@@ -229,12 +229,24 @@ const getPOReceiptById = async (receiptId) => {
             COALESCE(NULLIF(pri.outer_diameter, 0), poi.outer_diameter, 0) as outer_diameter,
             COALESCE(NULLIF(pri.density, 0), poi.density, 0) as density,
             COALESCE(NULLIF(pri.weight_per_unit, 0), poi.weight_per_unit, 0) as weight_per_unit,
-            (
-              SELECT s.name FROM shapes s 
-              JOIN stock_balance sb ON s.id = sb.shape_id 
-              WHERE sb.item_code = COALESCE(poi.item_code, pri.item_code) 
-              LIMIT 1
-            ) as shape_name
+            COALESCE(
+              poi.shape_type,
+              (
+                SELECT s.name FROM shapes s 
+                JOIN stock_balance sb ON s.id = sb.shape_id 
+                WHERE sb.item_code = COALESCE(poi.item_code, pri.item_code) 
+                LIMIT 1
+              )
+            ) as shape_name,
+            COALESCE(
+              poi.shape_type,
+              (
+                SELECT s.name FROM shapes s 
+                JOIN stock_balance sb ON s.id = sb.shape_id 
+                WHERE sb.item_code = COALESCE(poi.item_code, pri.item_code) 
+                LIMIT 1
+              )
+            ) as shape_type
      FROM po_receipt_items pri
      LEFT JOIN purchase_order_items poi ON poi.id = pri.po_item_id
      WHERE pri.receipt_id = ?`,
@@ -353,9 +365,9 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
         await connection.execute(
           `INSERT INTO grn_items (
             grn_id, po_item_id, po_qty, received_qty, accepted_qty, status, warehouse_id,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, uom
           )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             grnId, 
             poItemId, 
@@ -370,7 +382,9 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
             item.diameter || 0,
             item.outer_diameter || 0,
             item.density || 0,
-            item.weight_per_unit || 0
+            item.weight_per_unit || 0,
+            item.shape_type || item.shape_name || item.shape || null,
+            item.unit || item.uom || null
           ]
         );
       }

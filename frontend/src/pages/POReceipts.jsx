@@ -568,6 +568,11 @@ const POReceipts = () => {
       return;
     }
 
+    if (!attachments || attachments.length === 0) {
+      errorToast('Please upload at least one attachment / GRN Challan document');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('authToken');
       const formDataPayload = new FormData();
@@ -638,6 +643,11 @@ const POReceipts = () => {
 
   const handleUpdateReceipt = async (e) => {
     e.preventDefault();
+
+    if ((!attachments || attachments.length === 0) && (!existingAttachments || existingAttachments.length === 0)) {
+      errorToast('Please upload at least one attachment / GRN Challan document');
+      return;
+    }
 
     try {
       const token = localStorage.getItem('authToken');
@@ -1801,7 +1811,7 @@ const POReceipts = () => {
                   <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
                     <Upload className="w-5 h-5" />
                   </div>
-                  <h3 className="text-sm font-semibold text-slate-800">Attachments & Documents</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">Attachments & Documents <span className="text-red-500">*</span></h3>
                 </div>
 
                 <div className="border-2 border-dashed border-slate-200 rounded p-4 text-center hover:border-indigo-300 transition-all cursor-pointer bg-slate-50/50 group relative">
@@ -1943,7 +1953,7 @@ const POReceipts = () => {
               <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
                 <Upload className="w-5 h-5" />
               </div>
-              <h3 className="text-sm font-semibold text-slate-800">Attachments & Documents</h3>
+              <h3 className="text-sm font-semibold text-slate-800">Attachments & Documents <span className="text-red-500">*</span></h3>
             </div>
 
             <div className="border-2 border-dashed border-slate-200 rounded p-4 text-center hover:border-indigo-300 transition-all cursor-pointer bg-slate-50/50 group relative">

@@ -78,7 +78,7 @@ const createMaterialIssue = async (data, userId) => {
              AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
            LIMIT 1`,
           [
-            item.materialName, item.materialType,
+            item.materialName, item.materialType, item.materialType,
             item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || item.outerDiameter || 0
           ]
         );

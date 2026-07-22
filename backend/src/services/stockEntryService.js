@@ -680,7 +680,8 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
       gi.diameter,
       gi.outer_diameter,
       gi.density,
-      gi.weight_per_unit
+      gi.weight_per_unit,
+      COALESCE(gi.shape_type, poi.shape_type) as shape_type
     FROM grn_items gi
     LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
     LEFT JOIN qc_inspection_items qci ON qci.grn_item_id = gi.id
@@ -753,7 +754,18 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
         if (sbNameDims.length > 0) {
           item.item_code = sbNameDims[0].item_code;
         } else {
-          // 3. Fallback: Generate a standard item code and create a new master record in stock_balance
+          let resolvedShapeId = null;
+          const shapeName = item.shape_type;
+          if (shapeName) {
+            const [shapeRows] = await executor.query(
+              'SELECT id FROM shapes WHERE name = ? LIMIT 1',
+              [shapeName]
+            );
+            if (shapeRows.length > 0) {
+              resolvedShapeId = shapeRows[0].id;
+            }
+          }
+
           const generatedCode = await stockService.generateItemCode(item.material_name, item.material_type);
           
           const normalizedType = (item.material_type || '').toUpperCase().trim().replace(/ /g, '_');
@@ -774,7 +786,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
               item.outer_diameter || null,
               item.density || null,
               item.weight_per_unit || null,
-              item.shape_id || null,
+              resolvedShapeId,
               item.material_id || null
             ]
           );

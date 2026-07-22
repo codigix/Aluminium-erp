@@ -2152,6 +2152,7 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
           outer_diameter: od,
           density: Number(dimensions?.density) || 0,
           weight_per_unit: Number(dimensions?.weight_per_unit) || 0,
+          shape_type: dimensions?.shape_type || null,
           item_source: itemSource,
           remarks: remarks
         });
@@ -2180,6 +2181,7 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
         const od = item.outer_diameter !== undefined ? item.outer_diameter : (item.outerDiameter !== undefined ? item.outerDiameter : dimsObj.outer_diameter);
         const dens = item.density !== undefined ? item.density : dimsObj.density;
         const wpu = item.weight_per_unit !== undefined ? item.weight_per_unit : (item.weightPerUnit !== undefined ? item.weightPerUnit : dimsObj.weight_per_unit);
+        const shapeType = item.shape_type || item.shape_name || item.shape || null;
 
         addToPurposeMap(purchaseMap, code, req, uom, name, wh, cat, rate, design, {
           length: len,
@@ -2188,7 +2190,8 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
           diameter: dia,
           outer_diameter: od,
           density: dens,
-          weight_per_unit: wpu
+          weight_per_unit: wpu,
+          shape_type: shapeType
         }, item.is_manual ? 'MANUAL' : 'BOM', remarks);
       }
     } else {
@@ -2205,15 +2208,34 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
                COALESCE(NULLIF(ppm.diameter, 0), actual_sb.diameter, 0) as diameter, 
                COALESCE(NULLIF(ppm.outer_diameter, 0), actual_sb.outer_diameter, 0) as outer_diameter,
                COALESCE(NULLIF(ppm.density, 0), actual_sb.density, 0) as density,
-               COALESCE(NULLIF(ppm.weight_per_unit, 0), actual_sb.weight_per_unit, 0) as weight_per_unit
+               COALESCE(NULLIF(ppm.weight_per_unit, 0), actual_sb.weight_per_unit, 0) as weight_per_unit,
+               COALESCE(
+                 shape_lookup.shape_name,
+                 (SELECT name FROM shapes WHERE id = actual_sb.shape_id LIMIT 1)
+               ) as shape_type
         FROM production_plan_materials ppm
         LEFT JOIN (
           SELECT material_name, MAX(item_code) as item_code, MAX(valuation_rate) as valuation_rate, SUM(current_balance) as current_balance,
                  MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness, MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter,
-                 MAX(density) as density, MAX(weight_per_unit) as weight_per_unit
+                 MAX(density) as density, MAX(weight_per_unit) as weight_per_unit, MAX(shape_id) as shape_id
           FROM stock_balance 
           GROUP BY material_name
         ) actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
+        LEFT JOIN (
+            SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
+                   MAX(s.name) as shape_name
+            FROM sales_order_item_materials som
+            LEFT JOIN shapes s ON som.shape_id = s.id
+            WHERE s.id IS NOT NULL
+            GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
+        ) shape_lookup ON (
+            LOWER(TRIM(REPLACE(ppm.material_name, '\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\t', '')))
+            AND ABS(COALESCE(ppm.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
+            AND ABS(COALESCE(ppm.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
+            AND ABS(COALESCE(ppm.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
+            AND ABS(COALESCE(ppm.diameter, 0) - COALESCE(shape_lookup.diameter, 0)) < 0.0001
+            AND ABS(COALESCE(ppm.outer_diameter, 0) - COALESCE(shape_lookup.outer_diameter, 0)) < 0.0001
+        )
         LEFT JOIN (
           SELECT 
               mii.item_code, 
@@ -2239,7 +2261,8 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
           diameter: mat.diameter,
           outer_diameter: mat.outer_diameter,
           density: mat.density,
-          weight_per_unit: mat.weight_per_unit
+          weight_per_unit: mat.weight_per_unit,
+          shape_type: mat.shape_type
         }, 'BOM');
       }
     }
@@ -2301,8 +2324,8 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
         await connection.execute(
           `INSERT INTO material_request_items (
             mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, warehouse,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, item_source, remarks
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, item_source, remarks, shape_type
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             mrId,
             item.item_code,
@@ -2321,7 +2344,8 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
             item.density || 0,
             item.weight_per_unit || 0,
             item.item_source || 'BOM',
-            item.remarks || null
+            item.remarks || null,
+            item.shape_type || null
           ]
         );
       }

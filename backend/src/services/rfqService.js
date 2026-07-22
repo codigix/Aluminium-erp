@@ -26,8 +26,8 @@ const createRfq = async (payload) => {
                 await connection.execute(
                     `INSERT INTO procurement_rfq_items (
                         rfq_id, item_code, description, material_name, material_type, drawing_no, quantity, planned_qty, uom,
-                        length, width, thickness, diameter, outer_diameter, density, weight_per_unit
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         rfq_id,
                         item.item_code || null,
@@ -44,7 +44,8 @@ const createRfq = async (payload) => {
                         item.diameter || 0,
                         item.outer_diameter || 0,
                         item.density || 0,
-                        item.weight_per_unit || 0
+                        item.weight_per_unit || 0,
+                        item.shape_type || item.shape_name || item.shape || null
                     ]
                 );
             }
@@ -179,7 +180,8 @@ const _enrichRfqs = async (rfqs) => {
     const [items] = await pool.query(`
         SELECT i.*, 
                COALESCE(i.material_name, sb.material_name, sb.item_description, i.item_code) as material_name,
-               COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type
+               COALESCE(i.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type,
+               COALESCE(i.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name
         FROM procurement_rfq_items i 
         JOIN procurement_rfqs r ON i.rfq_id = r.id
         LEFT JOIN (

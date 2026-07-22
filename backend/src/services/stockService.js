@@ -188,6 +188,8 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
         MAX(sb.material_grade) as material_grade,
         MAX(sb.material_id) as material_id,
         MAX(sb.shape_id) as shape_id,
+        MAX(s.name) as shape_type,
+        MAX(s.name) as shape_name,
         NULL as length,
         NULL as width,
         NULL as thickness,
@@ -205,6 +207,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
         0 as issued_qty,
         0 as po_qty
       FROM stock_balance sb
+      LEFT JOIN shapes s ON sb.shape_id = s.id
       LEFT JOIN (
         SELECT drawing_no, MAX(hsn_code) as hsn_code
         FROM customer_drawings
@@ -256,6 +259,8 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       material_grade: balance.material_grade,
       material_id: balance.material_id,
       shape_id: balance.shape_id,
+      shape_type: balance.shape_type,
+      shape_name: balance.shape_name,
       length: balance.length,
       width: balance.width,
       thickness: balance.thickness,
@@ -292,6 +297,8 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
         MAX(sb.material_grade) as material_grade,
         MAX(sb.material_id) as material_id,
         MAX(sb.shape_id) as shape_id,
+        MAX(s.name) as shape_type,
+        MAX(s.name) as shape_name,
         MAX(sb.length) as length,
         MAX(sb.width) as width,
         MAX(sb.thickness) as thickness,
@@ -309,6 +316,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
         0 as issued_qty,
         0 as po_qty
       FROM stock_balance sb
+      LEFT JOIN shapes s ON sb.shape_id = s.id
       LEFT JOIN (
         SELECT drawing_no, MAX(hsn_code) as hsn_code
         FROM customer_drawings
@@ -373,6 +381,8 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       material_grade: balance.material_grade,
       material_id: balance.material_id,
       shape_id: balance.shape_id,
+      shape_type: balance.shape_type,
+      shape_name: balance.shape_name,
       length: balance.length,
       width: balance.width,
       thickness: balance.thickness,
@@ -393,8 +403,11 @@ const getStockBalanceByItem = async (itemCode) => {
   const [balance] = await pool.query(`
     SELECT sb.id, sb.item_code, sb.item_description, sb.material_name, sb.material_type, sb.unit, sb.current_balance, sb.valuation_rate as avg_cost, sb.drawing_no, sb.drawing_id, 
            sb.min_stock, sb.max_stock, sb.reorder_level,
-           COALESCE(sb.hsn_code, (SELECT MAX(hsn_code) FROM customer_drawings WHERE drawing_no = sb.drawing_no)) as hsn_code, sb.last_updated 
+           COALESCE(sb.hsn_code, (SELECT MAX(hsn_code) FROM customer_drawings WHERE drawing_no = sb.drawing_no)) as hsn_code, sb.last_updated,
+           s.name as shape_type, s.name as shape_name,
+           sb.length, sb.width, sb.thickness, sb.diameter, sb.outer_diameter, sb.density, sb.weight_per_unit
     FROM stock_balance sb
+    LEFT JOIN shapes s ON sb.shape_id = s.id
     WHERE sb.item_code = ?
   `, [itemCode]);
 
@@ -631,7 +644,17 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     const outerDiameter = options.outer_diameter !== undefined ? options.outer_diameter : (options.outerDiameter !== undefined ? options.outerDiameter : (existingBalance?.outer_diameter || null));
     const density = options.density !== undefined ? options.density : (existingBalance?.density || null);
     const weightPerUnit = options.weight_per_unit !== undefined ? options.weight_per_unit : (options.weightPerUnit !== undefined ? options.weightPerUnit : (existingBalance?.weight_per_unit || null));
-    const shapeId = options.shape_id !== undefined ? options.shape_id : (options.shapeId !== undefined ? options.shapeId : (existingBalance?.shape_id || null));
+    let shapeId = options.shape_id !== undefined ? options.shape_id : (options.shapeId !== undefined ? options.shapeId : (existingBalance?.shape_id || null));
+    if (!shapeId && (options.shape_type || options.shapeType)) {
+      const shapeName = options.shape_type || options.shapeType;
+      const [shapeRows] = await useConnection.query(
+        'SELECT id FROM shapes WHERE name = ? LIMIT 1',
+        [shapeName]
+      );
+      if (shapeRows.length > 0) {
+        shapeId = shapeRows[0].id;
+      }
+    }
     const materialId = options.material_id !== undefined ? options.material_id : (options.materialId !== undefined ? options.materialId : (existingBalance?.material_id || null));
 
     // Use Upsert (INSERT ... ON DUPLICATE KEY UPDATE) for reliability

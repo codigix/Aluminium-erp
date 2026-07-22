@@ -277,7 +277,8 @@ const ensurePurchaseOrderItemColumns = async () => {
       { name: 'diameter', definition: 'DECIMAL(12, 4) DEFAULT 0' },
       { name: 'outer_diameter', definition: 'DECIMAL(12, 4) DEFAULT 0' },
       { name: 'density', definition: 'DECIMAL(12, 6) DEFAULT 0' },
-      { name: 'weight_per_unit', definition: 'DECIMAL(12, 6) DEFAULT 0' }
+      { name: 'weight_per_unit', definition: 'DECIMAL(12, 6) DEFAULT 0' },
+      { name: 'shape_type', definition: 'VARCHAR(100) NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -360,7 +361,8 @@ const ensureQuotationItemColumns = async () => {
       { name: 'outer_diameter', definition: 'DECIMAL(12, 4) DEFAULT 0' },
       { name: 'density', definition: 'DECIMAL(12, 6) DEFAULT 0' },
       { name: 'weight_per_unit', definition: 'DECIMAL(12, 6) DEFAULT 0' },
-      { name: 'is_selected', definition: 'TINYINT DEFAULT 1' }
+      { name: 'is_selected', definition: 'TINYINT DEFAULT 1' },
+      { name: 'shape_type', definition: 'VARCHAR(100) NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -1969,6 +1971,7 @@ const ensureMaterialRequestTables = async () => {
         uom VARCHAR(20),
         warehouse VARCHAR(100),
         allocated_quantity DECIMAL(14, 3) DEFAULT 0,
+        shape_type VARCHAR(100) DEFAULT NULL,
         FOREIGN KEY (mr_id) REFERENCES material_requests(id) ON DELETE CASCADE
       )
     `);
@@ -2015,6 +2018,9 @@ const ensureMaterialRequestTables = async () => {
     }
     if (!existingItemCols.has('weight_per_unit')) {
       await connection.query('ALTER TABLE material_request_items ADD COLUMN weight_per_unit DECIMAL(12, 4) DEFAULT 0');
+    }
+    if (!existingItemCols.has('shape_type')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN shape_type VARCHAR(100) DEFAULT NULL');
     }
 
     console.log('Material Request tables synchronized');
@@ -2504,6 +2510,7 @@ const ensureGrnItemsTable = async () => {
         outer_diameter DECIMAL(12, 4) DEFAULT 0,
         density DECIMAL(12, 6) DEFAULT 0,
         weight_per_unit DECIMAL(12, 6) DEFAULT 0,
+        shape_type VARCHAR(100) DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (grn_id) REFERENCES grns(id) ON DELETE CASCADE
@@ -2525,7 +2532,8 @@ const ensureGrnItemsTable = async () => {
       { name: 'diameter', def: 'DECIMAL(12, 4) DEFAULT 0' },
       { name: 'outer_diameter', def: 'DECIMAL(12, 4) DEFAULT 0' },
       { name: 'density', def: 'DECIMAL(12, 6) DEFAULT 0' },
-      { name: 'weight_per_unit', def: 'DECIMAL(12, 6) DEFAULT 0' }
+      { name: 'weight_per_unit', def: 'DECIMAL(12, 6) DEFAULT 0' },
+      { name: 'shape_type', def: 'VARCHAR(100) DEFAULT NULL' }
     ];
 
     for (const col of required) {
@@ -2764,6 +2772,7 @@ const ensureProcurementRfqTables = async () => {
         outer_diameter DECIMAL(12, 4) DEFAULT 0,
         density DECIMAL(12, 4) DEFAULT 0,
         weight_per_unit DECIMAL(12, 4) DEFAULT 0,
+        shape_type VARCHAR(100) DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (rfq_id) REFERENCES procurement_rfqs(id) ON DELETE CASCADE
       )
@@ -2788,6 +2797,9 @@ const ensureProcurementRfqTables = async () => {
       if (!existing.has(dim)) {
         await connection.query(`ALTER TABLE procurement_rfq_items ADD COLUMN ${dim} DECIMAL(12, 4) DEFAULT 0`);
       }
+    }
+    if (!existing.has('shape_type')) {
+      await connection.query("ALTER TABLE procurement_rfq_items ADD COLUMN shape_type VARCHAR(100) DEFAULT NULL");
     }
 
     console.log('Procurement RFQ tables synchronized');

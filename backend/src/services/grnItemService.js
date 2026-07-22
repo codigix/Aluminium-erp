@@ -61,12 +61,7 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
 
     validateGRNItemInput(poQty, acceptedQty);
 
-    const [poItem] = await connection.query(
-      'SELECT item_code, description FROM purchase_order_items WHERE id = ?',
-      [poItemId]
-    );
-
-    const itemCode = poItem.length ? poItem[0].item_code : null;
+    const [poItem] = await connection.query('SELECT item_code, description, length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, uom FROM purchase_order_items WHERE id = ?', [poItemId]);
     const itemDescription = poItem.length ? poItem[0].description : null;
 
     const grnItemStatus = determineGRNItemStatus(poQty, acceptedQty);
@@ -75,11 +70,22 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
     const receivedQty = acceptedQty;
     const rejectedQty = 0;
 
+    const length = poItem.length ? poItem[0].length : 0;
+    const width = poItem.length ? poItem[0].width : 0;
+    const thickness = poItem.length ? poItem[0].thickness : 0;
+    const diameter = poItem.length ? poItem[0].diameter : 0;
+    const outer_diameter = poItem.length ? poItem[0].outer_diameter : 0;
+    const density = poItem.length ? poItem[0].density : 0;
+    const weight_per_unit = poItem.length ? poItem[0].weight_per_unit : 0;
+    const shape_type = poItem.length ? poItem[0].shape_type : null;
+    const uom = poItem.length ? poItem[0].uom : null;
+
     const [result] = await connection.execute(
       `INSERT INTO grn_items (
         grn_id, po_item_id, po_qty, received_qty, accepted_qty, rejected_qty,
-        shortage_qty, overage_qty, status, remarks, is_approved, warehouse_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        shortage_qty, overage_qty, status, remarks, is_approved, warehouse_id,
+        length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, uom
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         grnId,
         poItemId,
@@ -92,7 +98,16 @@ const createGRNItem = async (grnId, poItemId, poQty, acceptedQty, remarks = null
         grnItemStatus,
         remarks,
         false,
-        warehouseId
+        warehouseId,
+        length,
+        width,
+        thickness,
+        diameter,
+        outer_diameter,
+        density,
+        weight_per_unit,
+        shape_type,
+        uom
       ]
     );
 
@@ -339,15 +354,15 @@ const getGRNItemsByGrnId = async (grnId) => {
       poi.material_name,
       poi.material_type,
       poi.drawing_no,
-      COALESCE(NULLIF(poi.length, 0), 0) as length,
-      COALESCE(NULLIF(poi.width, 0), 0) as width,
-      COALESCE(NULLIF(poi.thickness, 0), 0) as thickness,
-      COALESCE(NULLIF(poi.diameter, 0), 0) as diameter,
-      COALESCE(NULLIF(poi.outer_diameter, 0), 0) as outer_diameter,
-      COALESCE(NULLIF(poi.density, 0), 0) as density,
-      COALESCE(NULLIF(poi.weight_per_unit, 0), 0) as weight_per_unit,
-      COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type,
-      COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name,
+      COALESCE(NULLIF(gi.length, 0), NULLIF(poi.length, 0), 0) as length,
+      COALESCE(NULLIF(gi.width, 0), NULLIF(poi.width, 0), 0) as width,
+      COALESCE(NULLIF(gi.thickness, 0), NULLIF(poi.thickness, 0), 0) as thickness,
+      COALESCE(NULLIF(gi.diameter, 0), NULLIF(poi.diameter, 0), 0) as diameter,
+      COALESCE(NULLIF(gi.outer_diameter, 0), NULLIF(poi.outer_diameter, 0), 0) as outer_diameter,
+      COALESCE(NULLIF(gi.density, 0), NULLIF(poi.density, 0), 0) as density,
+      COALESCE(NULLIF(gi.weight_per_unit, 0), NULLIF(poi.weight_per_unit, 0), 0) as weight_per_unit,
+      COALESCE(gi.shape_type, poi.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type,
+      COALESCE(gi.shape_type, poi.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name,
       gea.id as excess_approval_id,
       gea.status as excess_approval_status,
       gea.excess_qty

@@ -397,9 +397,9 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
             purchase_order_id, item_code, description, design_qty, quantity, planned_qty, unit, unit_rate, amount,
             cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
             material_name, material_type, drawing_no, drawing_id,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             poId,
             correctedItemCode,
@@ -434,7 +434,8 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
             item.diameter || 0,
             item.outer_diameter || 0,
             item.density || 0,
-            item.weight_per_unit || 0
+            item.weight_per_unit || 0,
+            item.shape_type || item.shape_name || item.shape || null
           ]
         );
       }
@@ -707,7 +708,7 @@ const getPurchaseOrders = async (filters = {}) => {
         poi.quantity, poi.unit, poi.unit_rate, poi.amount, poi.cgst_percent, poi.cgst_amount,
         poi.sgst_percent, poi.sgst_amount, poi.total_amount, poi.material_name, poi.material_type,
         poi.drawing_id, poi.length, poi.width, poi.thickness, poi.diameter, poi.outer_diameter,
-        poi.density, poi.weight_per_unit,
+        poi.density, poi.weight_per_unit, poi.shape_type, poi.shape_type as shape_name,
         COALESCE(
           NULLIF(NULLIF(TRIM(poi.drawing_no), TRIM(poi.item_code)), ''),
           (
@@ -1189,8 +1190,8 @@ const getPurchaseOrderById = async (poId) => {
        WHERE (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) 
        AND soi.sales_order_id = ? 
        LIMIT 1) as sales_order_item_status,
-      COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name,
-      COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type
+      COALESCE(poi.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name,
+      COALESCE(poi.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type
      FROM purchase_order_items poi
      LEFT JOIN (
        SELECT 
@@ -1361,12 +1362,13 @@ const updatePurchaseOrder = async (poId, payload) => {
           await connection.execute(
             `UPDATE purchase_order_items 
              SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, design_qty = ?, planned_qty = ?, description = ?, item_code = ?, unit = ?,
-                 length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?, density = ?, weight_per_unit = ?, drawing_no = ?
+                 length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?, density = ?, weight_per_unit = ?, drawing_no = ?, shape_type = ?
              WHERE id = ? AND purchase_order_id = ?`,
             [
               rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, item.description, item.item_code, item.unit,
               item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0,
               targetDrawingNo || null,
+              item.shape_type || item.shape_name || item.shape || null,
               item.id, poId
             ]
           );
@@ -1374,12 +1376,13 @@ const updatePurchaseOrder = async (poId, payload) => {
           await connection.execute(
             `INSERT INTO purchase_order_items 
              (purchase_order_id, item_code, description, quantity, design_qty, planned_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-              length, width, thickness, diameter, outer_diameter, density, weight_per_unit, drawing_no)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              length, width, thickness, diameter, outer_diameter, density, weight_per_unit, drawing_no, shape_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               poId, item.item_code, item.description, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount,
               item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0,
-              targetDrawingNo || null
+              targetDrawingNo || null,
+              item.shape_type || item.shape_name || item.shape || null
             ]
           );
         }
@@ -2710,8 +2713,8 @@ const mergePurchaseOrders = async (payload) => {
           drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, 
           amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
           length, width, thickness, diameter, outer_diameter, density, weight_per_unit,
-          sales_order_id, mr_id, source_po_id, source_po_item_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          sales_order_id, mr_id, source_po_id, source_po_item_id, shape_type
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newPoId,
           item.item_code || null,
@@ -2740,7 +2743,8 @@ const mergePurchaseOrders = async (payload) => {
           item.sales_order_id ? parseInt(item.sales_order_id) : null,
           item.mr_id ? parseInt(item.mr_id) : null,
           item.source_po_id ? parseInt(item.source_po_id) : null,
-          item.source_po_item_id ? parseInt(item.source_po_item_id) : null
+          item.source_po_item_id ? parseInt(item.source_po_item_id) : null,
+          item.shape_type || item.shape_name || item.shape || null
         ]
       );
     }

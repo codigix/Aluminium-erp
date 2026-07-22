@@ -24,6 +24,10 @@ const createPOReceipt = async (req, res, next) => {
     }
     const pdfPath = filePaths.length > 0 ? filePaths.join(',') : null;
 
+    if (!pdfPath) {
+      return res.status(400).json({ message: 'Attachments / Challan Documents are required' });
+    }
+
     const result = await poReceiptService.createPOReceipt(
       poId,
       receiptDate,
@@ -82,6 +86,10 @@ const updatePOReceipt = async (req, res, next) => {
       existingPaths = rawExisting.split(',').map(p => p.trim()).filter(Boolean);
     }
     const finalPdfPath = [...existingPaths, ...filePaths].join(',') || null;
+
+    if (!finalPdfPath) {
+      return res.status(400).json({ message: 'Attachments / Challan Documents are required' });
+    }
 
     const result = await poReceiptService.updatePOReceipt(
       req.params.receiptId,

@@ -10,25 +10,43 @@ const resolveDimensionItemCode = async (connection, item) => {
     const diameterVal = parseFloat(item.diameter || 0);
     const outerDiameterVal = parseFloat(item.outer_diameter || item.outerDiameter || 0);
 
+    let dimensionConditions = [];
+    let dimensionParams = [];
+
+    dimensionConditions.push('(COALESCE(length, 0) = ? OR (? = 0 AND length IS NULL))');
+    dimensionParams.push(lengthVal, lengthVal);
+
+    const shapeLower = (item.shape_type || '').toLowerCase();
+
+    if (shapeLower.includes('threaded rod') || shapeLower.includes('tr')) {
+      dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
+      dimensionParams.push(thicknessVal, thicknessVal);
+      dimensionConditions.push('(COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL))');
+      dimensionParams.push(diameterVal, diameterVal);
+    } else if ((shapeLower.includes('pipe') || shapeLower.includes('round tube') || shapeLower.includes('tube')) && !shapeLower.includes('square') && !shapeLower.includes('rectangular')) {
+      dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
+      dimensionParams.push(thicknessVal, thicknessVal);
+      dimensionConditions.push('(COALESCE(outer_diameter, 0) = ? OR (? = 0 AND outer_diameter IS NULL))');
+      dimensionParams.push(outerDiameterVal, outerDiameterVal);
+    } else if (shapeLower.includes('round bar') || shapeLower.includes('round') || shapeLower.includes('rb') || shapeLower.includes('wire')) {
+      dimensionConditions.push('(COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL))');
+      dimensionParams.push(diameterVal, diameterVal);
+    } else {
+      dimensionConditions.push('(COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL))');
+      dimensionParams.push(widthVal, widthVal);
+      dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
+      dimensionParams.push(thicknessVal, thicknessVal);
+    }
+
     const [rows] = await connection.query(`
       SELECT item_code 
       FROM stock_balance
       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?))
-        AND (
-          (COALESCE(length, 0) = ? OR (? = 0 AND length IS NULL)) AND
-          (COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL)) AND
-          (COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL)) AND
-          (COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL)) AND
-          (COALESCE(outer_diameter, 0) = ? OR (? = 0 AND outer_diameter IS NULL))
-        )
+        AND ${dimensionConditions.join(' AND ')}
       LIMIT 1
     `, [
       item.item_name || item.name || item.item_code,
-      lengthVal, lengthVal,
-      widthVal, widthVal,
-      thicknessVal, thicknessVal,
-      diameterVal, diameterVal,
-      outerDiameterVal, outerDiameterVal
+      ...dimensionParams
     ]);
     if (rows.length > 0) {
       return rows[0].item_code;
@@ -81,33 +99,7 @@ const materialRequestController = {
           (SELECT so3.project_name FROM sales_orders so3 WHERE mr.notes REGEXP CONCAT('SO-[0-9]{4}-', LPAD(so3.id, 4, '0')) LIMIT 1),
           (SELECT so4.project_name FROM sales_orders so4 WHERE mr.purpose LIKE CONCAT('%', so4.project_name, '%') LIMIT 1),
           '-'
-        ) as project_name,
-        (
-          SELECT CASE 
-            WHEN COUNT(*) = 0 THEN 'available'
-            WHEN COUNT(*) = SUM(CASE WHEN (
-              SELECT SUM(sb.current_balance) 
-              FROM stock_balance sb 
-              WHERE (
-                (LOWER(TRIM(mri.uom)) NOT IN ('kg', 'kgs') AND sb.item_code = mri.item_code)
-                OR
-                (
-                  LOWER(TRIM(mri.uom)) IN ('kg', 'kgs') 
-                  AND LOWER(TRIM(sb.material_name)) = LOWER(TRIM(COALESCE(mri.item_name, mri.item_code)))
-                  AND (COALESCE(sb.length, 0) = COALESCE(mri.length, 0))
-                  AND (COALESCE(sb.width, 0) = COALESCE(mri.width, 0))
-                  AND (COALESCE(sb.thickness, 0) = COALESCE(mri.thickness, 0))
-                  AND (COALESCE(sb.diameter, 0) = COALESCE(mri.diameter, 0))
-                  AND (COALESCE(sb.outer_diameter, 0) = COALESCE(mri.outer_diameter, 0))
-                )
-              )
-            ) >= (COALESCE(NULLIF(mri.quantity, 0), mri.design_qty, 0) - COALESCE(mri.allocated_quantity, 0)) THEN 1 ELSE 0 END) THEN 'available'
-            ELSE 'unavailable'
-          END
-          FROM material_request_items mri
-          WHERE mri.mr_id = mr.id
-          AND UPPER(COALESCE(mri.item_type, '')) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')
-        ) as availability
+        ) as project_name
         FROM material_requests mr
         LEFT JOIN users u ON mr.requested_by = u.id
         LEFT JOIN production_plans pp ON mr.plan_id = pp.id
@@ -117,6 +109,112 @@ const materialRequestController = {
         ) ppi ON pp.id = ppi.plan_id
         ORDER BY mr.created_at DESC
       `);
+
+      if (rows.length > 0) {
+        const mrIds = rows.map(r => r.id);
+        const [mris] = await pool.query(`
+          SELECT mri.*, COALESCE(mri.shape_type, shape_lookup.shape_name) as shape_type
+          FROM material_request_items mri
+          LEFT JOIN (
+              SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
+                     MAX(s.name) as shape_name
+              FROM sales_order_item_materials som
+              LEFT JOIN shapes s ON som.shape_id = s.id
+              GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
+          ) shape_lookup ON (
+              LOWER(TRIM(REPLACE(mri.item_name, '\\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\\t', '')))
+              AND ABS(COALESCE(mri.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
+              AND ABS(COALESCE(mri.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
+              AND ABS(COALESCE(mri.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
+              AND ABS(COALESCE(mri.diameter, 0) - COALESCE(shape_lookup.diameter, 0)) < 0.0001
+              AND ABS(COALESCE(mri.outer_diameter, 0) - COALESCE(shape_lookup.outer_diameter, 0)) < 0.0001
+          )
+          WHERE mri.mr_id IN (${mrIds.join(',')})
+            AND UPPER(COALESCE(mri.item_type, '')) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')
+        `);
+
+        // Batch query stock balances
+        const [sbRows] = await pool.query(`
+          SELECT sb.item_code, sb.material_name, sb.length, sb.width, sb.thickness, sb.diameter, sb.outer_diameter, sb.current_balance, s.name as shape_name
+          FROM stock_balance sb
+          LEFT JOIN shapes s ON sb.shape_id = s.id
+          WHERE sb.current_balance > 0
+        `);
+
+        // Map items by mr_id
+        const mriMap = {};
+        for (const mri of mris) {
+          if (!mriMap[mri.mr_id]) mriMap[mri.mr_id] = [];
+          mriMap[mri.mr_id].push(mri);
+        }
+
+        // Process availability in JS
+        for (const mr of rows) {
+          const mrItems = mriMap[mr.id] || [];
+          if (mrItems.length === 0) {
+            mr.availability = 'available';
+            continue;
+          }
+
+          let mrAvailability = 'available';
+
+          for (const item of mrItems) {
+            let availableStock = 0;
+            const uom = (item.uom || '').toLowerCase().trim();
+
+            if (uom === 'kg' || uom === 'kgs') {
+              const lengthVal = parseFloat(item.length || 0);
+              const widthVal = parseFloat(item.width || 0);
+              const thicknessVal = parseFloat(item.thickness || 0);
+              const diameterVal = parseFloat(item.diameter || 0);
+              const outerDiameterVal = parseFloat(item.outer_diameter || item.outerDiameter || 0);
+              const shapeLower = (item.shape_type || '').toLowerCase();
+
+              // Filter stock rows by name + shape dimensions
+              const matchingStocks = sbRows.filter(sb => {
+                const sbName = (sb.material_name || '').toLowerCase().trim();
+                const itemName = (item.item_name || item.item_code || '').toLowerCase().trim();
+                if (sbName !== itemName) return false;
+
+                // Length
+                if (Math.abs((parseFloat(sb.length) || 0) - lengthVal) >= 0.0001) return false;
+
+                if (shapeLower.includes('threaded rod') || shapeLower.includes('tr')) {
+                  if (Math.abs((parseFloat(sb.thickness) || 0) - thicknessVal) >= 0.0001) return false;
+                  if (Math.abs((parseFloat(sb.diameter) || 0) - diameterVal) >= 0.0001) return false;
+                } else if (shapeLower.includes('pipe') || shapeLower.includes('round tube') || shapeLower.includes('tube')) {
+                  if (Math.abs((parseFloat(sb.thickness) || 0) - thicknessVal) >= 0.0001) return false;
+                  if (Math.abs((parseFloat(sb.outer_diameter) || 0) - outerDiameterVal) >= 0.0001) return false;
+                } else if (shapeLower.includes('round bar') || shapeLower.includes('round') || shapeLower.includes('rb') || shapeLower.includes('wire')) {
+                  if (Math.abs((parseFloat(sb.diameter) || 0) - diameterVal) >= 0.0001) return false;
+                } else {
+                  if (Math.abs((parseFloat(sb.width) || 0) - widthVal) >= 0.0001) return false;
+                  if (Math.abs((parseFloat(sb.thickness) || 0) - thicknessVal) >= 0.0001) return false;
+                }
+
+                return true;
+              });
+
+              availableStock = matchingStocks.reduce((sum, sb) => sum + (parseFloat(sb.current_balance) || 0), 0);
+            } else {
+              const matchingStocks = sbRows.filter(sb => sb.item_code === item.item_code);
+              availableStock = matchingStocks.reduce((sum, sb) => sum + (parseFloat(sb.current_balance) || 0), 0);
+            }
+
+            // Common availability logic: currentStock > 0 ? "available" : "unavailable"
+            const itemAvailability = availableStock > 0 ? 'available' : 'unavailable';
+
+            // Aggregate MR availability:
+            // - If any item is 'unavailable' -> 'unavailable'
+            if (itemAvailability === 'unavailable') {
+              mrAvailability = 'unavailable';
+            }
+          }
+
+          mr.availability = mrAvailability;
+        }
+      }
+
       res.json(rows);
     } catch (error) {
       res.status(500).json({ message: error.message });
@@ -186,7 +284,7 @@ const materialRequestController = {
 
       const [items] = await pool.query(`
         SELECT mri.*, 
-               shape_lookup.shape_name as shape_type,
+               COALESCE(mri.shape_type, shape_lookup.shape_name) as shape_type,
                COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
                COALESCE(mri.uom, sb.unit) as uom,
                COALESCE(mri.item_type, sb.material_type) as material_type,
@@ -258,25 +356,43 @@ const materialRequestController = {
           const diameterVal = parseFloat(item.diameter || 0);
           const outerDiameterVal = parseFloat(item.outer_diameter || item.outerDiameter || 0);
           
+          let dimensionConditions = [];
+          let dimensionParams = [];
+
+          dimensionConditions.push('(COALESCE(length, 0) = ? OR (? = 0 AND length IS NULL))');
+          dimensionParams.push(lengthVal, lengthVal);
+
+          const shapeLower = (item.shape_type || '').toLowerCase();
+
+          if (shapeLower.includes('threaded rod') || shapeLower.includes('tr')) {
+            dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
+            dimensionParams.push(thicknessVal, thicknessVal);
+            dimensionConditions.push('(COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL))');
+            dimensionParams.push(diameterVal, diameterVal);
+          } else if ((shapeLower.includes('pipe') || shapeLower.includes('round tube') || shapeLower.includes('tube')) && !shapeLower.includes('square') && !shapeLower.includes('rectangular')) {
+            dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
+            dimensionParams.push(thicknessVal, thicknessVal);
+            dimensionConditions.push('(COALESCE(outer_diameter, 0) = ? OR (? = 0 AND outer_diameter IS NULL))');
+            dimensionParams.push(outerDiameterVal, outerDiameterVal);
+          } else if (shapeLower.includes('round bar') || shapeLower.includes('round') || shapeLower.includes('rb') || shapeLower.includes('wire')) {
+            dimensionConditions.push('(COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL))');
+            dimensionParams.push(diameterVal, diameterVal);
+          } else {
+            dimensionConditions.push('(COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL))');
+            dimensionParams.push(widthVal, widthVal);
+            dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
+            dimensionParams.push(thicknessVal, thicknessVal);
+          }
+
           [stockRows] = await pool.query(`
             SELECT warehouse as warehouse_name, current_balance as current_stock
             FROM stock_balance
             WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?))
               AND current_balance > 0
-              AND (
-                (COALESCE(length, 0) = ? OR (? = 0 AND length IS NULL)) AND
-                (COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL)) AND
-                (COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL)) AND
-                (COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL)) AND
-                (COALESCE(outer_diameter, 0) = ? OR (? = 0 AND outer_diameter IS NULL))
-              )
+              AND ${dimensionConditions.join(' AND ')}
           `, [
             item.item_name || item.name || item.item_code,
-            lengthVal, lengthVal,
-            widthVal, widthVal,
-            thicknessVal, thicknessVal,
-            diameterVal, diameterVal,
-            outerDiameterVal, outerDiameterVal
+            ...dimensionParams
           ]);
         } else {
           [stockRows] = await pool.query(`
@@ -412,7 +528,15 @@ const materialRequestController = {
                   warehouse: sourceWarehouse,
                   materialName: item.item_name,
                   materialType: item.item_type,
-                  unit: item.uom
+                  unit: item.uom,
+                  length: item.length,
+                  width: item.width,
+                  thickness: item.thickness,
+                  diameter: item.diameter,
+                  outer_diameter: item.outer_diameter,
+                  density: item.density,
+                  weight_per_unit: item.weight_per_unit,
+                  shape_type: item.shape_type
                 },
                 connection
               );
@@ -528,7 +652,15 @@ const materialRequestController = {
                   warehouse: stockRow.warehouse,
                   materialName: item.item_name,
                   materialType: item.item_type,
-                  unit: item.uom
+                  unit: item.uom,
+                  length: item.length,
+                  width: item.width,
+                  thickness: item.thickness,
+                  diameter: item.diameter,
+                  outer_diameter: item.outer_diameter,
+                  density: item.density,
+                  weight_per_unit: item.weight_per_unit,
+                  shape_type: item.shape_type
                 },
                 connection
               );
@@ -639,11 +771,12 @@ const materialRequestController = {
           item.diameter || 0,
           item.outer_diameter || 0,
           item.density || 0,
-          item.weight_per_unit || 0
+          item.weight_per_unit || 0,
+          item.shape_type || item.shape_name || item.shape || null
         ]);
 
         await connection.query(
-          'INSERT INTO material_request_items (mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, warehouse, length, width, thickness, diameter, outer_diameter, density, weight_per_unit) VALUES ?',
+          'INSERT INTO material_request_items (mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, warehouse, length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type) VALUES ?',
           [itemValues]
         );
       }

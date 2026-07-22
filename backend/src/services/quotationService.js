@@ -163,8 +163,8 @@ const createQuotation = async (payload) => {
             quotation_id, item_code, description, material_name, material_type, drawing_no, 
             quantity, design_qty, planned_qty, unit, unit_rate, amount, 
             cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
@@ -190,7 +190,8 @@ const createQuotation = async (payload) => {
             parseFloat(item.diameter || (item.dimensions && item.dimensions.diameter)) || 0,
             parseFloat(item.outer_diameter || (item.dimensions && item.dimensions.outer_diameter)) || 0,
             parseFloat(item.density || (item.dimensions && item.dimensions.density)) || 0,
-            parseFloat(item.weight_per_unit || (item.dimensions && item.dimensions.weight_per_unit)) || 0
+            parseFloat(item.weight_per_unit || (item.dimensions && item.dimensions.weight_per_unit)) || 0,
+            item.shape_type || item.shape_name || item.shape || null
           ]
         );
       }
@@ -360,6 +361,8 @@ const getQuotations = async (filters = {}) => {
   const quotationIds = quotations.map(q => q.id);
   const [items] = await pool.query(
     `SELECT qi.*, 
+            COALESCE(qi.shape_type, mri.shape_type) as shape_type,
+            COALESCE(qi.shape_type, mri.shape_type) as shape_name,
             COALESCE(NULLIF(qi.length, 0), mri.length, sb.length, 0) as length,
             COALESCE(NULLIF(qi.width, 0), mri.width, sb.width, 0) as width,
             COALESCE(NULLIF(qi.thickness, 0), mri.thickness, sb.thickness, 0) as thickness,
@@ -622,10 +625,12 @@ const getQuotationById = async (quotationId) => {
             COALESCE(NULLIF(qi.density, 0), mri.density, sb.density, 0) as density,
             COALESCE(NULLIF(qi.weight_per_unit, 0), mri.weight_per_unit, sb.weight_per_unit, 0) as weight_per_unit,
             COALESCE(
+              qi.shape_type,
               shape_lookup.shape_name,
               (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)
             ) as shape_name,
             COALESCE(
+              qi.shape_type,
               shape_lookup.shape_name,
               (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)
             ) as shape_type
@@ -892,8 +897,8 @@ const updateQuotation = async (quotationId, payload) => {
             quotation_id, item_code, description, material_name, material_type, 
             drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, 
             amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             newQuotationId,
             correctedItemCode,
@@ -918,7 +923,8 @@ const updateQuotation = async (quotationId, payload) => {
             parseFloat(item.diameter || (item.dimensions && item.dimensions.diameter)) || 0,
             parseFloat(item.outer_diameter || (item.dimensions && item.dimensions.outer_diameter)) || 0,
             parseFloat(item.density || (item.dimensions && item.dimensions.density)) || 0,
-            parseFloat(item.weight_per_unit || (item.dimensions && item.dimensions.weight_per_unit)) || 0
+            parseFloat(item.weight_per_unit || (item.dimensions && item.dimensions.weight_per_unit)) || 0,
+            item.shape_type || item.shape_name || item.shape || null
           ]
         );
       }
