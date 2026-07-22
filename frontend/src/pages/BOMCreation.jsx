@@ -1382,7 +1382,20 @@ const BOMCreation = () => {
                       </p>
                     </div>
                     <Link
-                      to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${dwgItems[0].drawing_public_id || drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_public_id || dwgItems[0].sales_order_id}`}
+                      to={(() => {
+                        // For Assembly drawings, pick the Assembly-typed item (not a child Part)
+                        const assemblyItem = isAssemblyDrawing
+                          ? (dwgItems.find(i => (i.drawing_type || '').toUpperCase().includes('ASSEMBLY') || (i.item_group || '').toUpperCase().includes('ASSEMBLY')) || dwgItems[0])
+                          : dwgItems[0];
+                        const linkSalesOrderId = assemblyItem.sales_order_public_id || assemblyItem.sales_order_id;
+                        const linkDrawingId = assemblyItem.drawing_public_id || assemblyItem.drawing_id || drawingId;
+                        const linkItemCode = assemblyItem.item_code || '';
+                        const linkItemGroup = isAssemblyDrawing ? 'Assembly' : (assemblyItem.item_group || '');
+                        let url = `/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${linkDrawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${linkSalesOrderId}`;
+                        if (linkItemCode) url += `&item_code=${encodeURIComponent(linkItemCode)}`;
+                        if (linkItemGroup) url += `&item_group=${encodeURIComponent(linkItemGroup)}`;
+                        return url;
+                      })()}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleAccessProject(client.id);
@@ -1394,6 +1407,7 @@ const BOMCreation = () => {
                       </svg>
                       Create BOM
                     </Link>
+
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteDrawingBOMs(dwgNo, dwgItems, client.client_name); }}
                       className="p-2 rounded border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shadow-sm"

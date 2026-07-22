@@ -1009,7 +1009,10 @@ const BOMFormPage = () => {
     const dwgParam = params.get('drawing_no');
     let dwgIdParam = params.get('drawing_id') === 'N/A' ? '' : params.get('drawing_id');
     const dwgNameParam = params.get('drawing_name');
-    const itemCodeParam = params.get('itemCode');
+    // Support both 'itemCode' (legacy) and 'item_code' (new Assembly-aware URL param)
+    const itemCodeParam = params.get('item_code') || params.get('itemCode');
+    // item_group passed from BOMCreation to distinguish Assembly vs Part
+    const itemGroupParam = params.get('item_group') || '';
     const itemIdParam = params.get('item_id');
 
     const handleInitialParams = async () => {
@@ -1060,11 +1063,35 @@ const BOMFormPage = () => {
         }
 
         if (itemCodeParam) {
+          // item_code param provided — match by code first (most precise)
           const orderItem = approvedDrawings.find(i => i.item_code === itemCodeParam);
           const stockItem = stockItems.find(i => i.item_code === itemCodeParam);
           const item = orderItem || stockItem;
           if (item) {
+            const resolvedGroup = itemGroupParam || getAutofetchedGroup(item);
             setSelectedItem(prev => prev || { ...item, source: orderItem ? 'order' : 'stock' });
+            setProductForm(prev => ({
+              ...prev,
+              itemCode: item.item_code || prev.itemCode,
+              itemGroup: resolvedGroup || prev.itemGroup,
+              drawingNo: item.drawing_no || dwgParam || prev.drawingNo,
+              drawing_id: item.drawing_id || dwgIdParam || prev.drawing_id,
+              description: item.drawing_name || item.description || item.item_description || cleanText(dwgNameParam || '') || prev.description
+            }));
+          } else if (dwgParam && !itemId) {
+            // item_code was given but not found yet — still set the drawing and group from URL
+            const resolvedGroup = itemGroupParam || '';
+            let dwgName = dwgNameParam || '';
+            if (!dwgName) dwgName = await fetchDrawingName(dwgParam);
+            else setFetchedDrawingName(dwgName);
+            setProductForm(prev => ({
+              ...prev,
+              drawingNo: dwgParam,
+              drawing_id: dwgIdParam || prev.drawing_id,
+              itemGroup: resolvedGroup || prev.itemGroup,
+              description: cleanText(dwgName) || prev.description,
+              itemCode: itemCodeParam || prev.itemCode
+            }));
           }
         } else if (dwgParam && !itemId) {
           // For NEW BOM creation from a drawing, pre-fill drawing info
@@ -1074,8 +1101,23 @@ const BOMFormPage = () => {
           let itemCode = '';
           let matchedItem = null;
 
-          const dwgInfo = approvedDrawings.find(i => cleanDwgNo(i.drawing_no) === cleanDwgNo(dwgParam)) ||
-            stockItems.find(i => cleanDwgNo(i.drawing_no) === cleanDwgNo(dwgParam));
+          // When item_group=Assembly is passed, prefer Assembly-typed items from the same drawing
+          const isAssemblyFromUrl = (itemGroupParam || '').toUpperCase().includes('ASSEMBLY');
+          let dwgInfo = null;
+
+          if (isAssemblyFromUrl) {
+            // Prefer the Assembly item — search approvedDrawings first, then stockItems
+            dwgInfo = approvedDrawings.find(i =>
+              cleanDwgNo(i.drawing_no) === cleanDwgNo(dwgParam) &&
+              ((i.drawing_type || '').toUpperCase().includes('ASSEMBLY') || (i.item_group || '').toUpperCase().includes('ASSEMBLY'))
+            ) || stockItems.find(i =>
+              cleanDwgNo(i.drawing_no) === cleanDwgNo(dwgParam) &&
+              ((i.item_group || '').toUpperCase().includes('ASSEMBLY') || (i.material_type || '').toUpperCase().includes('ASSEMBLY'))
+            ) || approvedDrawings.find(i => cleanDwgNo(i.drawing_no) === cleanDwgNo(dwgParam));
+          } else {
+            dwgInfo = approvedDrawings.find(i => cleanDwgNo(i.drawing_no) === cleanDwgNo(dwgParam)) ||
+              stockItems.find(i => cleanDwgNo(i.drawing_no) === cleanDwgNo(dwgParam));
+          }
 
           if (dwgInfo) {
             matchedItem = dwgInfo;
@@ -1090,8 +1132,8 @@ const BOMFormPage = () => {
             setFetchedDrawingName(dwgName);
           }
 
-          const autofetchedGroup = dwgInfo ? getAutofetchedGroup(dwgInfo) : '';
-          const isAssembly = autofetchedGroup === 'Assembly';
+          // Prefer the item_group from URL param if provided (Assembly), else detect from found item
+          const autofetchedGroup = isAssemblyFromUrl ? 'Assembly' : (dwgInfo ? getAutofetchedGroup(dwgInfo) : '');
           setProductForm(prev => ({
             ...prev,
             drawingNo: dwgParam,
@@ -1322,7 +1364,10 @@ const BOMFormPage = () => {
       }
 
       const params = new URLSearchParams(location.search);
-      const itemCodeFromUrl = params.get('itemCode');
+      // Support both 'item_code' (Assembly-aware) and 'itemCode' (legacy)
+      const itemCodeFromUrl = params.get('item_code') || params.get('itemCode');
+      // item_group passed from BOMCreation to distinguish Assembly vs Part
+      const itemGroupFromUrl = params.get('item_group') || '';
       const drawingNoFromUrl = params.get('drawing_no');
       let drawingIdFromUrl = params.get('drawing_id') === 'N/A' ? '' : params.get('drawing_id');
       let salesOrderIdFromUrl = params.get('sales_order_id');
@@ -1362,48 +1407,117 @@ const BOMFormPage = () => {
         // 1. Auto-link drawing to Sales Order Item if needed
         if (!effectiveId && drawingNoFromUrl && currentApprovedDrawings.length > 0) {
           let matchedItem = null;
-          if (salesOrderIdFromUrl) {
+          const isAssemblyUrl = (itemGroupFromUrl || '').toUpperCase().includes('ASSEMBLY');
+
+          // Highest priority: match by item_code exactly (most precise, avoids child-part confusion)
+          if (itemCodeFromUrl) {
             matchedItem = currentApprovedDrawings.find(d =>
+              d.item_code === itemCodeFromUrl &&
+              (!salesOrderIdFromUrl || String(d.sales_order_id) === String(salesOrderIdFromUrl))
+            ) || currentApprovedDrawings.find(d => d.item_code === itemCodeFromUrl);
+          }
+
+          // Second priority: match by drawing_no + sales_order_id, preferring Assembly type if needed
+          if (!matchedItem && salesOrderIdFromUrl) {
+            const candidates = currentApprovedDrawings.filter(d =>
               cleanDwgNo(d.drawing_no) === cleanDwgNo(drawingNoFromUrl) &&
               String(d.sales_order_id) === String(salesOrderIdFromUrl)
             );
+            if (isAssemblyUrl) {
+              matchedItem = candidates.find(d =>
+                (d.drawing_type || '').toUpperCase().includes('ASSEMBLY') ||
+                (d.item_group || '').toUpperCase().includes('ASSEMBLY')
+              ) || candidates[0];
+            } else {
+              matchedItem = candidates[0];
+            }
           }
+
+          // Fallback: match by drawing_no only, prefer Assembly if needed
           if (!matchedItem) {
-            matchedItem = currentApprovedDrawings.find(d => cleanDwgNo(d.drawing_no) === cleanDwgNo(drawingNoFromUrl));
+            const candidates = currentApprovedDrawings.filter(d =>
+              cleanDwgNo(d.drawing_no) === cleanDwgNo(drawingNoFromUrl)
+            );
+            if (isAssemblyUrl) {
+              matchedItem = candidates.find(d =>
+                (d.drawing_type || '').toUpperCase().includes('ASSEMBLY') ||
+                (d.item_group || '').toUpperCase().includes('ASSEMBLY')
+              ) || candidates[0];
+            } else {
+              matchedItem = candidates[0];
+            }
           }
 
           if (matchedItem) {
-            console.log(`[fetchData] Auto-linked drawing to item ID: ${matchedItem.id}`);
+            console.log(`[fetchData] Auto-linked drawing to item ID: ${matchedItem.id} (${matchedItem.item_code})`);
             currentItem = { ...matchedItem, source: 'order' };
             setSelectedItem(currentItem);
           }
         }
 
-        // Auto-fill from URL if no item was found
+        // Auto-fill from URL if no item was found in approvedDrawings
         if (!currentItem && drawingNoFromUrl) {
           const fakeItemName = params.get('drawing_name') || productForm.description || 'Unknown Part';
-          const fakeItem = {
-            id: drawingIdFromUrl || `draft_${Date.now()}`,
-            drawing_no: drawingNoFromUrl,
-            drawing_id: drawingIdFromUrl,
-            description: fakeItemName,
-            material_name: fakeItemName,
-            item_code: `PART-${String(drawingNoFromUrl).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)}-0001`,
-            item_group: 'Part',
-            source: 'url'
-          };
-          console.log(`[fetchData] Created temporary item from URL:`, fakeItem);
-          currentItem = fakeItem;
-          setSelectedItem(currentItem);
+          const isAssemblyContext = (itemGroupFromUrl || '').toUpperCase().includes('ASSEMBLY');
 
-          setProductForm(prev => ({
-            ...prev,
-            drawingNo: drawingNoFromUrl,
-            drawing_id: drawingIdFromUrl || prev.drawing_id,
-            description: fakeItemName,
-            itemCode: fakeItem.item_code,
-            itemGroup: 'Part'
-          }));
+          // --- Priority: exact item_code match in stockItems ---
+          // The Assembly item (e.g. ASSEMBLY-GEARDP720A-0001) lives in Items Master / stockItems
+          // even if it was not returned in approvedDrawings (e.g. async timing or different SO item).
+          let resolvedFromStock = null;
+          if (itemCodeFromUrl && latestStockItems.length > 0) {
+            resolvedFromStock = latestStockItems.find(s => s.item_code === itemCodeFromUrl);
+          }
+          // Fallback: find Assembly-typed item in stockItems by drawing_no
+          if (!resolvedFromStock && isAssemblyContext && latestStockItems.length > 0) {
+            resolvedFromStock = latestStockItems.find(s =>
+              cleanDwgNo(s.drawing_no) === cleanDwgNo(drawingNoFromUrl) &&
+              ((s.item_group || '').toUpperCase().includes('ASSEMBLY') ||
+               (s.material_type || '').toUpperCase().includes('ASSEMBLY'))
+            );
+          }
+
+          if (resolvedFromStock) {
+            const resolvedGroup = itemGroupFromUrl || getAutofetchedGroup(resolvedFromStock) || 'Part';
+            console.log(`[fetchData] Resolved item from stockItems: ${resolvedFromStock.item_code} (${resolvedGroup})`);
+            currentItem = { ...resolvedFromStock, source: 'stock' };
+            setSelectedItem(currentItem);
+            setProductForm(prev => ({
+              ...prev,
+              drawingNo: drawingNoFromUrl,
+              drawing_id: drawingIdFromUrl || prev.drawing_id,
+              description: resolvedFromStock.material_name || resolvedFromStock.description || fakeItemName,
+              itemCode: resolvedFromStock.item_code || prev.itemCode,
+              itemGroup: resolvedGroup
+            }));
+          } else {
+            // Absolute last resort: create a draft placeholder but honour URL context
+            const fallbackItemCode = itemCodeFromUrl ||
+              (isAssemblyContext
+                ? `ASSEMBLY-${String(drawingNoFromUrl).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)}-0001`
+                : `PART-${String(drawingNoFromUrl).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)}-0001`);
+            const fallbackGroup = itemGroupFromUrl || 'Part';
+            const fakeItem = {
+              id: drawingIdFromUrl || `draft_${Date.now()}`,
+              drawing_no: drawingNoFromUrl,
+              drawing_id: drawingIdFromUrl,
+              description: fakeItemName,
+              material_name: fakeItemName,
+              item_code: fallbackItemCode,
+              item_group: fallbackGroup,
+              source: 'url'
+            };
+            console.log(`[fetchData] Created temporary item from URL:`, fakeItem);
+            currentItem = fakeItem;
+            setSelectedItem(currentItem);
+            setProductForm(prev => ({
+              ...prev,
+              drawingNo: drawingNoFromUrl,
+              drawing_id: drawingIdFromUrl || prev.drawing_id,
+              description: fakeItemName,
+              itemCode: fakeItem.item_code,
+              itemGroup: fallbackGroup
+            }));
+          }
         }
 
         // 2. Fetch Item Info if we have an ID but no data
