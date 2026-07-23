@@ -1228,6 +1228,52 @@ const getItemBOMDetails = async (salesOrderItemId) => {
   const item = items[0];
   console.log(`[getItemBOMDetails] Exploding BOM for ${item.item_code} / ${item.drawing_no} using lookup ID: ${soItemIdForLookup}`);
 
+  let salesOrderId = item.sales_order_id || null;
+  if (!salesOrderId && item.order_id) {
+    const [ord] = await pool.query(
+      `SELECT DISTINCT so.id FROM sales_orders so
+       JOIN orders o ON (
+         (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+         (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+       )
+       WHERE o.id = ? LIMIT 1`,
+      [item.order_id]
+    );
+    if (ord.length > 0) salesOrderId = ord[0].id;
+  }
+
+  let allSoMaterials = [];
+  let allSoComponents = [];
+  let allSoOperations = [];
+  let allSoItems = [];
+
+  if (salesOrderId) {
+    [allSoMaterials] = await pool.query(
+      `SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape 
+       FROM sales_order_item_materials m
+       LEFT JOIN shapes s ON m.shape_id = s.id
+       WHERE m.sales_order_item_id IN (SELECT id FROM sales_order_items WHERE sales_order_id = ?)`,
+      [salesOrderId]
+    );
+
+    [allSoComponents] = await pool.query(
+      `SELECT * FROM sales_order_item_components 
+       WHERE sales_order_item_id IN (SELECT id FROM sales_order_items WHERE sales_order_id = ?)`,
+      [salesOrderId]
+    );
+
+    [allSoOperations] = await pool.query(
+      `SELECT * FROM sales_order_item_operations 
+       WHERE sales_order_item_id IN (SELECT id FROM sales_order_items WHERE sales_order_id = ?)`,
+      [salesOrderId]
+    );
+
+    [allSoItems] = await pool.query(
+      'SELECT id, item_code, description, drawing_no, item_type, item_group FROM sales_order_items WHERE sales_order_id = ?',
+      [salesOrderId]
+    );
+  }
+
   const materialMap = new Map();
   const componentMap = new Map();
   const operationMap = new Map();
@@ -1281,50 +1327,79 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const targetSoIds = isArray ? soItemId : [soItemId || null];
       const refId = isArray ? soItemId[0] : (soItemId || null);
 
-      const [soM] = await pool.query(`
-        SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape 
-        FROM sales_order_item_materials m
-        LEFT JOIN shapes s ON m.shape_id = s.id
-        WHERE m.sales_order_item_id IN (?) AND m.parent_id <=> ?
-      `, [targetSoIds, parentId]);
+      if (allSoMaterials.length > 0) {
+        materials = allSoMaterials.filter(m => targetSoIds.includes(m.sales_order_item_id) && m.parent_id === parentId);
+      } else {
+        const [soM] = await pool.query(`
+          SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape 
+          FROM sales_order_item_materials m
+          LEFT JOIN shapes s ON m.shape_id = s.id
+          WHERE m.sales_order_item_id IN (?) AND m.parent_id <=> ?
+        `, [targetSoIds, parentId]);
+        materials = soM;
+      }
 
-      // Join with sales_order_items to get item_type for components
-      const [soC] = await pool.query(`
-        SELECT c.*, 
-               MAX(soi.item_type) as item_type, 
-               MAX(soi.item_group) as item_group,
-               MAX(soi.drawing_no) as drawing_no
-        FROM sales_order_item_components c
-        LEFT JOIN sales_order_items soi ON c.component_code = soi.item_code
-        AND soi.sales_order_id <=> (SELECT sales_order_id FROM sales_order_items WHERE id = ? LIMIT 1)
-        WHERE c.sales_order_item_id IN (?) AND c.parent_id <=> ?
-        GROUP BY c.id`, [refId, targetSoIds, parentId]);
+      if (allSoComponents.length > 0) {
+        const matchingComps = allSoComponents.filter(c => targetSoIds.includes(c.sales_order_item_id) && c.parent_id === parentId);
+        const uniqueComps = new Map();
+        matchingComps.forEach(c => {
+          const key = `${c.component_code}-${c.drawing_no || ''}`;
+          if (!uniqueComps.has(key)) {
+            const soi = allSoItems.find(x => x.item_code === c.component_code);
+            const item_type = soi ? soi.item_type : null;
+            const item_group = soi ? soi.item_group : null;
+            const drawing_no = soi ? soi.drawing_no : null;
+            uniqueComps.set(key, {
+              ...c,
+              item_type: (item_type === 'SA' || item_type === 'SFG' || item_group === 'Sub Assembly' || item_group === 'SUB_ASSEMBLY' || item_group === 'SFG' || (c.component_code && (c.component_code.startsWith('SA-') || c.component_code.startsWith('SFG-')))) ? 'Sub Assembly' : (item_type || 'FG'),
+              item_group,
+              drawing_no
+            });
+          }
+        });
+        components = Array.from(uniqueComps.values());
+      } else {
+        const [soC] = await pool.query(`
+          SELECT c.*, 
+                 MAX(soi.item_type) as item_type, 
+                 MAX(soi.item_group) as item_group,
+                 MAX(soi.drawing_no) as drawing_no
+          FROM sales_order_item_components c
+          LEFT JOIN sales_order_items soi ON c.component_code = soi.item_code
+          AND soi.sales_order_id <=> (SELECT sales_order_id FROM sales_order_items WHERE id = ? LIMIT 1)
+          WHERE c.sales_order_item_id IN (?) AND c.parent_id <=> ?
+          GROUP BY c.id`, [refId, targetSoIds, parentId]);
 
-      // De-duplicate components by component_code + drawing_no
-      const uniqueComps = new Map();
-      soC.forEach(c => {
-        const key = `${c.component_code}-${c.drawing_no || ''}`;
-        if (!uniqueComps.has(key)) uniqueComps.set(key, c);
-      });
+        const uniqueComps = new Map();
+        soC.forEach(c => {
+          const key = `${c.component_code}-${c.drawing_no || ''}`;
+          if (!uniqueComps.has(key)) uniqueComps.set(key, c);
+        });
 
-      // Normalize item_type
-      const soCWithTypes = Array.from(uniqueComps.values()).map(c => ({
-        ...c,
-        item_type: (c.item_type === 'SA' || c.item_type === 'SFG' || c.item_group === 'Sub Assembly' || c.item_group === 'SUB_ASSEMBLY' || c.item_group === 'SFG' || (c.component_code && (c.component_code.startsWith('SA-') || c.component_code.startsWith('SFG-')))) ? 'Sub Assembly' : (c.item_type || 'FG')
-      }));
+        components = Array.from(uniqueComps.values()).map(c => ({
+          ...c,
+          item_type: (c.item_type === 'SA' || c.item_type === 'SFG' || c.item_group === 'Sub Assembly' || c.item_group === 'SUB_ASSEMBLY' || c.item_group === 'SFG' || (c.component_code && (c.component_code.startsWith('SA-') || c.component_code.startsWith('SFG-')))) ? 'Sub Assembly' : (c.item_type || 'FG')
+        }));
+      }
 
-      materials = soM;
-      components = soCWithTypes;
-
-      // Operations are usually flat for the item, fetch if matches item identity
-      const [soO] = await pool.query(`
-        SELECT * FROM sales_order_item_operations 
-        WHERE sales_order_item_id IN (?) 
-        AND (
-          TRIM(UPPER(item_code)) = TRIM(UPPER(?)) 
-          OR (TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) AND drawing_no IS NOT NULL)
-        )`, [targetSoIds, itemCode, drawingNo]);
-      operations = soO;
+      if (allSoOperations.length > 0) {
+        operations = allSoOperations.filter(o => 
+          targetSoIds.includes(o.sales_order_item_id) && 
+          (
+            (o.item_code && o.item_code.trim().toUpperCase() === itemCode.trim().toUpperCase()) ||
+            (o.drawing_no && drawingNo && o.drawing_no.trim().toUpperCase() === drawingNo.trim().toUpperCase())
+          )
+        );
+      } else {
+        const [soO] = await pool.query(`
+          SELECT * FROM sales_order_item_operations 
+          WHERE sales_order_item_id IN (?) 
+          AND (
+            TRIM(UPPER(item_code)) = TRIM(UPPER(?)) 
+            OR (TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) AND drawing_no IS NOT NULL)
+          )`, [targetSoIds, itemCode, drawingNo]);
+        operations = soO;
+      }
     }
 
     // 2. Granular Fallback to Master BOM or Any BOM (for missing parts)
@@ -1408,7 +1483,34 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const material_category = (depth <= 1) ? 'CORE' : 'EXPLODED';
       const source_assembly = depth === 0 ? null : itemCode;
 
-      const weight = (m.weight_per_unit && parseFloat(m.weight_per_unit) > 0) ? parseFloat(m.weight_per_unit) : 0;
+      const calculateWeightFromDimensions = (item) => {
+        let weightVal = (item.weight_per_unit && parseFloat(item.weight_per_unit) > 0) ? parseFloat(item.weight_per_unit) : 0;
+        if (weightVal === 0) {
+          const len = parseFloat(item.length || 0);
+          const wid = parseFloat(item.width || 0);
+          const thk = parseFloat(item.thickness || 0);
+          const dia = parseFloat(item.diameter || 0);
+          const od = parseFloat(item.outer_diameter || 0);
+          const density = parseFloat(item.density || 7.85);
+          const shapeStr = String(item.shape_type || item.shape_name || item.shape || item.material_name || '').trim().toLowerCase();
+
+          if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
+            const dVal = dia > 0 ? dia : od;
+            const pVal = parseFloat(item.thread_pitch || item.threadPitch || 0);
+            if (dVal > 0 && pVal > 0 && pVal < dVal && len > 0) {
+              const tensileArea = 0.7854 * Math.pow(dVal - (0.9382 * pVal), 2);
+              weightVal = (tensileArea * len * density) / 1000000;
+            }
+          } else if (len > 0 && wid > 0 && thk > 0) {
+            weightVal = (len * wid * thk * density) / 1000000;
+          } else if (len > 0 && dia > 0) {
+            weightVal = (Math.PI * Math.pow(dia, 2) / 4 * len * density) / 1000000;
+          }
+        }
+        return weightVal;
+      };
+
+      const weight = calculateWeightFromDimensions(m);
       const scrapFactor = (m.scrap_percent && parseFloat(m.scrap_percent) > 0) ? (1 + parseFloat(m.scrap_percent) / 100) : 1;
       const total_wt = weight * scrapFactor;
 
@@ -1488,7 +1590,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
     for (const comp of components) {
       const compCode = comp.component_code || comp.item_code;
-      const compDrawing = comp.drawing_no;
+      let compDrawing = comp.drawing_no;
       const compQty = parseFloat(comp.quantity || 0);
       const totalCompQty = compQty * qtyMultiplier;
 
@@ -1499,30 +1601,103 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
       if (soItemId) {
         const targetIds = Array.isArray(soItemId) ? soItemId : [soItemId];
-        const [found] = await pool.query(
-          `SELECT id FROM sales_order_items 
-           WHERE item_code = ? 
-           AND (
-             sales_order_id IN (
-               SELECT id FROM sales_orders 
-               WHERE id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?))
-               OR (customer_po_id IS NOT NULL AND customer_po_id IN (
-                 SELECT customer_po_id FROM sales_orders 
+        let found = [];
+        if (allSoItems.length > 0) {
+          const match = allSoItems.find(x => x.item_code === compCode);
+          if (match) found = [match];
+        } else {
+          const [dbFound] = await pool.query(
+            `SELECT id FROM sales_order_items 
+             WHERE item_code = ? 
+             AND (
+               sales_order_id IN (
+                 SELECT id FROM sales_orders 
                  WHERE id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?))
-               ))
+                 OR (customer_po_id IS NOT NULL AND customer_po_id IN (
+                   SELECT customer_po_id FROM sales_orders 
+                   WHERE id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?))
+                 ))
+               )
              )
-           )
-           ORDER BY id DESC
-           LIMIT 1`,
-          [compCode, targetIds, targetIds]
-        );
+             ORDER BY id DESC
+             LIMIT 1`,
+            [compCode, targetIds, targetIds]
+          );
+          found = dbFound;
+        }
 
         if (found.length > 0) {
           nextSoItemId = found[0].id;
           nextParentId = null;
         } else {
-          nextSoItemId = soItemId;
-          nextParentId = comp.id;
+          // Fallback: Search by normalized description / code in the same sales order context
+          let soItems = [];
+          if (allSoItems.length > 0) {
+            soItems = allSoItems;
+          } else {
+            [soItems] = await pool.query(
+              `SELECT id, item_code, description, drawing_no, item_type, item_group FROM sales_order_items 
+               WHERE sales_order_id IN (
+                 SELECT id FROM sales_orders 
+                 WHERE id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?))
+                 OR (customer_po_id IS NOT NULL AND customer_po_id IN (
+                   SELECT customer_po_id FROM sales_orders 
+                   WHERE id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?))
+                 ))
+               )`,
+              [targetIds, targetIds]
+            );
+          }
+
+          const normalize = (str) => {
+            if (!str) return '';
+            return str.toLowerCase().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+          };
+
+          const compDescNorm = normalize(comp.description);
+          const compCodeNorm = normalize(compCode);
+
+          let fallbackMatch = null;
+          for (const soi of soItems) {
+            const soiDescNorm = normalize(soi.description);
+            const soiCodeNorm = normalize(soi.item_code);
+
+            if (
+              (compDescNorm && soiDescNorm && compDescNorm === soiDescNorm) ||
+              (compCodeNorm && soiCodeNorm && compCodeNorm === soiCodeNorm)
+            ) {
+              fallbackMatch = soi;
+              break;
+            }
+          }
+
+          if (fallbackMatch) {
+            nextSoItemId = fallbackMatch.id;
+            nextParentId = null;
+          } else {
+            nextSoItemId = soItemId;
+            nextParentId = comp.id;
+          }
+        }
+      }
+
+      if (nextSoItemId) {
+        let details = null;
+        if (allSoItems.length > 0) {
+          details = allSoItems.find(x => x.id === nextSoItemId);
+        } else {
+          const [soiDetails] = await pool.query(
+            'SELECT item_type, item_group, drawing_no FROM sales_order_items WHERE id = ?',
+            [nextSoItemId]
+          );
+          if (soiDetails.length > 0) details = soiDetails[0];
+        }
+
+        if (details) {
+          comp.item_type = details.item_type;
+          comp.item_group = details.item_group;
+          comp.drawing_no = details.drawing_no;
+          compDrawing = details.drawing_no;
         }
       }
 
@@ -1548,6 +1723,64 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         operations: subDetails.operations
       };
 
+      const isBoughtOut = 
+        (comp.item_group && (comp.item_group.toUpperCase().includes('BOUGHT') || comp.item_group.toUpperCase().includes('CONSUMABLE'))) ||
+        (compCode && (compCode.toUpperCase().startsWith('BO-') || compCode.toUpperCase().startsWith('BO_') || compCode.toUpperCase().startsWith('CONS-') || compCode.toUpperCase().startsWith('BO:')));
+
+      if (isBoughtOut) {
+        const matName = comp.description || comp.component_code || 'Unknown BO Item';
+        const matCode = compCode;
+        const len = Number(comp.length) || 0;
+        const wid = Number(comp.width) || 0;
+        const thk = Number(comp.thickness) || 0;
+        const dia = Number(comp.diameter) || 0;
+        const od = Number(comp.outer_diameter) || 0;
+        const mKey = `${matName}-${matCode}-${len}-${wid}-${thk}-${dia}-${od}`;
+
+        const material_category = (depth <= 1) ? 'CORE' : 'EXPLODED';
+        const source_assembly = depth === 0 ? null : itemCode;
+
+        // For Bought Out items, quantity is unit-based (not calculated via dimensions/weight)
+        const baseQtyPerFG = parseFloat(comp.quantity || 0) || 1;
+        const reqQty = baseQtyPerFG * qtyMultiplier;
+
+        const existing = materialMap.get(mKey);
+        if (existing) {
+          existing.required_qty += reqQty;
+          existing.totalRequiredQty += reqQty;
+          if (material_category === 'CORE') {
+            existing.material_category = 'CORE';
+          }
+        } else {
+          materialMap.set(mKey, {
+            ...comp,
+            material_name: matName,
+            material_code: matCode,
+            item_code: matCode,
+            material_category,
+            required_qty: reqQty,
+            totalRequiredQty: reqQty,
+            source_assembly,
+            rate: comp.rate || 0,
+            bom_ref: comp.bom_no || comp.bom_ref || compDrawing || 'BOM-REF',
+            total_wt: 0,
+            is_kg_material: (comp.uom || '').toUpperCase() === 'KG'
+          });
+        }
+
+        // Also push to local materials list so it returns in subDetails.materials
+        materials.push({
+          ...comp,
+          material_name: matName,
+          material_code: matCode,
+          item_code: matCode,
+          qty_per_pc: baseQtyPerFG,
+          weight_per_unit: comp.weight_per_unit || 0,
+          scrap_percent: comp.scrap_percent || 0,
+          item_group: comp.item_group || 'BOUGHT_OUT'
+        });
+      }
+
       if (!componentMap.has(cKey)) {
         componentMap.set(cKey, componentData);
       }
@@ -1556,7 +1789,34 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
     return {
       materials: materials.map(m => {
-        const weight = (m.weight_per_unit && parseFloat(m.weight_per_unit) > 0) ? parseFloat(m.weight_per_unit) : 0;
+        const calculateWeightFromDimensions = (item) => {
+          let weightVal = (item.weight_per_unit && parseFloat(item.weight_per_unit) > 0) ? parseFloat(item.weight_per_unit) : 0;
+          if (weightVal === 0) {
+            const len = parseFloat(item.length || 0);
+            const wid = parseFloat(item.width || 0);
+            const thk = parseFloat(item.thickness || 0);
+            const dia = parseFloat(item.diameter || 0);
+            const od = parseFloat(item.outer_diameter || 0);
+            const density = parseFloat(item.density || 7.85);
+            const shapeStr = String(item.shape_type || item.shape_name || item.shape || item.material_name || '').trim().toLowerCase();
+
+            if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
+              const dVal = dia > 0 ? dia : od;
+              const pVal = parseFloat(item.thread_pitch || item.threadPitch || 0);
+              if (dVal > 0 && pVal > 0 && pVal < dVal && len > 0) {
+                const tensileArea = 0.7854 * Math.pow(dVal - (0.9382 * pVal), 2);
+                weightVal = (tensileArea * len * density) / 1000000;
+              }
+            } else if (len > 0 && wid > 0 && thk > 0) {
+              weightVal = (len * wid * thk * density) / 1000000;
+            } else if (len > 0 && dia > 0) {
+              weightVal = (Math.PI * Math.pow(dia, 2) / 4 * len * density) / 1000000;
+            }
+          }
+          return weightVal;
+        };
+
+        const weight = calculateWeightFromDimensions(m);
         const scrapFactor = (m.scrap_percent && parseFloat(m.scrap_percent) > 0) ? (1 + parseFloat(m.scrap_percent) / 100) : 1;
         const total_wt = weight * scrapFactor;
 
