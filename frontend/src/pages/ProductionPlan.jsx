@@ -1131,6 +1131,27 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   };
 
   const planDetails = useMemo(() => {
+    // 0. Pre-build a map: itemCode → effective planned qty for each plan item.
+    //    For a Part item that is 3× per Assembly (Assembly qty=5), effective qty = 15.
+    //    This is derived from the ASSEMBLY's component list (comp.quantity × Assembly.plannedQty).
+    //    Falls back to item.plannedQty (= design qty = 5) for top-level FG items.
+    const itemEffectiveQtyMap = new Map();
+    newPlan.items.forEach(item => {
+      const ownQty = parseFloat(item.plannedQty || newPlan.targetQuantity || 1);
+      (item.components || []).forEach(comp => {
+        const compCode = comp.component_code || comp.item_code;
+        if (!compCode) return;
+        const compQty = parseFloat(comp.quantity || comp.required_qty || 0);
+        const effectiveQty = compQty * ownQty;
+        // If the same component appears in multiple parent assemblies, sum up
+        itemEffectiveQtyMap.set(compCode, (itemEffectiveQtyMap.get(compCode) || 0) + effectiveQty);
+      });
+      // Ensure every plan item has at least its own qty registered
+      if (!itemEffectiveQtyMap.has(item.itemCode)) {
+        itemEffectiveQtyMap.set(item.itemCode, ownQty);
+      }
+    });
+
     // 1. Collect all materials
     const consolidatedMaterialsMap = new Map();
     const processedMaterialSOItems = new Set();
@@ -1147,6 +1168,15 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         const baseQty = parseFloat(mat.qty_per_pc || mat.required_qty || 0) * weightMultiplier;
         const itemPlannedQty = parseFloat(item.plannedQty || newPlan.targetQuantity || 1);
         const plannedQty = baseQty * itemPlannedQty;
+
+        // Determine which source item produced this material:
+        // - For materials from nested Parts (Assembly BOM explosion): mat.source_assembly = Part item code
+        // - For Assembly's own direct materials: mat.source_assembly = null → use Assembly's item code
+        // Look up the effective qty of that source item from our pre-built map.
+        // e.g. SUPPORT ARM materials → source_assembly = 'PART-SUPPORTARM-0001' → effectiveQty = 15
+        const sourceItemCode = mat.source_assembly || item.itemCode;
+        const designQtyForMaterial = itemEffectiveQtyMap.get(sourceItemCode)
+          || itemPlannedQty;
 
         // Use a key that represents the material identity - de-duplicate by name, unit, and dimensions
         const len = Number(mat.length || (mat.dimensions && mat.dimensions.length)) || 0;
@@ -1166,6 +1196,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           // Sum up quantities for the same material
           existing.totalPlannedQty += plannedQty;
           existing.required_qty = (parseFloat(existing.required_qty) || 0) + plannedQty;
+          // Take the largest design qty when same material is used in multiple items
+          if (designQtyForMaterial > existing.totalDesignQty) {
+            existing.totalDesignQty = designQtyForMaterial;
+          }
 
           if (matCat === 'CORE') existing.material_category = 'CORE';
         } else {
@@ -1174,7 +1208,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             item_code: itemCode,
             material_name: matName,
             material_category: matCat,
-            totalDesignQty: newPlan.targetQuantity || 0,
+            // Design Qty = effective qty of the source Part/item that consumes this material.
+            // For nested Part materials: mat.source_assembly → Part's effective qty (e.g. 15)
+            // For Assembly's own materials: item.itemCode → Assembly's qty (e.g. 5)
+            totalDesignQty: designQtyForMaterial,
             totalPlannedQty: plannedQty,
             required_qty: plannedQty,
             bomQty: baseQty,
@@ -1634,7 +1671,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         label: 'Design Qty',
         key: 'design_qty',
         className: 'text-right',
-        render: (val, mat) => Number(isViewing ? (val || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)
+        render: (val, mat) => Number(isViewing ? (val || mat.totalDesignQty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)
       },
       {
         label: 'Planned Qty',
@@ -1649,7 +1686,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               {mat.uom || mat.unit || 'Nos'}
               {isWeightBased(mat.uom || mat.unit) && (
                 <span className="ml-1 text-slate-300">
-                  ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number((parseFloat(val || mat.totalPlannedQty) || 0) / (parseFloat(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty) || 1)).toFixed(3)})
+                  ({Number(isViewing ? (mat.design_qty || mat.totalDesignQty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number((parseFloat(val || mat.totalPlannedQty) || 0) / (parseFloat(isViewing ? (mat.design_qty || mat.totalDesignQty || newPlan.targetQuantity) : mat.totalDesignQty) || 1)).toFixed(3)})
                 </span>
               )}
             </div>
@@ -1705,7 +1742,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         label: 'Design Qty',
         key: 'design_qty',
         className: 'text-right',
-        render: (val, mat) => Number(isViewing ? (val || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)
+        render: (val, mat) => Number(isViewing ? (val || mat.totalDesignQty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)
       },
       {
         label: 'Planned Qty',
@@ -2132,7 +2169,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                               </div>
                             </td>
                             <td className="p-2  text-right  text-slate-700">
-                              {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)}
+                              {Number(isViewing ? (mat.design_qty || mat.totalDesignQty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)}
                             </td>
                             <td className="p-2  text-right">
                               <div className=" text-amber-600 ">
@@ -2142,7 +2179,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                                 {mat.uom || mat.unit || 'Nos'}
                                 {isWeightBased(mat.uom || mat.unit) && (
                                   <span className="ml-1 text-slate-300">
-                                    ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number((parseFloat(mat.required_qty || mat.totalPlannedQty) || 0) / (parseFloat(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty) || 1)).toFixed(3)})
+                                    ({Number(isViewing ? (mat.design_qty || mat.totalDesignQty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number((parseFloat(mat.required_qty || mat.totalPlannedQty) || 0) / (parseFloat(isViewing ? (mat.design_qty || mat.totalDesignQty || newPlan.targetQuantity) : mat.totalDesignQty) || 1)).toFixed(3)})
                                   </span>
                                 )}
                               </div>
@@ -2203,7 +2240,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                               </div>
                             </td>
                             <td className="p-2  text-right  text-slate-700">
-                              {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)}
+                              {Number(isViewing ? (mat.design_qty || mat.totalDesignQty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)}
                             </td>
                             <td className="p-2  text-right">
                               <div className=" text-rose-600 ">
@@ -2213,7 +2250,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                                 {mat.uom || mat.unit || 'Nos'}
                                 {isWeightBased(mat.uom || mat.unit) && (
                                   <span className="ml-1 text-slate-300">
-                                    ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number((parseFloat(mat.required_qty || mat.totalPlannedQty) || 0) / (parseFloat(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty) || 1)).toFixed(3)})
+                                    ({Number(isViewing ? (mat.design_qty || mat.totalDesignQty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number((parseFloat(mat.required_qty || mat.totalPlannedQty) || 0) / (parseFloat(isViewing ? (mat.design_qty || mat.totalDesignQty || newPlan.targetQuantity) : mat.totalDesignQty) || 1)).toFixed(3)})
                                   </span>
                                 )}
                               </div>
@@ -2425,7 +2462,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           ...m,
           itemCode: m.material_code || m.item_code || m.item || null,
           materialName: m.material_name || m.item || null,
-          designQty: newPlan.targetQuantity || 0,
+          // Use the material's own effective exploded design qty (e.g. 15 for 5 assemblies × 3 parts),
+          // NOT the top-level targetQuantity which only reflects the top-level assembly count.
+          designQty: m.totalDesignQty ?? m.design_qty ?? newPlan.targetQuantity ?? 0,
           requiredQty: m.totalPlannedQty || m.required_qty || 0,
           bomRef: m.bom_ref || m.bom_no || null,
           sourceAssembly: m.source_assembly || null,
