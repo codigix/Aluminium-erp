@@ -1228,6 +1228,8 @@ const getItemBOMDetails = async (salesOrderItemId) => {
   const item = items[0];
   console.log(`[getItemBOMDetails] Exploding BOM for ${item.item_code} / ${item.drawing_no} using lookup ID: ${soItemIdForLookup}`);
 
+  const globalItemCache = new Map();
+
   let salesOrderId = item.sales_order_id || null;
   if (!salesOrderId && item.order_id) {
     const [ord] = await pool.query(
@@ -1327,7 +1329,9 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const targetSoIds = isArray ? soItemId : [soItemId || null];
       const refId = isArray ? soItemId[0] : (soItemId || null);
 
-      if (allSoMaterials.length > 0) {
+      const hasPrefetched = allSoItems.some(x => targetSoIds.includes(x.id));
+
+      if (hasPrefetched && allSoMaterials.length > 0) {
         materials = allSoMaterials.filter(m => targetSoIds.includes(m.sales_order_item_id) && m.parent_id === parentId);
       } else {
         const [soM] = await pool.query(`
@@ -1339,7 +1343,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         materials = soM;
       }
 
-      if (allSoComponents.length > 0) {
+      if (hasPrefetched && allSoComponents.length > 0) {
         const matchingComps = allSoComponents.filter(c => targetSoIds.includes(c.sales_order_item_id) && c.parent_id === parentId);
         const uniqueComps = new Map();
         matchingComps.forEach(c => {
@@ -1382,7 +1386,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         }));
       }
 
-      if (allSoOperations.length > 0) {
+      if (hasPrefetched && allSoOperations.length > 0) {
         operations = allSoOperations.filter(o => 
           targetSoIds.includes(o.sales_order_item_id) && 
           (
@@ -1479,8 +1483,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
     // Process Materials
     materials.forEach(m => {
-      // level 0 (FG) and level 1 (direct sub-assemblies) are considered CORE for primary list
-      const material_category = (depth <= 1) ? 'CORE' : 'EXPLODED';
+      const material_category = 'CORE';
       const source_assembly = depth === 0 ? null : itemCode;
 
       const calculateWeightFromDimensions = (item) => {
@@ -1602,7 +1605,9 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       if (soItemId) {
         const targetIds = Array.isArray(soItemId) ? soItemId : [soItemId];
         let found = [];
-        if (allSoItems.length > 0) {
+        const hasPrefetched = allSoItems.some(x => targetIds.includes(x.id));
+
+        if (hasPrefetched && allSoItems.length > 0) {
           const match = allSoItems.find(x => x.item_code === compCode);
           if (match) found = [match];
         } else {
@@ -1632,7 +1637,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         } else {
           // Fallback: Search by normalized description / code in the same sales order context
           let soItems = [];
-          if (allSoItems.length > 0) {
+          if (hasPrefetched && allSoItems.length > 0) {
             soItems = allSoItems;
           } else {
             [soItems] = await pool.query(
@@ -1675,8 +1680,28 @@ const getItemBOMDetails = async (salesOrderItemId) => {
             nextSoItemId = fallbackMatch.id;
             nextParentId = null;
           } else {
-            nextSoItemId = soItemId;
-            nextParentId = comp.id;
+            // Fallback 2: Cached Global Lookup across all Sales Order items in the database
+            let globalMatchId = globalItemCache.get(compCode);
+            if (!globalMatchId) {
+              const [dbGlobalMatch] = await pool.query(
+                `SELECT id FROM sales_order_items 
+                 WHERE (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL))
+                 ORDER BY id DESC LIMIT 1`,
+                [compCode, compDrawing]
+              );
+              if (dbGlobalMatch.length > 0) {
+                globalMatchId = dbGlobalMatch[0].id;
+                globalItemCache.set(compCode, globalMatchId);
+              }
+            }
+
+            if (globalMatchId) {
+              nextSoItemId = globalMatchId;
+              nextParentId = null;
+            } else {
+              nextSoItemId = soItemId;
+              nextParentId = comp.id;
+            }
           }
         }
       }
@@ -1737,7 +1762,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         const od = Number(comp.outer_diameter) || 0;
         const mKey = `${matName}-${matCode}-${len}-${wid}-${thk}-${dia}-${od}`;
 
-        const material_category = (depth <= 1) ? 'CORE' : 'EXPLODED';
+        const material_category = 'CORE';
         const source_assembly = depth === 0 ? null : itemCode;
 
         // For Bought Out items, quantity is unit-based (not calculated via dimensions/weight)
