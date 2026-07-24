@@ -788,7 +788,7 @@ const getPurchaseOrders = async (filters = {}) => {
         let resolvedDwg = null;
         const needsResolving = !item.drawing_no || /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no) || item.drawing_no === '—';
         if (needsResolving) {
-          resolvedDwg = await getItemParentDrawingNumber(pool, item, cache);
+          resolvedDwg = po.drawing_no;
         }
         item.drawing_no = resolvedDwg || item.drawing_no;
 

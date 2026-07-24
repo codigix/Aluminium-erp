@@ -273,14 +273,22 @@ const getAllStockEntries = async (filters = {}) => {
 
   const [rows] = await pool.query(query, params);
   
-  // Get item counts and total value for each entry
-  for (const row of rows) {
-    const [stats] = await pool.query(
-      'SELECT COUNT(*) as count, SUM(amount) as total_value FROM stock_entry_items WHERE stock_entry_id = ?', 
-      [row.id]
+  // Get item counts and total value for each entry in a single batched query
+  if (rows.length > 0) {
+    const entryIds = rows.map(r => r.id);
+    const [statsRows] = await pool.query(
+      'SELECT stock_entry_id, COUNT(*) as count, SUM(amount) as total_value FROM stock_entry_items WHERE stock_entry_id IN (?) GROUP BY stock_entry_id',
+      [entryIds]
     );
-    row.item_count = stats[0].count || 0;
-    row.total_value = stats[0].total_value || 0;
+    const statsMap = {};
+    for (const s of statsRows) {
+      statsMap[s.stock_entry_id] = s;
+    }
+    for (const row of rows) {
+      const stats = statsMap[row.id];
+      row.item_count = stats ? (stats.count || 0) : 0;
+      row.total_value = stats ? (stats.total_value || 0) : 0;
+    }
   }
 
   return rows;
