@@ -3,6 +3,7 @@ const path = require('path');
 const parsePoPdf = require('../utils/poParser');
 const parseExcelPo = require('../utils/excelPoParser');
 const customerPoService = require('../services/customerPoService');
+const excelExportService = require('../services/excelExportService');
 
 const deriveCreditDays = value => {
   const match = (value || '').match(/(\d+)/);
@@ -339,6 +340,106 @@ const uploadCustomerPoPdfOnly = async (req, res, next) => {
   }
 };
 
+const getPendingDrawings = async (req, res, next) => {
+  try {
+    const filters = {
+      customer: req.query.customer,
+      po_no: req.query.po_no,
+      drawing_no: req.query.drawing_no,
+      drawing_name: req.query.drawing_name,
+      project: req.query.project,
+      status: req.query.status,
+      from: req.query.from,
+      to: req.query.to,
+      ready_dispatch: req.query.ready_dispatch,
+      page: req.query.page,
+      limit: req.query.limit,
+      export_all: req.query.export_all === 'true'
+    };
+    const data = await customerPoService.getPendingDrawings(filters);
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getDispatchedDrawings = async (req, res, next) => {
+  try {
+    const filters = {
+      search: req.query.search,
+      page: req.query.page,
+      limit: req.query.limit,
+      export_all: req.query.export_all === 'true'
+    };
+    const data = await customerPoService.getDispatchedDrawings(filters);
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const exportPendingDrawingsExcel = async (req, res, next) => {
+  try {
+    const filters = {
+      customer: req.query.customer,
+      po_no: req.query.po_no,
+      drawing_no: req.query.drawing_no,
+      drawing_name: req.query.drawing_name,
+      project: req.query.project,
+      status: req.query.status,
+      from: req.query.from,
+      to: req.query.to,
+      ready_dispatch: req.query.ready_dispatch,
+      export_all: true
+    };
+    const data = await customerPoService.getPendingDrawings(filters);
+    await excelExportService.exportDrawingsToExcel(
+      res, 
+      data.drawings || [], 
+      'Pending Customer PO Dispatch Report', 
+      {
+        customer: filters.customer !== 'ALL' ? filters.customer : 'All Customers',
+        project: filters.project !== 'ALL' ? filters.project : 'All Projects',
+        status: filters.status
+      }
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+const exportDispatchedDrawingsExcel = async (req, res, next) => {
+  try {
+    const filters = {
+      search: req.query.search,
+      export_all: true
+    };
+    const data = await customerPoService.getDispatchedDrawings(filters);
+    await excelExportService.exportDrawingsToExcel(
+      res, 
+      data.drawings || [], 
+      'Dispatched Customer PO Report', 
+      {
+        customer: filters.search ? `Search: ${filters.search}` : 'All Customers',
+        project: 'All Projects',
+        status: 'Dispatched'
+      }
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getPendingFilterOptions = async (req, res, next) => {
+  try {
+    const data = await customerPoService.getPendingFilterOptions();
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 module.exports = {
   createCustomerPo,
   parseCustomerPoPdf,
@@ -348,5 +449,10 @@ module.exports = {
   updateCustomerPo,
   deleteCustomerPo,
   sendCustomerPoEmail,
-  uploadCustomerPoPdfOnly
+  uploadCustomerPoPdfOnly,
+  getPendingDrawings,
+  getPendingFilterOptions,
+  getDispatchedDrawings,
+  exportPendingDrawingsExcel,
+  exportDispatchedDrawingsExcel
 };

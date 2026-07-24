@@ -764,7 +764,7 @@ const customerPoSummaryTemplate = `
 
   body {
     background: #fff;
-    color: #1a1a1a;
+    color: #222222;
     font-size: 11px;
     line-height: 1.4;
     -webkit-print-color-adjust: exact;
@@ -780,9 +780,12 @@ const customerPoSummaryTemplate = `
   .header-section {
     display: flex;
     justify-content: space-between;
-    align-items: flex-end;
-    border-bottom: 1.5px solid #000;
-    padding-bottom: 10px;
+    align-items: center;
+    background-color: #FFF59D;
+    color: #333333;
+    padding: 12px 15px;
+    border: 1px solid #D6D6D6;
+    border-radius: 4px;
     margin-bottom: 15px;
   }
 
@@ -792,11 +795,12 @@ const customerPoSummaryTemplate = `
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 2px;
+    color: #333333;
   }
 
   .title-block p {
     font-size: 10px;
-    color: #555;
+    color: #333333;
   }
 
   .po-meta-table {
@@ -807,12 +811,14 @@ const customerPoSummaryTemplate = `
   .po-meta-table td {
     padding: 2px 4px;
     vertical-align: top;
+    color: #222222;
   }
 
   .po-meta-table td.label {
     font-weight: bold;
     text-align: right;
     width: 70px;
+    color: #333333;
   }
 
   /* Address Section */
@@ -831,15 +837,16 @@ const customerPoSummaryTemplate = `
     font-size: 10px;
     font-weight: bold;
     text-transform: uppercase;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid #D6D6D6;
     padding-bottom: 4px;
     margin-bottom: 6px;
-    color: #444;
+    color: #333333;
   }
 
   .address-box p {
     margin-bottom: 3px;
     line-height: 1.35;
+    color: #222222;
   }
 
   /* Items Table */
@@ -847,11 +854,13 @@ const customerPoSummaryTemplate = `
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 20px;
+    border: 1px solid #D6D6D6;
   }
 
   .items-table th {
-    border-top: 1px solid #000;
-    border-bottom: 1.5px solid #000;
+    background-color: #FFF176;
+    color: #333333;
+    border: 1px solid #D6D6D6;
     padding: 6px 4px;
     font-size: 10px;
     font-weight: bold;
@@ -860,9 +869,14 @@ const customerPoSummaryTemplate = `
   }
 
   .items-table td {
-    border-bottom: 1px solid #ddd;
+    border: 1px solid #D6D6D6;
     padding: 8px 4px;
     vertical-align: top;
+    color: #222222;
+  }
+
+  .items-table tr:nth-child(even) td {
+    background-color: #FFFDE7;
   }
 
   .items-table th.right-align,
@@ -878,11 +892,12 @@ const customerPoSummaryTemplate = `
   .item-desc-bold {
     font-weight: bold;
     margin-bottom: 2px;
+    color: #222222;
   }
 
   .item-desc-sub {
     font-size: 9.5px;
-    color: #555;
+    color: #333333;
   }
 
   /* Summary Footer Section */
@@ -895,10 +910,10 @@ const customerPoSummaryTemplate = `
   }
 
   .status-box {
-    border: 1px solid #ccc;
+    border: 1px solid #D6D6D6;
     padding: 8px 12px;
     border-radius: 4px;
-    background: #fafafa;
+    background: #FFFDE7;
     min-width: 150px;
   }
 
@@ -910,16 +925,20 @@ const customerPoSummaryTemplate = `
     font-size: 12px;
     font-weight: bold;
     text-transform: uppercase;
+    color: #333333;
   }
 
   .totals-table {
     width: 280px;
     border-collapse: collapse;
     font-size: 11px;
+    border: 1px solid #D6D6D6;
   }
 
   .totals-table td {
     padding: 4px 6px;
+    border: 1px solid #D6D6D6;
+    color: #222222;
   }
 
   .totals-table td.val {
@@ -927,11 +946,13 @@ const customerPoSummaryTemplate = `
   }
 
   .totals-table tr.grand-total-row td {
-    border-top: 1.5px solid #000;
-    border-bottom: 1.5px solid #000;
+    border-top: 1.5px solid #D6D6D6;
+    border-bottom: 1.5px solid #D6D6D6;
+    background-color: #FFF176;
     font-size: 13px;
     font-weight: bold;
     padding: 6px 6px;
+    color: #333333;
   }
 
   @media print {
@@ -2087,6 +2108,307 @@ const uploadCustomerPoPdf = async (id, pdfPath) => {
   return result.affectedRows > 0;
 };
 
+const getPendingDrawings = async (filters = {}) => {
+  const {
+    customer,
+    po_no,
+    drawing_no,
+    drawing_name,
+    project,
+    status,
+    from,
+    to,
+    ready_dispatch,
+    page = 1,
+    limit = 25,
+    export_all = false
+  } = filters;
+
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  let sql = `
+    SELECT * FROM (
+      SELECT 
+        cpi.id,
+        cpi.customer_po_id,
+        cp.po_number,
+        c.company_name,
+        cp.project_name,
+        cpi.drawing_no,
+        cpi.description as drawing_name,
+        cpi.quantity as ordered_qty,
+        cpi.delivery_date,
+        cp.status as po_status,
+        so.id as sales_order_id,
+        COALESCE(
+          (SELECT SUM(COALESCE(jc.produced_qty, jc.accepted_qty, 0))
+           FROM job_cards jc
+           JOIN work_orders wo ON jc.work_order_id = wo.id
+           WHERE wo.sales_order_item_id = soi.id AND wo.source_type = 'FG' AND jc.operation_name != 'shipment' AND jc.operation_name != 'dispatch'
+          ), 0
+        ) as produced,
+        COALESCE(
+          (SELECT SUM(COALESCE(qci.accepted_qty, 0))
+           FROM qc_inspection_items qci
+           JOIN qc_inspections qc ON qci.qc_inspection_id = qc.id
+           WHERE qci.item_code = cpi.drawing_no OR qci.item_code = cpi.item_code
+          ), 0
+        ) as qc,
+        COALESCE(
+          (SELECT SUM(COALESCE(sb.current_balance, 0))
+           FROM stock_balance sb
+           WHERE (sb.item_code = cpi.drawing_no OR sb.item_code = cpi.item_code) AND sb.material_type = 'FG'
+          ), 0
+        ) as fg_stock,
+        COALESCE(dispatch.dispatched_qty, 0) as dispatched
+      FROM customer_po_items cpi
+      JOIN customer_pos cp ON cpi.customer_po_id = cp.id
+      JOIN companies c ON cp.company_id = c.id
+      LEFT JOIN sales_orders so ON so.customer_po_id = cp.id
+      LEFT JOIN sales_order_items soi ON soi.sales_order_id = so.id AND (TRIM(UPPER(soi.drawing_no)) = TRIM(UPPER(cpi.drawing_no)) OR TRIM(UPPER(soi.item_code)) = TRIM(UPPER(cpi.item_code)))
+      LEFT JOIN (
+        SELECT 
+          so2.customer_po_id,
+          COALESCE(soi2.drawing_no, oi2.drawing_no, wo2.bom_no) as drawing_no,
+          COALESCE(soi2.item_code, oi2.item_code, wo2.item_code) as item_code,
+          SUM(COALESCE(jc2.dispatch_qty, jc2.accepted_qty, 0)) as dispatched_qty
+        FROM job_cards jc2
+        JOIN work_orders wo2 ON jc2.work_order_id = wo2.id
+        JOIN sales_orders so2 ON wo2.sales_order_id = so2.id
+        LEFT JOIN sales_order_items soi2 ON wo2.sales_order_item_id = soi2.id
+        LEFT JOIN order_items oi2 ON wo2.sales_order_item_id = oi2.id
+        WHERE (jc2.operation_name = 'shipment' OR jc2.operation_name = 'dispatch')
+          AND wo2.source_type = 'FG'
+        GROUP BY so2.customer_po_id, COALESCE(soi2.drawing_no, oi2.drawing_no, wo2.bom_no), COALESCE(soi2.item_code, oi2.item_code, wo2.item_code)
+      ) dispatch ON dispatch.customer_po_id = cpi.customer_po_id 
+                AND (
+                  (TRIM(UPPER(dispatch.drawing_no)) = TRIM(UPPER(cpi.drawing_no)) AND cpi.drawing_no IS NOT NULL AND cpi.drawing_no != '')
+                  OR 
+                  (TRIM(UPPER(dispatch.item_code)) = TRIM(UPPER(cpi.item_code)) AND cpi.item_code IS NOT NULL AND cpi.item_code != '')
+                )
+      WHERE cp.status != 'REJECTED'
+    ) t
+    WHERE (ordered_qty - dispatched) > 0
+  `;
+
+  const queryParams = [];
+
+  if (customer && customer !== 'ALL') {
+    sql += ` AND TRIM(company_name) = TRIM(?)`;
+    queryParams.push(customer);
+  }
+  if (po_no) {
+    sql += ` AND po_number LIKE ?`;
+    queryParams.push(`%${po_no}%`);
+  }
+  if (drawing_no) {
+    sql += ` AND drawing_no LIKE ?`;
+    queryParams.push(`%${drawing_no}%`);
+  }
+  if (drawing_name) {
+    sql += ` AND drawing_name LIKE ?`;
+    queryParams.push(`%${drawing_name}%`);
+  }
+  if (project && project !== 'ALL') {
+    sql += ` AND project_name LIKE ?`;
+    queryParams.push(`%${project}%`);
+  }
+  if (from) {
+    sql += ` AND delivery_date >= ?`;
+    queryParams.push(from);
+  }
+  if (to) {
+    sql += ` AND delivery_date <= ?`;
+    queryParams.push(to);
+  }
+
+  if (status && status !== 'ALL') {
+    if (status === 'Ready') {
+      sql += ` AND fg_stock >= (ordered_qty - dispatched)`;
+    } else if (status === 'Production') {
+      sql += ` AND fg_stock < (ordered_qty - dispatched)`;
+    } else if (status === 'Partial') {
+      sql += ` AND dispatched > 0`;
+    }
+  }
+
+  if (ready_dispatch === 'true' || ready_dispatch === true) {
+    sql += ` AND fg_stock >= (ordered_qty - dispatched)`;
+  }
+
+  const countSql = `SELECT COUNT(*) as total FROM (${sql}) c`;
+  const [countResult] = await pool.query(countSql, queryParams);
+  const total = countResult[0]?.total || 0;
+
+  const metricsSql = `
+    SELECT 
+      COUNT(*) as totalPendingDrawings,
+      SUM(CASE WHEN fg_stock >= (ordered_qty - dispatched) THEN 1 ELSE 0 END) as readyForDispatch,
+      SUM(CASE WHEN fg_stock < (ordered_qty - dispatched) THEN 1 ELSE 0 END) as productionPending,
+      SUM(CASE WHEN produced > qc THEN 1 ELSE 0 END) as qcPending,
+      SUM(CASE WHEN dispatched > 0 THEN 1 ELSE 0 END) as partialDispatch
+    FROM (${sql}) m
+  `;
+  const [metricsResult] = await pool.query(metricsSql, queryParams);
+  const summary = metricsResult[0] || {
+    totalPendingDrawings: 0,
+    readyForDispatch: 0,
+    productionPending: 0,
+    qcPending: 0,
+    partialDispatch: 0
+  };
+
+  if (!export_all) {
+    sql += ` LIMIT ? OFFSET ?`;
+    queryParams.push(parseInt(limit), parseInt(offset));
+  }
+
+  const [drawings] = await pool.query(sql, queryParams);
+
+  const formattedDrawings = drawings.map(r => {
+    const pending = Math.max(0, r.ordered_qty - r.dispatched);
+    let calculatedStatus = 'Production';
+    if (r.fg_stock >= pending && pending > 0) {
+      calculatedStatus = 'Ready';
+    } else if (r.dispatched > 0 && pending > 0) {
+      calculatedStatus = 'Partial';
+    }
+    return {
+      ...r,
+      pending,
+      status: calculatedStatus
+    };
+  });
+
+  return { drawings: formattedDrawings, total, summary };
+};
+
+const getDispatchedDrawings = async (filters = {}) => {
+  const {
+    search,
+    page = 1,
+    limit = 25,
+    export_all = false
+  } = filters;
+
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  let sql = `
+    SELECT * FROM (
+      SELECT 
+        cpi.id,
+        cpi.customer_po_id,
+        cp.po_number,
+        c.company_name,
+        cp.project_name,
+        cpi.drawing_no,
+        cpi.description as drawing_name,
+        cpi.quantity as ordered_qty,
+        cpi.delivery_date,
+        cp.status as po_status,
+        so.id as sales_order_id,
+        COALESCE(
+          (SELECT SUM(COALESCE(jc.produced_qty, jc.accepted_qty, 0))
+           FROM job_cards jc
+           JOIN work_orders wo ON jc.work_order_id = wo.id
+           WHERE wo.sales_order_item_id = soi.id AND wo.source_type = 'FG' AND jc.operation_name != 'shipment' AND jc.operation_name != 'dispatch'
+          ), 0
+        ) as produced,
+        COALESCE(
+          (SELECT SUM(COALESCE(qci.accepted_qty, 0))
+           FROM qc_inspection_items qci
+           JOIN qc_inspections qc ON qci.qc_inspection_id = qc.id
+           WHERE qci.item_code = cpi.drawing_no OR qci.item_code = cpi.item_code
+          ), 0
+        ) as qc,
+        COALESCE(
+          (SELECT SUM(COALESCE(sb.current_balance, 0))
+           FROM stock_balance sb
+           WHERE (sb.item_code = cpi.drawing_no OR sb.item_code = cpi.item_code) AND sb.material_type = 'FG'
+          ), 0
+        ) as fg_stock,
+        COALESCE(dispatch.dispatched_qty, 0) as dispatched
+      FROM customer_po_items cpi
+      JOIN customer_pos cp ON cpi.customer_po_id = cp.id
+      JOIN companies c ON cp.company_id = c.id
+      LEFT JOIN sales_orders so ON so.customer_po_id = cp.id
+      LEFT JOIN sales_order_items soi ON soi.sales_order_id = so.id AND (TRIM(UPPER(soi.drawing_no)) = TRIM(UPPER(cpi.drawing_no)) OR TRIM(UPPER(soi.item_code)) = TRIM(UPPER(cpi.item_code)))
+      LEFT JOIN (
+        SELECT 
+          so2.customer_po_id,
+          COALESCE(soi2.drawing_no, oi2.drawing_no, wo2.bom_no) as drawing_no,
+          COALESCE(soi2.item_code, oi2.item_code, wo2.item_code) as item_code,
+          SUM(COALESCE(jc2.dispatch_qty, jc2.accepted_qty, 0)) as dispatched_qty
+        FROM job_cards jc2
+        JOIN work_orders wo2 ON jc2.work_order_id = wo2.id
+        JOIN sales_orders so2 ON wo2.sales_order_id = so2.id
+        LEFT JOIN sales_order_items soi2 ON wo2.sales_order_item_id = soi2.id
+        LEFT JOIN order_items oi2 ON wo2.sales_order_item_id = oi2.id
+        WHERE (jc2.operation_name = 'shipment' OR jc2.operation_name = 'dispatch')
+          AND wo2.source_type = 'FG'
+        GROUP BY so2.customer_po_id, COALESCE(soi2.drawing_no, oi2.drawing_no, wo2.bom_no), COALESCE(soi2.item_code, oi2.item_code, wo2.item_code)
+      ) dispatch ON dispatch.customer_po_id = cpi.customer_po_id 
+                AND (
+                  (TRIM(UPPER(dispatch.drawing_no)) = TRIM(UPPER(cpi.drawing_no)) AND cpi.drawing_no IS NOT NULL AND cpi.drawing_no != '')
+                  OR 
+                  (TRIM(UPPER(dispatch.item_code)) = TRIM(UPPER(cpi.item_code)) AND cpi.item_code IS NOT NULL AND cpi.item_code != '')
+                )
+      WHERE cp.status != 'REJECTED'
+    ) t
+    WHERE dispatched > 0
+  `;
+
+  const queryParams = [];
+
+  if (search) {
+    sql += ` AND (po_number LIKE ? OR company_name LIKE ? OR drawing_no LIKE ? OR drawing_name LIKE ?)`;
+    queryParams.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+  }
+
+  const countSql = `SELECT COUNT(*) as total FROM (${sql}) c`;
+  const [countResult] = await pool.query(countSql, queryParams);
+  const total = countResult[0]?.total || 0;
+
+  if (!export_all) {
+    sql += ` LIMIT ? OFFSET ?`;
+    queryParams.push(parseInt(limit), parseInt(offset));
+  }
+
+  const [drawings] = await pool.query(sql, queryParams);
+
+  const formattedDrawings = drawings.map(r => {
+    const pending = Math.max(0, r.ordered_qty - r.dispatched);
+    return {
+      ...r,
+      pending,
+      status: pending === 0 ? 'Dispatched' : 'Partial'
+    };
+  });
+
+  return { drawings: formattedDrawings, total };
+};
+
+const getPendingFilterOptions = async () => {
+  const [rows] = await pool.query(`
+    SELECT DISTINCT
+      cp.po_number,
+      cpi.drawing_no,
+      cpi.description AS drawing_name,
+      cp.project_name
+    FROM customer_po_items cpi
+    JOIN customer_pos cp ON cpi.customer_po_id = cp.id
+    WHERE cp.status != 'REJECTED'
+    ORDER BY cp.po_number, cpi.drawing_no
+  `);
+
+  const poNumbers    = [...new Set(rows.map(r => r.po_number).filter(Boolean))].sort();
+  const drawingNos   = [...new Set(rows.map(r => r.drawing_no).filter(Boolean))].sort();
+  const drawingNames = [...new Set(rows.map(r => r.drawing_name).filter(Boolean))].sort();
+  const projects     = [...new Set(rows.map(r => r.project_name).filter(Boolean))].sort();
+
+  return { poNumbers, drawingNos, drawingNames, projects };
+};
+
 module.exports = {
   createCustomerPo,
   listCustomerPos,
@@ -2094,6 +2416,9 @@ module.exports = {
   updateCustomerPo,
   deleteCustomerPo,
   generateCustomerPoPDF,
-  uploadCustomerPoPdf
+  uploadCustomerPoPdf,
+  getPendingDrawings,
+  getPendingFilterOptions,
+  getDispatchedDrawings
 };
 

@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Loader2, ChevronRight, Eye, Plus, Trash2, X, Download, Pencil, Send,
   Search, RefreshCw, Filter, FileText, Calendar, Building2,
-  DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch, Upload, MapPin, User
+  DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch, Upload, MapPin, User, ArrowLeft, Check
 } from 'lucide-react'
 import { Card, DataTable, SearchableSelect } from '../components/ui.jsx'
 import SendEmailModal from '../components/SendEmailModal'
@@ -27,6 +28,282 @@ const CustomerPO = ({
   quotationRequests = [],
   quotationRequestsLoading
 }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const isPendingView = location.pathname === '/sales/customer-po/pending';
+  const isDispatchedView = location.pathname === '/sales/customer-po/dispatched';
+
+  // Sub-counts
+  const [pendingCount, setPendingCount] = useState(0);
+  const [dispatchedCount, setDispatchedCount] = useState(0);
+
+  const fetchCounts = async () => {
+    try {
+      const pRes = await apiRequest('/customer-pos/drawings/pending');
+      setPendingCount(pRes?.length || 0);
+      const dRes = await apiRequest('/customer-pos/drawings/dispatched');
+      setDispatchedCount(dRes?.length || 0);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Fetch companies locally for the pending/dispatched filter dropdowns
+  const [companiesList, setCompaniesList] = useState([]);
+  // Filter option lists from backend (PO No, Drawing No, Drawing Name, Project)
+  const [filterOptions, setFilterOptions] = useState({
+    poNumbers: [], drawingNos: [], drawingNames: [], projects: []
+  });
+
+  React.useEffect(() => {
+    if (isPendingView || isDispatchedView) {
+      apiRequest('/companies').then(data => {
+        if (Array.isArray(data)) setCompaniesList(data);
+        else if (data?.data) setCompaniesList(data.data);
+      }).catch(() => {});
+    }
+  }, [isPendingView, isDispatchedView]);
+
+  React.useEffect(() => {
+    if (isPendingView) {
+      apiRequest('/customer-pos/drawings/pending/filter-options')
+        .then(data => { if (data) setFilterOptions(data); })
+        .catch(() => {});
+    }
+  }, [isPendingView]);
+
+  React.useEffect(() => {
+    fetchCounts();
+  }, [customerPos, apiRequest]);
+
+  // Pending PO State & Pagination
+  const [pendingDrawings, setPendingDrawings] = useState([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingPage, setPendingPage] = useState(1);
+  const [pendingLimit, setPendingLimit] = useState(25);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const [pendingSummary, setPendingSummary] = useState({
+    totalPendingDrawings: 0,
+    readyForDispatch: 0,
+    productionPending: 0,
+    qcPending: 0,
+    partialDispatch: 0
+  });
+
+  // Dispatched drawings pagination
+  const [dispatchedDrawings, setDispatchedDrawings] = useState([]);
+  const [dispatchedLoading, setDispatchedLoading] = useState(false);
+  const [dispatchedPage, setDispatchedPage] = useState(1);
+  const [dispatchedLimit, setDispatchedLimit] = useState(25);
+  const [dispatchedTotal, setDispatchedTotal] = useState(0);
+  const [dispSearch, setDispSearch] = useState('');
+  const [dispSearchActive, setDispSearchActive] = useState('');
+  
+  // Pending PO Filter Form
+  const [filterCustomer, setFilterCustomer] = useState('ALL');
+  const [filterPoNo, setFilterPoNo] = useState('');
+  const [filterDrawingNo, setFilterDrawingNo] = useState('');
+  const [filterDrawingName, setFilterDrawingName] = useState('');
+  const [filterProject, setFilterProject] = useState('ALL');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterReadyOnly, setFilterReadyOnly] = useState(false);
+
+  // Active filters applied on Search click
+  const [activeFilters, setActiveFilters] = useState({
+    customer: 'ALL',
+    poNo: '',
+    drawingNo: '',
+    drawingName: '',
+    project: 'ALL',
+    status: 'ALL',
+    dateFrom: '',
+    dateTo: '',
+    readyOnly: false
+  });
+
+  const loadPendingDrawings = async (page = pendingPage, limit = pendingLimit, filters = activeFilters) => {
+    try {
+      setPendingLoading(true);
+      const params = new URLSearchParams({
+        customer: filters.customer,
+        po_no: filters.poNo,
+        drawing_no: filters.drawingNo,
+        drawing_name: filters.drawingName,
+        project: filters.project,
+        status: filters.status,
+        from: filters.dateFrom,
+        to: filters.dateTo,
+        ready_dispatch: filters.readyOnly ? 'true' : 'false',
+        page: String(page),
+        limit: String(limit)
+      });
+      const data = await apiRequest(`/customer-pos/drawings/pending?${params.toString()}`);
+      if (data) {
+        setPendingDrawings(data.drawings || []);
+        setPendingTotal(data.total || 0);
+        setPendingSummary(data.summary || {
+          totalPendingDrawings: 0,
+          readyForDispatch: 0,
+          productionPending: 0,
+          qcPending: 0,
+          partialDispatch: 0
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to load pending drawings');
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isPendingView) {
+      loadPendingDrawings(pendingPage, pendingLimit, activeFilters);
+    }
+  }, [isPendingView, pendingPage, pendingLimit, activeFilters]);
+
+  const loadDispatchedDrawings = async (page = dispatchedPage, limit = dispatchedLimit, search = dispSearchActive) => {
+    try {
+      setDispatchedLoading(true);
+      const params = new URLSearchParams({
+        search,
+        page: String(page),
+        limit: String(limit)
+      });
+      const data = await apiRequest(`/customer-pos/drawings/dispatched?${params.toString()}`);
+      if (data) {
+        setDispatchedDrawings(data.drawings || []);
+        setDispatchedTotal(data.total || 0);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to load dispatched drawings');
+    } finally {
+      setDispatchedLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isDispatchedView) {
+      loadDispatchedDrawings(dispatchedPage, dispatchedLimit, dispSearchActive);
+    }
+  }, [isDispatchedView, dispatchedPage, dispatchedLimit, dispSearchActive]);
+
+  const uniqueCustomers = useMemo(() => {
+    const src = companiesList.length > 0 ? companiesList : companies;
+    const s = new Set();
+    src.forEach(c => { if (c.company_name) s.add(c.company_name); });
+    return Array.from(s).sort();
+  }, [companies, companiesList]);
+
+  const uniqueProjects = useMemo(() => {
+    const s = new Set();
+    customerPos.forEach(p => { if (p.project_name) s.add(p.project_name); });
+    return Array.from(s);
+  }, [customerPos]);
+
+  // Export handlers — download formatted SAP-style .xlsx from backend
+  const handleExportPending = async () => {
+    try {
+      showToast('Generating Excel report...');
+      const params = new URLSearchParams({
+        customer: activeFilters.customer,
+        po_no: activeFilters.poNo,
+        drawing_no: activeFilters.drawingNo,
+        drawing_name: activeFilters.drawingName,
+        project: activeFilters.project,
+        status: activeFilters.status,
+        from: activeFilters.dateFrom,
+        to: activeFilters.dateTo,
+        ready_dispatch: activeFilters.readyOnly ? 'true' : 'false'
+      });
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(
+        `${API_BASE}/customer-pos/drawings/pending/excel?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}`, 'X-ERP-Request': 'true' } }
+      );
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Pending_PO_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      showToast('Export failed');
+    }
+  };
+
+  const handleExportDispatched = async () => {
+    try {
+      showToast('Generating Excel report...');
+      const params = new URLSearchParams({ search: dispSearchActive });
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(
+        `${API_BASE}/customer-pos/drawings/dispatched/excel?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}`, 'X-ERP-Request': 'true' } }
+      );
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Dispatched_PO_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      showToast('Export failed');
+    }
+  };
+
+  // Dispatch Action
+  const handleDispatchDrawing = async (row) => {
+    if (!row.sales_order_id) {
+      showToast('No Sales Order linked to this drawing PO line.');
+      return;
+    }
+    const Swal = (await import('sweetalert2')).default;
+    const result = await Swal.fire({
+      title: 'Initiate Dispatch?',
+      text: `Do you want to create a shipment order for Sales Order linked to PO: ${row.po_number}?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Dispatch',
+      confirmButtonColor: '#4f46e5',
+      cancelButtonColor: '#64748b'
+    });
+    if (result.isConfirmed) {
+      try {
+        await apiRequest('/shipments/orders', {
+          method: 'POST',
+          body: { salesOrderId: row.sales_order_id }
+        });
+        showToast('Shipment order created successfully.');
+        navigate('/shipment/shipment-planning', { state: { poNumber: row.po_number, drawingNo: row.drawing_no } });
+      } catch (error) {
+        if (error.message?.includes('already exists')) {
+          showToast('Redirecting to Shipment planning...');
+          navigate('/shipment/shipment-planning', { state: { poNumber: row.po_number, drawingNo: row.drawing_no } });
+        } else {
+          showToast(error.message || 'Failed to create shipment');
+        }
+      }
+    }
+  };
+
   const [showPoForm, setShowPoForm] = useState(false)
   const [formMode, setFormMode] = useState('CREATE') // CREATE, VIEW, EDIT
   const [editingPoId, setEditingPoId] = useState(null)
@@ -1578,6 +1855,524 @@ const CustomerPO = ({
     }
   ];
 
+  if (isPendingView) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] p-6 space-y-6">
+        {/* Header Section */}
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+              ⏳ Pending Customer Purchase Orders
+            </h1>
+            <p className="text-xs text-slate-500 mt-1">Track and manage drawings with pending dispatch quantities</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportPending}
+              className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-900 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 px-3.5 py-2 rounded-lg shadow-sm transition-all active:scale-95"
+            >
+              <Download className="w-4 h-4" />
+              Export Current Search
+            </button>
+            <button
+              onClick={() => navigate('/sales/customer-po')}
+              className="flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3.5 py-2 rounded-lg shadow-sm hover:bg-slate-50 transition-all active:scale-95"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Customer PO
+            </button>
+          </div>
+        </div>
+
+        {/* Professional ERP Filter Panel */}
+        <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+            {/* Customer */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Customer</label>
+              <SearchableSelect
+                value={filterCustomer === 'ALL' ? '' : filterCustomer}
+                onChange={(e) => setFilterCustomer(e?.target?.value || e || 'ALL')}
+                options={uniqueCustomers.map(c => ({ value: c, label: c }))}
+                placeholder="All Customers"
+                allowCustom={false}
+                className="w-full"
+              />
+            </div>
+
+            {/* PO No */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PO No</label>
+              <SearchableSelect
+                value={filterPoNo}
+                onChange={(e) => setFilterPoNo(e?.target?.value ?? e ?? '')}
+                options={filterOptions.poNumbers.map(v => ({ value: v, label: v }))}
+                placeholder="Enter or select PO No..."
+                allowCustom={true}
+                className="w-full"
+              />
+            </div>
+
+            {/* Drawing No */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Drawing No</label>
+              <SearchableSelect
+                value={filterDrawingNo}
+                onChange={(e) => setFilterDrawingNo(e?.target?.value ?? e ?? '')}
+                options={filterOptions.drawingNos.map(v => ({ value: v, label: v }))}
+                placeholder="Enter or select Drawing No..."
+                allowCustom={true}
+                className="w-full"
+              />
+            </div>
+
+            {/* Drawing Name */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Drawing Name</label>
+              <SearchableSelect
+                value={filterDrawingName}
+                onChange={(e) => setFilterDrawingName(e?.target?.value ?? e ?? '')}
+                options={filterOptions.drawingNames.map(v => ({ value: v, label: v }))}
+                placeholder="Enter or select Drawing Name..."
+                allowCustom={true}
+                className="w-full"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+            {/* Project */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Project</label>
+              <SearchableSelect
+                value={filterProject === 'ALL' ? '' : filterProject}
+                onChange={(e) => setFilterProject(e?.target?.value || e || 'ALL')}
+                options={filterOptions.projects.map(p => ({ value: p, label: p }))}
+                placeholder="All Projects"
+                allowCustom={false}
+                className="w-full"
+              />
+            </div>
+
+            {/* Status */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</label>
+              <SearchableSelect
+                value={filterStatus === 'ALL' ? '' : filterStatus}
+                onChange={(e) => setFilterStatus(e?.target?.value || e || 'ALL')}
+                options={[
+                  { value: 'Ready', label: '🟢 Ready for Dispatch' },
+                  { value: 'Production', label: '🔴 Production Pending' },
+                  { value: 'Partial', label: '🟠 Partial Dispatch' }
+                ]}
+                placeholder="All Statuses"
+                allowCustom={false}
+                className="w-full"
+              />
+            </div>
+
+            {/* Delivery Date From */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Delivery Date From</label>
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:bg-white transition-all"
+              />
+            </div>
+
+            {/* Delivery Date To */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Delivery Date To</label>
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:bg-white transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2 border-t border-slate-100">
+            <label className="flex items-center gap-2 text-xs text-slate-600 font-semibold cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={filterReadyOnly}
+                onChange={(e) => setFilterReadyOnly(e.target.checked)}
+                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
+              />
+              <span>Ready Dispatch (Show Ready Only)</span>
+            </label>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setFilterCustomer('ALL');
+                  setFilterPoNo('');
+                  setFilterDrawingNo('');
+                  setFilterDrawingName('');
+                  setFilterProject('ALL');
+                  setFilterStatus('ALL');
+                  setFilterDateFrom('');
+                  setFilterDateTo('');
+                  setFilterReadyOnly(false);
+                  setPendingPage(1);
+                  setActiveFilters({
+                    customer: 'ALL',
+                    poNo: '',
+                    drawingNo: '',
+                    drawingName: '',
+                    project: 'ALL',
+                    status: 'ALL',
+                    dateFrom: '',
+                    dateTo: '',
+                    readyOnly: false
+                  });
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 font-semibold text-xs rounded-lg shadow-sm transition-all active:scale-95"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Reset
+              </button>
+              <button
+                onClick={() => {
+                  setPendingPage(1);
+                  setActiveFilters({
+                    customer: filterCustomer,
+                    poNo: filterPoNo,
+                    drawingNo: filterDrawingNo,
+                    drawingName: filterDrawingName,
+                    project: filterProject,
+                    status: filterStatus,
+                    dateFrom: filterDateFrom,
+                    dateTo: filterDateTo,
+                    readyOnly: filterReadyOnly
+                  });
+                }}
+                className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-md shadow-indigo-100 transition-all active:scale-95"
+              >
+                <Search className="w-3.5 h-3.5" />
+                Search
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Summary Metric Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {[
+            { label: 'Total Pending Drawings', value: pendingSummary.totalPendingDrawings, color: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+            { label: 'Ready for Dispatch', value: pendingSummary.readyForDispatch, color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+            { label: 'Production Pending', value: pendingSummary.productionPending, color: 'bg-amber-50 text-amber-700 border-amber-100' },
+            { label: 'QC Pending', value: pendingSummary.qcPending, color: 'bg-rose-50 text-rose-700 border-rose-100' },
+            { label: 'Partial Dispatch', value: pendingSummary.partialDispatch, color: 'bg-blue-50 text-blue-700 border-blue-100' }
+          ].map((card, idx) => (
+            <div key={idx} className={`border rounded-xl p-4 shadow-sm bg-white hover:-translate-y-0.5 transition-all duration-300`}>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{card.label}</p>
+              <p className="text-2xl font-black text-slate-800 mt-2">{card.value}</p>
+              <div className={`mt-2.5 h-1.5 w-8 rounded-full ${card.color.split(' ')[0]}`} />
+            </div>
+          ))}
+        </div>
+
+        {/* Result Table */}
+        <div className="bg-white border border-[#D6D6D6] rounded-xl shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left text-[#222222]">
+              <thead className="bg-[#FFF176] text-[#333333] font-bold uppercase tracking-wider border-b border-[#D6D6D6] text-[10px]">
+                <tr>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333]">PO No</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333]">Customer</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333]">Project</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333]">Drawing No</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333]">Drawing Name</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">Ordered Qty</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">Produced</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">QC</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">FG Stock</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">Dispatched</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">Pending</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-center">Delivery</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-center">Status</th>
+                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#D6D6D6]">
+                {pendingLoading ? (
+                  <tr>
+                    <td colSpan={14} className="p-10 text-center text-slate-400">
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
+                      Loading drawing lines...
+                    </td>
+                  </tr>
+                ) : pendingDrawings.length === 0 ? (
+                  <tr>
+                    <td colSpan={14} className="p-10 text-center text-slate-400 font-medium">
+                      No matching pending drawings found.
+                    </td>
+                  </tr>
+                ) : (
+                  pendingDrawings.map((row) => (
+                    <tr key={row.id} className="even:bg-[#FFFDE7] hover:bg-slate-50/50 transition-colors">
+                      <td className="p-4 border border-[#D6D6D6] font-mono font-bold text-[#222222]">{row.po_number}</td>
+                      <td className="p-4 border border-[#D6D6D6] font-medium text-[#222222]">{row.company_name}</td>
+                      <td className="p-4 border border-[#D6D6D6] text-[#222222] italic">{row.project_name || 'General Project'}</td>
+                      <td className="p-4 border border-[#D6D6D6] text-indigo-600 font-bold">{row.drawing_no}</td>
+                      <td className="p-4 border border-[#D6D6D6] text-[#222222]">{row.drawing_name}</td>
+                      <td className="p-4 border border-[#D6D6D6] text-right font-semibold text-[#222222]">{row.ordered_qty}</td>
+                      <td className="p-4 border border-[#D6D6D6] text-right text-[#222222]">{row.produced}</td>
+                      <td className="p-4 border border-[#D6D6D6] text-right text-[#222222]">{row.qc}</td>
+                      <td className="p-4 border border-[#D6D6D6] text-right text-[#43A047] font-semibold">{row.fg_stock}</td>
+                      <td className="p-4 border border-[#D6D6D6] text-right text-[#222222]">{row.dispatched}</td>
+                      <td className="p-4 border border-[#D6D6D6] text-right text-[#E53935] font-black">{row.pending}</td>
+                      <td className="p-4 border border-[#D6D6D6] text-center text-[#222222]">{row.delivery_date ? new Date(row.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}</td>
+                      <td className="p-4 border border-[#D6D6D6] text-center">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
+                          row.status === 'Ready' ? 'bg-[#FFFDE7] border-[#D6D6D6] text-[#43A047]' :
+                          row.status === 'Partial' ? 'bg-[#FFFDE7] border-[#D6D6D6] text-[#FB8C00]' :
+                          'bg-[#FFFDE7] border-[#D6D6D6] text-[#E53935]'
+                        }`}>
+                          {row.status === 'Ready' ? '🟢 Ready' : row.status === 'Partial' ? '🟡 Partial' : '🔴 Pending'}
+                        </span>
+                      </td>
+                      <td className="p-4 border border-[#D6D6D6] text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => openPoInMode('VIEW', row.customer_po_id)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-lg transition-all"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDispatchDrawing(row)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-100 rounded-lg text-[10px] font-semibold transition-all active:scale-95"
+                          >
+                            🚚 Dispatch
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Footer */}
+          <div className="flex items-center justify-between p-4 bg-slate-50 border-t border-slate-100 text-xs">
+            <div className="text-slate-500 font-medium">
+              Showing {pendingTotal === 0 ? 0 : (pendingPage - 1) * pendingLimit + 1} to {Math.min(pendingTotal, pendingPage * pendingLimit)} of {pendingTotal} records
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400">Rows per page:</span>
+                <select
+                  value={pendingLimit}
+                  onChange={(e) => {
+                    setPendingLimit(parseInt(e.target.value));
+                    setPendingPage(1);
+                  }}
+                  className="bg-white border border-slate-200 rounded p-1 outline-none text-xs text-slate-700 font-semibold"
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  disabled={pendingPage === 1}
+                  onClick={() => setPendingPage(p => p - 1)}
+                  className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded disabled:opacity-50 text-slate-600 font-semibold active:scale-95 transition-all"
+                >
+                  Previous
+                </button>
+                <span className="text-slate-600 font-bold px-1">Page {pendingPage}</span>
+                <button
+                  disabled={pendingPage * pendingLimit >= pendingTotal}
+                  onClick={() => setPendingPage(p => p + 1)}
+                  className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded disabled:opacity-50 text-slate-600 font-semibold active:scale-95 transition-all"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isDispatchedView) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] p-6 space-y-6">
+        {/* Header Section */}
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+              🚚 Dispatched Customer Purchase Orders
+            </h1>
+            <p className="text-xs text-slate-500 mt-1">View history of fully or partially dispatched drawings</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportDispatched}
+              className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-900 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 px-3.5 py-2 rounded-lg shadow-sm transition-all active:scale-95"
+            >
+              <Download className="w-4 h-4" />
+              Export Current Search
+            </button>
+            <button
+              onClick={() => navigate('/sales/customer-po')}
+              className="flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3.5 py-2 rounded-lg shadow-sm hover:bg-slate-50 transition-all active:scale-95"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Customer PO
+            </button>
+          </div>
+        </div>
+
+        {/* Search Panel */}
+        <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <div className="relative flex-1">
+            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={dispSearch}
+              onChange={(e) => setDispSearch(e.target.value)}
+              placeholder="Search dispatched drawings by PO, customer, or drawing number..."
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:bg-white focus:border-indigo-500 transition-all"
+            />
+          </div>
+          <button
+            onClick={() => {
+              setDispatchedPage(1);
+              setDispSearchActive(dispSearch);
+            }}
+            className="flex items-center gap-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-md transition-all active:scale-95"
+          >
+            Search
+          </button>
+          <div className="text-xs text-slate-500 font-semibold shrink-0">
+            Total Dispatched Lines: <span className="text-indigo-600">{dispatchedTotal}</span>
+          </div>
+        </div>
+
+        {/* Result Table */}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left text-slate-600">
+              <thead className="bg-slate-50 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100 text-[10px]">
+                <tr>
+                  <th className="p-4">PO No</th>
+                  <th className="p-4">Customer</th>
+                  <th className="p-4">Project</th>
+                  <th className="p-4">Drawing No</th>
+                  <th className="p-4">Drawing Name</th>
+                  <th className="p-4 text-right">Ordered Qty</th>
+                  <th className="p-4 text-right">Dispatched Qty</th>
+                  <th className="p-4 text-right">Pending Qty</th>
+                  <th className="p-4 text-center">Delivery Date</th>
+                  <th className="p-4 text-center">Status</th>
+                  <th className="p-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {dispatchedLoading ? (
+                  <tr>
+                    <td colSpan={11} className="p-10 text-center text-slate-400">
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
+                      Loading history...
+                    </td>
+                  </tr>
+                ) : dispatchedDrawings.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="p-10 text-center text-slate-400 font-medium">
+                      No dispatched records found.
+                    </td>
+                  </tr>
+                ) : (
+                  dispatchedDrawings.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-4 font-mono font-bold text-slate-900">{row.po_number}</td>
+                      <td className="p-4 font-medium text-slate-700">{row.company_name}</td>
+                      <td className="p-4 text-slate-500 italic">{row.project_name || 'General Project'}</td>
+                      <td className="p-4 text-indigo-600 font-bold">{row.drawing_no}</td>
+                      <td className="p-4 text-slate-800">{row.drawing_name}</td>
+                      <td className="p-4 text-right font-semibold text-slate-700">{row.ordered_qty}</td>
+                      <td className="p-4 text-right text-emerald-600 font-bold">{row.dispatched}</td>
+                      <td className="p-4 text-right text-rose-500">{row.pending}</td>
+                      <td className="p-4 text-center text-slate-500">{row.delivery_date ? new Date(row.delivery_date).toLocaleDateString('en-IN') : '—'}</td>
+                      <td className="p-4 text-center">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">
+                          ✔️ Dispatched
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button
+                          onClick={() => openPoInMode('VIEW', row.customer_po_id)}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-lg transition-all"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Footer */}
+          <div className="flex items-center justify-between p-4 bg-slate-50 border-t border-slate-100 text-xs">
+            <div className="text-slate-500 font-medium">
+              Showing {dispatchedTotal === 0 ? 0 : (dispatchedPage - 1) * dispatchedLimit + 1} to {Math.min(dispatchedTotal, dispatchedPage * dispatchedLimit)} of {dispatchedTotal} records
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400">Rows per page:</span>
+                <select
+                  value={dispatchedLimit}
+                  onChange={(e) => {
+                    setDispatchedLimit(parseInt(e.target.value));
+                    setDispatchedPage(1);
+                  }}
+                  className="bg-white border border-slate-200 rounded p-1 outline-none text-xs text-slate-700 font-semibold"
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  disabled={dispatchedPage === 1}
+                  onClick={() => setDispatchedPage(p => p - 1)}
+                  className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded disabled:opacity-50 text-slate-600 font-semibold active:scale-95 transition-all"
+                >
+                  Previous
+                </button>
+                <span className="text-slate-600 font-bold px-1">Page {dispatchedPage}</span>
+                <button
+                  disabled={dispatchedPage * dispatchedLimit >= dispatchedTotal}
+                  onClick={() => setDispatchedPage(p => p + 1)}
+                  className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 rounded disabled:opacity-50 text-slate-600 font-semibold active:scale-95 transition-all"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {/* Header Section */}
@@ -1590,6 +2385,18 @@ const CustomerPO = ({
           <p className="text-slate-500 text-xs ">Manage and track external purchase orders from your clients</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/sales/customer-po/pending')}
+            className="flex items-center gap-2 border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded text-xs font-semibold shadow-sm transition-all active:scale-95"
+          >
+            ⏳ Pending PO ({pendingCount})
+          </button>
+          <button
+            onClick={() => navigate('/sales/customer-po/dispatched')}
+            className="flex items-center gap-2 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded text-xs font-semibold shadow-sm transition-all active:scale-95"
+          >
+            🚚 Dispatched PO ({dispatchedCount})
+          </button>
           <button
             onClick={() => onRefresh && onRefresh()}
             className="p-2 text-slate-500 hover:bg-white hover:text-indigo-600 rounded  transition-all border border-slate-200 bg-slate-50/50  active:scale-95"
