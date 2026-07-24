@@ -85,7 +85,7 @@ const getCorrectItemCode = async (item, connection) => {
       const ext = existing[0];
       const hasDimensions = (parseFloat(ext.length || 0) > 0 || parseFloat(ext.width || 0) > 0 || parseFloat(ext.thickness || 0) > 0 || parseFloat(ext.diameter || 0) > 0 || parseFloat(ext.outer_diameter || 0) > 0);
       const incomingHasDimensions = (length > 0 || width > 0 || thickness > 0 || diameter > 0 || outerDiameter > 0);
-      
+
       if (incomingHasDimensions && (!hasDimensions || itemCode.startsWith('RM-'))) {
         isMismatch = true;
       } else if (hasDimensions) {
@@ -94,7 +94,7 @@ const getCorrectItemCode = async (item, connection) => {
         const thicknessDiff = Math.abs(parseFloat(ext.thickness || 0) - thickness) >= 0.0001;
         const diameterDiff = Math.abs(parseFloat(ext.diameter || 0) - diameter) >= 0.0001;
         const outerDiameterDiff = Math.abs(parseFloat(ext.outer_diameter || 0) - outerDiameter) >= 0.0001;
-        
+
         if (lengthDiff || widthDiff || thicknessDiff || diameterDiff || outerDiameterDiff) {
           isMismatch = true;
         }
@@ -111,7 +111,7 @@ const getCorrectItemCode = async (item, connection) => {
   const matType = item.materialType || item.material_type;
   if (matName) {
     const generatedCode = await stockService.generateItemCode(matName, matType);
-    
+
     const normalizedType = (matType || '').toUpperCase().trim().replace(/ /g, '_');
     await connection.execute(
       `INSERT INTO stock_balance (
@@ -272,7 +272,7 @@ const getAllStockEntries = async (filters = {}) => {
   query += ' ORDER BY se.entry_date DESC, se.created_at DESC';
 
   const [rows] = await pool.query(query, params);
-  
+
   // Get item counts and total value for each entry in a single batched query
   if (rows.length > 0) {
     const entryIds = rows.map(r => r.id);
@@ -413,16 +413,16 @@ const getStockEntryById = async (id) => {
   if (rows.length === 0) return null;
 
   const [items] = await pool.query('SELECT * FROM stock_entry_items WHERE stock_entry_id = ?', [id]);
-  
+
   return { ...rows[0], items };
 };
 
 const generateEntryNo = async (type) => {
   const prefix = 'MA'; // As shown in screenshot
-  
+
   const dateStr = new Date().toISOString().slice(0, 7).replace('-', ''); // YYYYMM
   const fullPrefix = `${prefix}-${dateStr}-`;
-  
+
   const [rows] = await pool.query(
     'SELECT entry_no FROM stock_entries WHERE entry_no LIKE ? ORDER BY entry_no DESC LIMIT 1',
     [`${fullPrefix}%`]
@@ -553,9 +553,9 @@ const processStockMovement = async (entryId, connection, userId) => {
 
   for (const item of items) {
     console.log(`[StockMovement] Item: ${item.item_code}, Qty: ${item.quantity}, Type: ${entry.entry_type}`);
-    const ledgerOptions = { 
-      connection, 
-      warehouse: toWarehouseName || fromWarehouseName, 
+    const ledgerOptions = {
+      connection,
+      warehouse: toWarehouseName || fromWarehouseName,
       valuationRate: item.valuation_rate,
       materialName: item.material_name,
       materialType: item.material_type,
@@ -597,6 +597,10 @@ const processStockMovement = async (entryId, connection, userId) => {
     }
 
     if (entry.entry_type === 'Material Receipt') {
+      if (entry.grn_id) {
+        console.log(`[StockMovement] Stock entry ${entry.entry_no} is linked to GRN ${entry.grn_id} (QC Pass already posted stock). Skipping duplicate ledger entry.`);
+        continue;
+      }
       ledgerOptions.warehouse = toWarehouseName;
       await stockService.addStockLedgerEntry(
         item.item_code,
@@ -673,21 +677,21 @@ const deleteStockEntry = async (id) => {
 
     const [entries] = await connection.query('SELECT status FROM stock_entries WHERE id = ?', [id]);
     if (entries.length === 0) throw new Error('Stock Entry not found');
-    
+
     // If submitted, we must reverse the stock ledger entries first
     if (entries[0].status === 'submitted') {
       const [ledgerEntries] = await connection.query(
         'SELECT id FROM stock_ledger WHERE reference_doc_type = "STOCK_ENTRY" AND reference_doc_id = ?',
         [id]
       );
-      
+
       for (const le of ledgerEntries) {
         await stockService.deleteStockLedgerEntry(le.id, connection);
       }
     }
-    
+
     await connection.execute('DELETE FROM stock_entries WHERE id = ?', [id]);
-    
+
     await connection.commit();
     return { success: true };
   } catch (error) {
@@ -722,7 +726,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
     LEFT JOIN qc_inspection_items qci ON qci.grn_item_id = gi.id
     WHERE gi.grn_id = ?
   `, [grnId]);
-  
+
   // For all items, try to find the "correct" item_code from stock_balance by matching name + dimensions
   for (const item of items) {
     if (item.material_name) {
@@ -769,7 +773,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
          LIMIT 1`,
         [item.material_name, item.material_type, item.material_type, length, width, thickness, diameter, outerDiameter]
       );
-      
+
       if (sb.length > 0) {
         item.item_code = sb[0].item_code;
       } else {
@@ -785,7 +789,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
            LIMIT 1`,
           [item.material_name, length, width, thickness, diameter, outerDiameter]
         );
-        
+
         if (sbNameDims.length > 0) {
           item.item_code = sbNameDims[0].item_code;
         } else {
@@ -802,7 +806,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
           }
 
           const generatedCode = await stockService.generateItemCode(item.material_name, item.material_type);
-          
+
           const normalizedType = (item.material_type || '').toUpperCase().trim().replace(/ /g, '_');
           await executor.execute(
             `INSERT INTO stock_balance (
@@ -832,7 +836,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
       item.item_code = `ITEM-${item.grn_item_id}`;
     }
   }
-  
+
   // Filter out items without item_code and filter by type
   return items.filter(item => {
     if (!item.item_code) return false;
@@ -857,7 +861,7 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
 
     // 2. Get default warehouse ID
     const [allWhs] = await connection.query('SELECT id, warehouse_name FROM warehouses');
-    
+
     // Check if there's a warehouse assigned in the GRN items
     const [grnItemWhs] = await connection.query(
       'SELECT DISTINCT warehouse_id FROM grn_items WHERE grn_id = ? AND warehouse_id IS NOT NULL',
@@ -868,9 +872,9 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
     if (grnItemWhs.length > 0) {
       toWarehouseId = grnItemWhs[0].warehouse_id;
     } else {
-      const preferredWh = allWhs.find(w => 
-        w.warehouse_name === 'Consumables Store' || 
-        w.warehouse_name === 'Main Warehouse' || 
+      const preferredWh = allWhs.find(w =>
+        w.warehouse_name === 'Consumables Store' ||
+        w.warehouse_name === 'Main Warehouse' ||
         w.warehouse_name === 'RM-HOLD'
       );
       toWarehouseId = preferredWh ? preferredWh.id : (allWhs.length > 0 ? allWhs[0].id : null);
@@ -878,7 +882,7 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
 
     // 3. Get items from GRN
     const allItems = await getStockEntryItemsFromGRN(grnId, connection);
-    
+
     // Filter items with positive quantity
     const items = allItems.filter(item => parseFloat(item.quantity) > 0);
 

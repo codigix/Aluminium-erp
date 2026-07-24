@@ -314,7 +314,7 @@ const StockBalance = () => {
   const handleDelete = async (id) => {
     const result = await Swal.fire({
       title: 'Are you sure?',
-      text: "This will remove the item from stock balance! (Ledger history remains)",
+      text: "This will remove the item from stock balance and erase all of its ledger history!",
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',

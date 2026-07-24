@@ -76,13 +76,44 @@ const deleteStockLedgerEntry = async (id, externalConnection = null) => {
 };
 
 const deleteStockBalance = async (id) => {
-  const [result] = await pool.execute('DELETE FROM stock_balance WHERE id = ?', [id]);
-  if (result.affectedRows === 0) {
-    const error = new Error('Stock balance not found');
-    error.statusCode = 404;
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Get the item_code of the stock balance record
+    const [balanceRows] = await connection.query(
+      'SELECT item_code FROM stock_balance WHERE id = ?',
+      [id]
+    );
+
+    if (balanceRows.length === 0) {
+      const error = new Error('Stock balance not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const itemCode = balanceRows[0].item_code;
+
+    // 2. Delete all related stock ledger entries for this item_code
+    await connection.execute(
+      'DELETE FROM stock_ledger WHERE item_code = ?',
+      [itemCode]
+    );
+
+    // 3. Delete all stock balance records for this item_code
+    await connection.execute(
+      'DELETE FROM stock_balance WHERE item_code = ?',
+      [itemCode]
+    );
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
     throw error;
+  } finally {
+    connection.release();
   }
-  return { success: true };
 };
 
 const getStockLedger = async (itemCode = null, startDate = null, endDate = null) => {
@@ -766,7 +797,7 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
       `SELECT id FROM stock_ledger 
        WHERE reference_doc_id = ? 
        AND grn_item_id = ? 
-       AND transaction_type = 'GRN_IN'`,
+       AND transaction_type = 'IN'`,
       [grnId, grnItemId]
     );
 
@@ -782,7 +813,7 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
     // Use addStockLedgerEntry for consistency and to ensure qty_in/qty_out are set
     await addStockLedgerEntry(
       itemCode,
-      'GRN_IN',
+      'IN',
       passQty,
       'GRN',
       grnId,
