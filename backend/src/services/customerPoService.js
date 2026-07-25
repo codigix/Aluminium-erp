@@ -113,30 +113,20 @@ const createCustomerPo = async payload => {
 
     const totals = calculateAmounts(items);
 
-    // Dynamic, concurrency-safe PO number generation: PO17-07-2026-001
-    const today = new Date();
-    const day = String(today.getDate()).padStart(2, '0');
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const year = today.getFullYear();
-    const dateStr = `${day}-${month}-${year}`; // DD-MM-YYYY
-    const prefix = `PO${dateStr}-`;
-
-    const [rows] = await connection.execute(
-      `SELECT po_number FROM customer_pos WHERE po_number LIKE ? FOR UPDATE`,
-      [`${prefix}%`]
-    );
-
-    let maxSeq = 0;
-    for (const r of rows) {
-      if (r.po_number) {
-        const parts = r.po_number.split('-');
-        const seqVal = parseInt(parts[parts.length - 1]);
-        if (!isNaN(seqVal) && seqVal > maxSeq) {
-          maxSeq = seqVal;
-        }
-      }
+    if (!header.poNumber || !header.poNumber.trim()) {
+      throw new Error('Customer PO Number is required.');
     }
-    const finalPoNumber = `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
+
+    const trimmedPoNumber = header.poNumber.trim();
+
+    // Check for duplicate PO Number
+    const [existingPo] = await connection.execute(
+      `SELECT id FROM customer_pos WHERE po_number = ?`,
+      [trimmedPoNumber]
+    );
+    if (existingPo.length > 0) {
+      throw new Error(`Customer PO Number "${trimmedPoNumber}" already exists.`);
+    }
 
     const [poResult] = await connection.execute(
       `INSERT INTO customer_pos
@@ -149,7 +139,7 @@ const createCustomerPo = async payload => {
       [
         companyId,
         projectName || null,
-        finalPoNumber,
+        trimmedPoNumber,
         header.poDate || null,
         header.poVersion || '1.0',
         header.orderType || 'STANDARD',
@@ -590,6 +580,21 @@ const updateCustomerPo = async (id, payload) => {
     } = payload;
 
     const totals = calculateAmounts(items);
+
+    if (!header.poNumber || !header.poNumber.trim()) {
+      throw new Error('Customer PO Number is required.');
+    }
+
+    const trimmedPoNumber = header.poNumber.trim();
+
+    // Check for duplicate PO Number
+    const [existingPo] = await connection.execute(
+      `SELECT id FROM customer_pos WHERE po_number = ? AND id != ?`,
+      [trimmedPoNumber, id]
+    );
+    if (existingPo.length > 0) {
+      throw new Error(`Customer PO Number "${trimmedPoNumber}" already exists.`);
+    }
 
     await connection.execute(
       `UPDATE customer_pos
@@ -2139,12 +2144,18 @@ const getPendingDrawings = async (filters = {}) => {
         cpi.quantity as ordered_qty,
         cpi.delivery_date,
         cp.status as po_status,
-        so.id as sales_order_id,
+        (SELECT MAX(id) FROM sales_orders WHERE customer_po_id = cp.id) as sales_order_id,
         COALESCE(
           (SELECT SUM(COALESCE(jc.produced_qty, jc.accepted_qty, 0))
            FROM job_cards jc
            JOIN work_orders wo ON jc.work_order_id = wo.id
-           WHERE wo.sales_order_item_id = soi.id AND wo.source_type = 'FG' AND jc.operation_name != 'shipment' AND jc.operation_name != 'dispatch'
+           JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+           JOIN sales_orders so2 ON soi.sales_order_id = so2.id
+           WHERE so2.customer_po_id = cpi.customer_po_id 
+             AND (TRIM(UPPER(soi.drawing_no)) = TRIM(UPPER(cpi.drawing_no)) OR TRIM(UPPER(soi.item_code)) = TRIM(UPPER(cpi.item_code)))
+             AND wo.source_type = 'FG' 
+             AND jc.operation_name != 'shipment' 
+             AND jc.operation_name != 'dispatch'
           ), 0
         ) as produced,
         COALESCE(
@@ -2160,35 +2171,40 @@ const getPendingDrawings = async (filters = {}) => {
            WHERE (sb.item_code = cpi.drawing_no OR sb.item_code = cpi.item_code) AND sb.material_type = 'FG'
           ), 0
         ) as fg_stock,
-        COALESCE(dispatch.dispatched_qty, 0) as dispatched
+        COALESCE(
+          (SELECT SUM(COALESCE(jc2.dispatch_qty, jc2.accepted_qty, 0))
+           FROM job_cards jc2
+           JOIN work_orders wo2 ON jc2.work_order_id = wo2.id
+           JOIN sales_orders so2 ON wo2.sales_order_id = so2.id
+           LEFT JOIN sales_order_items soi2 ON wo2.sales_order_item_id = soi2.id
+           LEFT JOIN order_items oi2 ON wo2.sales_order_item_id = oi2.id
+           WHERE (jc2.operation_name = 'shipment' OR jc2.operation_name = 'dispatch')
+             AND wo2.source_type = 'FG'
+             AND so2.customer_po_id = cpi.customer_po_id
+             AND (
+               (TRIM(UPPER(COALESCE(soi2.drawing_no, oi2.drawing_no, wo2.bom_no))) = TRIM(UPPER(cpi.drawing_no)) AND cpi.drawing_no IS NOT NULL AND cpi.drawing_no != '')
+               OR
+               (TRIM(UPPER(COALESCE(soi2.item_code, oi2.item_code, wo2.item_code))) = TRIM(UPPER(cpi.item_code)) AND cpi.item_code IS NOT NULL AND cpi.item_code != '')
+             )
+          ), 0
+        ) as dispatched
       FROM customer_po_items cpi
       JOIN customer_pos cp ON cpi.customer_po_id = cp.id
       JOIN companies c ON cp.company_id = c.id
-      LEFT JOIN sales_orders so ON so.customer_po_id = cp.id
-      LEFT JOIN sales_order_items soi ON soi.sales_order_id = so.id AND (TRIM(UPPER(soi.drawing_no)) = TRIM(UPPER(cpi.drawing_no)) OR TRIM(UPPER(soi.item_code)) = TRIM(UPPER(cpi.item_code)))
-      LEFT JOIN (
-        SELECT 
-          so2.customer_po_id,
-          COALESCE(soi2.drawing_no, oi2.drawing_no, wo2.bom_no) as drawing_no,
-          COALESCE(soi2.item_code, oi2.item_code, wo2.item_code) as item_code,
-          SUM(COALESCE(jc2.dispatch_qty, jc2.accepted_qty, 0)) as dispatched_qty
-        FROM job_cards jc2
-        JOIN work_orders wo2 ON jc2.work_order_id = wo2.id
-        JOIN sales_orders so2 ON wo2.sales_order_id = so2.id
-        LEFT JOIN sales_order_items soi2 ON wo2.sales_order_item_id = soi2.id
-        LEFT JOIN order_items oi2 ON wo2.sales_order_item_id = oi2.id
-        WHERE (jc2.operation_name = 'shipment' OR jc2.operation_name = 'dispatch')
-          AND wo2.source_type = 'FG'
-        GROUP BY so2.customer_po_id, COALESCE(soi2.drawing_no, oi2.drawing_no, wo2.bom_no), COALESCE(soi2.item_code, oi2.item_code, wo2.item_code)
-      ) dispatch ON dispatch.customer_po_id = cpi.customer_po_id 
-                AND (
-                  (TRIM(UPPER(dispatch.drawing_no)) = TRIM(UPPER(cpi.drawing_no)) AND cpi.drawing_no IS NOT NULL AND cpi.drawing_no != '')
-                  OR 
-                  (TRIM(UPPER(dispatch.item_code)) = TRIM(UPPER(cpi.item_code)) AND cpi.item_code IS NOT NULL AND cpi.item_code != '')
-                )
       WHERE cp.status != 'REJECTED'
+      GROUP BY 
+        cpi.id,
+        cpi.customer_po_id,
+        cp.po_number,
+        c.company_name,
+        cp.project_name,
+        cpi.drawing_no,
+        cpi.description,
+        cpi.quantity,
+        cpi.delivery_date,
+        cp.status
     ) t
-    WHERE (ordered_qty - dispatched) > 0
+    WHERE 1=1
   `;
 
   const queryParams = [];
@@ -2224,16 +2240,20 @@ const getPendingDrawings = async (filters = {}) => {
 
   if (status && status !== 'ALL') {
     if (status === 'Ready') {
-      sql += ` AND fg_stock >= (ordered_qty - dispatched)`;
+      sql += ` AND (ordered_qty - dispatched) > 0 AND fg_stock >= (ordered_qty - dispatched)`;
     } else if (status === 'Production') {
-      sql += ` AND fg_stock < (ordered_qty - dispatched)`;
+      sql += ` AND (ordered_qty - dispatched) > 0 AND fg_stock < (ordered_qty - dispatched)`;
     } else if (status === 'Partial') {
-      sql += ` AND dispatched > 0`;
+      sql += ` AND (ordered_qty - dispatched) > 0 AND dispatched > 0`;
+    } else if (status === 'Dispatched') {
+      sql += ` AND (ordered_qty - dispatched) = 0 AND dispatched > 0`;
     }
+  } else if (!status) {
+    sql += ` AND (ordered_qty - dispatched) > 0`;
   }
 
   if (ready_dispatch === 'true' || ready_dispatch === true) {
-    sql += ` AND fg_stock >= (ordered_qty - dispatched)`;
+    sql += ` AND (ordered_qty - dispatched) > 0 AND fg_stock >= (ordered_qty - dispatched)`;
   }
 
   const countSql = `SELECT COUNT(*) as total FROM (${sql}) c`;
@@ -2243,10 +2263,11 @@ const getPendingDrawings = async (filters = {}) => {
   const metricsSql = `
     SELECT 
       COUNT(*) as totalPendingDrawings,
-      SUM(CASE WHEN fg_stock >= (ordered_qty - dispatched) THEN 1 ELSE 0 END) as readyForDispatch,
-      SUM(CASE WHEN fg_stock < (ordered_qty - dispatched) THEN 1 ELSE 0 END) as productionPending,
+      SUM(CASE WHEN fg_stock >= (ordered_qty - dispatched) AND (ordered_qty - dispatched) > 0 THEN 1 ELSE 0 END) as readyForDispatch,
+      SUM(CASE WHEN fg_stock < (ordered_qty - dispatched) AND (ordered_qty - dispatched) > 0 THEN 1 ELSE 0 END) as productionPending,
       SUM(CASE WHEN produced > qc THEN 1 ELSE 0 END) as qcPending,
-      SUM(CASE WHEN dispatched > 0 THEN 1 ELSE 0 END) as partialDispatch
+      SUM(CASE WHEN dispatched > 0 THEN 1 ELSE 0 END) as partialDispatch,
+      SUM(CASE WHEN (ordered_qty - dispatched) = 0 THEN 1 ELSE 0 END) as fullyDispatched
     FROM (${sql}) m
   `;
   const [metricsResult] = await pool.query(metricsSql, queryParams);
@@ -2255,7 +2276,8 @@ const getPendingDrawings = async (filters = {}) => {
     readyForDispatch: 0,
     productionPending: 0,
     qcPending: 0,
-    partialDispatch: 0
+    partialDispatch: 0,
+    fullyDispatched: 0
   };
 
   if (!export_all) {
@@ -2268,7 +2290,9 @@ const getPendingDrawings = async (filters = {}) => {
   const formattedDrawings = drawings.map(r => {
     const pending = Math.max(0, r.ordered_qty - r.dispatched);
     let calculatedStatus = 'Production';
-    if (r.fg_stock >= pending && pending > 0) {
+    if (pending === 0) {
+      calculatedStatus = 'Dispatched';
+    } else if (r.fg_stock >= pending && pending > 0) {
       calculatedStatus = 'Ready';
     } else if (r.dispatched > 0 && pending > 0) {
       calculatedStatus = 'Partial';
@@ -2306,12 +2330,18 @@ const getDispatchedDrawings = async (filters = {}) => {
         cpi.quantity as ordered_qty,
         cpi.delivery_date,
         cp.status as po_status,
-        so.id as sales_order_id,
+        (SELECT MAX(id) FROM sales_orders WHERE customer_po_id = cp.id) as sales_order_id,
         COALESCE(
           (SELECT SUM(COALESCE(jc.produced_qty, jc.accepted_qty, 0))
            FROM job_cards jc
            JOIN work_orders wo ON jc.work_order_id = wo.id
-           WHERE wo.sales_order_item_id = soi.id AND wo.source_type = 'FG' AND jc.operation_name != 'shipment' AND jc.operation_name != 'dispatch'
+           JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+           JOIN sales_orders so2 ON soi.sales_order_id = so2.id
+           WHERE so2.customer_po_id = cpi.customer_po_id 
+             AND (TRIM(UPPER(soi.drawing_no)) = TRIM(UPPER(cpi.drawing_no)) OR TRIM(UPPER(soi.item_code)) = TRIM(UPPER(cpi.item_code)))
+             AND wo.source_type = 'FG' 
+             AND jc.operation_name != 'shipment' 
+             AND jc.operation_name != 'dispatch'
           ), 0
         ) as produced,
         COALESCE(
@@ -2327,33 +2357,38 @@ const getDispatchedDrawings = async (filters = {}) => {
            WHERE (sb.item_code = cpi.drawing_no OR sb.item_code = cpi.item_code) AND sb.material_type = 'FG'
           ), 0
         ) as fg_stock,
-        COALESCE(dispatch.dispatched_qty, 0) as dispatched
+        COALESCE(
+          (SELECT SUM(COALESCE(jc2.dispatch_qty, jc2.accepted_qty, 0))
+           FROM job_cards jc2
+           JOIN work_orders wo2 ON jc2.work_order_id = wo2.id
+           JOIN sales_orders so2 ON wo2.sales_order_id = so2.id
+           LEFT JOIN sales_order_items soi2 ON wo2.sales_order_item_id = soi2.id
+           LEFT JOIN order_items oi2 ON wo2.sales_order_item_id = oi2.id
+           WHERE (jc2.operation_name = 'shipment' OR jc2.operation_name = 'dispatch')
+             AND wo2.source_type = 'FG'
+             AND so2.customer_po_id = cpi.customer_po_id
+             AND (
+               (TRIM(UPPER(COALESCE(soi2.drawing_no, oi2.drawing_no, wo2.bom_no))) = TRIM(UPPER(cpi.drawing_no)) AND cpi.drawing_no IS NOT NULL AND cpi.drawing_no != '')
+               OR
+               (TRIM(UPPER(COALESCE(soi2.item_code, oi2.item_code, wo2.item_code))) = TRIM(UPPER(cpi.item_code)) AND cpi.item_code IS NOT NULL AND cpi.item_code != '')
+             )
+          ), 0
+        ) as dispatched
       FROM customer_po_items cpi
       JOIN customer_pos cp ON cpi.customer_po_id = cp.id
       JOIN companies c ON cp.company_id = c.id
-      LEFT JOIN sales_orders so ON so.customer_po_id = cp.id
-      LEFT JOIN sales_order_items soi ON soi.sales_order_id = so.id AND (TRIM(UPPER(soi.drawing_no)) = TRIM(UPPER(cpi.drawing_no)) OR TRIM(UPPER(soi.item_code)) = TRIM(UPPER(cpi.item_code)))
-      LEFT JOIN (
-        SELECT 
-          so2.customer_po_id,
-          COALESCE(soi2.drawing_no, oi2.drawing_no, wo2.bom_no) as drawing_no,
-          COALESCE(soi2.item_code, oi2.item_code, wo2.item_code) as item_code,
-          SUM(COALESCE(jc2.dispatch_qty, jc2.accepted_qty, 0)) as dispatched_qty
-        FROM job_cards jc2
-        JOIN work_orders wo2 ON jc2.work_order_id = wo2.id
-        JOIN sales_orders so2 ON wo2.sales_order_id = so2.id
-        LEFT JOIN sales_order_items soi2 ON wo2.sales_order_item_id = soi2.id
-        LEFT JOIN order_items oi2 ON wo2.sales_order_item_id = oi2.id
-        WHERE (jc2.operation_name = 'shipment' OR jc2.operation_name = 'dispatch')
-          AND wo2.source_type = 'FG'
-        GROUP BY so2.customer_po_id, COALESCE(soi2.drawing_no, oi2.drawing_no, wo2.bom_no), COALESCE(soi2.item_code, oi2.item_code, wo2.item_code)
-      ) dispatch ON dispatch.customer_po_id = cpi.customer_po_id 
-                AND (
-                  (TRIM(UPPER(dispatch.drawing_no)) = TRIM(UPPER(cpi.drawing_no)) AND cpi.drawing_no IS NOT NULL AND cpi.drawing_no != '')
-                  OR 
-                  (TRIM(UPPER(dispatch.item_code)) = TRIM(UPPER(cpi.item_code)) AND cpi.item_code IS NOT NULL AND cpi.item_code != '')
-                )
       WHERE cp.status != 'REJECTED'
+      GROUP BY 
+        cpi.id,
+        cpi.customer_po_id,
+        cp.po_number,
+        c.company_name,
+        cp.project_name,
+        cpi.drawing_no,
+        cpi.description,
+        cpi.quantity,
+        cpi.delivery_date,
+        cp.status
     ) t
     WHERE dispatched > 0
   `;

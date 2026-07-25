@@ -106,7 +106,7 @@ const CustomerPO = ({
   const [filterDrawingNo, setFilterDrawingNo] = useState('');
   const [filterDrawingName, setFilterDrawingName] = useState('');
   const [filterProject, setFilterProject] = useState('ALL');
-  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterStatus, setFilterStatus] = useState('Production');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [filterReadyOnly, setFilterReadyOnly] = useState(false);
@@ -118,7 +118,7 @@ const CustomerPO = ({
     drawingNo: '',
     drawingName: '',
     project: 'ALL',
-    status: 'ALL',
+    status: 'Production',
     dateFrom: '',
     dateTo: '',
     readyOnly: false
@@ -747,20 +747,6 @@ const CustomerPO = ({
       setPoForm(prev => ({ ...prev, items: updatedItems }));
     }
   }, [allDrawings, poForm.items]);
-
-  // Auto-generate PO Number when form opens
-  React.useEffect(() => {
-    if (showPoForm && !poForm.poNumber) {
-      const today = new Date();
-      const day = String(today.getDate()).padStart(2, '0');
-      const month = String(today.getMonth() + 1).padStart(2, '0');
-      const year = today.getFullYear();
-      const dateStr = `${day}-${month}-${year}`;
-      const count = (customerPos?.length || 0) + 1;
-      const autoPo = `PO${dateStr}-${count.toString().padStart(3, '0')}`;
-      setPoForm(prev => ({ ...prev, poNumber: autoPo }));
-    }
-  }, [showPoForm, customerPos]);
 
   // URL-based Modal Navigation
   React.useEffect(() => {
@@ -1393,7 +1379,7 @@ const CustomerPO = ({
       return
     }
     if (!poForm.poNumber || !poForm.poNumber.trim()) {
-      const msg = 'Please enter a PO Number';
+      const msg = 'Please enter a Customer Purchase Order Number';
       showToast(msg)
       setLocalError(msg)
       return
@@ -1672,7 +1658,7 @@ const CustomerPO = ({
 
   const columns = [
     {
-      label: 'PO Details',
+      label: 'Customer PO Details',
       render: (_, row) => (
         <div className="flex items-center gap-2">
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
@@ -1857,155 +1843,145 @@ const CustomerPO = ({
 
   if (isPendingView) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] p-6 space-y-6">
+      <div className="max-w-full overflow-x-hidden p-4 space-y-4 bg-[#f8fafc] min-h-screen">
         {/* Header Section */}
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
           <div>
-            <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              ⏳ Pending Customer Purchase Orders
+            <h1 className="text-lg font-bold text-slate-900 flex items-center gap-1.5">
+              📦 Customer PO Status
             </h1>
-            <p className="text-xs text-slate-500 mt-1">Track and manage drawings with pending dispatch quantities</p>
+            <p className="text-[11px] text-slate-500">Track and manage drawing statuses, dispatch quantities, and production status</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={handleExportPending}
-              className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-900 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 px-3.5 py-2 rounded-lg shadow-sm transition-all active:scale-95"
+              className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-900 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 px-2.5 py-1.5 rounded shadow-sm transition-all active:scale-95"
             >
-              <Download className="w-4 h-4" />
-              Export Current Search
+              <Download className="w-3.5 h-3.5" />
+              Export
             </button>
             <button
               onClick={() => navigate('/sales/customer-po')}
-              className="flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3.5 py-2 rounded-lg shadow-sm hover:bg-slate-50 transition-all active:scale-95"
+              className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-2.5 py-1.5 rounded shadow-sm hover:bg-slate-50 transition-all active:scale-95"
             >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Customer PO
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back
             </button>
           </div>
         </div>
 
         {/* Professional ERP Filter Panel */}
-        <div className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-sm space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 shadow-sm space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2.5">
             {/* Customer */}
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Customer</label>
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Customer</label>
               <SearchableSelect
                 value={filterCustomer === 'ALL' ? '' : filterCustomer}
                 onChange={(e) => setFilterCustomer(e?.target?.value || e || 'ALL')}
                 options={uniqueCustomers.map(c => ({ value: c, label: c }))}
                 placeholder="All Customers"
                 allowCustom={false}
-                className="w-full"
+                className="w-full text-xs"
               />
             </div>
 
             {/* PO No */}
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PO No</label>
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">PO No</label>
               <SearchableSelect
                 value={filterPoNo}
                 onChange={(e) => setFilterPoNo(e?.target?.value ?? e ?? '')}
                 options={filterOptions.poNumbers.map(v => ({ value: v, label: v }))}
-                placeholder="Enter or select PO No..."
+                placeholder="Select PO No..."
                 allowCustom={true}
-                className="w-full"
+                className="w-full text-xs"
               />
             </div>
 
             {/* Drawing No */}
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Drawing No</label>
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Drawing No</label>
               <SearchableSelect
                 value={filterDrawingNo}
                 onChange={(e) => setFilterDrawingNo(e?.target?.value ?? e ?? '')}
                 options={filterOptions.drawingNos.map(v => ({ value: v, label: v }))}
-                placeholder="Enter or select Drawing No..."
+                placeholder="Select Drawing No..."
                 allowCustom={true}
-                className="w-full"
+                className="w-full text-xs"
               />
             </div>
 
             {/* Drawing Name */}
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Drawing Name</label>
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Drawing Name</label>
               <SearchableSelect
                 value={filterDrawingName}
                 onChange={(e) => setFilterDrawingName(e?.target?.value ?? e ?? '')}
                 options={filterOptions.drawingNames.map(v => ({ value: v, label: v }))}
-                placeholder="Enter or select Drawing Name..."
+                placeholder="Select Drawing Name..."
                 allowCustom={true}
-                className="w-full"
+                className="w-full text-xs"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 
             {/* Project */}
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Project</label>
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Project</label>
               <SearchableSelect
                 value={filterProject === 'ALL' ? '' : filterProject}
                 onChange={(e) => setFilterProject(e?.target?.value || e || 'ALL')}
                 options={filterOptions.projects.map(p => ({ value: p, label: p }))}
                 placeholder="All Projects"
                 allowCustom={false}
-                className="w-full"
+                className="w-full text-xs"
               />
             </div>
 
             {/* Status */}
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</label>
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Status</label>
               <SearchableSelect
                 value={filterStatus === 'ALL' ? '' : filterStatus}
                 onChange={(e) => setFilterStatus(e?.target?.value || e || 'ALL')}
                 options={[
-                  { value: 'Ready', label: '🟢 Ready for Dispatch' },
+                  { value: 'ALL', label: 'All Statuses' },
                   { value: 'Production', label: '🔴 Production Pending' },
-                  { value: 'Partial', label: '🟠 Partial Dispatch' }
+                  { value: 'Ready', label: '🟢 Ready for Dispatch' },
+                  { value: 'Partial', label: '🟠 Partial Dispatch' },
+                  { value: 'Dispatched', label: '🔵 Dispatched' }
                 ]}
-                placeholder="All Statuses"
+                placeholder="Select Status"
                 allowCustom={false}
-                className="w-full"
-              />
-            </div>
-
-            {/* Delivery Date From */}
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Delivery Date From</label>
-              <input
-                type="date"
-                value={filterDateFrom}
-                onChange={(e) => setFilterDateFrom(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:bg-white transition-all"
-              />
-            </div>
-
-            {/* Delivery Date To */}
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Delivery Date To</label>
-              <input
-                type="date"
-                value={filterDateTo}
-                onChange={(e) => setFilterDateTo(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                className="w-full text-xs"
               />
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2 border-t border-slate-100">
-            <label className="flex items-center gap-2 text-xs text-slate-600 font-semibold cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={filterReadyOnly}
-                onChange={(e) => setFilterReadyOnly(e.target.checked)}
-                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
-              />
-              <span>Ready Dispatch (Show Ready Only)</span>
-            </label>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 pt-1">
+            <div className="grid grid-cols-2 gap-2.5 w-full md:w-auto md:min-w-[360px]">
+              {/* Delivery Date From */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Delivery Date From</label>
+                <input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={(e) => setFilterDateFrom(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                />
+              </div>
+
+              {/* Delivery Date To */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Delivery Date To</label>
+                <input
+                  type="date"
+                  value={filterDateTo}
+                  onChange={(e) => setFilterDateTo(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs text-slate-700 outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                />
+              </div>
+            </div>
 
             <div className="flex items-center gap-2">
               <button
@@ -2032,9 +2008,9 @@ const CustomerPO = ({
                     readyOnly: false
                   });
                 }}
-                className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 font-semibold text-xs rounded-lg shadow-sm transition-all active:scale-95"
+                className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 font-semibold text-xs rounded shadow-sm transition-all active:scale-95"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                <RefreshCw className="w-3 h-3" />
                 Reset
               </button>
               <button
@@ -2052,108 +2028,104 @@ const CustomerPO = ({
                     readyOnly: filterReadyOnly
                   });
                 }}
-                className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-md shadow-indigo-100 transition-all active:scale-95"
+                className="flex items-center gap-1 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded shadow shadow-indigo-100 transition-all active:scale-95"
               >
-                <Search className="w-3.5 h-3.5" />
+                <Search className="w-3 h-3" />
                 Search
               </button>
             </div>
           </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <label className="flex items-center gap-2 text-xs text-slate-600 font-semibold cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={filterReadyOnly}
+                onChange={(e) => setFilterReadyOnly(e.target.checked)}
+                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20"
+              />
+              <span>Ready Dispatch (Show Ready Only)</span>
+            </label>
+          </div>
         </div>
 
-        {/* Summary Metric Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {/* Compact Statistics Cards */}
+        <div className="flex flex-wrap gap-3">
           {[
-            { label: 'Total Pending Drawings', value: pendingSummary.totalPendingDrawings, color: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
-            { label: 'Ready for Dispatch', value: pendingSummary.readyForDispatch, color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-            { label: 'Production Pending', value: pendingSummary.productionPending, color: 'bg-amber-50 text-amber-700 border-amber-100' },
-            { label: 'QC Pending', value: pendingSummary.qcPending, color: 'bg-rose-50 text-rose-700 border-rose-100' },
-            { label: 'Partial Dispatch', value: pendingSummary.partialDispatch, color: 'bg-blue-50 text-blue-700 border-blue-100' }
+            { label: 'Total Drawings', value: pendingSummary.totalPendingDrawings ?? 0, color: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+            { label: 'Production Pending', value: pendingSummary.productionPending ?? 0, color: 'bg-amber-50 text-amber-700 border-amber-100' },
+            { label: 'Ready for Dispatch', value: pendingSummary.readyForDispatch ?? 0, color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+            { label: 'Dispatched', value: pendingSummary.fullyDispatched ?? 0, color: 'bg-blue-50 text-blue-700 border-blue-100' }
           ].map((card, idx) => (
-            <div key={idx} className={`border rounded-xl p-4 shadow-sm bg-white hover:-translate-y-0.5 transition-all duration-300`}>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{card.label}</p>
-              <p className="text-2xl font-black text-slate-800 mt-2">{card.value}</p>
-              <div className={`mt-2.5 h-1.5 w-8 rounded-full ${card.color.split(' ')[0]}`} />
+            <div key={idx} className="flex-1 min-w-[120px] bg-white border rounded p-2.5 shadow-sm flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{card.label}</p>
+                <p className="text-lg font-black text-slate-800 mt-0.5">{card.value}</p>
+              </div>
+              <div className={`h-8 w-1.5 rounded-full ${card.color.split(' ')[0]}`} />
             </div>
           ))}
         </div>
 
         {/* Result Table */}
         <div className="bg-white border border-[#D6D6D6] rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left text-[#222222]">
-              <thead className="bg-[#FFF176] text-[#333333] font-bold uppercase tracking-wider border-b border-[#D6D6D6] text-[10px]">
+          <div className="overflow-x-auto max-h-[650px] relative">
+            <table className="w-full text-xs text-left text-[#222222] border-collapse">
+              <thead className="bg-[#FFF176] text-[#333333] font-bold uppercase tracking-wider border-b border-[#D6D6D6] text-[9px] sticky top-0 z-10 shadow-sm">
                 <tr>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333]">PO No</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333]">Customer</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333]">Project</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333]">Drawing No</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333]">Drawing Name</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">Ordered Qty</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">Produced</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">QC</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">FG Stock</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">Dispatched</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">Pending</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-center">Delivery</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-center">Status</th>
-                  <th className="p-4 border border-[#D6D6D6] text-[#333333] text-right">Action</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] w-[8%] min-w-[70px]">PO No</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] w-[12%] min-w-[90px]">Customer</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] w-[8%] min-w-[70px]">Project</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] w-[14%] min-w-[120px]">Drawing No</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] w-[16%] min-w-[140px]">Drawing Name</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] text-right w-[6%] min-w-[65px]">Ordered Qty</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] text-right w-[6%] min-w-[55px]">Produced</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] text-right w-[5%] min-w-[45px]">QC</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] text-right w-[6%] min-w-[55px]">FG Stock</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] text-right w-[6%] min-w-[60px]">Dispatched</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] text-right w-[6%] min-w-[60px]">Pending</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] text-center w-[7%] min-w-[65px]">Delivery</th>
+                  <th className="p-2 border border-[#D6D6D6] text-[#333333] text-center w-[8%] min-w-[70px]">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#D6D6D6]">
                 {pendingLoading ? (
                   <tr>
-                    <td colSpan={14} className="p-10 text-center text-slate-400">
+                    <td colSpan={13} className="p-8 text-center text-slate-400">
                       <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
                       Loading drawing lines...
                     </td>
                   </tr>
                 ) : pendingDrawings.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="p-10 text-center text-slate-400 font-medium">
+                    <td colSpan={13} className="p-8 text-center text-slate-400 font-medium">
                       No matching pending drawings found.
                     </td>
                   </tr>
                 ) : (
                   pendingDrawings.map((row) => (
-                    <tr key={row.id} className="even:bg-[#FFFDE7] hover:bg-slate-50/50 transition-colors">
-                      <td className="p-4 border border-[#D6D6D6] font-mono font-bold text-[#222222]">{row.po_number}</td>
-                      <td className="p-4 border border-[#D6D6D6] font-medium text-[#222222]">{row.company_name}</td>
-                      <td className="p-4 border border-[#D6D6D6] text-[#222222] italic">{row.project_name || 'General Project'}</td>
-                      <td className="p-4 border border-[#D6D6D6] text-indigo-600 font-bold">{row.drawing_no}</td>
-                      <td className="p-4 border border-[#D6D6D6] text-[#222222]">{row.drawing_name}</td>
-                      <td className="p-4 border border-[#D6D6D6] text-right font-semibold text-[#222222]">{row.ordered_qty}</td>
-                      <td className="p-4 border border-[#D6D6D6] text-right text-[#222222]">{row.produced}</td>
-                      <td className="p-4 border border-[#D6D6D6] text-right text-[#222222]">{row.qc}</td>
-                      <td className="p-4 border border-[#D6D6D6] text-right text-[#43A047] font-semibold">{row.fg_stock}</td>
-                      <td className="p-4 border border-[#D6D6D6] text-right text-[#222222]">{row.dispatched}</td>
-                      <td className="p-4 border border-[#D6D6D6] text-right text-[#E53935] font-black">{row.pending}</td>
-                      <td className="p-4 border border-[#D6D6D6] text-center text-[#222222]">{row.delivery_date ? new Date(row.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}</td>
-                      <td className="p-4 border border-[#D6D6D6] text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold border uppercase tracking-wider ${
+                    <tr key={row.id} className={`hover:bg-slate-50/50 transition-colors ${row.status === 'Production' ? 'bg-[#FFFDE7]' : 'bg-white'}`}>
+                      <td className="p-2 border border-[#D6D6D6] font-mono font-bold text-[#222222] truncate max-w-[80px]" title={row.po_number}>{row.po_number}</td>
+                      <td className="p-2 border border-[#D6D6D6] font-medium text-[#222222] truncate max-w-[120px]" title={row.company_name}>{row.company_name}</td>
+                      <td className="p-2 border border-[#D6D6D6] text-[#222222] italic truncate max-w-[80px]" title={row.project_name || 'General Project'}>{row.project_name || 'General Project'}</td>
+                      <td className="p-2 border border-[#D6D6D6] font-semibold text-indigo-600 select-all">{row.drawing_no}</td>
+                      <td className="p-2 border border-[#D6D6D6] text-[#222222] max-w-[160px] truncate" title={row.drawing_name}>{row.drawing_name}</td>
+                      <td className="p-2 border border-[#D6D6D6] text-right font-semibold text-[#222222]">{row.ordered_qty}</td>
+                      <td className="p-2 border border-[#D6D6D6] text-right text-[#222222]">{row.produced}</td>
+                      <td className="p-2 border border-[#D6D6D6] text-right text-[#222222]">{row.qc}</td>
+                      <td className="p-2 border border-[#D6D6D6] text-right text-[#43A047] font-semibold">{row.fg_stock}</td>
+                      <td className="p-2 border border-[#D6D6D6] text-right text-[#222222]">{row.dispatched}</td>
+                      <td className="p-2 border border-[#D6D6D6] text-right text-[#E53935] font-black">{row.pending}</td>
+                      <td className="p-2 border border-[#D6D6D6] text-center text-[#222222]">{row.delivery_date ? new Date(row.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}</td>
+                      <td className="p-2 border border-[#D6D6D6] text-center">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wider ${
                           row.status === 'Ready' ? 'bg-[#FFFDE7] border-[#D6D6D6] text-[#43A047]' :
                           row.status === 'Partial' ? 'bg-[#FFFDE7] border-[#D6D6D6] text-[#FB8C00]' :
+                          row.status === 'Dispatched' ? 'bg-blue-50 border-blue-200 text-blue-600' :
                           'bg-[#FFFDE7] border-[#D6D6D6] text-[#E53935]'
                         }`}>
-                          {row.status === 'Ready' ? '🟢 Ready' : row.status === 'Partial' ? '🟡 Partial' : '🔴 Pending'}
+                          {row.status === 'Ready' ? '🟢 Ready' : row.status === 'Partial' ? '🟡 Partial' : row.status === 'Dispatched' ? '🔵 Dispatched' : '🔴 Pending'}
                         </span>
-                      </td>
-                      <td className="p-4 border border-[#D6D6D6] text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => openPoInMode('VIEW', row.customer_po_id)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-lg transition-all"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDispatchDrawing(row)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-100 rounded-lg text-[10px] font-semibold transition-all active:scale-95"
-                          >
-                            🚚 Dispatch
-                          </button>
-                        </div>
                       </td>
                     </tr>
                   ))
@@ -2387,15 +2359,9 @@ const CustomerPO = ({
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/sales/customer-po/pending')}
-            className="flex items-center gap-2 border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded text-xs font-semibold shadow-sm transition-all active:scale-95"
-          >
-            ⏳ Pending PO ({pendingCount})
-          </button>
-          <button
-            onClick={() => navigate('/sales/customer-po/dispatched')}
             className="flex items-center gap-2 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded text-xs font-semibold shadow-sm transition-all active:scale-95"
           >
-            🚚 Dispatched PO ({dispatchedCount})
+            📦 Customer PO Status
           </button>
           <button
             onClick={() => onRefresh && onRefresh()}
@@ -2444,7 +2410,7 @@ const CustomerPO = ({
           <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by PO number, client, project, or drawing..."
+            placeholder="Search by Customer PO number, client, project, or drawing..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-11 pr-4 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all  "
@@ -2896,7 +2862,7 @@ const CustomerPO = ({
 
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="space-y-2">
-                      <label className="text-xs  text-slate-400   ml-1">PO Number *</label>
+                      <label className="text-xs  text-slate-400   ml-1">Customer Purchase Order Number *</label>
                       <input
                         type="text"
                         disabled={formMode === 'VIEW'}
