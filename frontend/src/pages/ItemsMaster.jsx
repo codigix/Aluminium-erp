@@ -140,8 +140,6 @@ const ItemsMaster = () => {
         }
 
         setShowItemForm(true);
-
-        fetchNextItemCode();
       }, 0);
 
       return;
@@ -314,6 +312,10 @@ const ItemsMaster = () => {
   }, [location.pathname, fetchItemsList, fetchItemGroups, fetchShapes, fetchMaterials, fetchApprovedDrawings, navigate, deptPrefix]);
 
   const fetchNextItemCode = useCallback(async (itemName = '', itemGroup = '') => {
+    if (!itemGroup) {
+      setItemFormData(prev => ({ ...prev, itemCode: '' }));
+      return;
+    }
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/stock/items/next-code?itemName=${encodeURIComponent(itemName)}&itemGroup=${encodeURIComponent(itemGroup)}`, {
@@ -321,7 +323,9 @@ const ItemsMaster = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setItemFormData(prev => ({ ...prev, itemCode: data.itemCode }));
+        if (data.itemCode) {
+          setItemFormData(prev => ({ ...prev, itemCode: data.itemCode }));
+        }
       }
     } catch (error) {
       console.error('Failed to fetch next item code:', error);
@@ -954,21 +958,25 @@ const ItemsMaster = () => {
                   <input 
                     type="text"
                     className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    placeholder="e.g. ITM-001"
+                    placeholder="Select Item Group to generate code"
                     value={itemFormData.itemCode}
                     onChange={(e) => setItemFormData({...itemFormData, itemCode: e.target.value})}
                     required
                   />
-                  {!isEditingItem && (
-                    <button 
-                      type="button"
-                      onClick={() => fetchNextItemCode(itemFormData.itemName, itemFormData.itemGroup)}
-                      className="p-2 bg-slate-100 text-slate-600 rounded  hover:bg-slate-200 transition-all border border-slate-200"
-                      title="Generate Code"
-                    >
-                      <RefreshCw size={15} />
-                    </button>
-                  )}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (itemFormData.itemGroup) {
+                        fetchNextItemCode(itemFormData.itemName, itemFormData.itemGroup);
+                      } else {
+                        infoToast('Please select an Item Group first');
+                      }
+                    }}
+                    className="p-2 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-all border border-slate-200"
+                    title="Generate Code based on Item Group"
+                  >
+                    <RefreshCw size={15} />
+                  </button>
                 </div>
               </div>
               <div className="space-y-2">
@@ -1000,8 +1008,12 @@ const ItemsMaster = () => {
                   value={itemFormData.itemGroup}
                   onChange={(e) => {
                     const group = e.target.value;
-                    setItemFormData({...itemFormData, itemGroup: group});
-                    if (!isEditingItem) fetchNextItemCode(itemFormData.itemName, group);
+                    setItemFormData(prev => ({ ...prev, itemGroup: group }));
+                    if (group) {
+                      fetchNextItemCode(itemFormData.itemName, group);
+                    } else {
+                      setItemFormData(prev => ({ ...prev, itemCode: '' }));
+                    }
                   }}
                   required
                 >

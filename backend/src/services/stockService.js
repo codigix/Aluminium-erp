@@ -958,28 +958,30 @@ const generateItemCode = async (itemName, itemGroup) => {
 
   const group = (groupType || '').toUpperCase().trim();
 
-  if (group === 'FINISHED GOODS' || group === 'FG' || group === 'FINISHED GOOD' || group === 'PART') {
+  if (group.includes('FINISHED') || group === 'FG' || group.includes('PART')) {
     prefix = 'PART';
-  } else if (group === 'RAW MATERIAL' || group === 'RAW MATERIALS' || group === 'RM' || group === 'RAW_MATERIAL' || group === 'SS' || group === 'MS' || group === 'AL' || group === 'ALUMINIUM') {
+  } else if (group.includes('RAW') || group === 'RM') {
     prefix = 'RAW';
-  } else if (group === 'SEMI FINISHED GOODS' || group === 'SFG' || group === 'SEMI-FINISHED GOODS') {
-    prefix = 'SFG';
-  } else if (group === 'SUB ASSEMBLY' || group === 'SUB ASSEMBLIES' || group === 'SA' || group === 'SUB-ASSEMBLY' || group === 'ASSEMBLY' || group === 'ASSY') {
-    prefix = 'ASSEMBLY';
-  } else if (group === 'CONSUMABLES' || group === 'CONSUMABLE' || group === 'CON') {
+  } else if (group.includes('BOUGHT') || group.includes('BO') || group.includes('OUT')) {
+    prefix = 'BO';
+  } else if (group.includes('CONSUM') || group === 'CON' || group.includes('CONSUMBLE')) {
     prefix = 'CON';
-  } else if (group === 'PACKING MATERIAL' || group === 'PACKING MATERIALS' || group === 'PAC' || group === 'PACKAGING') {
+  } else if (group.includes('SEMI') || group === 'SFG') {
+    prefix = 'SFG';
+  } else if (group.includes('ASSEMBL') || group === 'SA' || group === 'ASSY') {
+    prefix = 'ASSEMBLY';
+  } else if (group.includes('PACK') || group === 'PAC') {
     prefix = 'PAC';
-  } else if (group === 'SERVICE' || group === 'SERVICES' || group === 'SER') {
+  } else if (group.includes('SERV') || group === 'SER') {
     prefix = 'SER';
-  } else if (group === 'OTHER' || group === 'OTHERS' || group === 'OTH') {
+  } else if (group.includes('OTH')) {
     prefix = 'OTH';
   } else if (group) {
-    prefix = group.substring(0, 3).toUpperCase();
+    prefix = group.replace(/[^a-zA-Z0-9]/g, '').substring(0, 4).toUpperCase();
   }
 
-  // Clean item name for inclusion in code (alphanumeric only, max 10 chars)
-  const cleanName = itemName ? itemName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 10).toUpperCase() : 'ITEM';
+  // Clean item name for inclusion in code (alphanumeric only, max 15 chars)
+  const cleanName = itemName ? itemName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15).toUpperCase() : 'ITEM';
   const baseCode = `${prefix}-${cleanName}`;
 
   // Find the highest sequence number for this base code

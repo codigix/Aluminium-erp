@@ -2748,8 +2748,8 @@ const ensureItemGroupsTable = async () => {
     const [rows] = await connection.query('SELECT COUNT(*) as count FROM item_groups');
     if (rows[0].count === 0) {
       await connection.query(`
-        INSERT INTO item_groups (name) VALUES 
-        ('Raw Material'), ('SFG'), ('FG'), ('Sub Assembly'), ('Consumable')
+        INSERT INTO item_groups (name, group_type, status) VALUES 
+        ('part', 'PART', 'ACTIVE'), ('raw Material', 'RM', 'ACTIVE'), ('consumbles', 'CON', 'ACTIVE'), ('bought out', 'BO', 'ACTIVE'), ('assembly', 'ASSEMBLY', 'ACTIVE')
       `);
       console.log('Item Groups seeded');
     }
