@@ -74,28 +74,30 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing, onOpenAttachments }) =>
     };
   }, [files]);
 
-  if (!drawing || files.length === 0) return null;
+  if (!drawing) return null;
 
-  const activeFile = files[activeIdx] || files[0];
-  const fileUrl = activeFile.url;
-  const extension = activeFile.extension;
+  const activeFile = files.length > 0 ? (files[activeIdx] || files[0]) : null;
+  const fileUrl = activeFile ? activeFile.url : '';
+  const extension = activeFile ? activeFile.extension : '';
   const serverFileType = (drawing.file_type || '').toUpperCase();
 
   let type = 'other';
-  if (['JPG', 'JPEG', 'PNG', 'GIF', 'WEBP', 'BMP'].includes(serverFileType) || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(extension)) {
-    type = 'image';
-  } else if (serverFileType === 'PDF' || extension === 'pdf') {
-    type = 'pdf';
-  } else if (['DXF', 'IGS', 'STP', 'HTP', 'PRK'].includes(serverFileType) || ['dxf', 'igs', 'stp', 'htp', 'prk'].includes(extension)) {
-    type = 'nonPreviewableCad';
-  } else if (serverFileType === 'DWG' || extension === 'dwg') {
-    type = 'cad';
+  if (activeFile) {
+    if (['JPG', 'JPEG', 'PNG', 'GIF', 'WEBP', 'BMP'].includes(serverFileType) || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(extension)) {
+      type = 'image';
+    } else if (serverFileType === 'PDF' || extension === 'pdf') {
+      type = 'pdf';
+    } else if (['DXF', 'IGS', 'STP', 'HTP', 'PRK'].includes(serverFileType) || ['dxf', 'igs', 'stp', 'htp', 'prk'].includes(extension)) {
+      type = 'nonPreviewableCad';
+    } else if (serverFileType === 'DWG' || extension === 'dwg') {
+      type = 'cad';
+    }
   }
 
   const previewFile = {
     url: fileUrl,
-    name: activeFile.name,
-    type: type,
+    name: activeFile ? activeFile.name : (drawing.drawing_no || 'Document'),
+    type: activeFile ? type : 'empty',
     extension: extension
   };
 
@@ -198,23 +200,27 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing, onOpenAttachments }) =>
                 Manage Attachments
               </button>
             )}
-            <a
-              href={previewFile.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 py-2 bg-slate-900 text-white rounded  text-xs  hover:bg-slate-800 transition-all shadow-sm"
-            >
-              <ExternalLink size={12} />
-              Open New Tab
-            </a>
-            <a
-              href={previewFile.url}
-              download
-              className="w-full flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 text-indigo-600 rounded  text-xs  hover:bg-slate-50 transition-all"
-            >
-              <Download size={12} />
-              Download
-            </a>
+             {previewFile.url && (
+               <>
+                 <a
+                   href={previewFile.url}
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   className="w-full flex items-center justify-center gap-2 py-2 bg-slate-900 text-white rounded  text-xs  hover:bg-slate-800 transition-all shadow-sm"
+                 >
+                   <ExternalLink size={12} />
+                   Open New Tab
+                 </a>
+                 <a
+                   href={previewFile.url}
+                   download
+                   className="w-full flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 text-indigo-600 rounded  text-xs  hover:bg-slate-50 transition-all"
+                 >
+                   <Download size={12} />
+                   Download
+                 </a>
+               </>
+             )}
           </div>
         </div>
 
@@ -312,6 +318,31 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing, onOpenAttachments }) =>
                     <Download size={14} />
                     Download File
                   </a>
+                </div>
+              </div>
+            ) : previewFile.type === 'empty' ? (
+              <div className="w-full h-full flex items-center justify-center p-6 text-center">
+                <div className="max-w-md p-6 bg-white rounded border border-slate-200 shadow-sm">
+                  <div className="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FileText className="w-6 h-6 text-rose-500" />
+                  </div>
+                  <h3 className="text-slate-900 font-bold text-sm mb-2">No Drawing Document Uploaded</h3>
+                  <p className="text-slate-600 text-xs mb-6 leading-relaxed">
+                    There is currently no drawing document (PDF, CAD, or image file) uploaded for this part. You can view the metadata details on the left sidebar.
+                  </p>
+                  {onOpenAttachments && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenAttachments(drawing);
+                      }}
+                      className="inline-flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+                    >
+                      <Paperclip size={14} />
+                      Upload / Manage Attachments
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (

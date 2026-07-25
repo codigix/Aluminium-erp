@@ -748,8 +748,8 @@ const BOMFormPage = () => {
       return;
     }
 
-    // Check if we already have it in approvedDrawings AND it contains a valid file path
-    let dwg = approvedDrawings.find(d => cleanDwgNo(d.drawing_no) === cleanDwgNo(drawingNo) && (d.file_path || d.drawing_pdf));
+    // Check if we already have it in approvedDrawings
+    let dwg = approvedDrawings.find(d => cleanDwgNo(d.drawing_no) === cleanDwgNo(drawingNo));
     if (!dwg) {
       // Fetch from backend
       try {
@@ -776,7 +776,16 @@ const BOMFormPage = () => {
       setPreviewDrawing(finalDwg);
       setShowPreviewModal(true);
     } else {
-      errorToast('Drawing file not found in system');
+      // Fallback: create a virtual drawing object so the preview modal can still display the metadata
+      const virtualDwg = {
+        drawing_no: drawingNo,
+        description: productForm.productName || 'Child Part / Assembly',
+        client_name: 'Internal System',
+        revision: '0',
+        qty: 1
+      };
+      setPreviewDrawing(virtualDwg);
+      setShowPreviewModal(true);
     }
   };
 
@@ -4559,9 +4568,45 @@ const BOMFormPage = () => {
         isOpen={showPreviewModal}
         onClose={() => setShowPreviewModal(false)}
         drawing={previewDrawing}
-        onOpenAttachments={(dwg) => {
+        onOpenAttachments={async (dwg) => {
           const dwgId = dwg.drawing_master_id || dwg.drawing_id || dwg.id;
-          setActiveDrawingIdForFiles(dwgId);
+          if (dwgId) {
+            // Drawing already exists in DB — open directly
+            setShowPreviewModal(false);
+            setActiveDrawingIdForFiles(dwgId);
+            return;
+          }
+          // Virtual drawing — create the record in Drawing Master first
+          try {
+            const token = localStorage.getItem('authToken');
+            const formData = new FormData();
+            formData.append('drawingNo', dwg.drawing_no || '');
+            formData.append('description', dwg.description || '');
+            formData.append('clientName', dwg.client_name || 'Internal');
+            formData.append('revision', dwg.revision || '0');
+            formData.append('qty', dwg.qty || 1);
+            formData.append('drawing_type', dwg.drawing_type || 'Part');
+            const response = await fetch(`${API_BASE}/drawings`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: formData
+            });
+            if (!response.ok) {
+              const err = await response.json().catch(() => ({}));
+              throw new Error(err.message || 'Failed to create drawing record');
+            }
+            const created = await response.json();
+            const newId = created.id || created.drawing_master_id || created.drawingId;
+            if (!newId) throw new Error('Failed to get created drawing ID');
+            // Update the previewDrawing with the new DB id so subsequent opens work
+            setPreviewDrawing(prev => ({ ...prev, id: newId, drawing_master_id: newId }));
+            setShowPreviewModal(false);
+            setActiveDrawingIdForFiles(newId);
+            successToast('Drawing record created. You can now upload files.');
+          } catch (err) {
+            console.error(err);
+            errorToast(err.message || 'Could not create drawing record');
+          }
         }}
       />
 
