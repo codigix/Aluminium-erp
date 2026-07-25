@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { Card, DataTable, Modal, SearchableSelect, MultiSelect, Button, Tabs } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
@@ -743,21 +743,27 @@ const Quotations = () => {
       newItems[index].material_type = getCorrectMaterialType(value, newItems[index].material_type);
     }
 
+    const getItemDesignQty = (item) => {
+      if (item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') {
+        return parseFloat(item.planned_qty) || 0;
+      }
+      return parseFloat(item.design_qty || item.quantity) || 0;
+    };
+
     // Recalculate item amount
-    if (field === 'quantity' || field === 'unit_rate' || field === 'design_qty') {
-      // Always sync quantity with design_qty if it's the one being changed
+    if (field === 'quantity' || field === 'unit_rate' || field === 'design_qty' || field === 'planned_qty') {
       if (field === 'design_qty') {
         newItems[index].quantity = value;
       }
 
-      const qty = parseFloat(newItems[index].design_qty || newItems[index].quantity) || 0;
+      const qty = getItemDesignQty(newItems[index]);
       const rate = parseFloat(newItems[index].unit_rate) || 0;
       newItems[index].amount = qty * rate;
     }
 
     // Recalculate total amount (subtotal)
     const totalAmount = newItems.reduce((sum, item) => {
-      const qty = parseFloat(item.design_qty || item.quantity) || 0;
+      const qty = getItemDesignQty(item);
       const rate = parseFloat(item.unit_rate) || 0;
       return sum + (qty * rate);
     }, 0);
@@ -1451,6 +1457,7 @@ const Quotations = () => {
 
     setEditFormData({
       vendorId: quotation.vendor_id,
+      status: quotation.status || 'SENT',
       validUntil: quotation.valid_until ? new Date(quotation.valid_until).toISOString().split('T')[0] : '',
       hostCompanyId: String(defaultHostId),
       items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
@@ -1505,7 +1512,7 @@ const Quotations = () => {
           hostCompanyId: editFormData.hostCompanyId ? parseInt(editFormData.hostCompanyId) : null,
           items: editFormData.items,
           received_pdf_path: finalPaths.join(','),
-          status: selectedQuotation.status
+          status: editFormData.status || selectedQuotation.status
         })
       });
 
@@ -1764,7 +1771,7 @@ const Quotations = () => {
       const assignRes = await fetch(`${API_BASE}/rfqs/${formData.rfq_id}/assign-vendors`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemVendorMap })
+        body: JSON.stringify({ itemVendorMap, targetStatus: quotationStatus })
       });
 
       if (!assignRes.ok) throw new Error('Failed to save vendor assignments');
@@ -1863,9 +1870,13 @@ const Quotations = () => {
     });
   }, [quotations, rawRfqs, activeTab, filterStatus]);
 
-  const getVendorName = (vendorId) => {
-    return vendors.find(v => v.id === vendorId)?.vendor_name || 'Unknown Vendor';
-  };
+  const getVendorName = useCallback((vendorId, row = null) => {
+    if (row && row.vendor_name) return row.vendor_name;
+    if (row && row.company_name) return row.company_name;
+    if (!vendorId) return 'Unassigned';
+    const found = vendors.find(v => String(v.id) === String(vendorId));
+    return found ? found.vendor_name : (vendorId ? `Vendor #${vendorId}` : 'Unassigned');
+  }, [vendors]);
 
   const columns = useMemo(() => {
     const baseCols = [
@@ -1955,7 +1966,7 @@ const Quotations = () => {
               </>
             ) : (
               <>
-                <span className="text-slate-900">{val ? getVendorName(val) : 'Unknown'}</span>
+                <span className="text-slate-900 font-medium">{val ? getVendorName(val, q) : 'Unassigned'}</span>
                 {val && q.is_single_vendor && <span className="text-xs text-slate-400 mt-0.5">[Single Vendor]</span>}
                 {val && <span className="text-xs text-slate-400 mt-1 flex items-center gap-1 opacity-70">Vendor ID: #{val}</span>}
               </>
@@ -2850,7 +2861,7 @@ const Quotations = () => {
                             <th className="p-2  text-slate-600" style={{ width: '100px' }}>TYPE</th>
                             <th className="p-2 text-center  text-slate-600" style={{ width: '80px' }}>Design Qty</th>
                             <th className="p-2 text-center  text-slate-600" style={{ width: '100px' }}>Required</th>
-                            <th className="p-2 text-center  text-slate-600" style={{ width: '100px' }}>RATE (₹)</th>
+                            <th className="p-2 text-center  text-slate-600" style={{ width: '120px' }}>UNIT RATE (₹/Nos)</th>
                             <th className="p-2 text-right  text-slate-600" style={{ width: '100px' }}>AMOUNT</th>
                             <th className="p-2 text-center" style={{ width: '40px' }}></th>
                           </tr>
@@ -2959,13 +2970,13 @@ const Quotations = () => {
                                     type="number"
                                     value={item.unit_rate || ''}
                                     onChange={(e) => handleRecordItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
-                                    className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500"
+                                    className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500 font-medium"
                                     placeholder="0"
                                   />
                                 </td>
-                                <td className="p-2 text-right  text-slate-700">
-                                  {((parseFloat(item.design_qty || item.quantity) || 0) * (parseFloat(item.unit_rate) || 0)) > 0
-                                    ? formatCurrency((parseFloat(item.design_qty || item.quantity) || 0) * (parseFloat(item.unit_rate) || 0))
+                                <td className="p-2 text-right text-slate-700 font-medium">
+                                  {(((item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') ? (parseFloat(item.planned_qty) || 0) : (parseFloat(item.design_qty || item.quantity) || 0)) * (parseFloat(item.unit_rate) || 0)) > 0
+                                    ? formatCurrency(((item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') ? (parseFloat(item.planned_qty) || 0) : (parseFloat(item.design_qty || item.quantity) || 0)) * (parseFloat(item.unit_rate) || 0))
                                     : '—'}
                                 </td>
                                 <td className="p-2 text-center">
@@ -3263,14 +3274,15 @@ const Quotations = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-3 mb-4">
                 <div>
-                  <label className="block text-xs  text-slate-700 mb-1">Vendor</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Vendor *</label>
                   <select
-                    value={editFormData.vendorId}
+                    value={editFormData.vendorId || ''}
                     onChange={(e) => setEditFormData({ ...editFormData, vendorId: e.target.value })}
-                    className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                   >
+                    <option value="">Select Vendor...</option>
                     {vendors.map(v => (
                       <option key={v.id} value={v.id}>{v.vendor_name}</option>
                     ))}
@@ -3278,13 +3290,28 @@ const Quotations = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs  text-slate-700 mb-1">Valid Until</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Valid Until</label>
                   <input
                     type="date"
-                    value={editFormData.validUntil}
+                    value={editFormData.validUntil || ''}
                     onChange={(e) => setEditFormData({ ...editFormData, validUntil: e.target.value })}
-                    className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Quotation Status *</label>
+                  <select
+                    value={editFormData.status || 'SENT'}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-800"
+                  >
+                    <option value="DRAFT">DRAFT</option>
+                    <option value="SENT">SENT (Issued RFQ)</option>
+                    <option value="RECEIVED">RECEIVED (Quoted)</option>
+                    <option value="APPROVED">APPROVED</option>
+                    <option value="REJECTED">REJECTED</option>
+                  </select>
                 </div>
               </div>
 
@@ -3327,7 +3354,7 @@ const Quotations = () => {
                           <div className="col-span-1">Type</div>
                           <div className="col-span-1 text-center">Design Qty</div>
                           <div className="col-span-1 text-center">Quoted Qty</div>
-                          <div className="col-span-2 text-center">Rate (₹)</div>
+                          <div className="col-span-2 text-center">UNIT RATE (₹/Nos)</div>
                           <div className="col-span-1 text-right">Amount</div>
                           <div className="col-span-1"></div>
                         </>
@@ -3537,10 +3564,10 @@ const Quotations = () => {
                                 newItems[idx].unit_rate = parseFloat(e.target.value) || 0;
                                 setEditFormData({ ...editFormData, items: newItems });
                               }}
-                              className="col-span-2 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-2 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
                             />
-                            <div className="col-span-1 text-right text-xs  text-slate-700 pt-2">
-                              {formatCurrency((item.design_qty || item.quantity || 0) * (item.unit_rate || 0))}
+                            <div className="col-span-1 text-right text-xs text-slate-700 pt-2 font-medium">
+                              {formatCurrency(((item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') ? (parseFloat(item.planned_qty) || 0) : (parseFloat(item.design_qty || item.quantity) || 0)) * (parseFloat(item.unit_rate) || 0))}
                             </div>
                           </>
                         )}

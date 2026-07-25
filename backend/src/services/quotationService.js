@@ -114,8 +114,8 @@ const createQuotation = async (payload) => {
 
     const quotationId = result.insertId;
 
-    // Update RFQ status if rfq_id is provided, but only if it's not already SENT
-    if (rfq_id) {
+    // Update RFQ status if rfq_id is provided, but only if it's not already SENT and status is not DRAFT
+    if (rfq_id && status !== 'DRAFT') {
       await connection.execute(
         'UPDATE procurement_rfqs SET status = ? WHERE id = ? AND status != ?',
         ['SENT', rfq_id, 'SENT']
@@ -143,10 +143,11 @@ const createQuotation = async (payload) => {
 
     if (Array.isArray(items) && items.length > 0) {
       for (const item of items) {
-        const designQty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
+        const plannedQty = (item.planned_qty !== undefined && item.planned_qty !== null && item.planned_qty !== '') ? parseFloat(item.planned_qty) : null;
+        const designQty = (plannedQty !== null && !isNaN(plannedQty)) ? plannedQty : (parseFloat(item.design_qty) || parseFloat(item.quantity) || 0);
         const qty = parseFloat(item.quantity) || designQty || 0;
         const rate = parseFloat(item.unit_rate) || 0;
-        const amount = Number((qty * rate).toFixed(2));
+        const amount = Number((designQty * rate).toFixed(2));
         const cgstPercent = 9;
         const sgstPercent = 9;
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
@@ -877,10 +878,11 @@ const updateQuotation = async (quotationId, payload) => {
 
     if (Array.isArray(finalItems) && finalItems.length > 0) {
       for (const item of finalItems) {
-        const designQty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
+        const plannedQty = (item.planned_qty !== undefined && item.planned_qty !== null && item.planned_qty !== '') ? parseFloat(item.planned_qty) : null;
+        const designQty = (plannedQty !== null && !isNaN(plannedQty)) ? plannedQty : (parseFloat(item.design_qty) || parseFloat(item.quantity) || 0);
         const qty = parseFloat(item.quantity) || designQty || 0;
         const rate = parseFloat(item.unit_rate) || 0;
-        const amount = Number((qty * rate).toFixed(2));
+        const amount = Number((designQty * rate).toFixed(2));
         const cgstPercent = parseFloat(item.cgst_percent) || 9;
         const sgstPercent = parseFloat(item.sgst_percent) || 9;
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
@@ -1617,11 +1619,22 @@ const generateQuotationPDF = async (quotationId) => {
         }
       }
 
-      const designQtyVal = parseFloat(i.planned_qty || i.design_qty || 0);
-      const isRaw = (i.material_type === 'RAW_MATERIAL') || (i.item_code || '').startsWith('RM-');
+      const plannedQtyVal = (i.planned_qty !== undefined && i.planned_qty !== null && i.planned_qty !== '')
+        ? parseFloat(i.planned_qty)
+        : null;
+
+      const designQtyNum = (plannedQtyVal !== null && !isNaN(plannedQtyVal))
+        ? plannedQtyVal
+        : (parseFloat(i.design_qty) || 0);
+
+      const design_qty_str = designQtyNum > 0 ? `${designQtyNum} Nos` : (qty > 0 ? `${qty % 1 === 0 ? qty.toFixed(0) : qty.toFixed(3)} Nos` : '—');
       
-      const design_qty_str = isRaw ? `${designQtyVal.toFixed(0)} Nos` : `${qty.toFixed(0)} ${i.unit || 'Nos'}`;
-      const required_weight_str = isRaw ? `${qty.toFixed(3)} Kg` : '—';
+      const uom = (i.uom || i.unit || 'Kg').trim();
+      let required_weight_str = '—';
+      if (qty > 0) {
+        const formattedQty = (qty % 1 === 0) ? qty.toFixed(0) : qty.toFixed(3);
+        required_weight_str = `${formattedQty} ${uom}`;
+      }
 
       return {
         ...i,

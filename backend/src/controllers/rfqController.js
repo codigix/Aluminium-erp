@@ -45,13 +45,13 @@ const getRfqs = async (req, res, next) => {
 const assignItemVendors = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { itemVendorMap } = req.body; // { [rfq_item_id]: vendor_id | null }
+        const { itemVendorMap, targetStatus } = req.body; // { [rfq_item_id]: vendor_id | null }
 
         if (!itemVendorMap || typeof itemVendorMap !== 'object') {
             return res.status(400).json({ error: 'itemVendorMap is required' });
         }
 
-        const result = await rfqService.updateRfqItemVendors(id, itemVendorMap);
+        const result = await rfqService.updateRfqItemVendors(id, itemVendorMap, targetStatus);
         res.json({ message: 'Vendor assignment updated', data: result });
     } catch (error) {
         next(error);

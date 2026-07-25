@@ -71,7 +71,7 @@ const createRfq = async (payload) => {
  * Assign per-item vendor IDs and update RFQ status accordingly.
  * itemVendorMap: { [rfq_item_id]: [vendor_id_1, vendor_id_2] }
  */
-const updateRfqItemVendors = async (rfqId, itemVendorMap) => {
+const updateRfqItemVendors = async (rfqId, itemVendorMap, targetStatus = null) => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
@@ -100,7 +100,9 @@ const updateRfqItemVendors = async (rfqId, itemVendorMap) => {
 
         // 3. Determine new status
         let newStatus;
-        if (assigned_items === 0) {
+        if (targetStatus === 'DRAFT') {
+            newStatus = 'DRAFT';
+        } else if (assigned_items === 0) {
             newStatus = 'DRAFT'; // No vendors assigned
         } else if (assigned_items < total_items) {
             newStatus = 'PENDING_ITEMS'; // Partial assignment

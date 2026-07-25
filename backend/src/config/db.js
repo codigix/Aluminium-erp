@@ -2771,7 +2771,7 @@ const ensureProcurementRfqTables = async () => {
         rfq_number VARCHAR(50) UNIQUE NOT NULL,
         mr_id INT,
         requested_by INT,
-        status ENUM('DRAFT', 'SENT', 'RECEIVED', 'CLOSED') DEFAULT 'DRAFT',
+        status VARCHAR(50) DEFAULT 'DRAFT',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2829,7 +2829,8 @@ const ensureProcurementRfqTables = async () => {
       await connection.query("ALTER TABLE procurement_rfq_items ADD COLUMN shape_type VARCHAR(100) DEFAULT NULL");
     }
 
-    console.log('Procurement RFQ tables synchronized');
+      await connection.query("ALTER TABLE procurement_rfqs MODIFY COLUMN status VARCHAR(50) DEFAULT 'DRAFT'");
+      console.log('Procurement RFQ tables synchronized');
   } catch (error) {
     console.error('Procurement RFQ tables sync failed', error.message);
   } finally {

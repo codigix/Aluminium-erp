@@ -432,6 +432,7 @@ model grn_items {
   density               Decimal?                     @default(0.0000) @db.Decimal(12, 4)
   weight_per_unit       Decimal?                     @default(0.0000) @db.Decimal(12, 4)
   uom                   String?                      @db.VarChar(20)
+  shape_type            String?                      @db.VarChar(100)
   grn_excess_approvals  grn_excess_approvals[]
   warehouses            warehouses?                  @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction, map: "fk_grn_items_warehouse")
   grns                  grns                         @relation(fields: [grn_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "grn_items_ibfk_1")
@@ -755,6 +756,7 @@ model material_request_items {
   weight_per_unit    Decimal?          @default(0.0000) @db.Decimal(12, 4)
   item_source        String?           @default("BOM") @db.VarChar(20)
   remarks            String?           @db.Text
+  shape_type         String?           @db.VarChar(100)
   material_requests  material_requests @relation(fields: [mr_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "material_request_items_ibfk_1")
 
   @@index([mr_id], map: "mr_id")
@@ -957,8 +959,6 @@ model orders {
   updated_at      DateTime?     @default(now()) @db.Timestamp(0)
   public_id       String?       @unique(map: "public_id") @db.VarChar(100)
   host_company_id Int?
-  sales_order_id  Int?
-  shipment_id     Int?
   order_items     order_items[]
 
   @@index([client_id], map: "idx_client")
@@ -1119,43 +1119,47 @@ model po_receipts {
 }
 
 model procurement_rfq_items {
-  id               Int               @id @default(autoincrement())
-  rfq_id           Int?
-  item_code        String?           @db.VarChar(50)
-  description      String?           @db.Text
-  material_name    String?           @db.VarChar(255)
-  material_type    String?           @db.VarChar(100)
-  drawing_no       String?           @db.VarChar(100)
-  quantity         Decimal?          @db.Decimal(14, 3)
-  planned_qty      Decimal?          @db.Decimal(14, 3)
-  uom              String?           @db.VarChar(20)
-  created_at       DateTime?         @default(now()) @db.Timestamp(0)
-  length           Decimal?          @default(0.0000) @db.Decimal(12, 4)
-  width            Decimal?          @default(0.0000) @db.Decimal(12, 4)
-  thickness        Decimal?          @default(0.0000) @db.Decimal(12, 4)
-  diameter         Decimal?          @default(0.0000) @db.Decimal(12, 4)
-  outer_diameter   Decimal?          @default(0.0000) @db.Decimal(12, 4)
-  density          Decimal?          @default(0.0000) @db.Decimal(12, 4)
-  weight_per_unit  Decimal?          @default(0.0000) @db.Decimal(12, 4)
-  vendor_id        Int?
-  procurement_rfqs procurement_rfqs? @relation(fields: [rfq_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "procurement_rfq_items_ibfk_1")
+  id                                 Int                                  @id @default(autoincrement())
+  rfq_id                             Int?
+  item_code                          String?                              @db.VarChar(50)
+  description                        String?                              @db.Text
+  material_name                      String?                              @db.VarChar(255)
+  material_type                      String?                              @db.VarChar(100)
+  drawing_no                         String?                              @db.VarChar(100)
+  quantity                           Decimal?                             @db.Decimal(14, 3)
+  planned_qty                        Decimal?                             @db.Decimal(14, 3)
+  uom                                String?                              @db.VarChar(20)
+  created_at                         DateTime?                            @default(now()) @db.Timestamp(0)
+  length                             Decimal?                             @default(0.0000) @db.Decimal(12, 4)
+  width                              Decimal?                             @default(0.0000) @db.Decimal(12, 4)
+  thickness                          Decimal?                             @default(0.0000) @db.Decimal(12, 4)
+  diameter                           Decimal?                             @default(0.0000) @db.Decimal(12, 4)
+  outer_diameter                     Decimal?                             @default(0.0000) @db.Decimal(12, 4)
+  density                            Decimal?                             @default(0.0000) @db.Decimal(12, 4)
+  weight_per_unit                    Decimal?                             @default(0.0000) @db.Decimal(12, 4)
+  vendor_id                          Int?
+  vendor_ids                         String?                              @db.VarChar(255)
+  shape_type                         String?                              @db.VarChar(100)
+  procurement_rfqs                   procurement_rfqs?                    @relation(fields: [rfq_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "procurement_rfq_items_ibfk_1")
+  procurement_rfq_vendor_assignments procurement_rfq_vendor_assignments[]
 
   @@index([rfq_id], map: "rfq_id")
 }
 
 model procurement_rfqs {
-  id                    Int                      @id @default(autoincrement())
-  rfq_number            String                   @unique(map: "rfq_number") @db.VarChar(50)
-  mr_id                 Int?
-  requested_by          Int?
-  status                procurement_rfqs_status? @default(DRAFT)
-  notes                 String?                  @db.Text
-  created_at            DateTime?                @default(now()) @db.Timestamp(0)
-  updated_at            DateTime?                @default(now()) @db.Timestamp(0)
-  procurement_rfq_items procurement_rfq_items[]
-  material_requests     material_requests?       @relation(fields: [mr_id], references: [id], onUpdate: NoAction, map: "procurement_rfqs_ibfk_1")
-  users                 users?                   @relation(fields: [requested_by], references: [id], onUpdate: NoAction, map: "procurement_rfqs_ibfk_2")
-  quotations            quotations[]
+  id                                 Int                                  @id @default(autoincrement())
+  rfq_number                         String                               @unique(map: "rfq_number") @db.VarChar(50)
+  mr_id                              Int?
+  requested_by                       Int?
+  status                             String?                              @default("DRAFT") @db.VarChar(50)
+  notes                              String?                              @db.Text
+  created_at                         DateTime?                            @default(now()) @db.Timestamp(0)
+  updated_at                         DateTime?                            @default(now()) @db.Timestamp(0)
+  procurement_rfq_items              procurement_rfq_items[]
+  procurement_rfq_vendor_assignments procurement_rfq_vendor_assignments[]
+  material_requests                  material_requests?                   @relation(fields: [mr_id], references: [id], onUpdate: NoAction, map: "procurement_rfqs_ibfk_1")
+  users                              users?                               @relation(fields: [requested_by], references: [id], onUpdate: NoAction, map: "procurement_rfqs_ibfk_2")
+  quotations                         quotations[]
 
   @@index([mr_id], map: "mr_id")
   @@index([requested_by], map: "requested_by")
@@ -1211,6 +1215,9 @@ model production_plan_materials {
   thickness         Decimal?                                    @default(0.0000) @db.Decimal(12, 4)
   diameter          Decimal?                                    @default(0.0000) @db.Decimal(12, 4)
   outer_diameter    Decimal?                                    @default(0.0000) @db.Decimal(12, 4)
+  density           Decimal?                                    @default(0.000000) @db.Decimal(12, 6)
+  weight_per_unit   Decimal?                                    @default(0.000000) @db.Decimal(12, 6)
+  is_manual         Boolean?                                    @default(false)
   production_plans  production_plans                            @relation(fields: [plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "production_plan_materials_ibfk_1")
 
   @@index([plan_id], map: "plan_id")
@@ -1314,6 +1321,7 @@ model purchase_order_items {
   mr_id                                                              Int?
   source_po_id                                                       Int?
   source_po_item_id                                                  Int?
+  shape_type                                                         String?                @db.VarChar(100)
   material_requests                                                  material_requests?     @relation(fields: [mr_id], references: [id], onUpdate: NoAction, map: "fk_poi_mr")
   sales_orders                                                       sales_orders?          @relation(fields: [sales_order_id], references: [id], onUpdate: NoAction, map: "fk_poi_sales_order")
   purchase_orders_purchase_order_items_source_po_idTopurchase_orders purchase_orders?       @relation("purchase_order_items_source_po_idTopurchase_orders", fields: [source_po_id], references: [id], onUpdate: NoAction, map: "fk_poi_source_po")
@@ -1414,6 +1422,7 @@ model qc_inspections {
   invoice_url         String?                @db.VarChar(255)
   created_at          DateTime?              @default(now()) @db.Timestamp(0)
   updated_at          DateTime?              @default(now()) @db.Timestamp(0)
+  stock_updated       Int?                   @default(0) @db.TinyInt
   qc_attachments      qc_attachments[]
   qc_inspection_items qc_inspection_items[]
   grns                grns                   @relation(fields: [grn_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "qc_inspections_ibfk_1")
@@ -1466,6 +1475,7 @@ model quotation_items {
   uom             String?    @db.VarChar(20)
   planned_qty     Decimal?   @default(0.000) @db.Decimal(14, 3)
   is_selected     Int?       @default(1) @db.TinyInt
+  shape_type      String?    @db.VarChar(100)
   quotations      quotations @relation(fields: [quotation_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "quotation_items_ibfk_1")
 
   @@index([quotation_id], map: "idx_quotation_id")
@@ -1976,17 +1986,26 @@ model stock_entries {
 }
 
 model stock_entry_items {
-  id             Int           @id @default(autoincrement())
-  stock_entry_id Int
-  item_code      String        @db.VarChar(100)
-  material_name  String?       @db.VarChar(255)
-  material_type  String?       @db.VarChar(100)
-  quantity       Decimal       @db.Decimal(12, 3)
-  uom            String?       @db.VarChar(20)
-  batch_no       String?       @db.VarChar(100)
-  valuation_rate Decimal?      @default(0.00) @db.Decimal(12, 2)
-  amount         Decimal?      @default(0.00) @db.Decimal(14, 2)
-  stock_entries  stock_entries @relation(fields: [stock_entry_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "stock_entry_items_ibfk_1")
+  id              Int           @id @default(autoincrement())
+  stock_entry_id  Int
+  item_code       String        @db.VarChar(100)
+  material_name   String?       @db.VarChar(255)
+  material_type   String?       @db.VarChar(100)
+  quantity        Decimal       @db.Decimal(12, 3)
+  uom             String?       @db.VarChar(20)
+  batch_no        String?       @db.VarChar(100)
+  valuation_rate  Decimal?      @default(0.00) @db.Decimal(12, 2)
+  amount          Decimal?      @default(0.00) @db.Decimal(14, 2)
+  shape_id        Int?
+  length          Decimal?      @db.Decimal(12, 3)
+  width           Decimal?      @db.Decimal(12, 3)
+  thickness       Decimal?      @db.Decimal(12, 3)
+  diameter        Decimal?      @db.Decimal(12, 3)
+  outer_diameter  Decimal?      @db.Decimal(12, 3)
+  weight_per_unit Decimal?      @db.Decimal(12, 4)
+  density         Decimal?      @db.Decimal(10, 4)
+  shape_type      String?       @db.VarChar(100)
+  stock_entries   stock_entries @relation(fields: [stock_entry_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "stock_entry_items_ibfk_1")
 
   @@index([stock_entry_id], map: "stock_entry_id")
 }
@@ -2085,32 +2104,33 @@ model vendor_ledger {
 }
 
 model vendors {
-  id               Int                @id @default(autoincrement())
-  vendor_name      String             @db.VarChar(255)
-  vendor_code      String?            @unique(map: "vendor_code") @db.VarChar(50)
-  category         String?            @db.VarChar(120)
-  email            String?            @db.VarChar(255)
-  phone            String?            @db.VarChar(30)
-  location         String?            @db.VarChar(255)
-  rating           Decimal?           @default(0.0) @db.Decimal(3, 1)
-  status           vendors_status?    @default(ACTIVE)
-  total_orders     Int?               @default(0)
-  total_value      Decimal?           @default(0.00) @db.Decimal(14, 2)
-  last_order_date  DateTime?          @db.Date
-  created_at       DateTime?          @default(now()) @db.Timestamp(0)
-  updated_at       DateTime?          @default(now()) @db.Timestamp(0)
-  gstin            String?            @db.VarChar(20)
-  group_name       String?            @db.VarChar(100)
-  lead_time        String?            @db.VarChar(50)
-  public_id        String?            @unique @db.VarChar(100)
-  inward_challans  inward_challans[]
-  outward_challans outward_challans[]
-  payment_vouchers payment_vouchers[]
-  payments         payments[]
-  purchase_orders  purchase_orders[]
-  quotations       quotations[]
-  vendor_invoices  vendor_invoices[]
-  vendor_ledger    vendor_ledger[]
+  id                                 Int                                  @id @default(autoincrement())
+  vendor_name                        String                               @db.VarChar(255)
+  vendor_code                        String?                              @unique(map: "vendor_code") @db.VarChar(50)
+  category                           String?                              @db.VarChar(120)
+  email                              String?                              @db.VarChar(255)
+  phone                              String?                              @db.VarChar(30)
+  location                           String?                              @db.VarChar(255)
+  rating                             Decimal?                             @default(0.0) @db.Decimal(3, 1)
+  status                             vendors_status?                      @default(ACTIVE)
+  total_orders                       Int?                                 @default(0)
+  total_value                        Decimal?                             @default(0.00) @db.Decimal(14, 2)
+  last_order_date                    DateTime?                            @db.Date
+  created_at                         DateTime?                            @default(now()) @db.Timestamp(0)
+  updated_at                         DateTime?                            @default(now()) @db.Timestamp(0)
+  gstin                              String?                              @db.VarChar(20)
+  group_name                         String?                              @db.VarChar(100)
+  lead_time                          String?                              @db.VarChar(50)
+  public_id                          String?                              @unique @db.VarChar(100)
+  inward_challans                    inward_challans[]
+  outward_challans                   outward_challans[]
+  payment_vouchers                   payment_vouchers[]
+  payments                           payments[]
+  procurement_rfq_vendor_assignments procurement_rfq_vendor_assignments[]
+  purchase_orders                    purchase_orders[]
+  quotations                         quotations[]
+  vendor_invoices                    vendor_invoices[]
+  vendor_ledger                      vendor_ledger[]
 
   @@index([category], map: "idx_category")
   @@index([status], map: "idx_status")
@@ -2295,6 +2315,21 @@ model vendor_invoices {
   @@index([vendor_id], map: "vendor_id")
 }
 
+model procurement_rfq_vendor_assignments {
+  id                    Int                   @id @default(autoincrement())
+  rfq_id                Int
+  rfq_item_id           Int
+  vendor_id             Int
+  created_at            DateTime?             @default(now()) @db.Timestamp(0)
+  procurement_rfqs      procurement_rfqs      @relation(fields: [rfq_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "procurement_rfq_vendor_assignments_ibfk_1")
+  procurement_rfq_items procurement_rfq_items @relation(fields: [rfq_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "procurement_rfq_vendor_assignments_ibfk_2")
+  vendors               vendors               @relation(fields: [vendor_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "procurement_rfq_vendor_assignments_ibfk_3")
+
+  @@unique([rfq_id, rfq_item_id, vendor_id], map: "unique_assignment")
+  @@index([rfq_item_id], map: "rfq_item_id")
+  @@index([vendor_id], map: "vendor_id")
+}
+
 enum company_addresses_address_type {
   BILLING
   SHIPPING
@@ -2457,19 +2492,6 @@ enum contacts_contact_type {
   ACCOUNTS
   TECHNICAL
   OTHER
-}
-
-enum material_requests_status {
-  DRAFT
-  APPROVED
-  PROCESSING
-  FULFILLED
-  CANCELLED
-  ORDERED
-  COMPLETED
-  PO_CREATED
-  PARTIALLY_RELEASED
-  PARTIAL_STOCK_AVAILABLE
 }
 
 enum permissions_status {
@@ -2691,14 +2713,6 @@ enum qc_inspections_status {
   REJECTED
 }
 
-enum procurement_rfqs_status {
-  DRAFT
-  SENT
-  RECEIVED
-  CLOSED
-  PENDING_ITEMS
-}
-
 enum purchase_orders_status {
   DRAFT
   PO_REQUEST
@@ -2723,4 +2737,17 @@ enum job_cards_status {
   IN_PROGRESS
   COMPLETED
   PAUSED
+}
+
+enum material_requests_status {
+  DRAFT
+  Approved
+  PROCESSING
+  FULFILLED
+  CANCELLED
+  ORDERED
+  COMPLETED
+  PO_CREATED
+  PARTIALLY_RELEASED
+  PARTIAL_STOCK_AVAILABLE
 }
