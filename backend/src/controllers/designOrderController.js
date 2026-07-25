@@ -70,8 +70,23 @@ const rejectBulkRequest = async (req, res) => {
   }
 };
 
+const searchDesignOrders = async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q) {
+      res.json([]);
+      return;
+    }
+    const results = await designOrderService.searchDesignOrders(q);
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   listDesignOrders,
+  searchDesignOrders,
   updateStatus,
   deleteOrder,
   getDesignOrderItemsBySalesOrder,

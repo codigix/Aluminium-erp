@@ -281,8 +281,64 @@ const rejectBulkRequest = async (id) => {
   }
 };
 
+// Search design orders by client name, project, drawing, item code, assembly or bought-out item
+const searchDesignOrders = async (query) => {
+  const like = `%${query}%`;
+  const [rows] = await pool.query(`
+    SELECT DISTINCT
+      do.id,
+      do.design_order_number,
+      do.status,
+      do.start_date,
+      do.completion_date,
+      do.created_at,
+      so.id as sales_order_id,
+      so.status as sales_order_status,
+      so.customer_po_id,
+      so.project_name,
+      so.target_dispatch_date,
+      c.company_name,
+      cp.po_number,
+      soi.item_code,
+      soi.id as item_id,
+      soi.drawing_no,
+      soi.description,
+      soi.status as item_status,
+      soi.rejection_reason as item_rejection_reason,
+      soi.item_type,
+      COALESCE(
+        poi.quantity,
+        (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
+        soi.quantity
+      ) as total_quantity,
+      sb.material_type as item_group
+    FROM design_orders do
+    JOIN sales_orders so ON do.sales_order_id = so.id
+    JOIN sales_order_items soi ON soi.sales_order_id = so.id
+    JOIN companies c ON so.company_id = c.id
+    LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
+    LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id
+         AND soi.item_code = poi.item_code
+         AND (soi.drawing_no = poi.drawing_no OR (soi.drawing_no IS NULL AND poi.drawing_no IS NULL))
+    LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
+    LEFT JOIN sales_order_item_components boitems ON boitems.sales_order_item_id = soi.id
+    WHERE (
+      c.company_name LIKE ?
+      OR so.project_name LIKE ?
+      OR soi.drawing_no LIKE ?
+      OR soi.description LIKE ?
+      OR soi.item_code LIKE ?
+      OR boitems.component_code LIKE ?
+      OR boitems.description LIKE ?
+    )
+    ORDER BY do.created_at DESC
+  `, [like, like, like, like, like, like, like]);
+  return rows;
+};
+
 module.exports = {
   listDesignOrders,
+  searchDesignOrders,
   createDesignOrder,
   updateDesignOrderStatus,
   deleteDesignOrder,

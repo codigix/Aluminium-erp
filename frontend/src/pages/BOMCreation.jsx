@@ -398,8 +398,18 @@ const BOMCreation = () => {
         else if (drawingName.toLowerCase().includes(searchMatch)) isMatched = true;
         else if (allItems.some(i => 
           (i.item_code || '').toLowerCase().includes(searchMatch) || 
-          (i.description || i.material_name || '').toLowerCase().includes(searchMatch) ||
-          (i.drawing_no || '').toLowerCase().includes(searchMatch)
+          (i.description || i.material_name || i.item_name || '').toLowerCase().includes(searchMatch) ||
+          (i.drawing_no || '').toLowerCase().includes(searchMatch) ||
+          (Array.isArray(i.components) && i.components.some(c =>
+            (c.component_code || c.componentCode || '').toLowerCase().includes(searchMatch) ||
+            (c.description || c.component_name || c.material_name || '').toLowerCase().includes(searchMatch) ||
+            (c.drawing_no || c.drawingNo || '').toLowerCase().includes(searchMatch)
+          )) ||
+          (Array.isArray(i.materials) && i.materials.some(m =>
+            (m.material_code || m.materialCode || '').toLowerCase().includes(searchMatch) ||
+            (m.material_name || m.materialName || m.description || '').toLowerCase().includes(searchMatch) ||
+            (m.drawing_no || m.drawingNo || '').toLowerCase().includes(searchMatch)
+          ))
         )) {
           isMatched = true;
         }
@@ -920,8 +930,18 @@ const BOMCreation = () => {
       else if (drawingName.toLowerCase().includes(searchLower)) hasRenderableMatch = true;
       else if (allItems.some(i => 
         (i.item_code || '').toLowerCase().includes(searchLower) || 
-        (i.description || i.material_name || '').toLowerCase().includes(searchLower) ||
-        (i.drawing_no || '').toLowerCase().includes(searchLower)
+        (i.description || i.material_name || i.item_name || '').toLowerCase().includes(searchLower) ||
+        (i.drawing_no || '').toLowerCase().includes(searchLower) ||
+        (Array.isArray(i.components) && i.components.some(c =>
+          (c.component_code || c.componentCode || '').toLowerCase().includes(searchLower) ||
+          (c.description || c.component_name || c.material_name || '').toLowerCase().includes(searchLower) ||
+          (c.drawing_no || c.drawingNo || '').toLowerCase().includes(searchLower)
+        )) ||
+        (Array.isArray(i.materials) && i.materials.some(m =>
+          (m.material_code || m.materialCode || '').toLowerCase().includes(searchLower) ||
+          (m.material_name || m.materialName || m.description || '').toLowerCase().includes(searchLower) ||
+          (m.drawing_no || m.drawingNo || '').toLowerCase().includes(searchLower)
+        ))
       )) {
         hasRenderableMatch = true;
       }
@@ -1252,8 +1272,18 @@ const BOMCreation = () => {
       if (drawingName.toLowerCase().includes(searchMatch)) return true;
       if (allItems.some(i => 
         (i.item_code || '').toLowerCase().includes(searchMatch) || 
-        (i.description || i.material_name || '').toLowerCase().includes(searchMatch) ||
-        (i.drawing_no || '').toLowerCase().includes(searchMatch)
+        (i.description || i.material_name || i.item_name || '').toLowerCase().includes(searchMatch) ||
+        (i.drawing_no || '').toLowerCase().includes(searchMatch) ||
+        (Array.isArray(i.components) && i.components.some(c =>
+          (c.component_code || c.componentCode || '').toLowerCase().includes(searchMatch) ||
+          (c.description || c.component_name || c.material_name || '').toLowerCase().includes(searchMatch) ||
+          (c.drawing_no || c.drawingNo || '').toLowerCase().includes(searchMatch)
+        )) ||
+        (Array.isArray(i.materials) && i.materials.some(m =>
+          (m.material_code || m.materialCode || '').toLowerCase().includes(searchMatch) ||
+          (m.material_name || m.materialName || m.description || '').toLowerCase().includes(searchMatch) ||
+          (m.drawing_no || m.drawingNo || '').toLowerCase().includes(searchMatch)
+        ))
       )) return true;
       
       return false;
