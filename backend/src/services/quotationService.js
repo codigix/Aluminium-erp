@@ -1128,6 +1128,11 @@ const generateQuotationPDF = async (quotationId) => {
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         
+        @page {
+          size: A4 portrait;
+          margin: 10mm 12mm;
+        }
+
         body { 
           font-family: 'Inter', sans-serif; 
           color: #1e293b; 
@@ -1135,13 +1140,12 @@ const generateQuotationPDF = async (quotationId) => {
           margin: 0;
           padding: 0;
           background-color: #fff;
-          font-size: 11px;
+          font-size: 10px;
         }
         
         .page {
-          padding: 20px;
-          border: 1px solid #1e293b;
-          min-height: 297mm;
+          padding: 10px;
+          min-height: 270mm;
           box-sizing: border-box;
           display: flex;
           flex-direction: column;
@@ -1152,7 +1156,7 @@ const generateQuotationPDF = async (quotationId) => {
           display: flex;
           align-items: center;
           padding: 10px 15px;
-          margin-bottom: 15px;
+          margin-bottom: 12px;
         }
 
         .logo-container {
@@ -1185,73 +1189,81 @@ const generateQuotationPDF = async (quotationId) => {
 
         .rfq-title {
           color: #ff6b00;
-          font-size: 22px;
+          font-size: 20px;
           font-weight: 800;
           letter-spacing: 1px;
           text-transform: uppercase;
-          margin: 0 0 5px 0;
+          margin: 0 0 4px 0;
         }
 
         .company-name {
           color: #1e293b;
-          font-size: 18px;
+          font-size: 16px;
           font-weight: 700;
-          margin: 0 0 5px 0;
+          margin: 0 0 4px 0;
           text-transform: uppercase;
         }
 
         .company-address {
           color: #475569;
-          font-size: 10px;
-          margin: 2px 0;
+          font-size: 9.5px;
+          margin: 1px 0;
         }
 
         .company-contact {
           color: #475569;
-          font-size: 10px;
-          margin: 2px 0;
+          font-size: 9.5px;
+          margin: 1px 0;
           font-weight: 500;
         }
 
         .info-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 15px;
-          margin-bottom: 15px;
+          gap: 10px;
+          margin-bottom: 10px;
         }
 
         .info-card {
           border: 1px solid #1e293b;
-          padding: 10px;
+          padding: 8px 10px;
           background: #fff;
-          min-height: 95px;
         }
 
         .info-header {
-          font-size: 10px;
+          font-size: 9.5px;
           font-weight: 800;
           color: #1e293b;
           text-transform: uppercase;
           border-bottom: 1px solid #cbd5e1;
-          padding-bottom: 5px;
-          margin-bottom: 8px;
+          padding-bottom: 4px;
+          margin-bottom: 6px;
         }
 
         .info-body p {
-          margin: 3px 0;
-          line-height: 1.4;
+          margin: 2px 0;
+          line-height: 1.3;
         }
 
         .details-table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 15px;
+          margin-bottom: 12px;
+          page-break-inside: auto;
+        }
+
+        .details-table thead {
+          display: table-header-group;
+        }
+
+        .details-table tr {
+          page-break-inside: avoid;
         }
 
         .details-table th, .details-table td {
           border: 1px solid #1e293b;
-          padding: 6px 8px;
-          font-size: 10px;
+          padding: 5px 6px;
+          font-size: 9.5px;
           text-align: left;
         }
 
@@ -1275,12 +1287,12 @@ const generateQuotationPDF = async (quotationId) => {
           display: grid;
           grid-template-columns: 3fr 2fr;
           border: 1px solid #1e293b;
-          margin-bottom: 15px;
+          margin-bottom: 12px;
           background: #fff;
         }
 
         .remarks-container {
-          padding: 10px;
+          padding: 8px;
           border-right: 1px solid #1e293b;
         }
 
@@ -1290,8 +1302,8 @@ const generateQuotationPDF = async (quotationId) => {
         }
 
         .summary-table td {
-          padding: 6px 10px;
-          font-size: 10px;
+          padding: 5px 8px;
+          font-size: 9.5px;
           border-bottom: 1px solid #e2e8f0;
         }
 
@@ -1312,25 +1324,25 @@ const generateQuotationPDF = async (quotationId) => {
 
         .grand-total-row {
           background: #f8fafc;
-          font-size: 11px;
+          font-size: 10.5px;
           font-weight: 800 !important;
         }
 
         .grand-total-value {
           color: #10b981;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 800;
         }
 
         .section-box {
           border: 1px solid #1e293b;
-          margin-bottom: 15px;
+          margin-bottom: 10px;
         }
 
         .section-box-header {
           background: #f8fafc;
           border-bottom: 1px solid #1e293b;
-          padding: 6px 10px;
+          padding: 5px 8px;
           font-size: 9px;
           font-weight: 800;
           color: #1e293b;
@@ -1338,20 +1350,19 @@ const generateQuotationPDF = async (quotationId) => {
         }
 
         .section-box-content {
-          padding: 10px;
-          font-size: 10px;
+          padding: 8px;
+          font-size: 9.5px;
           color: #334155;
-          min-height: 25px;
         }
 
         .footer {
           margin-top: auto;
-          padding-top: 10px;
+          padding-top: 8px;
           border-top: 1px solid #cbd5e1;
           display: flex;
           justify-content: space-between;
           color: #64748b;
-          font-size: 9px;
+          font-size: 8.5px;
         }
       </style>
     </head>
@@ -1367,34 +1378,113 @@ const generateQuotationPDF = async (quotationId) => {
             {{/logoBase64}}
           </div>
           <div class="header-content">
-            <h1 class="rfq-title">{{#isRFQ}}Request For Quotation{{/isRFQ}}{{^isRFQ}}Supplier PO{{/isRFQ}}</h1>
+            <h1 class="rfq-title">{{#isRFQ}}REQUEST FOR QUOTATION (RFQ){{/isRFQ}}{{^isRFQ}}SUPPLIER PO{{/isRFQ}}</h1>
             <h2 class="company-name">{{hostCompanyName}}</h2>
             <p class="company-address">{{hostCompanyAddress}}</p>
             {{#hostGSTIN}}
-            <p class="company-address">GST No: {{hostGSTIN}}</p>
+            <p class="company-address">GSTIN: {{hostGSTIN}}</p>
             {{/hostGSTIN}}
             <p class="company-contact">
               {{#hostEmail}}Email: {{hostEmail}}{{/hostEmail}}
-              {{#hostPhone}} | Mobile: {{hostPhone}}{{/hostPhone}}
+              {{#hostPhone}} | Contact: {{hostPhone}}{{/hostPhone}}
             </p>
           </div>
         </div>
 
+        {{#isRFQ}}
+        <div class="info-grid font-sans">
+          <div class="info-card">
+            <div class="info-header">RFQ INFORMATION</div>
+            <table style="width: 100%; border: none; margin: 0; background: transparent;">
+              <tr style="background: transparent;">
+                <td style="width: 40%; border: none; padding: 2px 0; color: #475569;">RFQ Number</td>
+                <td style="border: none; padding: 2px 0; font-weight: 700; font-family: monospace;">{{quote_number}}</td>
+              </tr>
+              <tr style="background: transparent;">
+                <td style="border: none; padding: 2px 0; color: #475569;">RFQ Date</td>
+                <td style="border: none; padding: 2px 0; font-weight: 600;">{{created_at}}</td>
+              </tr>
+              <tr style="background: transparent;">
+                <td style="border: none; padding: 2px 0; color: #475569;">Valid Until</td>
+                <td style="border: none; padding: 2px 0; font-weight: 600;">{{valid_until}}</td>
+              </tr>
+              <tr style="background: transparent;">
+                <td style="border: none; padding: 2px 0; color: #475569;">RFQ Status</td>
+                <td style="border: none; padding: 2px 0; font-weight: 700; color: #2563eb;">{{status}}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="info-card">
+            <div class="info-header">SUPPLIER DETAILS</div>
+            <p style="font-weight: 700; font-size: 10.5px; margin-bottom: 3px;">{{vendor_name}}</p>
+            <p style="color: #475569; margin: 1px 0;">Contact Person: {{vendor_contact_person}}</p>
+            <p style="color: #475569; margin: 1px 0;">Mobile: {{phone}} | Email: {{vendor_email}}</p>
+            {{#vendor_gstin}}
+            <p style="color: #475569; margin: 1px 0; font-weight: 500;">GSTIN: {{vendor_gstin}}</p>
+            {{/vendor_gstin}}
+          </div>
+        </div>
+
+        <div class="info-grid font-sans" style="margin-top: -2px;">
+          <div class="info-card">
+            <div class="info-header">PROJECT DETAILS</div>
+            <table style="width: 100%; border: none; margin: 0; background: transparent;">
+              <tr style="background: transparent;">
+                <td style="width: 40%; border: none; padding: 2px 0; color: #475569;">Customer</td>
+                <td style="border: none; padding: 2px 0; font-weight: 600;">{{customer_name}}</td>
+              </tr>
+              <tr style="background: transparent;">
+                <td style="border: none; padding: 2px 0; color: #475569;">Project</td>
+                <td style="border: none; padding: 2px 0; font-weight: 600;">{{project_name}}</td>
+              </tr>
+              <tr style="background: transparent;">
+                <td style="border: none; padding: 2px 0; color: #475569;">Customer PO</td>
+                <td style="border: none; padding: 2px 0; font-weight: 600;">{{customer_po}}</td>
+              </tr>
+              <tr style="background: transparent;">
+                <td style="border: none; padding: 2px 0; color: #475569;">Sales Order</td>
+                <td style="border: none; padding: 2px 0; font-weight: 600;">{{so_number}}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="info-card">
+            <div class="info-header">DRAWING DETAILS</div>
+            <table style="width: 100%; border: none; margin: 0; background: transparent;">
+              <tr style="background: transparent;">
+                <td style="width: 40%; border: none; padding: 2px 0; color: #475569;">Drawing Number</td>
+                <td style="border: none; padding: 2px 0; font-weight: 700; font-family: monospace;">{{drawing_no}}</td>
+              </tr>
+              <tr style="background: transparent;">
+                <td style="border: none; padding: 2px 0; color: #475569;">Drawing Name</td>
+                <td style="border: none; padding: 2px 0; font-weight: 600;">{{drawing_name}}</td>
+              </tr>
+              <tr style="background: transparent;">
+                <td style="border: none; padding: 2px 0; color: #475569;">Revision</td>
+                <td style="border: none; padding: 2px 0; font-weight: 600;">{{revision}}</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+        {{/isRFQ}}
+
+        {{^isRFQ}}
         <div class="info-grid">
           <div class="info-card">
-            <div class="info-header">RFQ TO:</div>
+            <div class="info-header">SUPPLIER DETAILS</div>
             <div class="info-body">
               <p><strong>{{vendor_name}}</strong></p>
               <p>{{location}}</p>
               <p style="color: #475569; font-size: 9px; margin-top: 4px;">Email: {{vendor_email}}</p>
               <p style="color: #475569; font-size: 9px;">Phone: {{phone}}</p>
               {{#vendor_gstin}}
-              <p style="color: #475569; font-size: 9px; font-weight: 500;">GST No: {{vendor_gstin}}</p>
+              <p style="color: #475569; font-size: 9px; font-weight: 500;">GSTIN: {{vendor_gstin}}</p>
               {{/vendor_gstin}}
             </div>
           </div>
           <div class="info-card">
-            <div class="info-header">RFQ DETAILS:</div>
+            <div class="info-header">PO DETAILS</div>
             <table style="width: 100%; border: none; margin: 0; background: transparent;">
               <tr style="background: transparent;">
                 <td style="width: 35%; border: none; padding: 2px 0; color: #475569;">Date</td>
@@ -1414,16 +1504,20 @@ const generateQuotationPDF = async (quotationId) => {
             </table>
           </div>
         </div>
+        {{/isRFQ}}
 
         <table class="details-table">
           <thead>
             {{#isRFQ}}
             <tr>
-              <th style="width: 5%; text-align: center;">Sr. No</th>
-              <th style="width: 25%">Item Code</th>
-              <th style="width: 40%">Material Name</th>
-              <th style="width: 15%; text-align: center;">Design Qty</th>
-              <th style="width: 15%; text-align: center;">Required Weight</th>
+              <th style="width: 5%; text-align: center;">Sr No</th>
+              <th style="width: 16%;">Drawing No</th>
+              <th style="width: 22%;">Material Name</th>
+              <th style="width: 20%;">Description / Size</th>
+              <th style="width: 13%;">Material Type</th>
+              <th style="width: 9%; text-align: center;">Design Qty</th>
+              <th style="width: 9%; text-align: center;">Required Qty</th>
+              <th style="width: 6%; text-align: center;">UOM</th>
             </tr>
             {{/isRFQ}}
             {{^isRFQ}}
@@ -1446,12 +1540,12 @@ const generateQuotationPDF = async (quotationId) => {
               <td class="center-col">{{sr}}</td>
               {{#isRFQ}}
               <td style="font-family: monospace; font-weight: 500;">{{drawing_no}}</td>
-              <td>
-                <strong>{{material_name}}</strong>
-                {{#material_description}}<br><span style="font-size: 8px; color: #64748b;">{{material_description}}</span>{{/material_description}}
-              </td>
+              <td><strong>{{material_name}}</strong></td>
+              <td>{{material_description}}</td>
+              <td>{{material_type}}</td>
               <td class="center-col"><strong>{{design_qty_str}}</strong></td>
               <td class="center-col"><strong>{{required_weight_str}}</strong></td>
+              <td class="center-col">{{uom}}</td>
               {{/isRFQ}}
               {{^isRFQ}}
               <td style="font-family: monospace; font-weight: 500;">
@@ -1475,10 +1569,11 @@ const generateQuotationPDF = async (quotationId) => {
         <div class="section-box">
           <div class="section-box-header">Remarks / Delivery Requirements</div>
           <div class="section-box-content">
-            {{notes}}{{^notes}}Request for quotation created from the procurement requirements.{{/notes}}
+            {{notes}}{{^notes}}Request for quotation created from the procurement requirements. Please submit your best rate and delivery timeline.{{/notes}}
           </div>
         </div>
         {{/isRFQ}}
+
         {{^isRFQ}}
         <div class="summary-block">
           <div class="remarks-container">
@@ -1509,21 +1604,14 @@ const generateQuotationPDF = async (quotationId) => {
         {{/isRFQ}}
 
         <div class="section-box">
-          <div class="section-box-header">Special Instructions & Notes</div>
+          <div class="section-box-header">Special Instructions & Terms</div>
           <div class="section-box-content">
-            RFQ Ref: {{rfq_ref}}
-          </div>
-        </div>
-
-        <div class="section-box">
-          <div class="section-box-header">Declaration & Terms</div>
-          <div class="section-box-content">
-            {{invoiceFooterNotes}}{{^invoiceFooterNotes}}ASDFGHJHGFDS{{/invoiceFooterNotes}}
+            RFQ Ref: {{rfq_ref}} | Terms: {{invoiceFooterNotes}}{{^invoiceFooterNotes}}Standard procurement terms apply.{{/invoiceFooterNotes}}
           </div>
         </div>
 
         <div class="footer">
-          <div class="footer-left">This is a system generated document and does not require physical signature.</div>
+          <div class="footer-left">Generated By: {{generated_by}} | Generated Date & Time: {{generated_at}}</div>
           <div class="footer-right">{{hostCompanyName}} | Page 1 of 1</div>
         </div>
       </div>
@@ -1533,13 +1621,29 @@ const generateQuotationPDF = async (quotationId) => {
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
-  const isRFQVal = ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING'].includes(quotation.status);
+  const isRFQVal = ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING', 'PENDING_ITEMS'].includes(quotation.status);
 
   const viewData = {
     ...quotation,
     isRFQ: isRFQVal,
     created_at: formatDate(quotation.created_at),
     valid_until: formatDate(quotation.valid_until),
+    status: quotation.status || 'DRAFT',
+    vendor_name: vendor?.vendor_name || 'N/A',
+    vendor_contact_person: vendor?.contact_person || vendor?.name || 'N/A',
+    vendor_email: vendor?.email || 'N/A',
+    location: vendor?.location || 'N/A',
+    phone: vendor?.phone || 'N/A',
+    vendor_gstin: vendor?.gstin || '',
+    customer_name: quotation.company_name || quotation.client || 'N/A',
+    project_name: quotation.project_name || 'N/A',
+    customer_po: quotation.customer_po || quotation.po_number || 'N/A',
+    so_number: quotation.so_number || (quotation.sales_order_id ? `SO-${quotation.sales_order_id}` : 'N/A'),
+    drawing_no: quotation.drawing_no || (quotation.items && quotation.items[0] ? (quotation.items[0].drawing_no || quotation.items[0].item_code) : '—'),
+    drawing_name: quotation.drawing_name || (quotation.items && quotation.items[0] ? (quotation.items[0].material_name || quotation.items[0].description) : '—'),
+    revision: quotation.revision || quotation.drawing_revision || 'R0',
+    generated_at: new Date().toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    generated_by: 'System Admin',
     vendor_name: vendor?.vendor_name || 'N/A',
     vendor_email: vendor?.email || 'N/A',
     location: vendor?.location || 'N/A',

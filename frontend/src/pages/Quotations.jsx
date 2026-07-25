@@ -24,11 +24,13 @@ import {
   CheckCircle2,
   Send,
   History,
-  Building2
+  Building2,
+  Printer
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions } from '../utils/formatters';
+import RFQPrintDetail from './RFQPrintDetail.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -1117,6 +1119,12 @@ const Quotations = () => {
   };
 
   const handleViewPDF = async (quotationId) => {
+    // Synchronously open tab before async fetch to prevent popup blocker
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write('<div style="font-family:sans-serif;padding:30px;text-align:center;color:#475569;"><h3>Generating RFQ PDF Document...</h3><p>Please wait a moment.</p></div>');
+    }
+
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/quotations/${quotationId}/pdf`, {
@@ -1125,12 +1133,27 @@ const Quotations = () => {
         }
       });
 
-      if (!response.ok) throw new Error('Failed to fetch PDF');
+      if (!response.ok) {
+        if (printWindow) printWindow.close();
+        throw new Error('Failed to fetch PDF');
+      }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      window.open(url, '_blank');
+
+      if (printWindow && !printWindow.closed) {
+        printWindow.location.href = url;
+      } else {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.download = `RFQ_${quotationId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     } catch (error) {
+      if (printWindow && !printWindow.closed) printWindow.close();
       errorToast('Could not view PDF');
       console.error(error);
     }
@@ -2017,11 +2040,14 @@ const Quotations = () => {
           <div className="flex justify-end gap-1.5">
             {!q.isRFQOnly && q.status !== 'REJECTED' && (
               <button
-                onClick={(e) => { e.stopPropagation(); handleViewPDF(q.id); }}
-                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
-                title="Download RFQ PDF"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`${deptPrefix}/quotations/view/${q.id}`, { state: { autoPrint: true } });
+                }}
+                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all border border-transparent hover:border-indigo-100"
+                title="Print RFQ"
               >
-                <Download className="w-4 h-4" />
+                <Printer className="w-4 h-4" />
               </button>
             )}
             {q.isRFQOnly && (
@@ -2158,6 +2184,16 @@ const Quotations = () => {
 
     return baseCols;
   }, [activeTab, selectedQuotes, displayQuotations, vendors, quotations, getVendorName, handleApproveQuoteClick, handleDeleteQuotation, openEmailModal]);
+
+  const viewPathMatch = location.pathname.match(/\/quotations\/view\/(\d+)/);
+  if (viewPathMatch) {
+    return (
+      <RFQPrintDetail
+        quotationId={viewPathMatch[1]}
+        onBack={() => navigate(`${deptPrefix}/quotations`)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-2">
