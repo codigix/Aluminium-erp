@@ -80,7 +80,27 @@ const listOrders = async () => {
     LEFT JOIN customer_pos cp ON cp.id = o.quotation_id AND o.source_type = 'DIRECT'
     ORDER BY o.created_at DESC
   `);
-  return rows;
+  
+  if (rows.length === 0) return [];
+  
+  const orderIds = rows.map(r => r.id);
+  const [items] = await pool.query(
+    'SELECT order_id, drawing_no, description FROM order_items WHERE order_id IN (?)',
+    [orderIds]
+  );
+  
+  const itemsMap = {};
+  for (const item of items) {
+    if (!itemsMap[item.order_id]) {
+      itemsMap[item.order_id] = [];
+    }
+    itemsMap[item.order_id].push(item);
+  }
+  
+  return rows.map(r => ({
+    ...r,
+    items: itemsMap[r.id] || []
+  }));
 };
 
 const createOrder = async (orderData) => {

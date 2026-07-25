@@ -20,7 +20,8 @@ import {
   DollarSign,
   Check,
   GitBranch,
-  MapPin
+  MapPin,
+  Search
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -44,6 +45,7 @@ const SalesOrders = () => {
   const [formMode, setFormMode] = useState('create'); // 'create', 'edit', 'view'
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [companies, setCompanies] = useState([]);
   const [boms, setBoms] = useState([]);
   const [quotations, setQuotations] = useState([]);
@@ -1325,6 +1327,23 @@ const SalesOrders = () => {
     const pendingOrders = orders.filter(o => ['DRAFT', 'CREATED', 'IN_PROGRESS'].includes(o.status?.toUpperCase())).length;
     const completedOrders = orders.filter(o => ['COMPLETED', 'FULFILLED', 'DELIVERED'].includes(o.status?.toUpperCase())).length;
 
+    const filteredOrders = orders.filter(order => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase().trim();
+      
+      const soNumber = (order.order_no || `ORD-${String(order.id).padStart(4, '0')}`).toLowerCase();
+      const clientName = (order.client || order.company_name || '').toLowerCase();
+      const projectName = (order.project_name || order.projectName || '').toLowerCase();
+      
+      const itemsMatch = (order.items || []).some(item => {
+        const drawingNo = (item.drawing_no || '').toLowerCase();
+        const drawingName = (item.description || item.drawing_name || '').toLowerCase();
+        return drawingNo.includes(q) || drawingName.includes(q);
+      });
+      
+      return soNumber.includes(q) || clientName.includes(q) || projectName.includes(q) || itemsMatch;
+    });
+
     return (
       <div className="space-y-6 animate-in fade-in duration-500 pb-10">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1368,13 +1387,29 @@ const SalesOrders = () => {
           </div>
         </div>
 
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 border border-slate-200 rounded-xl shadow-sm my-4">
+          <div className="relative w-full max-w-md">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+              <Search className="w-4 h-4" />
+            </span>
+            <input
+              type="text"
+              placeholder="Search by SO #, customer, project, drawing # or drawing name..."
+              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-slate-900 transition-all font-medium placeholder-slate-400"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
         <div className=" overflow-hidden my-4">
           <DataTable
             columns={columns}
-            data={orders}
+            data={filteredOrders}
             loading={loading}
             searchPlaceholder="Search orders by number, customer or project..."
             className="border-none"
+            hideSearch={true}
           />
         </div>
       </div>

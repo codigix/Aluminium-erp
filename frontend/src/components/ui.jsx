@@ -734,7 +734,8 @@ export const DataTable = ({
   onExpandedChange,
   onSearchChange,
   customFilter,
-  rowClassName
+  rowClassName,
+  hideSearch = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(null);
@@ -785,7 +786,7 @@ export const DataTable = ({
 
   const filteredData = React.useMemo(() => {
     return sortedData.filter(item => {
-      if (hideHeader) return true;
+      if (hideHeader || hideSearch) return true;
       const searchLower = String(searchTerm || '').toLowerCase();
       
       if (customFilter && customFilter(item, searchLower)) {
@@ -798,7 +799,7 @@ export const DataTable = ({
         return String(val || '').toLowerCase().includes(searchLower);
       });
     });
-  }, [sortedData, searchTerm, hideHeader, columns, customFilter]);
+  }, [sortedData, searchTerm, hideHeader, hideSearch, columns, customFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -858,19 +859,21 @@ export const DataTable = ({
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="relative group min-w-[200px] md:min-w-[250px]">
-              <input
-                type="text"
-                placeholder={searchPlaceholder}
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  if (onSearchChange) onSearchChange(e.target.value);
-                }}
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all placeholder:text-slate-400 bg-white text-slate-900 shadow-sm"
-              />
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" />
-            </div>
+            {!hideSearch && (
+              <div className="relative group min-w-[200px] md:min-w-[250px]">
+                <input
+                  type="text"
+                  placeholder={searchPlaceholder}
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    if (onSearchChange) onSearchChange(e.target.value);
+                  }}
+                  className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all placeholder:text-slate-400 bg-white text-slate-900 shadow-sm"
+                />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" />
+              </div>
+            )}
             {actions}
           </div>
         </div>
