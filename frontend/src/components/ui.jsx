@@ -87,7 +87,16 @@ export const SearchableSelect = ({
     }
     return String(getLabel(opt) || '').toLowerCase().includes(safeSearchTerm) ||
            String(opt[valueField] || '').toLowerCase().includes(safeSearchTerm) ||
-           String(getSublabel(opt) || '').toLowerCase().includes(safeSearchTerm);
+           String(getSublabel(opt) || '').toLowerCase().includes(safeSearchTerm) ||
+           String(opt.partNo || '').toLowerCase().includes(safeSearchTerm) ||
+           String(opt.part_no || '').toLowerCase().includes(safeSearchTerm) ||
+           String(opt.drawingNoSearch || '').toLowerCase().includes(safeSearchTerm) ||
+           String(opt.drawingNo || '').toLowerCase().includes(safeSearchTerm) ||
+           String(opt.drawing_no || '').toLowerCase().includes(safeSearchTerm) ||
+           String(opt.itemCode || '').toLowerCase().includes(safeSearchTerm) ||
+           String(opt.item_code || '').toLowerCase().includes(safeSearchTerm) ||
+           String(opt.description || '').toLowerCase().includes(safeSearchTerm) ||
+           String(opt.material_name || '').toLowerCase().includes(safeSearchTerm);
   });
 
   useEffect(() => {
@@ -161,7 +170,7 @@ export const SearchableSelect = ({
                     <span className="">{getLabel(opt)}</span>
                     {getSublabel(opt) && (
                       <span className="text-xs text-slate-400 font-normal whitespace-pre-line">
-                        {getSublabel(opt).startsWith('🟢') || getSublabel(opt).startsWith('🔴')
+                        {getSublabel(opt).startsWith('🟢') || getSublabel(opt).startsWith('🔴') || getSublabel(opt).startsWith('Drawing No') || getSublabel(opt).includes('\n')
                           ? getSublabel(opt)
                           : `(${getSublabel(opt)})`
                         }

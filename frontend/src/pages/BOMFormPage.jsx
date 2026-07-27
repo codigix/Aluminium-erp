@@ -873,7 +873,7 @@ const BOMFormPage = () => {
 
       if (currentItemCode && item.item_code === currentItemCode) return; // Skip self by code
 
-      const uniqueKey = `${item.item_code}|${item.drawing_no || 'N/A'}`;
+      const uniqueKey = `${item.id}|${item.item_code}|${item.drawing_no || 'N/A'}`;
       if (!seenCodes.has(uniqueKey)) {
         // Find if this item has an approved BOM cost, prioritizing those with non-zero cost
         const matchingBOMs = approvedBOMs.filter(b => b.item_code === item.item_code);
@@ -881,11 +881,18 @@ const BOMFormPage = () => {
         const bomCost = bomInfo ? (parseFloat(bomInfo.bom_cost) || 0) : 0;
         const dims = getDimensionString(item);
 
+        const rawType = (item.material_type || item.item_group || 'Part').trim();
+        const displayType = rawType.toLowerCase().includes('part') ? 'Part' : (rawType.toLowerCase().includes('assembly') || rawType.toLowerCase().includes('sub') || rawType.toLowerCase().includes('sfg') ? 'Assembly' : rawType);
+        const dwgStr = item.drawing_no && item.drawing_no !== 'N/A' ? item.drawing_no.toUpperCase() : 'N/A';
+        const partNoStr = item.part_no || item.part_number || (item.material_name && item.material_name.includes('(') ? (item.material_name.match(/\(([^)]+)\)/) || [])[1] : null);
+
         options.push({
-          label: `${item.item_code} – ${item.material_name}${bomCost > 0 ? ` (₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}`,
+          label: item.material_name,
           value: item.id,
           itemCode: item.item_code,
-          subLabel: `${dims ? `${dims}\n` : ''}${item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no.toUpperCase()}${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}` : `Stock Item${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`}`,
+          subLabel: `${item.item_code}\nDrawing: ${dwgStr} | Type: ${displayType}`,
+          partNo: partNoStr || '',
+          drawingNoSearch: item.drawing_no || '',
           rate: bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0)),
           uom: item.unit || 'Kg',
           description: item.material_name,
@@ -926,7 +933,7 @@ const BOMFormPage = () => {
         if (["Part", "FG"].includes(productForm.itemGroup) && !isSA) return;
       }
 
-      const uniqueKey = `${item.item_code}|${item.drawing_no || 'N/A'}`;
+      const uniqueKey = `so_${item.id}|${item.item_code}|${item.drawing_no || 'N/A'}`;
       if (!seenCodes.has(uniqueKey)) {
         // Find if this item has an approved BOM cost, prioritizing code match then drawing match, and non-zero costs
         const matchingBOMs = approvedBOMs.filter(b => b.item_code === item.item_code || (cleanDwgNo(b.drawing_no) === cleanDwgNo(item.drawing_no) && cleanDwgNo(b.drawing_no) !== 'N/A'));
@@ -941,11 +948,19 @@ const BOMFormPage = () => {
         const bomCost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : (bomInfo ? (parseFloat(bomInfo.bom_cost) || 0) : 0);
         const dims = getDimensionString(item);
 
+        const rawType = (item.item_group || 'Part').trim();
+        const displayType = rawType.toLowerCase().includes('part') ? 'Part' : (rawType.toLowerCase().includes('assembly') || rawType.toLowerCase().includes('sub') || rawType.toLowerCase().includes('sfg') ? 'Assembly' : rawType);
+        const dwgStr = item.drawing_no && item.drawing_no !== 'N/A' ? item.drawing_no.toUpperCase() : 'N/A';
+        const descName = item.description || item.material_name || '';
+        const partNoStr = item.part_no || item.part_number || (descName.includes('(') ? (descName.match(/\(([^)]+)\)/) || [])[1] : null);
+
         options.push({
-          label: `${item.item_code} – ${item.description || item.material_name}${bomCost > 0 ? ` (₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}`,
+          label: descName,
           value: item.id,
           itemCode: item.item_code,
-          subLabel: `${dims ? `${dims}\n` : ''}Drawing: ${(item.drawing_no || '').toUpperCase()} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`,
+          subLabel: `${item.item_code}\nDrawing: ${dwgStr} | Type: ${displayType}`,
+          partNo: partNoStr || '',
+          drawingNoSearch: item.drawing_no || '',
           rate: bomCost > 0 ? bomCost : (item.rate || 0),
           uom: item.unit || 'Kg',
           description: item.description || item.material_name,
@@ -2976,10 +2991,12 @@ const BOMFormPage = () => {
                           onFocus={fetchStockItemsOnly}
                           options={componentOptions}
                           value={(() => {
+                            if (componentForm.selectedId) return componentForm.selectedId;
                             if (!componentForm.componentCode) return '';
                             const match = componentOptions.find(opt => 
-                              opt.itemCode === componentForm.componentCode && 
-                              (cleanDwgNo(opt.drawingNo) === cleanDwgNo(componentForm.drawingNo || componentForm.drawing_no) || (!opt.drawingNo && !componentForm.drawingNo))
+                              String(opt.value) === String(componentForm.selectedId) ||
+                              (opt.itemCode === componentForm.componentCode && 
+                              (cleanDwgNo(opt.drawingNo) === cleanDwgNo(componentForm.drawingNo || componentForm.drawing_no) || (!opt.drawingNo && !componentForm.drawingNo)))
                             );
                             return match ? match.value : '';
                           })()}
@@ -2989,6 +3006,7 @@ const BOMFormPage = () => {
                             if (item) {
                               setComponentForm({
                                 ...componentForm,
+                                selectedId: item.value,
                                 componentCode: item.itemCode,
                                 rate: item.rate || 0,
                                 uom: { kg: 'Kg', kilogram: 'Kg', kgs: 'Kg', nos: 'Nos', numbers: 'Nos', number: 'Nos', no: 'Nos', pcs: 'Nos', pc: 'Nos', mtr: 'Mtr', meter: 'Mtr', meters: 'Mtr', m: 'Mtr', 'litre (ltr)': 'Litre (Ltr)', ltr: 'Litre (Ltr)', l: 'Litre (Ltr)' }[String(item.uom || '').trim().toLowerCase()] || item.uom || 'Nos',
