@@ -18,7 +18,7 @@ const toast = {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const getEmptyDrawingRow = () => ({
-  id: `temp_${crypto.randomUUID()}`,
+  id: crypto.randomUUID(),
   drawing_no: '',
   revision: '',
   qty: 1,
@@ -577,7 +577,7 @@ const CustomerDrawing = () => {
         // Show if it's a "Design Review" project OR if it's in relevant departments
         // Sales should see things in SALES, DESIGN_ENG (shared), or initial departments
         return so.project_name?.includes('Design Review') ||
-          ['SALES', 'DESIGN_ENG', 'PROCUREMENT', 'PRODUCTION', 'SHIPMENT', 'QUALITY', 'QC', 'ACCOUNTS'].includes(dept) ||
+          ['SALES', 'DESIGN_ENG', 'PRODUCTION', 'SHIPMENT', 'QUALITY', 'QC', 'ACCOUNTS'].includes(dept) ||
           dept === '';
       });
 
@@ -610,7 +610,7 @@ const CustomerDrawing = () => {
           };
         }
 
-        // Count items that belong to this requirement
+        // Preserve all drawing items (including approved items synced to Items Master)
         const items = so.items || [];
         acc[key].original_items = [...acc[key].original_items, ...items];
 
@@ -638,23 +638,21 @@ const CustomerDrawing = () => {
         return acc;
       }, {});
 
-      // Hide duplicate child orders/rows for the same project of the same company
+      // Hide duplicate child orders/rows for the same project
       const groupedList = Object.values(grouped);
       const projectGroups = {};
       
       groupedList.forEach(req => {
-        const companyKey = req.company_id || req.company_name || req.client_name || 'General';
         const projName = req.project_name || 'General';
-        const groupKey = `${companyKey}_${projName}`;
-        if (!projectGroups[groupKey]) {
-          projectGroups[groupKey] = [];
+        if (!projectGroups[projName]) {
+          projectGroups[projName] = [];
         }
-        projectGroups[groupKey].push(req);
+        projectGroups[projName].push(req);
       });
 
       const finalFiltered = [];
-      Object.keys(projectGroups).forEach(groupKey => {
-        const group = projectGroups[groupKey];
+      Object.keys(projectGroups).forEach(projName => {
+        const group = projectGroups[projName];
         if (group.length === 1) {
           finalFiltered.push(group[0]);
         } else {
@@ -839,7 +837,6 @@ const CustomerDrawing = () => {
         const existingFiles = pathVal.split(',').filter(Boolean);
         return {
           id: item.id || crypto.randomUUID(),
-          isExisting: true,
           drawing_id: item.drawing_id || item.drawing_master_id,
           drawing_no: item.drawing_no || '',
           revision: item.revision || item.revision_no || '',
@@ -1093,29 +1090,7 @@ const CustomerDrawing = () => {
       is: 'manual',
       then: (schema) => schema.of(
         Yup.object().shape({
-          drawing_no: Yup.string()
-            .required('Drawing # is required')
-            .test(
-              'unique-approved',
-              'Drawing Number already exists as an Approved Drawing. Please enter a different Drawing Number.',
-              function (value) {
-                if (!value) return true;
-                const currentDrawingId = this.parent.drawing_id || this.parent.id;
-                const cleanValue = String(value).trim().toLowerCase();
-                
-                const isDuplicate = drawings.some(d => {
-                  const dId = d.drawing_master_id || d.id;
-                  // Exclude the current drawing record when editing
-                  if (currentDrawingId && (String(dId) === String(currentDrawingId) || (d.public_id && String(d.public_id) === String(currentDrawingId)))) {
-                    return false;
-                  }
-                  const isApproved = (d.status || '').toUpperCase().trim() === 'APPROVED' || (d.item_status || '').toUpperCase().trim() === 'APPROVED';
-                  return isApproved && String(d.drawing_no).trim().toLowerCase() === cleanValue;
-                });
-                
-                return !isDuplicate;
-              }
-            ),
+          drawing_no: Yup.string().required('Drawing # is required'),
           drawing_type: Yup.string().required('Type is required'),
         })
       ),
@@ -1213,17 +1188,87 @@ const CustomerDrawing = () => {
               setDeletedDrawingIds([]);
             }
 
+            // ── Helper to find original drawing item for an existing row ───────
+            const getOriginalDrawing = (row) => {
+              if (!row || !editingRequirementData?.original_items) return null;
+              return editingRequirementData.original_items.find(d => 
+                (row.id && String(d.id) === String(row.id)) ||
+                (row.drawing_id && String(d.drawing_id) === String(row.drawing_id)) ||
+                (row.drawing_id && String(d.id) === String(row.drawing_id)) ||
+                (row.id && String(d.drawing_id) === String(row.id))
+              );
+            };
+
+            // ── Within-requirement duplicate check ──────────────────────────────
+            // Before calling the API, confirm no new or edited drawing number conflicts
+            // with any other drawing number in this Client Requirement.
+            const isDesignInReviewMode = editingRequirementData &&
+              (editingRequirementData.status || '').toUpperCase().replace(/_/g, ' ').trim() === 'DESIGN IN REVIEW';
+
+            const dwgNoMap = new Map();
+            for (const row of values.manualDrawings) {
+              const orig = getOriginalDrawing(row);
+              const isExistingRow = !!orig;
+              const isLocked = isDesignInReviewMode && isExistingRow &&
+                (row.status?.toUpperCase() === 'APPROVED' || orig.status?.toUpperCase() === 'APPROVED');
+
+              if (isLocked) continue; // Locked rows cannot be changed — skip
+
+              const cleanNo = String(row.drawing_no || '').trim().toUpperCase();
+              if (!cleanNo) continue;
+
+              if (!dwgNoMap.has(cleanNo)) {
+                dwgNoMap.set(cleanNo, []);
+              }
+              dwgNoMap.get(cleanNo).push({ row, orig });
+            }
+
+            for (const [cleanNo, occurrences] of dwgNoMap.entries()) {
+              if (occurrences.length > 1) {
+                // If there are multiple occurrences of cleanNo, check if at least ONE
+                // of them is a NEW row or a CHANGED row!
+                const hasNewOrChanged = occurrences.some(({ row, orig }) => {
+                  if (!orig) return true; // New row!
+                  const origNo = String(orig.drawing_no || '').trim().toUpperCase();
+                  return String(row.drawing_no || '').trim().toUpperCase() !== origNo; // Changed row!
+                });
+
+                if (hasNewOrChanged) {
+                  const displayNo = occurrences[0].row.drawing_no;
+                  errorToast(`Validation Failed\n\nDrawing Number "${displayNo}" has already been added in this Client Requirement.\n\nEach Drawing Number must be unique.`);
+                  setSubmitting(false);
+                  return;
+                }
+              }
+            }
+            // ────────────────────────────────────────────────────────────────────
+
             // Update existing requirement logic
             for (const drawing of values.manualDrawings) {
               if (!drawing.drawing_no) continue;
 
-              // If it has a file, it might be a new drawing added during edit OR an update with new file
-              const isExistingDrawing = drawing.isExisting || Boolean(drawing.drawing_id) || (drawing.id && !String(drawing.id).startsWith('temp_'));
-              if (isExistingDrawing) {
+              const orig = getOriginalDrawing(drawing);
+              const isExistingRow = !!orig;
+
+              // Skip locked approved rows — they cannot be changed and should not be re-validated
+              const isRowLocked = isDesignInReviewMode && isExistingRow &&
+                (drawing.status?.toUpperCase() === 'APPROVED' || orig.status?.toUpperCase() === 'APPROVED');
+              if (isRowLocked) {
+                successCount++; // count it as success (it was already saved correctly)
+                continue;
+              }
+
+              if (isExistingRow) {
                 // Update existing drawing metadata
                 const token = localStorage.getItem('authToken');
                 const formData = new FormData();
-                formData.append('drawingNo', drawing.drawing_no);
+
+                // Only include drawingNo if it has been changed from the original value.
+                const originalDrawingNo = orig?.drawing_no || '';
+                if (String(drawing.drawing_no).trim() !== String(originalDrawingNo).trim()) {
+                  formData.append('drawingNo', drawing.drawing_no);
+                }
+
                 formData.append('projectName', values.project_name || '');
                 formData.append('clientName', values.client_name || '');
                 formData.append('contactPerson', values.contact_person || '');
@@ -1253,7 +1298,7 @@ const CustomerDrawing = () => {
                 }
 
                 // Use drawing_id if available, fallback to id (which should be the drawing_master_id for existing)
-                const updateId = drawing.drawing_id || drawing.id;
+                const updateId = drawing.drawing_id || orig?.drawing_id || orig?.id || drawing.id;
                 const response = await fetch(`${API_BASE}/drawings/${updateId}`, {
                   method: 'PATCH',
                   headers: { 'Authorization': `Bearer ${token}` },
@@ -1280,6 +1325,20 @@ const CustomerDrawing = () => {
               warningToast('No valid drawings found to update');
             }
           } else {
+            // ── Within-requirement duplicate check for add mode ─────────────────
+            const seenAddNos = new Set();
+            for (const row of values.manualDrawings) {
+              const dwgKey = String(row.drawing_no || '').trim().toUpperCase();
+              if (!dwgKey) continue;
+              if (seenAddNos.has(dwgKey)) {
+                errorToast(`Validation Failed\n\nDrawing Number "${row.drawing_no}" has already been added in this Client Requirement.\n\nEach Drawing Number must be unique.`);
+                setSubmitting(false);
+                return;
+              }
+              seenAddNos.add(dwgKey);
+            }
+            // ────────────────────────────────────────────────────────────────────
+
             let sharedSalesOrderId = null;
             for (const drawing of values.manualDrawings) {
               if (!drawing.drawing_no) continue;
@@ -2403,16 +2462,9 @@ const CustomerDrawing = () => {
             pageSize={10}
             onSearchChange={setRequirementsSearchTerm}
             customFilter={(row, searchLower) => {
-              const matchProj = String(row.project_name || '').toLowerCase().includes(searchLower);
-              const matchClient = String(row.client_name || row.company_name || '').toLowerCase().includes(searchLower);
-              const matchContact = String(row.contact_person || row.email_address || row.contact_phone || '').toLowerCase().includes(searchLower);
-              const matchStatus = String(row.status || '').toLowerCase().includes(searchLower);
-              const matchDrawings = row.original_items?.some(item =>
-                String(item.drawing_no || '').toLowerCase().includes(searchLower) ||
-                String(item.description || '').toLowerCase().includes(searchLower) ||
-                String(item.item_code || '').toLowerCase().includes(searchLower)
+              return row.original_items?.some(item =>
+                String(item.drawing_no || '').toLowerCase().includes(searchLower)
               );
-              return matchProj || matchClient || matchContact || matchStatus || matchDrawings;
             }}
             selectable={true}
             selectedRows={selectedRequirements}
@@ -3180,13 +3232,13 @@ const CustomerDrawing = () => {
                                     disabled={isRowLocked}
                                     name={`manualDrawings[${index}].drawing_no`}
                                     placeholder="DRW-1001"
-                                    className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : ((formik.touched.manualDrawings?.[index]?.drawing_no || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_no ? 'border-red-500' : 'border-slate-300')}`}
+                                    className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : ((formik.touched.manualDrawings?.[index]?.drawing_no || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_no && !drawing.drawing_no?.trim() ? 'border-red-500' : 'border-slate-300')}`}
                                     value={drawing.drawing_no}
                                     onChange={formik.handleChange}
                                     onBlur={formik.handleBlur}
                                   />
                                 </div>
-                                {((formik.touched.manualDrawings?.[index]?.drawing_no || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_no) && (
+                                {((formik.touched.manualDrawings?.[index]?.drawing_no || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_no && !drawing.drawing_no?.trim()) && (
                                   <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.manualDrawings[index].drawing_no}</div>
                                 )}
                               </div>
@@ -3277,11 +3329,12 @@ const CustomerDrawing = () => {
                                 )}
                               </div>
                             </td>
-                            <td className="px-2 py-2">
+                            <td className="px-2 py-2" onClick={isRowLocked ? () => toast.error("Approved drawing cannot be edited.") : undefined}>
                               <div className="flex flex-col">
                                 <select
+                                  disabled={isRowLocked}
                                   name={`manualDrawings[${index}].drawing_type`}
-                                  className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 bg-white border-slate-300 ${((formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : '')}`}
+                                  className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : ((formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : 'border-slate-300')}`}
                                   value={drawing.drawing_type || 'Part'}
                                   onChange={formik.handleChange}
                                   onBlur={formik.handleBlur}

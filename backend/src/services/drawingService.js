@@ -77,9 +77,9 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null, 
   }
 
   if (search) {
-    query += ` AND (d.client_name LIKE ? OR d.drawing_no LIKE ? OR d.description LIKE ? OR d.project_name LIKE ? OR soi.item_code LIKE ?)`;
+    query += ` AND (d.client_name LIKE ? OR d.drawing_no LIKE ? OR d.description LIKE ?)`;
     const searchPattern = `%${search}%`;
-    params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+    params.push(searchPattern, searchPattern, searchPattern);
   }
 
   query += ` ORDER BY 
@@ -325,16 +325,16 @@ const performCascadingDrawingTypeSync = async (connection, { drawingId, drawingN
 
   if (!targetDrawingNo) return;
 
-  // 1. Update customer_drawings (all instances of this drawing_no)
+  // 1. Update customer_drawings (all instances of this drawing_no or drawingId)
   await connection.execute(
-    'UPDATE customer_drawings SET drawing_type = ?, updated_at = NOW() WHERE drawing_no = ?',
-    [targetType, targetDrawingNo]
+    'UPDATE customer_drawings SET drawing_type = ?, updated_at = NOW() WHERE drawing_no = ? OR (id = ? AND ? > 0)',
+    [targetType, targetDrawingNo, drawingId || 0, drawingId || 0]
   );
 
   // 2. Update sales_order_items
   await connection.execute(
-    'UPDATE sales_order_items SET drawing_type = ?, item_type = ?, item_group = ? WHERE drawing_no = ?',
-    [targetType, targetType, targetGroup, targetDrawingNo]
+    'UPDATE sales_order_items SET drawing_type = ?, item_type = ?, item_group = ? WHERE drawing_no = ? OR (drawing_id = ? AND ? > 0)',
+    [targetType, targetType, targetGroup, targetDrawingNo, drawingId || 0, drawingId || 0]
   );
 
   // 3. Update bom table
@@ -382,33 +382,33 @@ const checkDuplicateApprovedDrawing = async (connection, drawingNo, excludeDrawi
   if (!drawingNo) return;
   const cleanDwgNo = String(drawingNo).trim();
 
-  // 1. Check in customer_drawings for any existing Approved drawing with same drawing_no
+  // 1. Check customer_drawings — Approved drawings only
   let cdQuery = `
-    SELECT id, drawing_no, client_name 
-    FROM customer_drawings 
-    WHERE TRIM(drawing_no) = ? 
+    SELECT id, drawing_no
+    FROM customer_drawings
+    WHERE TRIM(drawing_no) = ?
       AND UPPER(TRIM(status)) IN ('APPROVED', 'DESIGN_APPROVED')
   `;
   const cdParams = [cleanDwgNo];
   if (excludeDrawingId) {
-    cdQuery += ` AND id <> ? AND public_id <> ?`;
-    cdParams.push(excludeDrawingId, String(excludeDrawingId));
+    cdQuery += ` AND id <> ?`;
+    cdParams.push(excludeDrawingId);
   }
   const [cdDupes] = await connection.query(cdQuery, cdParams);
   if (cdDupes.length > 0) {
     const error = new Error(
-      `Approval Failed\n\nDrawing Number "${cleanDwgNo}" already exists as an Approved Drawing.\n\nPlease change the Drawing Number before approving.`
+      `Approval Failed\n\nDrawing Number "${cleanDwgNo}" already exists as an Approved Drawing.\n\nPlease change the Drawing Number before saving.`
     );
     error.statusCode = 400;
     error.validationFailed = true;
     throw error;
   }
 
-  // 2. Check in sales_order_items for any existing Approved drawing with same drawing_no
+  // 2. Check sales_order_items — Approved active items only
   let soiQuery = `
-    SELECT id, drawing_no 
-    FROM sales_order_items 
-    WHERE TRIM(drawing_no) = ? 
+    SELECT id
+    FROM sales_order_items
+    WHERE TRIM(drawing_no) = ?
       AND UPPER(TRIM(status)) IN ('APPROVED', 'DESIGN_APPROVED')
       AND is_active = 1
   `;
@@ -417,10 +417,14 @@ const checkDuplicateApprovedDrawing = async (connection, drawingNo, excludeDrawi
     soiQuery += ` AND id <> ?`;
     soiParams.push(excludeSalesOrderItemId);
   }
+  if (excludeDrawingId) {
+    soiQuery += ` AND (drawing_id IS NULL OR drawing_id <> ?)`;
+    soiParams.push(excludeDrawingId);
+  }
   const [soiDupes] = await connection.query(soiQuery, soiParams);
   if (soiDupes.length > 0) {
     const error = new Error(
-      `Approval Failed\n\nDrawing Number "${cleanDwgNo}" already exists as an Approved Drawing.\n\nPlease change the Drawing Number before approving.`
+      `Approval Failed\n\nDrawing Number "${cleanDwgNo}" already exists as an Approved Drawing.\n\nPlease change the Drawing Number before saving.`
     );
     error.statusCode = 400;
     error.validationFailed = true;
@@ -444,18 +448,23 @@ const updateDrawing = async (id, data) => {
     let internalId = id;
     if (isNaN(id)) {
       const [rows] = await connection.query('SELECT id FROM customer_drawings WHERE public_id = ?', [id]);
-      if (rows.length === 0) {
-        const error = new Error('Drawing not found');
-        error.statusCode = 404;
-        throw error;
-      }
+      if (rows.length === 0) throw new Error('Drawing not found');
       internalId = rows[0].id;
     }
 
-    // Validate unique approved drawing number
-    const [currentDwg] = await connection.query('SELECT drawing_no FROM customer_drawings WHERE id = ?', [internalId]);
-    const targetDwgNo = drawingNo !== undefined ? drawingNo : (currentDwg[0]?.drawing_no || '');
-    await checkDuplicateApprovedDrawing(connection, targetDwgNo, internalId);
+    // Only validate duplicate approved drawing number if the drawing_no is actually being changed.
+    // Existing locked/approved drawings that have not had their number changed are skipped entirely.
+    const [currentDwg] = await connection.query('SELECT drawing_no, status FROM customer_drawings WHERE id = ?', [internalId]);
+    const currentDrawingNo = currentDwg[0]?.drawing_no || '';
+    const currentStatus = (currentDwg[0]?.status || '').toUpperCase().trim();
+    const isDrawingNoChanging = drawingNo !== undefined && String(drawingNo).trim() !== String(currentDrawingNo).trim();
+
+    if (isDrawingNoChanging) {
+      // The drawing number is changing — check that the new number isn't already taken
+      await checkDuplicateApprovedDrawing(connection, drawingNo, internalId);
+    }
+    // If drawing_no is NOT changing (e.g. updating file, notes, delivery date on approved drawing),
+    // skip the duplicate check entirely — the drawing already belongs to this requirement.
 
     // Check if drawing is linked to any sales order that is QUOTATION_SENT or BOM_SUBMITTED
     const [orders] = await connection.query(
@@ -532,7 +541,8 @@ const updateDrawing = async (id, data) => {
               (drawingNo !== undefined && String(drawingNo).trim() !== String(dwg.drawing_no || '').trim()) ||
               (description !== undefined && String(description).trim() !== String(dwg.description || '').trim()) ||
               (revisionNo !== undefined && String(revisionNo).trim() !== String(dwg.revision || '').trim()) ||
-              (qty !== undefined && Number(qty) !== Number(dwg.qty || 0));
+              (qty !== undefined && Number(qty) !== Number(dwg.qty || 0)) ||
+              (drawing_type !== undefined && String(drawing_type).trim() !== String(dwg.drawing_type || '').trim());
 
             if (isDiff) {
               throw new Error('Approved drawing cannot be edited.');
@@ -582,8 +592,8 @@ const updateDrawing = async (id, data) => {
 
     // 2. Sync with sales_order_items and sales_orders
     const [items] = await connection.query(
-      'SELECT sales_order_id, id as item_id, bom_id, parent_bom_id FROM sales_order_items WHERE drawing_id = ? OR (drawing_no = ? AND ? <> "")',
-      [internalId, drawingNo || '', drawingNo || '']
+      'SELECT sales_order_id, id as item_id, bom_id, parent_bom_id FROM sales_order_items WHERE drawing_id = ?',
+      [internalId]
     );
 
     if (items.length > 0) {
@@ -747,15 +757,6 @@ const updateItemDrawing = async (itemId, data) => {
           [...dParams, drawingId]
         );
       }
-
-      if (drawing_type !== undefined) {
-        await performCascadingDrawingTypeSync(connection, {
-          drawingId,
-          drawingNo,
-          drawing_type,
-          description
-        });
-      }
     }
 
     await connection.commit();
@@ -787,6 +788,9 @@ const createCustomerDrawing = async (data) => {
   try {
     await connection.beginTransaction();
 
+    // Check if the drawing number already exists as an approved drawing
+    await checkDuplicateApprovedDrawing(connection, drawingNo);
+
     if (providedSalesOrderId) {
       const [order] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [providedSalesOrderId]);
       if (order.length > 0) {
@@ -797,9 +801,6 @@ const createCustomerDrawing = async (data) => {
         }
       }
     }
-
-    // Check if the drawing number already exists as an approved drawing
-    await checkDuplicateApprovedDrawing(connection, drawingNo);
 
     const drawingPublicId = crypto.randomUUID();
     let salesOrderId = providedSalesOrderId;
@@ -815,7 +816,7 @@ const createCustomerDrawing = async (data) => {
       ,
       [
         drawingPublicId,
-        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, deliveryDate || null, filePath || '', fileType || 'NONE', remarks || null,
+        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, deliveryDate || null, filePath || null, fileType || null, remarks || null,
         uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
         customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
         fileType === 'XLSX' || fileType === 'XLS' ? filePath : null,
@@ -927,6 +928,9 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
         customerType, gstin, city, state, billingAddress, shippingAddress,
         drawing_type, hsnCode, deliveryDate
       } = data;
+
+      // Check if the drawing number already exists as an approved drawing
+      await checkDuplicateApprovedDrawing(connection, drawingNo);
 
       const drawingPublicId = crypto.randomUUID();
 

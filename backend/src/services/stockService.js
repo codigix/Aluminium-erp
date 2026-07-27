@@ -1139,8 +1139,8 @@ const updateItem = async (id, itemData) => {
 
       // Update sales_order_items
       await connection.execute(
-        'UPDATE sales_order_items SET drawing_type = ?, item_type = ?, item_group = ?, item_code = ? WHERE drawing_no = ?',
-        [targetType, targetType, targetGroup, itemData.itemCode, itemData.drawingNo]
+        'UPDATE sales_order_items SET drawing_type = ?, item_type = ?, item_group = ?, item_code = ? WHERE drawing_no = ? OR drawing_id IN (SELECT id FROM customer_drawings WHERE drawing_no = ?)',
+        [targetType, targetType, targetGroup, itemData.itemCode, itemData.drawingNo, itemData.drawingNo]
       );
 
       // Update bom
