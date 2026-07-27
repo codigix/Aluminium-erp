@@ -892,8 +892,7 @@ const BOMFormPage = () => {
 
         options.push({
           label: `${item.item_code} – ${item.material_name}${bomCost > 0 ? ` (₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}`,
-          value: item.id,
-          itemCode: item.item_code,
+          value: uniqueKey,
           subLabel: `${dims ? `${dims}\n` : ''}${item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no.toUpperCase()}${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}` : `Stock Item${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`}`,
           rate: bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0)),
           uom: item.unit || 'Kg',
@@ -952,8 +951,7 @@ const BOMFormPage = () => {
 
         options.push({
           label: `${item.item_code} – ${item.description || item.material_name}${bomCost > 0 ? ` (₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}`,
-          value: item.id,
-          itemCode: item.item_code,
+          value: uniqueKey,
           subLabel: `${dims ? `${dims}\n` : ''}Drawing: ${(item.drawing_no || '').toUpperCase()} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`,
           rate: bomCost > 0 ? bomCost : (item.rate || 0),
           uom: item.unit || 'Kg',
@@ -2984,14 +2982,15 @@ const BOMFormPage = () => {
                           placeholder="Select assembly or part..."
                           onFocus={fetchStockItemsOnly}
                           options={componentOptions}
-                          value={componentForm.componentCode ? (componentOptions.find(opt => opt.itemCode === componentForm.componentCode && opt.drawingNo === (componentForm.drawingNo || componentForm.drawing_no || 'N/A'))?.value || componentForm.componentCode) : ''}
+                          value={componentForm.componentCode ? `${componentForm.componentCode}|${componentForm.drawingNo || componentForm.drawing_no || 'N/A'}` : ''}
                           onChange={(e) => {
                             const val = e.target.value;
-                            const item = componentOptions.find(i => String(i.value) === String(val)) ||
-                              stockItems.find(si => String(si.id) === String(val));
+                            const [code, dwg] = val.includes('|') ? val.split('|') : [val, 'N/A'];
+                            const item = componentOptions.find(i => i.value === val) ||
+                              stockItems.find(si => si.item_code === code && (si.drawing_no || 'N/A') === dwg);
                             setComponentForm({
                               ...componentForm,
-                              componentCode: item ? (item.itemCode || item.item_code) : val,
+                              componentCode: code,
                               rate: item ? item.rate : componentForm.rate,
                               uom: item ? ({ kg: 'Kg', kilogram: 'Kg', kgs: 'Kg', nos: 'Nos', numbers: 'Nos', number: 'Nos', no: 'Nos', pcs: 'Nos', pc: 'Nos', mtr: 'Mtr', meter: 'Mtr', meters: 'Mtr', m: 'Mtr', 'litre (ltr)': 'Litre (Ltr)', ltr: 'Litre (Ltr)', l: 'Litre (Ltr)' }[String(item.uom || item.unit || '').trim().toLowerCase()] || (item.uom || item.unit)) : componentForm.uom,
                               description: item ? item.description : componentForm.description,
