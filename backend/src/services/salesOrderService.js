@@ -66,10 +66,10 @@ const listSalesOrders = async (includeWithoutPo = true) => {
             COALESCE(cd_contact.email, "") as email_address, 
             COALESCE(cd_contact.phone, "") as contact_phone,
             COALESCE(cd_contact.contact_person, "") as contact_person,
-            (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
+            (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id AND parent_bom_id IS NULL) as drawing_no,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason,
-            (SELECT COUNT(*) FROM sales_order_items WHERE sales_order_id = so.id AND UPPER(TRIM(status)) = 'APPROVED') as approved_items_count,
-            (SELECT COUNT(*) FROM sales_order_items WHERE sales_order_id = so.id) as total_items_count
+            (SELECT COUNT(*) FROM sales_order_items WHERE sales_order_id = so.id AND UPPER(TRIM(status)) = 'APPROVED' AND parent_bom_id IS NULL) as approved_items_count,
+            (SELECT COUNT(*) FROM sales_order_items WHERE sales_order_id = so.id AND parent_bom_id IS NULL) as total_items_count
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
@@ -95,8 +95,13 @@ const listSalesOrders = async (includeWithoutPo = true) => {
     const [itemRows] = await pool.query(
       `SELECT soi.*, soi.quantity as design_qty, cd.file_path, cd.hsn_code, cd.contact_person, cd.phone, cd.email, COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
        FROM sales_order_items soi
-       LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
-       WHERE soi.sales_order_id IN (?)`,
+       INNER JOIN (
+         SELECT MIN(id) as min_id
+         FROM sales_order_items
+         WHERE sales_order_id IN (?) AND parent_bom_id IS NULL
+         GROUP BY sales_order_id, COALESCE(drawing_id, id)
+       ) unique_items ON soi.id = unique_items.min_id
+       LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id`,
       [orderIds]
     );
     allItems = itemRows;
@@ -181,8 +186,13 @@ const getSalesOrderById = async (id) => {
   const [items] = await pool.query(
     `SELECT soi.*, cd.file_path, cd.hsn_code, cd.contact_person, cd.phone, cd.email, COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
      FROM sales_order_items soi
-     LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
-     WHERE soi.sales_order_id = ?`,
+     INNER JOIN (
+       SELECT MIN(id) as min_id
+       FROM sales_order_items
+       WHERE sales_order_id = ? AND parent_bom_id IS NULL
+       GROUP BY COALESCE(drawing_id, id)
+     ) unique_items ON soi.id = unique_items.min_id
+     LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id`,
     [order.id]
   );
 
