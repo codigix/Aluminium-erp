@@ -803,10 +803,68 @@ const approveDesignAndCreateQuotation = async (salesOrderId) => {
   }
 };
 
+const checkDuplicateApprovedDrawing = async (connection, drawingNo, excludeDrawingId = null, excludeSalesOrderItemId = null) => {
+  if (!drawingNo) return;
+  const cleanDwgNo = String(drawingNo).trim();
+
+  // 1. Check in customer_drawings for any existing Approved drawing with same drawing_no
+  let cdQuery = `
+    SELECT id, drawing_no, client_name 
+    FROM customer_drawings 
+    WHERE TRIM(drawing_no) = ? 
+      AND UPPER(TRIM(status)) IN ('APPROVED', 'DESIGN_APPROVED')
+  `;
+  const cdParams = [cleanDwgNo];
+  if (excludeDrawingId) {
+    cdQuery += ` AND id <> ? AND public_id <> ?`;
+    cdParams.push(excludeDrawingId, String(excludeDrawingId));
+  }
+  const [cdDupes] = await connection.query(cdQuery, cdParams);
+  if (cdDupes.length > 0) {
+    const error = new Error(
+      `Approval Failed\n\nDrawing Number "${cleanDwgNo}" already exists as an Approved Drawing.\n\nPlease change the Drawing Number before approving.`
+    );
+    error.statusCode = 400;
+    error.validationFailed = true;
+    throw error;
+  }
+
+  // 2. Check in sales_order_items for any existing Approved drawing with same drawing_no
+  let soiQuery = `
+    SELECT id, drawing_no 
+    FROM sales_order_items 
+    WHERE TRIM(drawing_no) = ? 
+      AND UPPER(TRIM(status)) IN ('APPROVED', 'DESIGN_APPROVED')
+  `;
+  const soiParams = [cleanDwgNo];
+  if (excludeSalesOrderItemId) {
+    soiQuery += ` AND id <> ?`;
+    soiParams.push(excludeSalesOrderItemId);
+  }
+  const [soiDupes] = await connection.query(soiQuery, soiParams);
+  if (soiDupes.length > 0) {
+    const error = new Error(
+      `Approval Failed\n\nDrawing Number "${cleanDwgNo}" already exists as an Approved Drawing.\n\nPlease change the Drawing Number before approving.`
+    );
+    error.statusCode = 400;
+    error.validationFailed = true;
+    throw error;
+  }
+};
+
 const updateSalesOrderItemStatus = async (itemId, status, reason) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    if (status && status.trim().toUpperCase() === 'APPROVED') {
+      const [itemRows] = await connection.query('SELECT id, drawing_no, drawing_id FROM sales_order_items WHERE id = ?', [itemId]);
+      if (itemRows.length > 0) {
+        const dwgNo = itemRows[0].drawing_no;
+        const dwgId = itemRows[0].drawing_id;
+        await checkDuplicateApprovedDrawing(connection, dwgNo, dwgId, itemId);
+      }
+    }
 
     // Update status and rejection reason on the item
     await connection.execute(
@@ -916,9 +974,19 @@ const bulkApproveDesigns = async (orderIds) => {
       ['DESIGN_IN_REVIEW', 'DESIGN_ENG', ...orderIds]
     );
 
+    // Validate that no drawing being approved already exists as an Approved drawing
+    const [itemsToApprove] = await connection.query(
+      `SELECT id, drawing_no, drawing_id FROM sales_order_items WHERE sales_order_id IN (${placeholders}) AND (status IS NULL OR status = 'PENDING' OR status = 'ACCEPTED')`,
+      orderIds
+    );
+
+    for (const item of itemsToApprove) {
+      await checkDuplicateApprovedDrawing(connection, item.drawing_no, item.drawing_id, item.id);
+    }
+
     // Mark non-rejected items as APPROVED
     await connection.execute(
-      `UPDATE sales_order_items SET status = 'Approved' WHERE sales_order_id IN (${placeholders}) AND (status IS NULL OR status = 'PENDING')`,
+      `UPDATE sales_order_items SET status = 'Approved' WHERE sales_order_id IN (${placeholders}) AND (status IS NULL OR status = 'PENDING' OR status = 'ACCEPTED')`,
       orderIds
     );
 

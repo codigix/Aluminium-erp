@@ -1124,6 +1124,32 @@ const updateItem = async (id, itemData) => {
       id
     ]);
 
+    // Sync across all modules for this drawing_no
+    if (itemData.drawingNo) {
+      const rawGroup = (itemData.itemGroup || '').toLowerCase().trim();
+      const isAssembly = rawGroup.includes('assembly');
+      const targetType = isAssembly ? 'Assembly' : (rawGroup.includes('part') ? 'Part' : rawGroup.toUpperCase());
+      const targetGroup = rawGroup;
+
+      // Update customer_drawings
+      await connection.execute(
+        'UPDATE customer_drawings SET drawing_type = ?, updated_at = NOW() WHERE drawing_no = ?',
+        [targetType, itemData.drawingNo]
+      );
+
+      // Update sales_order_items
+      await connection.execute(
+        'UPDATE sales_order_items SET drawing_type = ?, item_type = ?, item_group = ?, item_code = ? WHERE drawing_no = ?',
+        [targetType, targetType, targetGroup, itemData.itemCode, itemData.drawingNo]
+      );
+
+      // Update bom
+      await connection.execute(
+        'UPDATE bom SET item_group = ?, item_code = ? WHERE drawing_no = ?',
+        [targetGroup, itemData.itemCode, itemData.drawingNo]
+      );
+    }
+
     await connection.commit();
     return { success: true };
   } catch (error) {

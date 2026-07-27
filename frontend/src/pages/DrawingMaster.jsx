@@ -137,6 +137,36 @@ const DrawingMaster = () => {
     }
   }, [expandedRevisions, revisionsLoading]);
 
+  const handleApprovalError = async (response) => {
+    let errMessage = 'Failed to approve drawing';
+    try {
+      const data = await response.json();
+      errMessage = data.message || data.error || errMessage;
+    } catch (e) {}
+
+    if (errMessage.includes('Approval Failed') || errMessage.includes('already exists as an Approved Drawing')) {
+      const lines = errMessage.split('\n\n');
+      const headerTitle = lines[0] || 'Approval Failed';
+      const mainMsg = lines[1] || errMessage;
+      const subMsg = lines[2] || 'Please change the Drawing Number before approving.';
+
+      Swal.fire({
+        title: `<span class="text-red-600 font-bold flex items-center justify-center gap-2 text-lg">❌ ${headerTitle}</span>`,
+        html: `
+          <div class="text-center space-y-3 py-2">
+            <p class="text-sm font-semibold text-slate-800 bg-red-50 p-3 rounded-lg border border-red-200">${mainMsg}</p>
+            <p class="text-xs text-slate-500 font-medium">${subMsg}</p>
+          </div>
+        `,
+        confirmButtonColor: '#ef4444',
+        confirmButtonText: 'OK',
+        width: '420px'
+      });
+    } else {
+      errorToast(errMessage);
+    }
+  };
+
   const handleApproveItem = async (itemId) => {
     try {
       setBulkOperationLoading(true);
@@ -150,7 +180,10 @@ const DrawingMaster = () => {
         body: JSON.stringify({ status: 'Approved' })
       });
 
-      if (!response.ok) throw new Error('Failed to approve drawing');
+      if (!response.ok) {
+        await handleApprovalError(response);
+        return;
+      }
 
       successToast('Drawing approved');
       fetchDrawings(searchTerm);
@@ -253,7 +286,10 @@ const DrawingMaster = () => {
         body: JSON.stringify({ itemIds: itemsToApprove, status: 'Approved' })
       });
 
-      if (!response.ok) throw new Error('Failed to approve drawings');
+      if (!response.ok) {
+        await handleApprovalError(response);
+        return;
+      }
 
       successToast(`${itemsToApprove.length} drawings approved successfully`);
       setSelectedRows(new Set());

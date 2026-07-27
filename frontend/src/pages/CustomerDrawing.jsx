@@ -610,8 +610,8 @@ const CustomerDrawing = () => {
           };
         }
 
-        // Count items that are actual drawings (not existing items)
-        const items = so.items?.filter(item => !item.item_code) || [];
+        // Count items that belong to this requirement
+        const items = so.items || [];
         acc[key].original_items = [...acc[key].original_items, ...items];
 
         // Deduplicate original_items by drawing number to get correct unique drawing count
@@ -837,6 +837,7 @@ const CustomerDrawing = () => {
         const existingFiles = pathVal.split(',').filter(Boolean);
         return {
           id: item.id || crypto.randomUUID(),
+          isExisting: true,
           drawing_id: item.drawing_id || item.drawing_master_id,
           drawing_no: item.drawing_no || '',
           revision: item.revision || item.revision_no || '',
@@ -1193,8 +1194,8 @@ const CustomerDrawing = () => {
               if (!drawing.drawing_no) continue;
 
               // If it has a file, it might be a new drawing added during edit OR an update with new file
-              // If it has id and no file, it's just updating metadata
-              if (drawing.id && !String(drawing.id).includes('-')) {
+              const isExistingDrawing = drawing.isExisting || Boolean(drawing.drawing_id) || (drawing.id && !String(drawing.id).startsWith('temp_'));
+              if (isExistingDrawing) {
                 // Update existing drawing metadata
                 const token = localStorage.getItem('authToken');
                 const formData = new FormData();
@@ -2378,9 +2379,16 @@ const CustomerDrawing = () => {
             pageSize={10}
             onSearchChange={setRequirementsSearchTerm}
             customFilter={(row, searchLower) => {
-              return row.original_items?.some(item =>
-                String(item.drawing_no || '').toLowerCase().includes(searchLower)
+              const matchProj = String(row.project_name || '').toLowerCase().includes(searchLower);
+              const matchClient = String(row.client_name || row.company_name || '').toLowerCase().includes(searchLower);
+              const matchContact = String(row.contact_person || row.email_address || row.contact_phone || '').toLowerCase().includes(searchLower);
+              const matchStatus = String(row.status || '').toLowerCase().includes(searchLower);
+              const matchDrawings = row.original_items?.some(item =>
+                String(item.drawing_no || '').toLowerCase().includes(searchLower) ||
+                String(item.description || '').toLowerCase().includes(searchLower) ||
+                String(item.item_code || '').toLowerCase().includes(searchLower)
               );
+              return matchProj || matchClient || matchContact || matchStatus || matchDrawings;
             }}
             selectable={true}
             selectedRows={selectedRequirements}
@@ -3245,12 +3253,11 @@ const CustomerDrawing = () => {
                                 )}
                               </div>
                             </td>
-                            <td className="px-2 py-2" onClick={isRowLocked ? () => toast.error("Approved drawing cannot be edited.") : undefined}>
+                            <td className="px-2 py-2">
                               <div className="flex flex-col">
                                 <select
-                                  disabled={isRowLocked}
                                   name={`manualDrawings[${index}].drawing_type`}
-                                  className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : ((formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : 'border-slate-300')}`}
+                                  className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 bg-white border-slate-300 ${((formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : '')}`}
                                   value={drawing.drawing_type || 'Part'}
                                   onChange={formik.handleChange}
                                   onBlur={formik.handleBlur}
