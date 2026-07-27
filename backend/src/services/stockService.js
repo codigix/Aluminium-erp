@@ -984,22 +984,40 @@ const generateItemCode = async (itemName, itemGroup) => {
   const cleanName = itemName ? itemName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 15).toUpperCase() : 'ITEM';
   const baseCode = `${prefix}-${cleanName}`;
 
-  // Find the highest sequence number for this base code
-  const [result] = await pool.query(
+  // Find the highest sequence number for this base code across stock_balance, sales_order_items, and items tables
+  const [stockResult] = await pool.query(
     'SELECT item_code FROM stock_balance WHERE item_code LIKE ? ORDER BY item_code DESC LIMIT 1',
     [`${baseCode}-%`]
   );
+  const [soiResult] = await pool.query(
+    'SELECT item_code FROM sales_order_items WHERE item_code LIKE ? ORDER BY item_code DESC LIMIT 1',
+    [`${baseCode}-%`]
+  );
+  const [itemsResult] = await pool.query(
+    'SELECT item_code FROM items WHERE item_code LIKE ? ORDER BY item_code DESC LIMIT 1',
+    [`${baseCode}-%`]
+  );
 
-  let nextNumber = 1;
-  if (result.length > 0) {
-    const lastCode = result[0].item_code;
-    const parts = lastCode.split('-');
-    const lastNumStr = parts[parts.length - 1];
-    const lastNumber = parseInt(lastNumStr);
-    if (!isNaN(lastNumber)) {
-      nextNumber = lastNumber + 1;
+  let maxNum = 0;
+  const processResult = (resultRows) => {
+    if (resultRows && resultRows.length > 0) {
+      const lastCode = resultRows[0].item_code;
+      if (lastCode) {
+        const parts = lastCode.split('-');
+        const lastNumStr = parts[parts.length - 1];
+        const lastNumber = parseInt(lastNumStr);
+        if (!isNaN(lastNumber) && lastNumber > maxNum) {
+          maxNum = lastNumber;
+        }
+      }
     }
-  }
+  };
+
+  processResult(stockResult);
+  processResult(soiResult);
+  processResult(itemsResult);
+
+  const nextNumber = maxNum + 1;
 
   return `${baseCode}-${String(nextNumber).padStart(4, '0')}`;
 };
