@@ -410,6 +410,7 @@ const checkDuplicateApprovedDrawing = async (connection, drawingNo, excludeDrawi
     FROM sales_order_items 
     WHERE TRIM(drawing_no) = ? 
       AND UPPER(TRIM(status)) IN ('APPROVED', 'DESIGN_APPROVED')
+      AND is_active = 1
   `;
   const soiParams = [cleanDwgNo];
   if (excludeSalesOrderItemId) {
@@ -443,16 +444,18 @@ const updateDrawing = async (id, data) => {
     let internalId = id;
     if (isNaN(id)) {
       const [rows] = await connection.query('SELECT id FROM customer_drawings WHERE public_id = ?', [id]);
-      if (rows.length === 0) throw new Error('Drawing not found');
+      if (rows.length === 0) {
+        const error = new Error('Drawing not found');
+        error.statusCode = 404;
+        throw error;
+      }
       internalId = rows[0].id;
     }
 
-    // If status is being updated to APPROVED, validate unique approved drawing number
-    if (data.status && String(data.status).trim().toUpperCase() === 'APPROVED') {
-      const [currentDwg] = await connection.query('SELECT drawing_no FROM customer_drawings WHERE id = ?', [internalId]);
-      const targetDwgNo = drawingNo || currentDwg[0]?.drawing_no;
-      await checkDuplicateApprovedDrawing(connection, targetDwgNo, internalId);
-    }
+    // Validate unique approved drawing number
+    const [currentDwg] = await connection.query('SELECT drawing_no FROM customer_drawings WHERE id = ?', [internalId]);
+    const targetDwgNo = drawingNo !== undefined ? drawingNo : (currentDwg[0]?.drawing_no || '');
+    await checkDuplicateApprovedDrawing(connection, targetDwgNo, internalId);
 
     // Check if drawing is linked to any sales order that is QUOTATION_SENT or BOM_SUBMITTED
     const [orders] = await connection.query(
@@ -579,8 +582,8 @@ const updateDrawing = async (id, data) => {
 
     // 2. Sync with sales_order_items and sales_orders
     const [items] = await connection.query(
-      'SELECT sales_order_id, id as item_id, bom_id, parent_bom_id FROM sales_order_items WHERE drawing_id = ? OR id = ? OR (drawing_no = ? AND ? <> "")',
-      [internalId, internalId, drawingNo || '', drawingNo || '']
+      'SELECT sales_order_id, id as item_id, bom_id, parent_bom_id FROM sales_order_items WHERE drawing_id = ? OR (drawing_no = ? AND ? <> "")',
+      [internalId, drawingNo || '', drawingNo || '']
     );
 
     if (items.length > 0) {
@@ -794,6 +797,9 @@ const createCustomerDrawing = async (data) => {
         }
       }
     }
+
+    // Check if the drawing number already exists as an approved drawing
+    await checkDuplicateApprovedDrawing(connection, drawingNo);
 
     const drawingPublicId = crypto.randomUUID();
     let salesOrderId = providedSalesOrderId;

@@ -835,6 +835,7 @@ const checkDuplicateApprovedDrawing = async (connection, drawingNo, excludeDrawi
     FROM sales_order_items 
     WHERE TRIM(drawing_no) = ? 
       AND UPPER(TRIM(status)) IN ('APPROVED', 'DESIGN_APPROVED')
+      AND is_active = 1
   `;
   const soiParams = [cleanDwgNo];
   if (excludeSalesOrderItemId) {
@@ -871,6 +872,8 @@ const updateSalesOrderItemStatus = async (itemId, status, reason) => {
       'UPDATE sales_order_items SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
       [status, status === 'REJECTED' ? reason : null, itemId]
     );
+
+
 
 
 
@@ -2048,6 +2051,8 @@ const bulkUpdateItemStatus = async (itemIds, status, reason) => {
       `UPDATE sales_order_items SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id IN (${placeholders})`,
       [status, status === 'REJECTED' ? reason : null, ...itemIds]
     );
+
+
 
 
 

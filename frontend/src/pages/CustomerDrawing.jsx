@@ -18,7 +18,7 @@ const toast = {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const getEmptyDrawingRow = () => ({
-  id: crypto.randomUUID(),
+  id: `temp_${crypto.randomUUID()}`,
   drawing_no: '',
   revision: '',
   qty: 1,
@@ -577,7 +577,7 @@ const CustomerDrawing = () => {
         // Show if it's a "Design Review" project OR if it's in relevant departments
         // Sales should see things in SALES, DESIGN_ENG (shared), or initial departments
         return so.project_name?.includes('Design Review') ||
-          ['SALES', 'DESIGN_ENG', 'PRODUCTION', 'SHIPMENT', 'QUALITY', 'QC', 'ACCOUNTS'].includes(dept) ||
+          ['SALES', 'DESIGN_ENG', 'PROCUREMENT', 'PRODUCTION', 'SHIPMENT', 'QUALITY', 'QC', 'ACCOUNTS'].includes(dept) ||
           dept === '';
       });
 
@@ -638,21 +638,23 @@ const CustomerDrawing = () => {
         return acc;
       }, {});
 
-      // Hide duplicate child orders/rows for the same project
+      // Hide duplicate child orders/rows for the same project of the same company
       const groupedList = Object.values(grouped);
       const projectGroups = {};
       
       groupedList.forEach(req => {
+        const companyKey = req.company_id || req.company_name || req.client_name || 'General';
         const projName = req.project_name || 'General';
-        if (!projectGroups[projName]) {
-          projectGroups[projName] = [];
+        const groupKey = `${companyKey}_${projName}`;
+        if (!projectGroups[groupKey]) {
+          projectGroups[groupKey] = [];
         }
-        projectGroups[projName].push(req);
+        projectGroups[groupKey].push(req);
       });
 
       const finalFiltered = [];
-      Object.keys(projectGroups).forEach(projName => {
-        const group = projectGroups[projName];
+      Object.keys(projectGroups).forEach(groupKey => {
+        const group = projectGroups[groupKey];
         if (group.length === 1) {
           finalFiltered.push(group[0]);
         } else {
@@ -1091,7 +1093,29 @@ const CustomerDrawing = () => {
       is: 'manual',
       then: (schema) => schema.of(
         Yup.object().shape({
-          drawing_no: Yup.string().required('Drawing # is required'),
+          drawing_no: Yup.string()
+            .required('Drawing # is required')
+            .test(
+              'unique-approved',
+              'Drawing Number already exists as an Approved Drawing. Please enter a different Drawing Number.',
+              function (value) {
+                if (!value) return true;
+                const currentDrawingId = this.parent.drawing_id || this.parent.id;
+                const cleanValue = String(value).trim().toLowerCase();
+                
+                const isDuplicate = drawings.some(d => {
+                  const dId = d.drawing_master_id || d.id;
+                  // Exclude the current drawing record when editing
+                  if (currentDrawingId && (String(dId) === String(currentDrawingId) || (d.public_id && String(d.public_id) === String(currentDrawingId)))) {
+                    return false;
+                  }
+                  const isApproved = (d.status || '').toUpperCase().trim() === 'APPROVED' || (d.item_status || '').toUpperCase().trim() === 'APPROVED';
+                  return isApproved && String(d.drawing_no).trim().toLowerCase() === cleanValue;
+                });
+                
+                return !isDuplicate;
+              }
+            ),
           drawing_type: Yup.string().required('Type is required'),
         })
       ),
