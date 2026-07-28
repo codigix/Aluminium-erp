@@ -67,6 +67,10 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null, 
   `;
   const params = [];
 
+  if (!search) {
+    query += ` AND LOWER(TRIM(COALESCE(d.client_name, ''))) NOT IN ('internal', 'internal system')`;
+  }
+
   if (onlyShared) {
     query += ` AND (TRIM(d.status) IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW', 'REJECTED') OR TRIM(soi.status) IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW', 'REJECTED'))`;
   }

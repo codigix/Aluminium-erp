@@ -571,6 +571,10 @@ const CustomerDrawing = () => {
       if (!response.ok) throw new Error('Failed to fetch requirements');
       const data = await response.json();
       const filtered = data.filter(so => {
+        const clientName = (so.client_name || so.company_name || '').toLowerCase().trim();
+        // Hide internal system / BOM child part requirements
+        if (clientName === 'internal' || clientName === 'internal system') return false;
+
         const dept = (so.current_department || '').toUpperCase().trim();
         const status = (so.status || '').toUpperCase().trim();
 

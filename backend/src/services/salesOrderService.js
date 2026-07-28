@@ -50,6 +50,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
     whereClause += ' AND so.customer_po_id IS NOT NULL';
   }
   whereClause += " AND (so.so_number IS NULL OR so.so_number NOT LIKE 'ORD%')";
+  whereClause += " AND LOWER(TRIM(COALESCE(c.company_name, ''))) NOT IN ('internal', 'internal system')";
 
   const [rows] = await pool.query(
     `SELECT so.*, 

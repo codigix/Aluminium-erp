@@ -592,38 +592,30 @@ const BOMFormPage = () => {
       });
       
       if (!response.ok) throw new Error('Failed to update drawing files');
+      const resData = await response.json();
       
       successToast('Attachments updated successfully');
       
-      const drawingNo = previewDrawing?.drawing_no;
-      if (drawingNo) {
-        const searchRes = await fetch(`${API_BASE}/drawings?search=${encodeURIComponent(drawingNo)}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (searchRes.ok) {
-          const list = await searchRes.json();
-          const updatedDwg = list.find(d => d.id === drawingId || d.drawing_master_id === drawingId || d.drawing_no === drawingNo);
-          if (updatedDwg) {
-            const finalDwg = {
-              ...updatedDwg,
-              file_path: updatedDwg.file_path || updatedDwg.drawing_pdf,
-              drawing_pdf: updatedDwg.drawing_pdf || updatedDwg.file_path,
-              client_name: updatedDwg.client_name || updatedDwg.company_name
+      const newFilePath = resData.file_path || resData.drawingPdf || '';
+
+      setPreviewDrawing(prev => ({
+        ...(prev || {}),
+        file_path: newFilePath,
+        drawing_pdf: newFilePath
+      }));
+
+      const dwgNo = previewDrawing?.drawing_no;
+      if (dwgNo) {
+        setApprovedDrawings(prev => prev.map(item => {
+          if (item.drawing_no === dwgNo) {
+            return {
+              ...item,
+              file_path: newFilePath,
+              drawing_pdf: newFilePath
             };
-            setPreviewDrawing(finalDwg);
-            
-            setApprovedDrawings(prev => prev.map(item => {
-              if (item.drawing_no === updatedDwg.drawing_no) {
-                return {
-                  ...item,
-                  file_path: updatedDwg.file_path || updatedDwg.drawing_pdf,
-                  drawing_pdf: updatedDwg.drawing_pdf || updatedDwg.file_path
-                };
-              }
-              return item;
-            }));
           }
-        }
+          return item;
+        }));
       }
     } catch (error) {
       console.error(error);
@@ -769,9 +761,11 @@ const BOMFormPage = () => {
     if (dwg) {
       const finalDwg = {
         ...dwg,
+        id: dwg.drawing_master_id || dwg.id,
+        drawing_master_id: dwg.drawing_master_id || dwg.id,
         file_path: dwg.file_path || dwg.drawing_pdf,
         drawing_pdf: dwg.drawing_pdf || dwg.file_path,
-        client_name: dwg.client_name || dwg.company_name
+        client_name: dwg.client_name || dwg.company_name || 'Internal System'
       };
       setPreviewDrawing(finalDwg);
       setShowPreviewModal(true);
@@ -4589,15 +4583,17 @@ const BOMFormPage = () => {
             return;
           }
           // Virtual drawing — create the record in Drawing Master first
+          // These are BOM child parts — marked as 'Internal System' to be hidden from Client Requirements list
           try {
             const token = localStorage.getItem('authToken');
             const formData = new FormData();
             formData.append('drawingNo', dwg.drawing_no || '');
-            formData.append('description', dwg.description || '');
-            formData.append('clientName', dwg.client_name || 'Internal');
+            formData.append('description', dwg.description || dwg.drawing_no || 'Child Part');
+            formData.append('clientName', 'Internal System');
             formData.append('revision', dwg.revision || '0');
             formData.append('qty', dwg.qty || 1);
             formData.append('drawing_type', dwg.drawing_type || 'Part');
+            formData.append('remarks', 'BOM_CHILD_PART');
             const response = await fetch(`${API_BASE}/drawings`, {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${token}` },

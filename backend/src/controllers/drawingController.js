@@ -115,7 +115,7 @@ const updateDrawing = async (req, res, next) => {
       hsnCode: hsnCode || hsn_code,
       deliveryDate: deliveryDate || delivery_date
     });
-    res.json({ message: 'Drawing updated successfully' });
+    res.json({ message: 'Drawing updated successfully', drawingPdf, file_path: drawingPdf });
   } catch (error) {
     next(error);
   }
