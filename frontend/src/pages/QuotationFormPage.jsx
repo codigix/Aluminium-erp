@@ -249,6 +249,121 @@ const QuotationFormPage = () => {
     }
   }, [selectedHostId, hostCompanies]);
 
+  const cleanDwgKey = (val) => String(val || '').trim().toUpperCase();
+
+  const deduplicateQuotationItems = (itemsList, masterDrawingsList = []) => {
+    if ((!itemsList || itemsList.length === 0) && (!masterDrawingsList || masterDrawingsList.length === 0)) {
+      return itemsList;
+    }
+
+    const currentProjectKey = cleanDwgKey(projectName || initialData?.projectName || initialData?.project_name);
+    const currentClientKey = cleanDwgKey(selectedClient?.company_name || initialData?.clientName);
+
+    // Helper to check if a drawing belongs to the current quotation context
+    const isDrawingForCurrentQuote = (dwg) => {
+      if (!dwg) return false;
+      const dwgProj = cleanDwgKey(dwg.project_name || dwg.project);
+      const dwgClient = cleanDwgKey(dwg.client_name || dwg.company_name);
+
+      if (currentProjectKey && dwgProj && currentProjectKey === dwgProj) return true;
+      if (currentClientKey && dwgClient && currentClientKey === dwgClient) return true;
+      if (!currentProjectKey && !currentClientKey) return true;
+      return false;
+    };
+
+    // 1. Collect all child drawing_no's, component_codes, and item_codes linked INSIDE any Assembly in current quotation OR master drawings
+    const assemblyChildKeys = new Set();
+
+    const registerSubAssemblies = (subAssemblies) => {
+      if (!Array.isArray(subAssemblies)) return;
+      subAssemblies.forEach(sa => {
+        if (sa.drawing_no) assemblyChildKeys.add(cleanDwgKey(sa.drawing_no));
+        if (sa.component_code) assemblyChildKeys.add(cleanDwgKey(sa.component_code));
+        if (sa.item_code) assemblyChildKeys.add(cleanDwgKey(sa.item_code));
+      });
+    };
+
+    // From itemsList
+    (itemsList || []).forEach(item => {
+      const isAssembly = (item.item_group || '').toUpperCase().includes('ASSEMBLY');
+      if (isAssembly) {
+        registerSubAssemblies(item.sub_assemblies);
+      }
+    });
+
+    // From masterDrawingsList (only for current quote context)
+    if (Array.isArray(masterDrawingsList)) {
+      masterDrawingsList.forEach(dwg => {
+        if (!isDrawingForCurrentQuote(dwg)) return;
+
+        const isAssembly = (dwg.item_group || dwg.drawing_type || '').toUpperCase().includes('ASSEMBLY');
+        if (isAssembly) {
+          registerSubAssemblies(dwg.sub_assemblies);
+        }
+      });
+    }
+
+    // 2. Filter top-level itemsList:
+    // If a top-level item is a PART (not Assembly), and its drawing_no OR item_code is in assemblyChildKeys,
+    // it is ALREADY included inside an Assembly — remove its duplicate standalone top-level quotation line!
+    let deduplicated = (itemsList || []).filter(item => {
+      const isAssembly = (item.item_group || '').toUpperCase().includes('ASSEMBLY');
+      if (isAssembly) return true; // Always keep Assembly items
+
+      const drwNo = cleanDwgKey(item.drawing_no);
+      const itemCode = cleanDwgKey(item.item_code);
+
+      const isInsideAssembly = (drwNo && assemblyChildKeys.has(drwNo)) || (itemCode && assemblyChildKeys.has(itemCode));
+      return !isInsideAssembly;
+    });
+
+    // 3. Ensure all standalone BOMs from masterDrawingsList for this project/client
+    // that are NOT linked inside any Assembly are included as standalone top-level quotation items!
+    if (Array.isArray(masterDrawingsList) && masterDrawingsList.length > 0) {
+      masterDrawingsList.forEach(dwg => {
+        if (!isDrawingForCurrentQuote(dwg)) return;
+
+        const dwgGroup = (dwg.item_group || dwg.drawing_type || '').toUpperCase();
+        const dwgIsPart = dwgGroup.includes('PART');
+        if (!dwgIsPart) return;
+
+        const drwNo = cleanDwgKey(dwg.drawing_no);
+        const itemCode = cleanDwgKey(dwg.item_code);
+
+        const isInsideAssembly = (drwNo && assemblyChildKeys.has(drwNo)) || (itemCode && assemblyChildKeys.has(itemCode));
+        const existsInDeduplicated = deduplicated.some(it => {
+          const itDrw = cleanDwgKey(it.drawing_no);
+          const itCode = cleanDwgKey(it.item_code);
+          return (drwNo && itDrw === drwNo) || (itemCode && itCode === itemCode);
+        });
+
+        // If standalone part drawing for this quote is NOT inside any assembly and NOT in deduplicated items, add it as a standalone quotation item!
+        if (!isInsideAssembly && !existsInDeduplicated) {
+          const cost = parseFloat(dwg.bom_cost || dwg.rate || dwg.quotedPrice || 0);
+          deduplicated.push({
+            id: Date.now() + Math.random(),
+            drawing_id: dwg.drawing_master_id || dwg.id,
+            drawing_no: dwg.drawing_no,
+            item_code: dwg.item_code,
+            description: dwg.description || dwg.drawing_description || dwg.drawing_no,
+            item_group: 'Part',
+            quantity: parseFloat(dwg.qty) || 1,
+            unit: dwg.unit || 'NOS',
+            bom_cost: cost,
+            rate: cost,
+            total: (parseFloat(dwg.qty) || 1) * cost,
+            profit_percentage: 0,
+            override_percentage: 0,
+            gst_percentage: 18,
+            sub_assemblies: []
+          });
+        }
+      });
+    }
+
+    return deduplicated;
+  };
+
   useEffect(() => {
     fetchClients();
     fetchHostCompanies();
@@ -347,7 +462,7 @@ const QuotationFormPage = () => {
           };
         });
 
-      setItems(mappedItems);
+      setItems(deduplicateQuotationItems(mappedItems, drawings));
       const initialNotes = initialData.notes || '';
       setNotes(initialNotes.startsWith('Drawing Numbers:') ? '' : initialNotes);
       setDiscountType(initialData.discount_type || initialData.discountType || 'percentage');
@@ -511,14 +626,15 @@ const QuotationFormPage = () => {
         return item;
       });
 
+      const finalItems = deduplicateQuotationItems(updatedItems, drawings);
       const currentJson = JSON.stringify(items);
-      const updatedJson = JSON.stringify(updatedItems);
+      const updatedJson = JSON.stringify(finalItems);
 
       if (currentJson === updatedJson) {
         return;
       }
 
-      setItems(updatedItems);
+      setItems(finalItems);
     }
   }, [
     items,
@@ -787,7 +903,7 @@ const QuotationFormPage = () => {
             }))
           };
         });
-        setItems(mappedItems);
+        setItems(deduplicateQuotationItems(mappedItems, drawings));
         if (showGlobalBreakdown) {
           fetchBreakdownData(mappedItems);
         } else {
@@ -1286,7 +1402,7 @@ const QuotationFormPage = () => {
         hostCompanyId: selectedHostId ? Number(selectedHostId) : null,
         discount_type: discountType,
         discount_value: parseFloat(discountValue) || 0,
-        items: sortedItems.map(item => ({
+        items: deduplicateQuotationItems(sortedItems, drawings).map(item => ({
           salesOrderItemId: item.salesOrderItemId || null,
           bom_id: item.bom_id || null,
           revision_no: item.revision_no || null,

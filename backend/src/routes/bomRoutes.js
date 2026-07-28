@@ -22,6 +22,7 @@ router.get('/sales-order/:salesOrderId', authenticate, authorize(['BOM_VIEW', 'P
 router.get('/history', authenticate, authorize(['BOM_VIEW', 'QC_VIEW']), bomController.getBOMHistory);
 router.post('/createRequest', authenticate, authorize(['BOM_MANAGE']), bomController.createBOMRequest);
 
+router.delete('/items/:itemId/unlink-child', authenticate, authorize(['BOM_MANAGE']), bomController.unlinkChildFromAssembly);
 router.delete('/items/:itemId', authenticate, authorize(['BOM_MANAGE']), bomController.deleteBOM);
 
 module.exports = router;

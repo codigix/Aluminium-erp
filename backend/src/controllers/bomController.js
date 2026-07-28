@@ -183,6 +183,15 @@ const getLatestBOMCost = async (req, res, next) => {
   }
 };
 
+const unlinkChildFromAssembly = async (req, res, next) => {
+  try {
+    await bomService.unlinkChildFromAssembly(req.params.itemId);
+    res.json({ message: 'Child item removed from assembly' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getItemMaterials,
   addItemMaterial,
@@ -202,5 +211,6 @@ module.exports = {
   createBOMRequest,
   deleteBOM,
   getBOMHistory,
-  getLatestBOMCost
+  getLatestBOMCost,
+  unlinkChildFromAssembly
 };

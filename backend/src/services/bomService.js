@@ -2091,6 +2091,49 @@ const syncQuotationCosts = async (itemId, bomCost) => {
   }
 };
 
+const unlinkChildFromAssembly = async (childItemId) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Get child item details
+    const [rows] = await connection.query(
+      'SELECT id, parent_bom_id, item_code, drawing_no, sales_order_id FROM sales_order_items WHERE id = ?',
+      [childItemId]
+    );
+
+    if (rows.length > 0) {
+      const { parent_bom_id, item_code, drawing_no } = rows[0];
+
+      // 2. Clear parent_bom_id so this Part BOM becomes an independent/standalone Part BOM
+      await connection.execute(
+        'UPDATE sales_order_items SET parent_bom_id = NULL WHERE id = ?',
+        [childItemId]
+      );
+
+      // 3. Remove corresponding component row from sales_order_item_components for the parent assembly
+      if (parent_bom_id) {
+        await connection.execute(
+          `DELETE FROM sales_order_item_components 
+           WHERE sales_order_item_id = ? 
+             AND (
+               (component_code = ? AND component_code IS NOT NULL AND component_code != '') 
+               OR (drawing_no = ? AND drawing_no IS NOT NULL AND drawing_no != '')
+             )`,
+          [parent_bom_id, item_code || '', drawing_no || '']
+        );
+      }
+    }
+
+    await connection.commit();
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   getItemMaterials,
   getItemComponents,
@@ -2117,5 +2160,6 @@ module.exports = {
   getLatestBOMCost,
   recalculateBOMCost,
   propagateCostToParents,
-  updateItemCostAndPropagate
+  updateItemCostAndPropagate,
+  unlinkChildFromAssembly
 };

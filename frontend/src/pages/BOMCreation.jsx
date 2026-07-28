@@ -466,34 +466,45 @@ const BOMCreation = () => {
     setExpandedBOMGroups(newExpanded);
   };
 
-  const handleDeleteBOM = async (itemId) => {
+  const handleDeleteBOM = async (itemId, isChild = false, itemObj = null) => {
     try {
+      const itemDesc = itemObj?.description || itemObj?.material_name || itemObj?.item_code || 'this item';
+      const titleText = isChild ? 'Remove from Assembly?' : 'Delete BOM?';
+      const htmlText = isChild
+        ? `Are you sure you want to remove <span class="font-bold text-slate-800">${cleanText(itemDesc)}</span> from inside this Assembly? The standalone Part BOM will remain unchanged.`
+        : `Are you sure you want to delete this BOM? This action <span class="text-rose-600 font-semibold">cannot be undone</span>.`;
+      const confirmText = isChild ? 'Yes, Remove' : 'Yes, Delete';
+
       const result = await Swal.fire({
-        title: '<span class="text-base  text-slate-800">Delete BOM?</span>',
-        html: '<span class="text-xs text-slate-600">Are you sure you want to delete this BOM? This action <span class=" text-rose-600">cannot be undone</span>.</span>',
+        title: `<span class="text-base text-slate-800">${titleText}</span>`,
+        html: `<span class="text-xs text-slate-600">${htmlText}</span>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
         cancelButtonColor: '#64748b',
-        confirmButtonText: 'Yes, Delete',
+        confirmButtonText: confirmText,
         cancelButtonText: 'Cancel',
         width: '380px',
         padding: '1rem',
         customClass: {
-          confirmButton: 'text-[11px]  p-2 rounded shadow-lg shadow-rose-100  ',
-          cancelButton: 'text-[11px]  p-2 rounded  '
+          confirmButton: 'text-[11px] p-2 rounded shadow-lg shadow-rose-100',
+          cancelButton: 'text-[11px] p-2 rounded'
         }
       });
 
       if (result.isConfirmed) {
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/bom/items/${itemId}`, {
+        const url = isChild
+          ? `${API_BASE}/bom/items/${itemId}/unlink-child`
+          : `${API_BASE}/bom/items/${itemId}`;
+
+        const response = await fetch(url, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        if (!response.ok) throw new Error('Failed to delete BOM');
-        successToast('BOM has been deleted.');
+        if (!response.ok) throw new Error(isChild ? 'Failed to remove from assembly' : 'Failed to delete BOM');
+        successToast(isChild ? 'Removed from Assembly.' : 'BOM has been deleted.');
         fetchOrders();
 
         // If modal is open and showing this order, refresh its items
@@ -1686,9 +1697,9 @@ const BOMCreation = () => {
                                           <Edit2 className="w-4 h-4" />
                                         </Link>
                                         <button
-                                          onClick={(e) => { e.stopPropagation(); handleDeleteBOM(latest.id); }}
+                                          onClick={(e) => { e.stopPropagation(); handleDeleteBOM(latest.id, isChild, latest); }}
                                           className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
-                                          title="Delete BOM"
+                                          title={isChild ? "Remove from Assembly" : "Delete BOM"}
                                         >
                                           <Trash2 className="w-4 h-4" />
                                         </button>
@@ -1983,9 +1994,9 @@ const BOMCreation = () => {
                                       <Check size={14} strokeWidth={3} />
                                     </div>
                                     <button
-                                      onClick={() => handleDeleteBOM(item.id)}
+                                      onClick={() => handleDeleteBOM(item.id, !!item.parent_bom_id, item)}
                                       className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
-                                      title="Delete BOM"
+                                      title={item.parent_bom_id ? "Remove from Assembly" : "Delete BOM"}
                                     >
                                       <Trash2 size={14} />
                                     </button>
