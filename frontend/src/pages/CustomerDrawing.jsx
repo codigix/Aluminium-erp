@@ -3331,17 +3331,22 @@ const CustomerDrawing = () => {
                             </td>
                             <td className="px-2 py-2" onClick={isRowLocked ? () => toast.error("Approved drawing cannot be edited.") : undefined}>
                               <div className="flex flex-col">
-                                <select
-                                  disabled={isRowLocked}
-                                  name={`manualDrawings[${index}].drawing_type`}
-                                  className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : ((formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : 'border-slate-300')}`}
-                                  value={drawing.drawing_type || 'Part'}
-                                  onChange={formik.handleChange}
-                                  onBlur={formik.handleBlur}
-                                >
-                                  <option value="Part">Part</option>
-                                  <option value="Assembly">Assembly</option>
-                                </select>
+                                {(() => {
+                                  const isTypeLocked = ['QUOTATION_SENT', 'BOM_SUBMITTED', 'IN_PRODUCTION'].includes(editingRequirementData?.status?.toUpperCase()?.trim());
+                                  return (
+                                    <select
+                                      disabled={isTypeLocked}
+                                      name={`manualDrawings[${index}].drawing_type`}
+                                      className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isTypeLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : ((formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : 'border-slate-300')}`}
+                                      value={drawing.drawing_type || 'Part'}
+                                      onChange={formik.handleChange}
+                                      onBlur={formik.handleBlur}
+                                    >
+                                      <option value="Part">Part</option>
+                                      <option value="Assembly">Assembly</option>
+                                    </select>
+                                  );
+                                })()}
                                 {((formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type) && (
                                   <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.manualDrawings[index].drawing_type}</div>
                                 )}
