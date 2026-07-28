@@ -1855,13 +1855,21 @@ const ClientQuotations = () => {
 
   const handleApplyPendingBOM = async (group, targetItem) => {
     let currentCost = 0;
-    if (targetItem) {
+    // Current cost = the already-saved/finalized bom_cost of the latest quotation version
+    // Look through group quotes for the most recent saved bom_cost (not the pending notification row)
+    const allGroupQuotes = group.quotes || [];
+    const savedQuotes = allGroupQuotes.filter(q => parseFloat(q.bom_cost) > 0);
+    if (savedQuotes.length > 0) {
+      // Take the latest saved quote's bom_cost as the current cost
+      currentCost = parseFloat(savedQuotes[savedQuotes.length - 1].bom_cost) || 0;
+    }
+    if (currentCost === 0 && targetItem) {
+      // Fallback: use the targetItem's own total_amount or rate
       const possibleValues = [
+        targetItem.total_amount,
         targetItem.rate,
-        targetItem.bom_cost,
         targetItem.latest_bom_cost,
         targetItem.final_bom_cost,
-        targetItem.current_bom_cost
       ];
       for (const val of possibleValues) {
         const parsed = parseFloat(val);

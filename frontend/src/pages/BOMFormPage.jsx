@@ -2279,56 +2279,35 @@ const BOMFormPage = () => {
         successToast(isDraft ? 'BOM saved as draft' : (isNewVersion ? `BOM Revision V${nextRevision} created successfully` : 'BOM created successfully'));
       }
 
-      // Auto-update quotation and refresh history
+      // Refresh history to show updated cost in sidebar
       const targetUpdateId = isNewVersion ? newId : effectiveItemId;
-      if (!isDraft && targetUpdateId) {
-        try {
-          await fetch(`${API_BASE}/quotation-requests/update-from-bom`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ salesOrderItemId: targetUpdateId, bomCost: totalBOMCost })
-          });
-        } catch (e) {
-          console.error('Failed to auto-update quotation:', e);
-        }
-
-        // Refresh history to show updated cost in sidebar
+      if (targetUpdateId) {
         fetchBOMHistory(productForm.itemCode, productForm.drawingNo, targetUpdateId);
-
-        // Also update local state for immediate feedback
-        setProductForm(prev => ({ ...prev, bom_cost: totalBOMCost }));
-
-        if (!isNewVersion) {
-          setBomHistory(prev => {
-            const newHistory = [...prev];
-            // Find the version we're currently viewing to update its cost in history sidebar
-            const currentViewingId = itemId || effectiveItemId;
-            const idx = newHistory.findIndex(v => String(v.id) === String(currentViewingId));
-
-            if (idx !== -1) {
-              newHistory[idx] = { ...newHistory[idx], total_cost: totalBOMCost };
-            } else if (newHistory.length > 0) {
-              // Fallback: Update the last one (usually Current) if ID match fails
-              const lastIdx = newHistory.length - 1;
-              newHistory[lastIdx] = { ...newHistory[lastIdx], total_cost: totalBOMCost };
-            }
-            return newHistory;
-          });
-        }
-
-        // Refresh all data from server to ensure sync
-        fetchData(false);
-
-        // Auto-trigger Quotation Update Request for FG items (Auto-click simulation)
-        const groupG = (productForm.itemGroup || "").toUpperCase();
-        const isFGItem = groupG.includes("FG") || groupG.includes("FINISHED") || groupG.includes("GOOD");
-        if (isFGItem) {
-          handleUpdateQuotation(targetUpdateId, totalBOMCost, true);
-        }
       }
+
+      // Also update local state for immediate feedback
+      setProductForm(prev => ({ ...prev, bom_cost: totalBOMCost }));
+
+      if (!isNewVersion) {
+        setBomHistory(prev => {
+          const newHistory = [...prev];
+          // Find the version we're currently viewing to update its cost in history sidebar
+          const currentViewingId = itemId || effectiveItemId;
+          const idx = newHistory.findIndex(v => String(v.id) === String(currentViewingId));
+
+          if (idx !== -1) {
+            newHistory[idx] = { ...newHistory[idx], total_cost: totalBOMCost };
+          } else if (newHistory.length > 0) {
+            // Fallback: Update the last one (usually Current) if ID match fails
+            const lastIdx = newHistory.length - 1;
+            newHistory[lastIdx] = { ...newHistory[lastIdx], total_cost: totalBOMCost };
+          }
+          return newHistory;
+        });
+      }
+
+      // Refresh all data from server to ensure sync
+      fetchData(false);
 
       // Instead of resetting and navigating to list, stay on the page in view mode
       if (isFromSalesOrder) {

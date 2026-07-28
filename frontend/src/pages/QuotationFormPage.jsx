@@ -69,7 +69,7 @@ const QuotationFormPage = () => {
   const [mode, setMode] = useState('create'); // 'create', 'revise', or 'received'
   const [isBOMUpdateRequest, setIsBOMUpdateRequest] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState(null);
-  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(!!(initialData?.id || initialData?.parentId));
   const [refreshingDrawings, setRefreshingDrawings] = useState(false);
   const hasInitialized = useRef(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -322,12 +322,11 @@ const QuotationFormPage = () => {
             isManual: !item.drawing_id && !!item.drawing_no,
             sub_assemblies: (() => {
               const g = (item.item_group || '').toUpperCase();
-              if (!g.includes('ASSEMBLY')) {
+              const hasSub = item.sub_assemblies && item.sub_assemblies.length > 0;
+              if (!g.includes('ASSEMBLY') && !g.includes('ASM') && !hasSub) {
                 return [];
               }
-              return (item.sub_assemblies || []).filter(sa =>
-                (sa.item_group || '').toUpperCase().includes('PART')
-              ).map(sa => {
+              return (item.sub_assemblies || []).map(sa => {
                 let actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
                 const parentBOMCost = parseFloat(item.bom_cost || item.rate || 0);
                 if (Math.abs(actualCost - parentBOMCost) < 0.01) {
@@ -338,6 +337,7 @@ const QuotationFormPage = () => {
                 }
                 return {
                   ...sa,
+                  component_code: sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || '',
                   drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
                   bom_cost: actualCost,
                   rate: actualCost
@@ -367,11 +367,13 @@ const QuotationFormPage = () => {
     // 5. This is NOT a BOM Update Request (preventing drawings sync override)
     const canSync = items.length > 0 &&
       drawings.length > 0 &&
+      !loadingHistory &&
+      !selectedVersionId &&
       !isHistoricalView &&
       !isSnapshotStatus &&
       mode !== 'received' &&
-      !isLocked &&
-      !isBOMUpdateRequest;
+      !isLocked;
+
 
     if (canSync) {
       const updatedItems = items.map(item => {
@@ -470,69 +472,36 @@ const QuotationFormPage = () => {
             }
           }
 
-          // Sync sub-assemblies if it is an ASSEMBLY item to pick up latest correct child PART costs
-          const gUpper = (item.item_group || '').toUpperCase();
-          if (gUpper.includes('ASSEMBLY') && matchedDrawing.sub_assemblies && matchedDrawing.sub_assemblies.length > 0) {
-            const currentSAs = item.sub_assemblies || [];
-            let saChanged = false;
-
-            const updatedSAs = currentSAs.map(sa => {
-              const cleanSaCode = String(sa.component_code || sa.item_code || sa.component_code || '').trim().toLowerCase();
-              const cleanSaDwg = String(sa.drawing_no || '').trim().toLowerCase();
-
-              // Find matching sa component in matchedDrawing
-              const matchedSA = matchedDrawing.sub_assemblies.find(msa => {
-                const cleanMsaCode = String(msa.component_code || msa.item_code || msa.component_code || '').trim().toLowerCase();
-                const cleanMsaDwg = String(msa.drawing_no || '').trim().toLowerCase();
-
-                if (cleanSaCode && cleanMsaCode && cleanSaCode === cleanMsaCode) return true;
-                if (cleanSaDwg && cleanMsaDwg && cleanSaDwg === cleanMsaDwg) {
-                  const saDesc = String(sa.description || '').trim().toLowerCase();
-                  const msaDesc = String(msa.description || '').trim().toLowerCase();
-                  return !saDesc || !msaDesc || saDesc === msaDesc || saDesc.includes(msaDesc) || msaDesc.includes(saDesc);
-                }
-                return false;
-              });
-
-              if (matchedSA) {
-                const correctCost = parseFloat(matchedSA.component_bom_cost || matchedSA.child_bom_cost || matchedSA.part_bom_cost || matchedSA.component_cost || matchedSA.bom_cost || matchedSA.rate || 0);
-                const parentBOMCost = parseFloat(drwRate || item.bom_cost || 0);
-
-                // Block inheritance
-                let finalCost = correctCost;
-                if (Math.abs(finalCost - parentBOMCost) < 0.01) {
-                  finalCost = parseFloat(matchedSA.component_bom_cost || matchedSA.child_bom_cost || matchedSA.part_bom_cost || matchedSA.component_cost || 0);
-                }
-
-                if (Math.abs(parseFloat(sa.bom_cost || 0) - finalCost) > 0.01 || Math.abs(parseFloat(sa.rate || 0) - finalCost) > 0.01 || sa.drawing_no !== matchedSA.drawing_no) {
-                  saChanged = true;
-                  return {
-                    ...sa,
-                    drawing_no: matchedSA.drawing_no || sa.drawing_no,
-                    bom_cost: finalCost,
-                    rate: finalCost
-                  };
-                }
-              }
-              return sa;
+          // Sync sub-assemblies if it has child components to pick up latest correct child PART costs
+          if (matchedDrawing.sub_assemblies && matchedDrawing.sub_assemblies.length > 0) {
+            const latestSAs = matchedDrawing.sub_assemblies.map(sa => {
+              // Use the actual per-part bom_cost (resolved_bom_cost from backend is most accurate).
+              // Do NOT use pending_bom_cost here — it reflects the parent assembly cost incorrectly
+              // propagated by the old auto-update logic, not the individual child part cost.
+              let actualPartCost = parseFloat(
+                sa.resolved_bom_cost || sa.component_bom_cost || sa.child_bom_cost ||
+                sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0
+              );
+              return {
+                ...sa,
+                component_code: sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || '',
+                drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
+                bom_cost: actualPartCost,
+                rate: actualPartCost
+              };
             });
 
-            if (currentSAs.length === 0) {
-              newItem.sub_assemblies = matchedDrawing.sub_assemblies.map(sa => {
-                let actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
-                const parentBOMCost = parseFloat(drwRate || item.bom_cost || 0);
-                if (Math.abs(actualPartCost - parentBOMCost) < 0.01) {
-                  actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
-                }
-                return {
-                  ...sa,
-                  bom_cost: actualPartCost,
-                  rate: actualPartCost
-                };
+            const currentSAs = item.sub_assemblies || [];
+            const hasDifferences = currentSAs.length !== latestSAs.length ||
+              currentSAs.some((sa, idx) => {
+                const lsa = latestSAs[idx];
+                return !lsa ||
+                  String(sa.drawing_no).trim().toLowerCase() !== String(lsa.drawing_no).trim().toLowerCase() ||
+                  Math.abs(parseFloat(sa.bom_cost || 0) - parseFloat(lsa.bom_cost || 0)) > 0.01;
               });
-              changed = true;
-            } else if (saChanged) {
-              newItem.sub_assemblies = updatedSAs;
+
+            if (hasDifferences) {
+              newItem.sub_assemblies = latestSAs;
               changed = true;
             }
           }
@@ -552,12 +521,14 @@ const QuotationFormPage = () => {
       setItems(updatedItems);
     }
   }, [
+    items,
     drawings,
     isLocked,
     mode,
     version,
     selectedVersionId,
-    isBOMUpdateRequest
+    isBOMUpdateRequest,
+    loadingHistory
   ]);
 
   // Disabled auto-population of Drawing Numbers into Terms & Conditions field
@@ -763,16 +734,9 @@ const QuotationFormPage = () => {
             let actualPartCost =
               parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
 
-            // COMPLETELY BLOCK parent/assembly bom_cost inheritance!
-            const parentBOMCost = parseFloat(item.bom_cost || item.rate || 0);
-            if (Math.abs(actualPartCost - parentBOMCost) < 0.01) {
-              actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
-            }
-
-            // Apply pending BOM cost if available and we are editing/revising
-            if (!isLocked && sa.pending_bom_cost > 0) {
-              actualPartCost = parseFloat(sa.pending_bom_cost);
-            }
+            // Use actual bom_cost only — do NOT override with pending_bom_cost.
+            // pending_bom_cost was incorrectly set to the parent assembly total cost
+            // by the old auto-propagation logic, not to the individual child part cost.
 
             return {
               ...sa,
@@ -816,6 +780,8 @@ const QuotationFormPage = () => {
             revision_no: item.revision_no,
             sub_assemblies: savedSubAssemblies.map(sa => ({
               ...sa,
+              component_code: sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || '',
+              drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
               bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
               rate: parseFloat(sa.rate || sa.bom_cost || 0)
             }))
@@ -1417,6 +1383,17 @@ const QuotationFormPage = () => {
     }
   };
 
+  const showMainLoader = loadingHistory;
+
+  if (showMainLoader) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-3">
+        <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
+        <span className="text-sm font-medium text-slate-600">Loading Quotation details and drawings...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-2 space-y-4 bg-slate-50 min-h-screen pb-10">
       {/* Header */}
@@ -1963,10 +1940,8 @@ const QuotationFormPage = () => {
                                                     item_group: drw?.item_group || it.item_group,
                                                     unit: drw?.unit || it.unit || 'Nos',
                                                     total: (parseFloat(it.quantity) || 0) * newRate,
-                                                    sub_assemblies: g.includes('ASSEMBLY')
-                                                      ? ((drw?.sub_assemblies && drw.sub_assemblies.length > 0)
-                                                        ? drw.sub_assemblies.filter(sa => (sa.item_group || '').toUpperCase().includes('PART'))
-                                                        : (it.sub_assemblies || []).filter(sa => (sa.item_group || '').toUpperCase().includes('PART'))).map(sa => {
+                                                    sub_assemblies: (drw?.sub_assemblies && drw.sub_assemblies.length > 0)
+                                                      ? drw.sub_assemblies.map(sa => {
                                                           let actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
                                                           const parentBOMCost = parseFloat(drwRate || it.bom_cost || 0);
                                                           if (Math.abs(actualPartCost - parentBOMCost) < 0.01) {
@@ -1974,6 +1949,8 @@ const QuotationFormPage = () => {
                                                           }
                                                           return {
                                                             ...sa,
+                                                            component_code: sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || '',
+                                                            drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
                                                             bom_cost: actualPartCost,
                                                             rate: actualPartCost
                                                           };

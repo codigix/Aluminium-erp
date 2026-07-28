@@ -2040,7 +2040,7 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
     // d) Match by description (as last resort)
     // e) Match if it's a SUB-COMPONENT of a parent that is in a quotation
     let [qrs] = await pool.query(
-      `SELECT qr.id, c.company_name, qr.batch_id, qr.sales_order_item_id, qr.status
+      `SELECT qr.id, c.company_name, qr.batch_id, qr.sales_order_item_id, qr.status, qr.drawing_no, qr.drawing_id
        FROM quotation_requests qr
        JOIN companies c ON qr.company_id = c.id
        WHERE (qr.sales_order_item_id = ? 
@@ -2058,12 +2058,17 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
     if (qrs.length === 0) {
       console.log(`[requestQuotationUpdateFromBOM] No direct quotations for ${item_code}. Checking parents...`);
       const [parentQrs] = await pool.query(
-        `SELECT DISTINCT qr.id, c.company_name, qr.batch_id, qr.description as parent_desc, qr.sales_order_item_id
+        `SELECT DISTINCT qr.id, c.company_name, qr.batch_id, qr.description as parent_desc, qr.sales_order_item_id, qr.drawing_no, qr.drawing_id
          FROM quotation_requests qr
          JOIN companies c ON qr.company_id = c.id
-         JOIN sales_order_item_components sic ON sic.sales_order_item_id = qr.sales_order_item_id
+         JOIN sales_order_items soi ON (
+             soi.drawing_no = qr.drawing_no 
+             OR (soi.drawing_id IS NOT NULL AND soi.drawing_id = qr.drawing_id)
+         )
+         JOIN sales_order_item_components sic ON sic.sales_order_item_id = soi.id
          WHERE (sic.component_code = ? OR sic.drawing_no = ?)
-         AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')`,
+         AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')
+         AND qr.status != 'COMPONENT'`,
         [item_code, drawing_no]
       );
 
@@ -2091,10 +2096,10 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
       );
 
       let targetPendingCost = bomCost;
-      if (isParentNotification && qr.sales_order_item_id) {
+      if (isParentNotification) {
         const [parentItemRow] = await pool.query(
-          'SELECT bom_cost FROM sales_order_items WHERE id = ?',
-          [qr.sales_order_item_id]
+          'SELECT bom_cost FROM sales_order_items WHERE (drawing_no = ? OR drawing_id = ?) AND bom_cost > 0 ORDER BY id DESC LIMIT 1',
+          [qr.drawing_no, qr.drawing_id]
         );
         if (parentItemRow.length > 0 && parseFloat(parentItemRow[0].bom_cost) > 0) {
           targetPendingCost = parseFloat(parentItemRow[0].bom_cost);
