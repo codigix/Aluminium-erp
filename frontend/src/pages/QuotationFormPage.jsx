@@ -259,6 +259,19 @@ const QuotationFormPage = () => {
     const currentProjectKey = cleanDwgKey(projectName || initialData?.projectName || initialData?.project_name);
     const currentClientKey = cleanDwgKey(selectedClient?.company_name || initialData?.clientName);
 
+    // Get all drawing numbers, item codes, and drawing IDs from the sales order items list to filter master drawings
+    const salesOrderDrawingNos = new Set();
+    const salesOrderItemCodes = new Set();
+    const salesOrderDrawingIds = new Set();
+
+    (itemsList || []).forEach(item => {
+      if ((item.status || '').toUpperCase() !== 'COMPONENT') {
+        if (item.drawing_no) salesOrderDrawingNos.add(cleanDwgKey(item.drawing_no));
+        if (item.item_code) salesOrderItemCodes.add(cleanDwgKey(item.item_code));
+        if (item.drawing_id) salesOrderDrawingIds.add(String(item.drawing_id));
+      }
+    });
+
     // Helper to check if a drawing belongs to the current quotation context
     const isDrawingForCurrentQuote = (dwg) => {
       if (!dwg) return false;
@@ -318,7 +331,8 @@ const QuotationFormPage = () => {
     });
 
     // 3. Ensure all standalone BOMs from masterDrawingsList for this project/client
-    // that are NOT linked inside any Assembly are included as standalone top-level quotation items!
+    // that are NOT linked inside any Assembly AND are part of the current Sales Order
+    // are included as standalone top-level quotation items!
     if (Array.isArray(masterDrawingsList) && masterDrawingsList.length > 0) {
       masterDrawingsList.forEach(dwg => {
         if (!isDrawingForCurrentQuote(dwg)) return;
@@ -329,6 +343,11 @@ const QuotationFormPage = () => {
 
         const drwNo = cleanDwgKey(dwg.drawing_no);
         const itemCode = cleanDwgKey(dwg.item_code);
+        const dwgId = String(dwg.drawing_master_id || dwg.id);
+
+        // Only load if it's linked/selected in the current Sales Order
+        const isLinkedToSalesOrder = salesOrderDrawingNos.has(drwNo) || salesOrderItemCodes.has(itemCode) || salesOrderDrawingIds.has(dwgId);
+        if (!isLinkedToSalesOrder) return;
 
         const isInsideAssembly = (drwNo && assemblyChildKeys.has(drwNo)) || (itemCode && assemblyChildKeys.has(itemCode));
         const existsInDeduplicated = deduplicated.some(it => {
@@ -362,115 +381,184 @@ const QuotationFormPage = () => {
     }
 
     return deduplicated;
-  };
+  };  useEffect(() => {
+    const init = async () => {
+      fetchClients();
+      fetchHostCompanies();
 
-  useEffect(() => {
-    fetchClients();
-    fetchHostCompanies();
-
-    if (initialData && !hasInitialized.current) {
-      hasInitialized.current = true;
-      generateQuotationNo();
-      setVersion(initialData.version || 1);
-      setParentId(initialData.parentId || null);
-      setBatchId(initialData.batchId || null);
-      setMode(initialData.mode || 'create');
-      if (initialData.isBOMUpdateRequest) {
-        setIsBOMUpdateRequest(true);
-      }
-      if (initialData.parentId || initialData.id) {
-        fetchVersionHistory(initialData.parentId || initialData.id);
-      }
-      if (initialData.host_company_id || initialData.hostCompanyId) {
-        setSelectedHostId(String(initialData.host_company_id || initialData.hostCompanyId));
-      }
-      setSelectedClient({
-        id: initialData.clientId,
-        company_name: initialData.clientName,
-        email: initialData.clientEmail,
-        contact_person: initialData.contact_person,
-        phone: initialData.phone,
-        address: initialData.address
-      });
-      setProjectName(initialData.projectName || '');
-
-      const allSourceItems = initialData.items || [];
-      const nestedPartCodes = new Set();
-
-      (allSourceItems || []).forEach(item => {
-        (item.sub_assemblies || []).forEach(sa => {
-          nestedPartCodes.add(
-            String(sa.component_code || sa.item_code || '')
-              .trim()
-              .toUpperCase()
-          );
+      if (initialData && !hasInitialized.current) {
+        hasInitialized.current = true;
+        generateQuotationNo();
+        setVersion(initialData.version || 1);
+        setParentId(initialData.parentId || null);
+        setBatchId(initialData.batchId || null);
+        setMode(initialData.mode || 'create');
+        if (initialData.isBOMUpdateRequest) {
+          setIsBOMUpdateRequest(true);
+        }
+        if (initialData.parentId || initialData.id) {
+          fetchVersionHistory(initialData.parentId || initialData.id);
+        }
+        if (initialData.host_company_id || initialData.hostCompanyId) {
+          setSelectedHostId(String(initialData.host_company_id || initialData.hostCompanyId));
+        }
+        setSelectedClient({
+          id: initialData.clientId,
+          company_name: initialData.clientName,
+          email: initialData.clientEmail,
+          contact_person: initialData.contact_person,
+          phone: initialData.phone,
+          address: initialData.address
         });
-      });
+        setProjectName(initialData.projectName || '');
 
-      const mappedItems = allSourceItems
-        .filter(item => {
-          const group = (item.item_group || '').toUpperCase();
-          const code = String(item.item_code || '').trim().toUpperCase();
-          const isPart = group.includes('PART');
+        let fetchedDrawings = drawings;
+        if (initialData.clientName) {
+          fetchedDrawings = await fetchDrawings();
+        }
 
-          // Remove PART rows already nested inside assembly
-          if (isPart && nestedPartCodes.has(code)) {
-            return false;
+        const allSourceItems = initialData.items || [];
+        const nestedPartCodes = new Set();
+
+        (allSourceItems || []).forEach(item => {
+          (item.sub_assemblies || []).forEach(sa => {
+            nestedPartCodes.add(
+              String(sa.component_code || sa.item_code || '')
+                .trim()
+                .toUpperCase()
+            );
+          });
+        });
+
+        // Collect BOM children removed from assemblies so they appear as standalone items
+        const initRemovedBOMChildren = [];
+
+        const mappedItems = allSourceItems
+          .filter(item => {
+            const group = (item.item_group || '').toUpperCase();
+            const code = String(item.item_code || '').trim().toUpperCase();
+            const isPart = group.includes('PART');
+
+            // Remove PART rows already nested inside assembly
+            if (isPart && nestedPartCodes.has(code)) {
+              return false;
+            }
+
+            return true;
+          })
+          .map(item => {
+            let bomCost = parseFloat(item.bom_cost || 0);
+            let drwRate = parseFloat(item.quotedPrice || item.rate || bomCost || 0);
+
+            return {
+              ...item,
+              id: item.id || Date.now() + Math.random(),
+              quantity: parseFloat(item.quantity) || 0,
+              rate: drwRate,
+              bom_cost: bomCost || drwRate,
+              profit_percentage: parseFloat(item.profit_percentage) || 0,
+              override_percentage: parseFloat(item.override_percentage) || 0,
+              total: (parseFloat(item.quantity) || 0) * drwRate,
+              gst_percentage: item.gst_percentage || 18,
+              isManual: !item.drawing_id && !!item.drawing_no,
+              sub_assemblies: (() => {
+                const g = (item.item_group || '').toUpperCase();
+                const isAssembly = g.includes('ASSEMBLY') || g.includes('ASM');
+
+                let sourceSubs = item.sub_assemblies || [];
+                const prevSubs = item.sub_assemblies || [];
+
+                if (!isLocked && isAssembly) {
+                  const itemDwg = (item.drawing_no || '').trim().toUpperCase();
+                  const itemCode = (item.item_code || '').trim().toUpperCase();
+                  const matchedDwg = fetchedDrawings.find(d => 
+                    (item.drawing_id && String(d.drawing_master_id) === String(item.drawing_id)) ||
+                    (itemCode && d.item_code && String(d.item_code).trim().toUpperCase() === itemCode) ||
+                    (itemDwg && d.drawing_no && String(d.drawing_no).trim().toUpperCase() === itemDwg)
+                  );
+                  if (matchedDwg && matchedDwg.sub_assemblies) {
+                    sourceSubs = matchedDwg.sub_assemblies;
+
+                    // Detect children removed from live BOM vs what was saved in this quotation
+                    const liveSAKeys = new Set(
+                      sourceSubs.map(sa => String(sa.drawing_no || sa.component_code || sa.item_code || '').trim().toUpperCase())
+                    );
+                    prevSubs.forEach(oldSA => {
+                      const key = String(oldSA.drawing_no || oldSA.component_code || oldSA.item_code || '').trim().toUpperCase();
+                      if (!key || liveSAKeys.has(key)) return; // Still in BOM — skip
+                      // Queue as standalone
+                      initRemovedBOMChildren.push({
+                        ...oldSA,
+                        drawing_no: (oldSA.drawing_no || oldSA.drawingNo || '').toUpperCase(),
+                        item_code: oldSA.item_code || oldSA.component_code || oldSA.drawing_no || '',
+                        component_code: oldSA.component_code || oldSA.item_code || oldSA.drawing_no || '',
+                        description: oldSA.description || oldSA.drawing_no || '',
+                        item_group: oldSA.item_group || 'PART',
+                        quantity: parseFloat(oldSA.quantity || oldSA.qty || 1),
+                        unit: oldSA.unit || oldSA.uom || 'NOS',
+                        bom_cost: parseFloat(oldSA.bom_cost || oldSA.rate || 0),
+                        rate: parseFloat(oldSA.bom_cost || oldSA.rate || 0),
+                        profit_percentage: 0,
+                        override_percentage: 0,
+                        gst_percentage: 18,
+                        sub_assemblies: [],
+                        isRemovedFromAssembly: true,
+                      });
+                    });
+                  }
+                }
+
+                if (sourceSubs.length === 0) {
+                  return [];
+                }
+
+                return sourceSubs.map(sa => {
+                  let actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+                  const parentBOMCost = parseFloat(item.bom_cost || item.rate || 0);
+                  if (Math.abs(actualCost - parentBOMCost) < 0.01) {
+                    actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
+                  }
+                  if (!isLocked && sa.pending_bom_cost > 0) {
+                    actualCost = parseFloat(sa.pending_bom_cost);
+                  }
+                  return {
+                    ...sa,
+                    component_code: sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || '',
+                    drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
+                    bom_cost: actualCost,
+                    rate: actualCost
+                  };
+                });
+              })()
+            };
+          });
+
+        // Inject removed BOM children as standalone top-level items if not already present
+        initRemovedBOMChildren.forEach(child => {
+          const childKey = String(child.drawing_no || child.item_code || '').trim().toUpperCase();
+          const alreadyExists = mappedItems.some(it => {
+            const itKey = String(it.drawing_no || it.item_code || '').trim().toUpperCase();
+            return itKey && itKey === childKey;
+          });
+          if (!alreadyExists && childKey) {
+            mappedItems.push({
+              ...child,
+              id: Date.now() + Math.random(),
+            });
           }
-
-          return true;
-        })
-        .map(item => {
-          let bomCost = parseFloat(item.bom_cost || 0);
-          let drwRate = parseFloat(item.quotedPrice || item.rate || bomCost || 0);
-
-          return {
-            ...item,
-            id: item.id || Date.now() + Math.random(),
-            quantity: parseFloat(item.quantity) || 0,
-            rate: drwRate,
-            bom_cost: bomCost || drwRate,
-            profit_percentage: parseFloat(item.profit_percentage) || 0,
-            override_percentage: parseFloat(item.override_percentage) || 0,
-            total: (parseFloat(item.quantity) || 0) * drwRate,
-            gst_percentage: item.gst_percentage || 18,
-            isManual: !item.drawing_id && !!item.drawing_no,
-            sub_assemblies: (() => {
-              const g = (item.item_group || '').toUpperCase();
-              const hasSub = item.sub_assemblies && item.sub_assemblies.length > 0;
-              if (!g.includes('ASSEMBLY') && !g.includes('ASM') && !hasSub) {
-                return [];
-              }
-              return (item.sub_assemblies || []).map(sa => {
-                let actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
-                const parentBOMCost = parseFloat(item.bom_cost || item.rate || 0);
-                if (Math.abs(actualCost - parentBOMCost) < 0.01) {
-                  actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
-                }
-                if (!isLocked && sa.pending_bom_cost > 0) {
-                  actualCost = parseFloat(sa.pending_bom_cost);
-                }
-                return {
-                  ...sa,
-                  component_code: sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || '',
-                  drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
-                  bom_cost: actualCost,
-                  rate: actualCost
-                };
-              });
-            })()
-          };
         });
 
-      setItems(deduplicateQuotationItems(mappedItems, drawings));
-      const initialNotes = initialData.notes || '';
-      setNotes(initialNotes.startsWith('Drawing Numbers:') ? '' : initialNotes);
-      setDiscountType(initialData.discount_type || initialData.discountType || 'percentage');
-      setDiscountValue(parseFloat(initialData.discount_value || initialData.discountValue) || 0);
-    } else if (!hasInitialized.current) {
-      generateQuotationNo();
-      hasInitialized.current = true;
-    }
+        setItems(deduplicateQuotationItems(mappedItems, fetchedDrawings));
+        const initialNotes = initialData.notes || '';
+        setNotes(initialNotes.startsWith('Drawing Numbers:') ? '' : initialNotes);
+        setDiscountType(initialData.discount_type || initialData.discountType || 'percentage');
+        setDiscountValue(parseFloat(initialData.discount_value || initialData.discountValue) || 0);
+      } else if (!hasInitialized.current) {
+        generateQuotationNo();
+        hasInitialized.current = true;
+      }
+    };
+    init();
   }, [initialData]);
 
   useEffect(() => {
@@ -491,6 +579,8 @@ const QuotationFormPage = () => {
 
 
     if (canSync) {
+      // Collect children removed from BOM assemblies so they can become standalone items
+      const removedBOMChildren = [];
       const updatedItems = items.map(item => {
         const itemG = (item.item_group || '').toUpperCase();
         const itemIsPart = itemG.includes('PART');
@@ -588,43 +678,85 @@ const QuotationFormPage = () => {
           }
 
           // Sync sub-assemblies if it has child components to pick up latest correct child PART costs
-          if (matchedDrawing.sub_assemblies && matchedDrawing.sub_assemblies.length > 0) {
-            const latestSAs = matchedDrawing.sub_assemblies.map(sa => {
-              // Use the actual per-part bom_cost (resolved_bom_cost from backend is most accurate).
-              // Do NOT use pending_bom_cost here — it reflects the parent assembly cost incorrectly
-              // propagated by the old auto-update logic, not the individual child part cost.
-              let actualPartCost = parseFloat(
-                sa.resolved_bom_cost || sa.component_bom_cost || sa.child_bom_cost ||
-                sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0
-              );
-              return {
-                ...sa,
-                component_code: sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || '',
-                drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
-                bom_cost: actualPartCost,
-                rate: actualPartCost
-              };
+          const latestSAs = (matchedDrawing.sub_assemblies || []).map(sa => {
+            // Use the actual per-part bom_cost (resolved_bom_cost from backend is most accurate).
+            // Do NOT use pending_bom_cost here — it reflects the parent assembly cost incorrectly
+            // propagated by the old auto-update logic, not the individual child part cost.
+            let actualPartCost = parseFloat(
+              sa.resolved_bom_cost || sa.component_bom_cost || sa.child_bom_cost ||
+              sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0
+            );
+            return {
+              ...sa,
+              component_code: sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || '',
+              drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
+              bom_cost: actualPartCost,
+              rate: actualPartCost
+            };
+          });
+
+          const currentSAs = item.sub_assemblies || [];
+          const hasDifferences = currentSAs.length !== latestSAs.length ||
+            currentSAs.some((sa, idx) => {
+              const lsa = latestSAs[idx];
+              return !lsa ||
+                String(sa.drawing_no).trim().toLowerCase() !== String(lsa.drawing_no).trim().toLowerCase() ||
+                Math.abs(parseFloat(sa.bom_cost || 0) - parseFloat(lsa.bom_cost || 0)) > 0.01;
             });
 
-            const currentSAs = item.sub_assemblies || [];
-            const hasDifferences = currentSAs.length !== latestSAs.length ||
-              currentSAs.some((sa, idx) => {
-                const lsa = latestSAs[idx];
-                return !lsa ||
-                  String(sa.drawing_no).trim().toLowerCase() !== String(lsa.drawing_no).trim().toLowerCase() ||
-                  Math.abs(parseFloat(sa.bom_cost || 0) - parseFloat(lsa.bom_cost || 0)) > 0.01;
-              });
+          if (hasDifferences) {
+            newItem.sub_assemblies = latestSAs;
+            changed = true;
 
-            if (hasDifferences) {
-              newItem.sub_assemblies = latestSAs;
-              changed = true;
-            }
+            // Detect children removed from this assembly's BOM and surface them as standalone items
+            const latestSAKeys = new Set(
+              latestSAs.map(sa => String(sa.drawing_no || sa.component_code || sa.item_code || '').trim().toUpperCase())
+            );
+            currentSAs.forEach(removedSA => {
+              const key = String(removedSA.drawing_no || removedSA.component_code || removedSA.item_code || '').trim().toUpperCase();
+              if (!key || latestSAKeys.has(key)) return; // Still in BOM — skip
+              // Queue this removed child to be surfaced as a standalone item
+              removedBOMChildren.push({
+                ...removedSA,
+                drawing_no: (removedSA.drawing_no || removedSA.drawingNo || '').toUpperCase(),
+                item_code: removedSA.item_code || removedSA.component_code || removedSA.drawing_no || '',
+                component_code: removedSA.component_code || removedSA.item_code || removedSA.drawing_no || '',
+                description: removedSA.description || removedSA.drawing_no || '',
+                item_group: removedSA.item_group || 'PART',
+                quantity: parseFloat(removedSA.quantity || removedSA.qty || 1),
+                unit: removedSA.unit || removedSA.uom || 'NOS',
+                bom_cost: parseFloat(removedSA.bom_cost || removedSA.rate || 0),
+                rate: parseFloat(removedSA.bom_cost || removedSA.rate || 0),
+                profit_percentage: 0,
+                override_percentage: 0,
+                gst_percentage: 18,
+                sub_assemblies: [],
+                isRemovedFromAssembly: true,
+              });
+            });
           }
 
           return changed ? newItem : item;
         }
         return item;
       });
+
+      // Inject removed BOM children as standalone top-level items if not already present
+      if (removedBOMChildren.length > 0) {
+        removedBOMChildren.forEach(child => {
+          const childKey = String(child.drawing_no || child.item_code || '').trim().toUpperCase();
+          const alreadyExists = updatedItems.some(it => {
+            const itKey = String(it.drawing_no || it.item_code || '').trim().toUpperCase();
+            return itKey && itKey === childKey;
+          });
+          if (!alreadyExists && childKey) {
+            updatedItems.push({
+              ...child,
+              id: Date.now() + Math.random(),
+            });
+          }
+        });
+      }
 
       const finalItems = deduplicateQuotationItems(updatedItems, drawings);
       const currentJson = JSON.stringify(items);
@@ -726,12 +858,14 @@ const QuotationFormPage = () => {
       if (response.ok) {
         const data = await response.json();
         setDrawings(data);
+        return data;
       }
     } catch (error) {
       console.error('Error fetching drawings:', error);
     } finally {
       setRefreshingDrawings(false);
     }
+    return [];
   };
 
   const fetchVersionHistory = async (id) => {
@@ -846,7 +980,25 @@ const QuotationFormPage = () => {
 
           // Map saved sub-assemblies first to ensure they are available for cost logic.
           // Prioritize override sub_assemblies if they exist.
-          const savedSubAssemblies = ((override?.sub_assemblies || item.sub_assemblies) || []).map(sa => {
+          const g = (item.item_group || '').toUpperCase();
+          const isAssembly = g.includes('ASSEMBLY') || g.includes('ASM');
+
+          let sourceSubs = (override?.sub_assemblies || item.sub_assemblies) || [];
+
+          if (!isLocked && isAssembly) {
+            const itemDwg = (item.drawing_no || '').trim().toUpperCase();
+            const itemCode = (item.item_code || '').trim().toUpperCase();
+            const matchedDwg = drawings.find(d => 
+              (item.drawing_id && String(d.drawing_master_id) === String(item.drawing_id)) ||
+              (itemCode && d.item_code && String(d.item_code).trim().toUpperCase() === itemCode) ||
+              (itemDwg && d.drawing_no && String(d.drawing_no).trim().toUpperCase() === itemDwg)
+            );
+            if (matchedDwg && matchedDwg.sub_assemblies) {
+              sourceSubs = matchedDwg.sub_assemblies;
+            }
+          }
+
+          const savedSubAssemblies = sourceSubs.map(sa => {
             let actualPartCost =
               parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
 
@@ -1499,7 +1651,7 @@ const QuotationFormPage = () => {
     }
   };
 
-  const showMainLoader = loadingHistory;
+  const showMainLoader = loadingHistory || refreshingDrawings;
 
   if (showMainLoader) {
     return (
@@ -1724,8 +1876,8 @@ const QuotationFormPage = () => {
                     )}
                     <span className="text-xs font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
                     <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${selectedHostCompany.status === 'ACTIVE'
-                        ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
-                        : 'bg-slate-100 border-slate-200 text-slate-500'
+                      ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                      : 'bg-slate-100 border-slate-200 text-slate-500'
                       }`}>
                       {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
                     </span>
@@ -1928,11 +2080,10 @@ const QuotationFormPage = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleToggleBreakdown}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all shadow-sm border ${
-                    showGlobalBreakdown
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all shadow-sm border ${showGlobalBreakdown
                       ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700'
                       : 'bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100'
-                  }`}
+                    }`}
                 >
                   {showGlobalBreakdown ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   Cost Breakdown
@@ -2058,19 +2209,19 @@ const QuotationFormPage = () => {
                                                     total: (parseFloat(it.quantity) || 0) * newRate,
                                                     sub_assemblies: (drw?.sub_assemblies && drw.sub_assemblies.length > 0)
                                                       ? drw.sub_assemblies.map(sa => {
-                                                          let actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
-                                                          const parentBOMCost = parseFloat(drwRate || it.bom_cost || 0);
-                                                          if (Math.abs(actualPartCost - parentBOMCost) < 0.01) {
-                                                            actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
-                                                          }
-                                                          return {
-                                                            ...sa,
-                                                            component_code: sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || '',
-                                                            drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
-                                                            bom_cost: actualPartCost,
-                                                            rate: actualPartCost
-                                                          };
-                                                        })
+                                                        let actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+                                                        const parentBOMCost = parseFloat(drwRate || it.bom_cost || 0);
+                                                        if (Math.abs(actualPartCost - parentBOMCost) < 0.01) {
+                                                          actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
+                                                        }
+                                                        return {
+                                                          ...sa,
+                                                          component_code: sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || '',
+                                                          drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
+                                                          bom_cost: actualPartCost,
+                                                          rate: actualPartCost
+                                                        };
+                                                      })
                                                       : []
                                                   };
                                                 }
@@ -2129,8 +2280,8 @@ const QuotationFormPage = () => {
                               onChange={(e) => handleItemChange(item.id, 'bom_cost', e.target.value)}
                               placeholder=""
                               className={`w-full px-2 py-1 text-xs font-semibold border rounded outline-none transition-all ${isLocked
-                                  ? 'bg-transparent border-transparent text-slate-700'
-                                  : 'bg-white border-slate-200 text-emerald-600 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'
+                                ? 'bg-transparent border-transparent text-slate-700'
+                                : 'bg-white border-slate-200 text-emerald-600 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'
                                 }`}
                             />
                           </td>
@@ -2360,24 +2511,24 @@ const QuotationFormPage = () => {
                         <tfoot>
                           {(() => {
                             const parentRows = (globalBreakdownData.rows || []).filter(r => !r.sr.includes('↳'));
-                            const totalSum   = parentRows.reduce((sum, r) => sum + (parseFloat(r.total) || 0), 0);
-                            const totalQty   = parentRows.reduce((sum, r) => sum + (parseFloat(r.qty)   || 0), 0);
+                            const totalSum = parentRows.reduce((sum, r) => sum + (parseFloat(r.total) || 0), 0);
+                            const totalQty = parentRows.reduce((sum, r) => sum + (parseFloat(r.qty) || 0), 0);
                             return (
                               <tr className="border-t border-slate-200 bg-slate-50 font-semibold text-slate-700">
                                 <td colSpan={4} className="whitespace-nowrap sticky left-0 z-5 bg-slate-50 text-left font-bold text-slate-800" style={{ padding: '10px', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}>Quotation Grand Total</td>
                                 <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.materialCost || 0) * (r.qty || 0), 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.cnc      || 0) * (r.qty || 0), 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.milling  || 0) * (r.qty || 0), 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.vmc      || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.cnc || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.milling || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.vmc || 0) * (r.qty || 0), 0))}</td>
                                 <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.drilling || 0) * (r.qty || 0), 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.tapping  || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.tapping || 0) * (r.qty || 0), 0))}</td>
                                 <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.grinding || 0) * (r.qty || 0), 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.laser    || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.laser || 0) * (r.qty || 0), 0))}</td>
                                 <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.sparking || 0) * (r.qty || 0), 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.finish   || 0) * (r.qty || 0), 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.qc      || 0) * (r.qty || 0), 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.packing  || 0) * (r.qty || 0), 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.profit   || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.finish || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.qc || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.packing || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.profit || 0) * (r.qty || 0), 0))}</td>
                                 <td className="whitespace-nowrap text-right font-bold text-slate-900" style={{ padding: '10px' }}>
                                   {formatCurrency(totalQty > 0 ? totalSum / totalQty : 0)}
                                 </td>

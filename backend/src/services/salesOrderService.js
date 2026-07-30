@@ -1199,22 +1199,7 @@ const getOrderTimeline = async salesOrderId => {
          GROUP BY drawing_no
        ) d2 ON d1.id = d2.max_id
      ) cd ON cd.drawing_no = soi.drawing_no
-     WHERE soi.sales_order_id = ?
-        AND (
-          soi.parent_bom_id IS NOT NULL
-          OR (so.customer_po_id IS NOT NULL AND EXISTS (
-              SELECT 1 FROM customer_po_items poi2
-              WHERE poi2.customer_po_id = so.customer_po_id
-                AND (
-                  (poi2.item_code = soi.item_code AND soi.item_code IS NOT NULL)
-                  OR (poi2.drawing_no = soi.drawing_no AND soi.drawing_no IS NOT NULL)
-                )
-          ))
-          OR (so.customer_po_id IS NULL AND EXISTS (
-              SELECT 1 FROM customer_drawings cd
-              WHERE cd.drawing_no = soi.drawing_no
-          ))
-        )`,
+     WHERE soi.sales_order_id = ?`,
     [salesOrderId]
   );
 

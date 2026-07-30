@@ -478,7 +478,7 @@ const updateDrawing = async (id, data) => {
        WHERE soi.drawing_id = ?`,
       [internalId]
     );
-    const isOnlyFilesUpdate = 
+    const isOnlyFilesUpdate =
       description === undefined &&
       revisionNo === undefined &&
       clientName === undefined &&
@@ -1462,12 +1462,12 @@ const getDrawingAutofetchDetails = async (id) => {
       if (poItem.delivery_date) {
         delivery_date = poItem.delivery_date instanceof Date ? poItem.delivery_date.toISOString().split('T')[0] : poItem.delivery_date;
       }
-      
+
       const [storedSA] = await pool.query(
         `SELECT drawing_no, drawing_no as drawingNo, description, quantity, unit, rate, hsn_code, delivery_date 
          FROM customer_po_item_subassemblies 
          WHERE po_item_id = ?`,
-         [poItem.id]
+        [poItem.id]
       );
       sub_assemblies = storedSA.map(sa => ({
         ...sa,

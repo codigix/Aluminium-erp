@@ -258,31 +258,42 @@ const ClientQuotations = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/approved-drawings`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const [response, drawingsResponse] = await Promise.all([
+        fetch(`${API_BASE}/sales-orders/approved-drawings`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE}/drawings/approved`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+
       if (!response.ok) throw new Error('Failed to fetch approved orders');
       const data = await response.json();
 
-      const normalizedDrawings = data.filter(item => {
-        const g = (item.item_group || '').toUpperCase();
+      let drawingsData = [];
+      if (drawingsResponse.ok) {
+        drawingsData = await drawingsResponse.json();
+      }
 
-        // Remove PART rows already nested under assembly
-        if (g.includes('PART')) {
-          const belongsToAssembly = data.some(parent =>
-            (parent.sub_assemblies || []).some(sa =>
-              (sa.component_code || '').trim().toUpperCase() ===
-              (item.item_code || '').trim().toUpperCase()
-            )
-          );
-
-          if (belongsToAssembly) {
-            return false;
-          }
+      // Enrich order items with sub_assemblies from approved drawings
+      data.forEach(order => {
+        if (order.items) {
+          order.items.forEach(item => {
+            const itemDwg = (item.drawing_no || '').trim().toUpperCase();
+            const itemCode = (item.item_code || '').trim().toUpperCase();
+            const matchedDwg = drawingsData.find(d => 
+              (item.drawing_id && String(d.drawing_master_id) === String(item.drawing_id)) ||
+              (itemCode && d.item_code && String(d.item_code).trim().toUpperCase() === itemCode) ||
+              (itemDwg && d.drawing_no && String(d.drawing_no).trim().toUpperCase() === itemDwg)
+            );
+            if (matchedDwg && matchedDwg.sub_assemblies) {
+              item.sub_assemblies = matchedDwg.sub_assemblies;
+            }
+          });
         }
-
-        return true;
       });
+
+      const normalizedDrawings = data;
 
       const grouped = {};
       const initialPrices = {};
@@ -350,48 +361,42 @@ const ClientQuotations = () => {
 
         // EXTRA PASS: Hide items from top-level if they already exist as nested sub-assemblies in this client group
         // This handles cases where an SA might be in one order and its parent FG in another
-        const nestedIdentities = new Set();
+        const nestedDrawingNos = new Set();
+        const nestedItemCodes = new Set();
+        const nestedDrawingIds = new Set();
+
         items.forEach(item => {
           if (item.sub_assemblies && item.sub_assemblies.length > 0) {
             item.sub_assemblies.forEach(sa => {
-              const saCode = (sa.component_code || sa.componentCode || '').trim().toUpperCase();
-              const saDrawing = (sa.drawing_no || '').trim().toUpperCase();
-              const saDesc = (sa.description || sa.item_description || '').trim().toUpperCase();
-
-              if (saCode) {
-                nestedIdentities.add(`${saDrawing}_${saCode}`);
-                nestedIdentities.add(`_ANY_DRAWING_${saCode}`);
-              }
-              if (saDesc) {
-                nestedIdentities.add(`${saDrawing}_DESC_${saDesc}`);
-                nestedIdentities.add(`_ANY_DRAWING_DESC_${saDesc}`);
-              }
+              if (sa.drawing_no) nestedDrawingNos.add(sa.drawing_no.trim().toUpperCase());
+              if (sa.drawingNo) nestedDrawingNos.add(sa.drawingNo.trim().toUpperCase());
+              if (sa.component_code) nestedItemCodes.add(sa.component_code.trim().toUpperCase());
+              if (sa.componentCode) nestedItemCodes.add(sa.componentCode.trim().toUpperCase());
+              if (sa.item_code) nestedItemCodes.add(sa.item_code.trim().toUpperCase());
+              if (sa.itemCode) nestedItemCodes.add(sa.itemCode.trim().toUpperCase());
+              if (sa.drawing_id) nestedDrawingIds.add(String(sa.drawing_id));
+              if (sa.drawingId) nestedDrawingIds.add(String(sa.drawingId));
             });
           }
         });
 
-        // Filter items: Keep it if it's an FG OR if it's NOT found in nestedIdentities
+        // Filter items: Keep it if it's an FG OR if it's NOT found in nested sets
         items = items.filter(item => {
           const g = (item.item_group_calc || '').toUpperCase();
           const t = (item.item_type || '').trim().toUpperCase();
-          const p = (item.product_type || '').trim().toUpperCase();
 
           const isPart = g.includes('PART') || (typeof t !== 'undefined' && t.includes('PART'));
           const isAssembly = !isPart;
 
-          if (isAssembly) return true; // Always show FGs/Parts at top level
+          if (isAssembly) return true; // Always show FGs/Assemblies at top level
 
           const code = (item.item_code || '').trim().toUpperCase();
           const drawing = (item.drawing_no || '').trim().toUpperCase();
-          const desc = (item.description || item.item_description || '').trim().toUpperCase();
+          const id = String(item.drawing_id || item.id);
 
-          const identity = `${drawing}_${code}`;
-          const identityDesc = `${drawing}_DESC_${desc}`;
-
-          const isNested = nestedIdentities.has(identity) ||
-            nestedIdentities.has(`_ANY_DRAWING_${code}`) ||
-            nestedIdentities.has(identityDesc) ||
-            nestedIdentities.has(`_ANY_DRAWING_DESC_${desc}`);
+          const isNested = (drawing && nestedDrawingNos.has(drawing)) ||
+                           (code && nestedItemCodes.has(code)) ||
+                           (id && nestedDrawingIds.has(id));
 
           return !isNested;
         });

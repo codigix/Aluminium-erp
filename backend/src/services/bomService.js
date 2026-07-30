@@ -2040,7 +2040,9 @@ const syncQuotationCosts = async (itemId, bomCost) => {
     // We update quotations that are NOT yet turned into POs (status != 'COMPLETED' or similar)
     // Actually, usually we update those in 'PENDING', 'SENT', 'ACCEPTED' status.
     const [qrs] = await pool.query(
-      `SELECT qr.id, qr.item_qty, qr.profit_percentage, qr.gst_percentage 
+      `SELECT qr.id, qr.item_qty, qr.profit_percentage, qr.gst_percentage, 
+              qr.company_id, qr.project_name, qr.batch_id, qr.version, 
+              qr.client_email, qr.client_phone, qr.contact_person, qr.client_address
        FROM quotation_requests qr
        LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
        WHERE (qr.sales_order_item_id = ? 
@@ -2073,6 +2075,122 @@ const syncQuotationCosts = async (itemId, bomCost) => {
          WHERE id = ?`,
         [bomCost, newTotalBase, newTotalInclGst, itemId, qr.id]
       );
+
+      // Get all current COMPONENT rows before deleting them
+      const [oldComponents] = await pool.query(
+        "SELECT * FROM quotation_requests WHERE status = 'COMPONENT' AND rejection_reason = ?",
+        [String(qr.id)]
+      );
+
+      // Rebuild parent-child hierarchy from the latest BOM
+      const components = await getItemComponents(itemId, item_code, drawing_no);
+      const latestCompMap = new Map();
+      if (components) {
+        components.forEach(c => {
+          const key = `${(c.item_code || '').trim().toUpperCase()}_${(c.drawing_no || '').trim().toUpperCase()}`;
+          latestCompMap.set(key, c);
+        });
+      }
+
+      // Identify removed components
+      const removedComponents = [];
+      oldComponents.forEach(oc => {
+        const key = `${(oc.item_code || '').trim().toUpperCase()}_${(oc.drawing_no || '').trim().toUpperCase()}`;
+        if (!latestCompMap.has(key)) {
+          removedComponents.push(oc);
+        }
+      });
+
+      // Delete the old quotation hierarchy (COMPONENT rows)
+      await pool.execute(
+        "DELETE FROM quotation_requests WHERE status = 'COMPONENT' AND rejection_reason = ?",
+        [String(qr.id)]
+      );
+
+      // Insert the latest components as COMPONENT rows
+      if (components && components.length > 0) {
+        for (const sa of components) {
+          await pool.execute(
+            `INSERT INTO quotation_requests (
+               company_id, status, total_amount, received_amount, 
+               created_at, version, parent_id, drawing_no, description, 
+               item_unit, item_qty, batch_id, item_group, bom_cost, 
+               project_name, item_code, rejection_reason,
+               client_email, client_phone, contact_person, client_address
+             ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              qr.company_id,
+              'COMPONENT',
+              0,
+              sa.rate || sa.bom_cost || 0,
+              qr.version || 1,
+              null, // parent_id
+              sa.drawing_no || null,
+              sa.description || null,
+              sa.unit || 'Nos',
+              sa.quantity || 0,
+              qr.batch_id,
+              sa.item_group || 'PART',
+              sa.bom_cost || 0,
+              qr.project_name || null,
+              sa.item_code || null,
+              String(qr.id),
+              qr.client_email || null,
+              qr.client_phone || null,
+              qr.contact_person || null,
+              qr.client_address || null
+            ]
+          );
+        }
+      }
+
+      // Convert removed components to standalone top-level items
+      if (removedComponents.length > 0) {
+        for (const rc of removedComponents) {
+          const qty = parseFloat(rc.item_qty) || 1;
+          const cost = parseFloat(rc.bom_cost) || 0;
+          const profit = parseFloat(qr.profit_percentage) || 0;
+          const gst = parseFloat(qr.gst_percentage) || 18;
+
+          const newRate = cost * (1 + profit / 100);
+          const newTotalBase = newRate * qty;
+          const newTotalInclGst = newTotalBase * (1 + gst / 100);
+
+          await pool.execute(
+            `INSERT INTO quotation_requests (
+               company_id, status, total_amount, received_amount, 
+               created_at, version, parent_id, drawing_no, description, 
+               item_unit, item_qty, batch_id, item_group, bom_cost, 
+               project_name, item_code, rejection_reason,
+               client_email, client_phone, contact_person, client_address,
+               profit_percentage, gst_percentage
+             ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+            [
+              qr.company_id,
+              qr.status || 'Draft',
+              newTotalBase,
+              newTotalInclGst,
+              qr.version || 1,
+              null, // parent_id
+              rc.drawing_no || null,
+              rc.description || null,
+              rc.item_unit || 'Nos',
+              rc.item_qty || 0,
+              qr.batch_id,
+              rc.item_group || 'PART',
+              rc.bom_cost || 0,
+              qr.project_name || null,
+              rc.item_code || null,
+              qr.client_email || null,
+              qr.client_phone || null,
+              qr.contact_person || null,
+              qr.client_address || null,
+              profit,
+              gst
+            ]
+          );
+        }
+      }
 
       // Also update the component snapshot for this quotation if it exists as a child part in its parent assembly
       await pool.execute(
@@ -2115,17 +2233,34 @@ const unlinkChildFromAssembly = async (childItemId) => {
       if (parent_bom_id) {
         await connection.execute(
           `DELETE FROM sales_order_item_components 
-           WHERE sales_order_item_id = ? 
+           WHERE (sales_order_item_id = ? OR parent_id = ?) 
              AND (
-               (component_code = ? AND component_code IS NOT NULL AND component_code != '') 
-               OR (drawing_no = ? AND drawing_no IS NOT NULL AND drawing_no != '')
+               (LOWER(TRIM(component_code)) = LOWER(TRIM(?)) AND component_code IS NOT NULL AND component_code != '') 
+               OR (LOWER(TRIM(drawing_no)) = LOWER(TRIM(?)) AND drawing_no IS NOT NULL AND drawing_no != '')
+               OR (LOWER(TRIM(item_code)) = LOWER(TRIM(?)) AND item_code IS NOT NULL AND item_code != '')
              )`,
-          [parent_bom_id, item_code || '', drawing_no || '']
+          [parent_bom_id, parent_bom_id, item_code || '', drawing_no || '', item_code || '']
         );
       }
     }
 
     await connection.commit();
+
+    // 4. Recalculate parent BOM cost and propagate to parents and quotations
+    if (rows.length > 0 && rows[0].parent_bom_id) {
+      const parentBomId = rows[0].parent_bom_id;
+      const [parentRows] = await pool.query(
+        'SELECT item_code, drawing_no FROM sales_order_items WHERE id = ?',
+        [parentBomId]
+      );
+      
+      const newParentCost = await recalculateBOMCost(parentBomId, true);
+      
+      if (parentRows.length > 0) {
+        const parentItem = parentRows[0];
+        await propagateCostToParents(parentItem.item_code, parentItem.drawing_no);
+      }
+    }
   } catch (err) {
     await connection.rollback();
     throw err;

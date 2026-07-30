@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Card, StatusBadge, DataTable } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { Eye, FileText, RotateCw, Clock, History, Check, X, ExternalLink, Trash2, Edit2 } from 'lucide-react';
+import { Eye, FileText, RotateCw, Clock, History, Check, X, ExternalLink, Trash2, Edit2, Loader2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -24,17 +24,17 @@ const parseVerToComparable = (v) => {
 const compareVersions = (a, b) => {
   const sA = parseVerToComparable(a);
   const sB = parseVerToComparable(b);
-  
+
   if (sA === sB) return 0;
   if (sA === '') return -1;
   if (sB === '') return 1;
-  
+
   const numA = Number(sA);
   const numB = Number(sB);
   if (!isNaN(numA) && !isNaN(numB)) {
     return numA - numB;
   }
-  
+
   return sA.localeCompare(sB, undefined, { numeric: true, sensitivity: 'base' });
 };
 
@@ -50,6 +50,7 @@ const formatDate = (dateString) => {
 const BOMCreation = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState(null); // Track which BOM item is being deleted
   const [clientData, setClientData] = useState({}); // { [clientId]: { items: [], loading: false } }
   const [expandedDrawings, setExpandedDrawings] = useState({}); // { drawingKey: boolean }
   const [expandedBOMGroups, setExpandedBOMGroups] = useState(new Set());
@@ -152,7 +153,7 @@ const BOMCreation = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch BOM details');
       const data = await response.json();
-      
+
       // Filter to show only the latest version of each item
       const itemGroups = (data || []).reduce((acc, item) => {
         const key = `${item.item_code}-${item.drawing_no || 'N/A'}`;
@@ -278,7 +279,7 @@ const BOMCreation = () => {
         // Use sales_order_id as the primary key for grouping projects
         const key = item.sales_order_id || item.id;
         const clientName = item.company_name || 'Unknown Client';
-        
+
         if (!acc[key]) {
           acc[key] = {
             id: key,
@@ -321,7 +322,7 @@ const BOMCreation = () => {
     if (filter === 'drafts' && orders.length > 0) {
       let changed = false;
       const newExpandedDrawings = { ...expandedDrawings };
-  
+
       orders.forEach(client => {
         const items = clientData[client.id]?.items || [];
         const drawings = items.reduce((acc, item) => {
@@ -330,7 +331,7 @@ const BOMCreation = () => {
           acc[dwg].push(item);
           return acc;
         }, {});
-  
+
         Object.entries(drawings).forEach(([dwgNo, dwgItems]) => {
           if (dwgItems.some(i => i.status === 'DRAFT')) {
             const key = `${client.id}_${dwgNo}`;
@@ -341,7 +342,7 @@ const BOMCreation = () => {
           }
         });
       });
-  
+
       if (changed) {
         setExpandedDrawings(newExpandedDrawings);
       }
@@ -350,7 +351,7 @@ const BOMCreation = () => {
 
   useEffect(() => {
     if (!globalSearchTerm) return;
-    
+
     const searchMatch = globalSearchTerm.trim().toLowerCase();
     let hasChanges = false;
     let nextExpandedDrawings = { ...expandedDrawings };
@@ -359,20 +360,20 @@ const BOMCreation = () => {
     orders.forEach(client => {
       const items = clientData[client.id]?.items || [];
       const topLevelItems = items.filter(item => item.status?.toLowerCase() === 'approved');
-      
+
       const drawingsMap = topLevelItems.reduce((acc, item) => {
         const dwg = cleanText(item.drawing_no || 'N/A');
         if (!acc[dwg]) acc[dwg] = [];
         acc[dwg].push(item);
         return acc;
       }, {});
-      
+
       let clientMatches = false;
 
       Object.entries(drawingsMap).forEach(([dwgNo, dwgItems]) => {
         const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
         const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
-        
+
         if (typeFilter === 'Assembly' && !isAssemblyDrawing) return;
         if (typeFilter === 'Part' && isAssemblyDrawing) return;
 
@@ -392,12 +393,12 @@ const BOMCreation = () => {
 
         const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
         const allItems = [...dwgItems, ...childBOMs];
-        
+
         let isMatched = false;
         if (dwgNo.toLowerCase().includes(searchMatch)) isMatched = true;
         else if (drawingName.toLowerCase().includes(searchMatch)) isMatched = true;
-        else if (allItems.some(i => 
-          (i.item_code || '').toLowerCase().includes(searchMatch) || 
+        else if (allItems.some(i =>
+          (i.item_code || '').toLowerCase().includes(searchMatch) ||
           (i.description || i.material_name || i.item_name || '').toLowerCase().includes(searchMatch) ||
           (i.drawing_no || '').toLowerCase().includes(searchMatch) ||
           (Array.isArray(i.components) && i.components.some(c =>
@@ -413,7 +414,7 @@ const BOMCreation = () => {
         )) {
           isMatched = true;
         }
-        
+
         if (isMatched) {
           clientMatches = true;
           const dwgKey = `${client.id}_${dwgNo}`;
@@ -423,7 +424,7 @@ const BOMCreation = () => {
           }
         }
       });
-      
+
       if (clientMatches && !nextExpandedClients.has(client.id)) {
         nextExpandedClients.add(client.id);
         hasChanges = true;
@@ -433,7 +434,7 @@ const BOMCreation = () => {
     if (hasChanges) {
       setExpandedDrawings(nextExpandedDrawings);
       setExpandedClientRows(nextExpandedClients);
-      
+
       setTimeout(() => {
         const highlighted = document.querySelectorAll('.highlight-match');
         if (highlighted.length > 0) {
@@ -493,6 +494,7 @@ const BOMCreation = () => {
       });
 
       if (result.isConfirmed) {
+        setDeletingId(itemId);
         const token = localStorage.getItem('authToken');
         const url = isChild
           ? `${API_BASE}/bom/items/${itemId}/unlink-child`
@@ -505,6 +507,7 @@ const BOMCreation = () => {
 
         if (!response.ok) throw new Error(isChild ? 'Failed to remove from assembly' : 'Failed to delete BOM');
         successToast(isChild ? 'Removed from Assembly.' : 'BOM has been deleted.');
+        setDeletingId(null);
         fetchOrders();
 
         // If modal is open and showing this order, refresh its items
@@ -513,6 +516,7 @@ const BOMCreation = () => {
         }
       }
     } catch (error) {
+      setDeletingId(null);
       errorToast(error.message);
     }
   };
@@ -631,11 +635,11 @@ const BOMCreation = () => {
       // Filter items to find eligible sales orders (those not already submitted or further)
       const eligibleItems = (client.items || []).filter(i => {
         const s = (i.sales_order_status || '').toUpperCase();
-        return !s.includes('BOM_SUBMITTED') && !s.includes('BOM_APPROVED') && 
-               !s.includes('QUOTATION') && !s.includes('PO_') &&
-               !s.includes('PRODUCTION') && !s.includes('PLAN') && 
-               !s.includes('SHIPMENT') && !s.includes('COMPLETED') && 
-               !s.includes('PAID');
+        return !s.includes('BOM_SUBMITTED') && !s.includes('BOM_APPROVED') &&
+          !s.includes('QUOTATION') && !s.includes('PO_') &&
+          !s.includes('PRODUCTION') && !s.includes('PLAN') &&
+          !s.includes('SHIPMENT') && !s.includes('COMPLETED') &&
+          !s.includes('PAID');
       });
 
       const salesOrderIds = [...new Set(eligibleItems.map(i => i.sales_order_id))].filter(id => id);
@@ -805,10 +809,10 @@ const BOMCreation = () => {
       if (!clientData[client.id] || clientData[client.id].loading) {
         return true;
       }
-      
+
       const items = clientData[client.id]?.items || [];
       const topLevelItems = items.filter(item => item.status?.toLowerCase() === 'approved');
-      
+
       const drawingsMap = topLevelItems.reduce((acc, item) => {
         const dwg = cleanText(item.drawing_no || 'N/A');
         if (!acc[dwg]) acc[dwg] = [];
@@ -819,7 +823,7 @@ const BOMCreation = () => {
       const matchingDrawings = Object.entries(drawingsMap).filter(([dwgNo, dwgItems]) => {
         const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
         const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
-        
+
         if (typeFilter === 'Assembly' && !isAssemblyDrawing) return false;
         if (typeFilter === 'Part' && isAssemblyDrawing) return false;
 
@@ -890,10 +894,10 @@ const BOMCreation = () => {
   const customFilter = useCallback((client, searchStr) => {
     if (!searchStr) return false;
     const searchLower = searchStr.trim().toLowerCase();
-    
+
     const items = clientData[client.id]?.items || [];
     const topLevelItems = items.filter(item => item.status?.toLowerCase() === 'approved');
-      
+
     const drawingsMap = topLevelItems.reduce((acc, item) => {
       const dwg = cleanText(item.drawing_no || 'N/A');
       if (!acc[dwg]) acc[dwg] = [];
@@ -904,7 +908,7 @@ const BOMCreation = () => {
     const filteredDrawings = Object.entries(drawingsMap).filter(([dwgNo, dwgItems]) => {
       const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
       const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
-      
+
       if (typeFilter === 'Assembly' && !isAssemblyDrawing) return false;
       if (typeFilter === 'Part' && isAssemblyDrawing) return false;
 
@@ -936,11 +940,11 @@ const BOMCreation = () => {
       const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
       const childItems = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
       const allItems = [...dwgItems, ...childItems];
-      
+
       if (dwgNo.toLowerCase().includes(searchLower)) hasRenderableMatch = true;
       else if (drawingName.toLowerCase().includes(searchLower)) hasRenderableMatch = true;
-      else if (allItems.some(i => 
-        (i.item_code || '').toLowerCase().includes(searchLower) || 
+      else if (allItems.some(i =>
+        (i.item_code || '').toLowerCase().includes(searchLower) ||
         (i.description || i.material_name || i.item_name || '').toLowerCase().includes(searchLower) ||
         (i.drawing_no || '').toLowerCase().includes(searchLower) ||
         (Array.isArray(i.components) && i.components.some(c =>
@@ -996,7 +1000,7 @@ const BOMCreation = () => {
       render: (_, row) => {
         const items = clientData[row.id]?.items || [];
         const topLevelItems = items.filter(item => item.status?.toLowerCase() === 'approved');
-        
+
         const drawingsMap = topLevelItems.reduce((acc, item) => {
           const dwg = cleanText(item.drawing_no || 'N/A');
           if (!acc[dwg]) acc[dwg] = [];
@@ -1007,7 +1011,7 @@ const BOMCreation = () => {
         const count = Object.values(drawingsMap).filter(dwgItems => {
           const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
           const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
-          
+
           if (typeFilter === 'Assembly' && !isAssemblyDrawing) return false;
           if (typeFilter === 'Part' && isAssemblyDrawing) return false;
 
@@ -1063,7 +1067,7 @@ const BOMCreation = () => {
         Object.entries(drawingsMap).forEach(([dwgNo, dwgItems]) => {
           const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
           const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
-          
+
           if (typeFilter === 'Assembly' && !isAssemblyDrawing) return;
           if (typeFilter === 'Part' && isAssemblyDrawing) return;
 
@@ -1183,11 +1187,11 @@ const BOMCreation = () => {
                 // Check if BOM has already been sent for approval or has progressed further
                 const isSentOrBeyond = row.items?.some(i => {
                   const s = (i.sales_order_status || '').toUpperCase();
-                  return s.includes('BOM_SUBMITTED') || s.includes('BOM_APPROVED') || 
-                         s.includes('QUOTATION') || s.includes('PO_') ||
-                         s.includes('PRODUCTION') || s.includes('PLAN') || 
-                         s.includes('SHIPMENT') || s.includes('COMPLETED') || 
-                         s.includes('PAID');
+                  return s.includes('BOM_SUBMITTED') || s.includes('BOM_APPROVED') ||
+                    s.includes('QUOTATION') || s.includes('PO_') ||
+                    s.includes('PRODUCTION') || s.includes('PLAN') ||
+                    s.includes('SHIPMENT') || s.includes('COMPLETED') ||
+                    s.includes('PAID');
                 });
 
                 if (isSentOrBeyond) {
@@ -1248,7 +1252,7 @@ const BOMCreation = () => {
     const filteredDrawings = Object.entries(drawingsMap).filter(([dwgNo, dwgItems]) => {
       const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
       const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
-      
+
       if (typeFilter === 'Assembly' && !isAssemblyDrawing) return false;
       if (typeFilter === 'Part' && isAssemblyDrawing) return false;
 
@@ -1275,14 +1279,14 @@ const BOMCreation = () => {
       ) {
         return true;
       }
-      
+
       const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
       const allItems = [...dwgItems, ...childBOMs];
-      
+
       if (dwgNo.toLowerCase().includes(searchMatch)) return true;
       if (drawingName.toLowerCase().includes(searchMatch)) return true;
-      if (allItems.some(i => 
-        (i.item_code || '').toLowerCase().includes(searchMatch) || 
+      if (allItems.some(i =>
+        (i.item_code || '').toLowerCase().includes(searchMatch) ||
         (i.description || i.material_name || i.item_name || '').toLowerCase().includes(searchMatch) ||
         (i.drawing_no || '').toLowerCase().includes(searchMatch) ||
         (Array.isArray(i.components) && i.components.some(c =>
@@ -1296,7 +1300,7 @@ const BOMCreation = () => {
           (m.drawing_no || m.drawingNo || '').toLowerCase().includes(searchMatch)
         ))
       )) return true;
-      
+
       return false;
     });
 
@@ -1337,16 +1341,16 @@ const BOMCreation = () => {
             }, {});
 
             // Filter latestCosts to find items belonging directly to this drawing (drawing_no matches card dwgNo)
-            const drawingMainItems = Object.values(latestCosts).filter(i => 
+            const drawingMainItems = Object.values(latestCosts).filter(i =>
               cleanText(i.drawing_no) === cleanText(dwgNo)
             );
-            
+
             // Sum cost of main items if found, else fallback to sum of all items in latestCosts
             const totalDisplayCost = isAssemblyDrawing
               ? drawingMainItems.filter(i => !i.parent_bom_id).reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0)
               : (drawingMainItems.length > 0
-                  ? drawingMainItems.reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0)
-                  : Object.values(latestCosts).reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0));
+                ? drawingMainItems.reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0)
+                : Object.values(latestCosts).reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0));
 
             // Refined status logic
             let dwgStatus = 'PENDING';
@@ -1535,7 +1539,7 @@ const BOMCreation = () => {
                                 return b.id - a.id;
                               });
                               const latest = sortedVersions[0];
-                              
+
                               // If this item code is already displayed/linked through a sub-BOM hierarchy, skip it from being a direct row
                               if (subComponentCodes.has(latest.item_code)) {
                                 return;
@@ -1580,7 +1584,7 @@ const BOMCreation = () => {
 
                             return finalOrderedGroups.map(({ groupId, sortedVersions, latest, isChild, isLastChild }) => {
                               const hasMultiple = sortedVersions.length > 1;
-                              
+
                               // Filter components of this item to exclude any component that is already nested under a child BOM of this item
                               const filteredComponents = (latest.components || []).filter(c => {
                                 const isNestedUnderChild = Object.values(groupedBOMs).some(versions => {
@@ -1698,10 +1702,13 @@ const BOMCreation = () => {
                                         </Link>
                                         <button
                                           onClick={(e) => { e.stopPropagation(); handleDeleteBOM(latest.id, isChild, latest); }}
-                                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                                          disabled={deletingId === latest.id}
+                                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                           title={isChild ? "Remove from Assembly" : "Delete BOM"}
                                         >
-                                          <Trash2 className="w-4 h-4" />
+                                          {deletingId === latest.id
+                                            ? <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                                            : <Trash2 className="w-4 h-4" />}
                                         </button>
                                       </div>
                                     </td>
@@ -1795,31 +1802,28 @@ const BOMCreation = () => {
               <div className="flex border border-slate-200 rounded bg-white p-0.5 shadow-sm">
                 <button
                   onClick={() => setActiveTab('All')}
-                  className={`px-3.5 py-1 rounded text-xs font-semibold transition-all ${
-                    activeTab === 'All'
+                  className={`px-3.5 py-1 rounded text-xs font-semibold transition-all ${activeTab === 'All'
                       ? 'bg-indigo-600 text-white shadow-sm'
                       : 'bg-transparent text-slate-500 hover:text-slate-700'
-                  }`}
+                    }`}
                 >
                   All
                 </button>
                 <button
                   onClick={() => setActiveTab('In Process')}
-                  className={`px-3.5 py-1 rounded text-xs font-semibold transition-all ${
-                    activeTab === 'In Process'
+                  className={`px-3.5 py-1 rounded text-xs font-semibold transition-all ${activeTab === 'In Process'
                       ? 'bg-indigo-600 text-white shadow-sm'
                       : 'bg-transparent text-slate-500 hover:text-slate-700'
-                  }`}
+                    }`}
                 >
                   In Process
                 </button>
                 <button
                   onClick={() => setActiveTab('Completed')}
-                  className={`px-3.5 py-1 rounded text-xs font-semibold transition-all ${
-                    activeTab === 'Completed'
+                  className={`px-3.5 py-1 rounded text-xs font-semibold transition-all ${activeTab === 'Completed'
                       ? 'bg-indigo-600 text-white shadow-sm'
                       : 'bg-transparent text-slate-500 hover:text-slate-700'
-                  }`}
+                    }`}
                 >
                   Completed
                 </button>
@@ -1897,7 +1901,7 @@ const BOMCreation = () => {
                                 if (item.status === 'REJECTED') return total;
                                 const group = (item.item_group || item.itemGroup || '').toUpperCase();
                                 if (group !== 'PART' && group !== 'ASSEMBLY') return total;
-                                
+
                                 const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
                                 const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) || 0;
                                 const labor = item.operations?.reduce((sum, o) => {
@@ -1926,168 +1930,168 @@ const BOMCreation = () => {
                           return group === 'PART' || group === 'ASSEMBLY';
                         })
                         .map((item) => {
-                        const matCost = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity || 0) * parseFloat(m.rate || 0)), 0) || 0;
-                        const compCost = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity || 0) * parseFloat(c.rate || 0)), 0) || 0;
-                        const laborCost = item.operations?.reduce((sum, o) => {
-                          const cycle = parseFloat(o.cycle_time_min || 0);
-                          const setup = parseFloat(o.setup_time_min || 0);
-                          const rate = parseFloat(o.hourly_rate || 0);
-                          return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity || 0));
-                        }, 0) || 0;
-                        const scrapCredit = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
-                        const itemTotal = matCost + compCost + laborCost - scrapCredit;
-                        const profitMargin = parseFloat(selectedBOMOrder?.profit_margin || 0);
-                        const estProfit = (itemTotal * profitMargin) / 100;
-                        const isExpanded = expandedBOMItems.has(item.id);
+                          const matCost = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity || 0) * parseFloat(m.rate || 0)), 0) || 0;
+                          const compCost = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity || 0) * parseFloat(c.rate || 0)), 0) || 0;
+                          const laborCost = item.operations?.reduce((sum, o) => {
+                            const cycle = parseFloat(o.cycle_time_min || 0);
+                            const setup = parseFloat(o.setup_time_min || 0);
+                            const rate = parseFloat(o.hourly_rate || 0);
+                            return sum + (((cycle + setup) / 60 * rate) * parseFloat(item.quantity || 0));
+                          }, 0) || 0;
+                          const scrapCredit = item.scrap?.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100) * parseFloat(s.rate || 0)), 0) || 0;
+                          const itemTotal = matCost + compCost + laborCost - scrapCredit;
+                          const profitMargin = parseFloat(selectedBOMOrder?.profit_margin || 0);
+                          const estProfit = (itemTotal * profitMargin) / 100;
+                          const isExpanded = expandedBOMItems.has(item.id);
 
-                        return (
-                          <div key={item.id} className={`bg-white rounded border transition-all ${isExpanded ? 'border-indigo-200 shadow-md ring-1 ring-indigo-50' : 'border-slate-100 hover:border-slate-200 shadow-sm'}`}>
-                            <div className="p-3">
-                              <div className="flex items-start gap-3">
-                                <div className={`p-2 rounded mt-1 ${isExpanded ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                                  <FileText size={18} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <h4 className="text-xs  text-slate-900 truncate ">{item.item_code}</h4>
-                                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-xs    ">{item.item_group || 'FINISHED_GOOD'}</span>
+                          return (
+                            <div key={item.id} className={`bg-white rounded border transition-all ${isExpanded ? 'border-indigo-200 shadow-md ring-1 ring-indigo-50' : 'border-slate-100 hover:border-slate-200 shadow-sm'}`}>
+                              <div className="p-3">
+                                <div className="flex items-start gap-3">
+                                  <div className={`p-2 rounded mt-1 ${isExpanded ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                    <FileText size={18} />
                                   </div>
-                                  <div className="flex items-center gap-3 text-xs  text-slate-500 ">
-                                    <button
-                                      onClick={() => item.drawing_no && handlePreviewByNo(item.drawing_no)}
-                                      className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 transition-colors "
-                                    >
-                                      VIEW DRAWING <ExternalLink size={10} />
-                                    </button>
-                                    <button
-                                      onClick={() => toggleBOMItem(item.id)}
-                                      className="flex items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors "
-                                    >
-                                      {isExpanded ? 'CLOSE BOM' : 'FULL BOM'} <ExternalLink size={10} className={isExpanded ? 'rotate-180' : ''} />
-                                    </button>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <h4 className="text-xs  text-slate-900 truncate ">{item.item_code}</h4>
+                                      <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-xs    ">{item.item_group || 'FINISHED_GOOD'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs  text-slate-500 ">
+                                      <button
+                                        onClick={() => item.drawing_no && handlePreviewByNo(item.drawing_no)}
+                                        className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 transition-colors "
+                                      >
+                                        VIEW DRAWING <ExternalLink size={10} />
+                                      </button>
+                                      <button
+                                        onClick={() => toggleBOMItem(item.id)}
+                                        className="flex items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors "
+                                      >
+                                        {isExpanded ? 'CLOSE BOM' : 'FULL BOM'} <ExternalLink size={10} className={isExpanded ? 'rotate-180' : ''} />
+                                      </button>
+                                    </div>
                                   </div>
-                                </div>
 
-                                <div className="flex gap-6 text-center">
-                                  <div>
-                                    <p className="text-xs  text-slate-400   mb-1">Order Qty</p>
-                                    <p className="text-xs  text-slate-700">{parseFloat(item.quantity || 0)} <span className="text-xs  font-normal text-slate-400">{item.unit || 'Nos'}</span></p>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs  text-slate-400   mb-1">Material Cost</p>
-                                    <p className="text-xs  text-slate-700">₹{matCost.toLocaleString('en-IN')}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs  text-slate-400   mb-1">Labor Cost</p>
-                                    <p className="text-xs  text-slate-700">₹{laborCost.toLocaleString('en-IN')}</p>
-                                  </div>
-                                  <div className="px-4 py-1 bg-emerald-50/50 rounded border border-emerald-100/50">
-                                    <p className="text-xs  text-emerald-600/70   mb-1">Est. Profit</p>
-                                    <p className="text-xs  text-emerald-600">₹{estProfit.toLocaleString('en-IN')}</p>
-                                  </div>
-                                  <div className="flex items-center gap-2 pl-4 border-l border-slate-100">
+                                  <div className="flex gap-6 text-center">
                                     <div>
-                                      <p className="text-xs  text-slate-400   mb-1">Item Total</p>
-                                      <p className="text-sm  text-indigo-600">₹{itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                      <p className="text-xs  text-slate-400   mb-1">Order Qty</p>
+                                      <p className="text-xs  text-slate-700">{parseFloat(item.quantity || 0)} <span className="text-xs  font-normal text-slate-400">{item.unit || 'Nos'}</span></p>
                                     </div>
-                                    <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded">
-                                      <Check size={14} strokeWidth={3} />
+                                    <div>
+                                      <p className="text-xs  text-slate-400   mb-1">Material Cost</p>
+                                      <p className="text-xs  text-slate-700">₹{matCost.toLocaleString('en-IN')}</p>
                                     </div>
-                                    <button
-                                      onClick={() => handleDeleteBOM(item.id, !!item.parent_bom_id, item)}
-                                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
-                                      title={item.parent_bom_id ? "Remove from Assembly" : "Delete BOM"}
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
+                                    <div>
+                                      <p className="text-xs  text-slate-400   mb-1">Labor Cost</p>
+                                      <p className="text-xs  text-slate-700">₹{laborCost.toLocaleString('en-IN')}</p>
+                                    </div>
+                                    <div className="px-4 py-1 bg-emerald-50/50 rounded border border-emerald-100/50">
+                                      <p className="text-xs  text-emerald-600/70   mb-1">Est. Profit</p>
+                                      <p className="text-xs  text-emerald-600">₹{estProfit.toLocaleString('en-IN')}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 pl-4 border-l border-slate-100">
+                                      <div>
+                                        <p className="text-xs  text-slate-400   mb-1">Item Total</p>
+                                        <p className="text-sm  text-indigo-600">₹{itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                      </div>
+                                      <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded">
+                                        <Check size={14} strokeWidth={3} />
+                                      </div>
+                                      <button
+                                        onClick={() => handleDeleteBOM(item.id, !!item.parent_bom_id, item)}
+                                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                                        title={item.parent_bom_id ? "Remove from Assembly" : "Delete BOM"}
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
 
-                              {isExpanded && (
-                                <div className="mt-4 pt-4 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300">
-                                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                                    {/* Materials */}
-                                    <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
-                                      <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-xs   text-indigo-600   flex items-center gap-2">
-                                          <div className="w-1 h-3 bg-indigo-600 rounded" />
-                                          Raw Materials
-                                        </h5>
-                                        <span className="text-xs   text-slate-400">₹{matCost.toLocaleString('en-IN')}</span>
-                                      </div>
-                                      <div className="space-y-1.5">
-                                        {item.materials?.length > 0 ? item.materials.map((m, idx) => (
-                                          <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center group hover:border-indigo-200 transition-colors">
-                                            <div>
-                                              <p className="text-xs  text-slate-700">{m.material_name}</p>
-                                              <p className="text-xs  text-slate-400 ">{parseFloat(m.qty_per_pc || 0)} @ ₹{parseFloat(m.rate || 0).toLocaleString('en-IN')}</p>
-                                            </div>
-                                            <p className="text-xs  text-slate-600">₹{(parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)).toLocaleString('en-IN')}</p>
-                                          </div>
-                                        )) : (
-                                          <p className="text-xs  text-slate-400 italic px-1">No materials listed</p>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {/* Components */}
-                                    <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
-                                      <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-xs   text-blue-600   flex items-center gap-2">
-                                          <div className="w-1 h-3 bg-blue-600 rounded" />
-                                          Components
-                                        </h5>
-                                        <span className="text-xs   text-slate-400">₹{compCost.toLocaleString('en-IN')}</span>
-                                      </div>
-                                      <div className="space-y-1.5">
-                                        {item.components?.length > 0 ? item.components.map((c, idx) => (
-                                          <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center hover:border-blue-200 transition-colors">
-                                            <div>
-                                              <p className="text-xs  text-slate-700">{c.description || c.component_code}</p>
-                                              <p className="text-xs  text-slate-400 ">{parseFloat(c.quantity || 0)} @ ₹{parseFloat(c.rate || 0).toLocaleString('en-IN')}</p>
-                                            </div>
-                                            <p className="text-xs  text-slate-600">₹{(parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)).toLocaleString('en-IN')}</p>
-                                          </div>
-                                        )) : (
-                                          <p className="text-xs  text-slate-400 italic px-1">No components listed</p>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {/* Operations */}
-                                    <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
-                                      <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-xs   text-amber-600   flex items-center gap-2">
-                                          <div className="w-1 h-3 bg-amber-600 rounded" />
-                                          Operations
-                                        </h5>
-                                        <span className="text-xs   text-slate-400">₹{laborCost.toLocaleString('en-IN')}</span>
-                                      </div>
-                                      <div className="space-y-1.5">
-                                        {item.operations?.length > 0 ? item.operations.map((o, idx) => {
-                                          const opCost = ((parseFloat(o.cycle_time_min || 0) + parseFloat(o.setup_time_min || 0)) / 60 * parseFloat(o.hourly_rate || 0)) * parseFloat(item.quantity);
-                                          return (
-                                            <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center hover:border-amber-200 transition-colors">
+                                {isExpanded && (
+                                  <div className="mt-4 pt-4 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300">
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                      {/* Materials */}
+                                      <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
+                                        <div className="flex items-center justify-between mb-3 px-1">
+                                          <h5 className="text-xs   text-indigo-600   flex items-center gap-2">
+                                            <div className="w-1 h-3 bg-indigo-600 rounded" />
+                                            Raw Materials
+                                          </h5>
+                                          <span className="text-xs   text-slate-400">₹{matCost.toLocaleString('en-IN')}</span>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                          {item.materials?.length > 0 ? item.materials.map((m, idx) => (
+                                            <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center group hover:border-indigo-200 transition-colors">
                                               <div>
-                                                <p className="text-xs  text-slate-700">{o.operation_name}</p>
-                                                <p className="text-xs  text-slate-400 ">{o.cycle_time_min + o.setup_time_min} MIN @ ₹{parseFloat(o.hourly_rate || 0).toLocaleString('en-IN')}/hr</p>
+                                                <p className="text-xs  text-slate-700">{m.material_name}</p>
+                                                <p className="text-xs  text-slate-400 ">{parseFloat(m.qty_per_pc || 0)} @ ₹{parseFloat(m.rate || 0).toLocaleString('en-IN')}</p>
                                               </div>
-                                              <p className="text-xs  text-slate-600">₹{opCost.toLocaleString('en-IN')}</p>
+                                              <p className="text-xs  text-slate-600">₹{(parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)).toLocaleString('en-IN')}</p>
                                             </div>
-                                          );
-                                        }) : (
-                                          <p className="text-xs  text-slate-400 italic px-1">No operations listed</p>
-                                        )}
+                                          )) : (
+                                            <p className="text-xs  text-slate-400 italic px-1">No materials listed</p>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Components */}
+                                      <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
+                                        <div className="flex items-center justify-between mb-3 px-1">
+                                          <h5 className="text-xs   text-blue-600   flex items-center gap-2">
+                                            <div className="w-1 h-3 bg-blue-600 rounded" />
+                                            Components
+                                          </h5>
+                                          <span className="text-xs   text-slate-400">₹{compCost.toLocaleString('en-IN')}</span>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                          {item.components?.length > 0 ? item.components.map((c, idx) => (
+                                            <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center hover:border-blue-200 transition-colors">
+                                              <div>
+                                                <p className="text-xs  text-slate-700">{c.description || c.component_code}</p>
+                                                <p className="text-xs  text-slate-400 ">{parseFloat(c.quantity || 0)} @ ₹{parseFloat(c.rate || 0).toLocaleString('en-IN')}</p>
+                                              </div>
+                                              <p className="text-xs  text-slate-600">₹{(parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)).toLocaleString('en-IN')}</p>
+                                            </div>
+                                          )) : (
+                                            <p className="text-xs  text-slate-400 italic px-1">No components listed</p>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Operations */}
+                                      <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
+                                        <div className="flex items-center justify-between mb-3 px-1">
+                                          <h5 className="text-xs   text-amber-600   flex items-center gap-2">
+                                            <div className="w-1 h-3 bg-amber-600 rounded" />
+                                            Operations
+                                          </h5>
+                                          <span className="text-xs   text-slate-400">₹{laborCost.toLocaleString('en-IN')}</span>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                          {item.operations?.length > 0 ? item.operations.map((o, idx) => {
+                                            const opCost = ((parseFloat(o.cycle_time_min || 0) + parseFloat(o.setup_time_min || 0)) / 60 * parseFloat(o.hourly_rate || 0)) * parseFloat(item.quantity);
+                                            return (
+                                              <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center hover:border-amber-200 transition-colors">
+                                                <div>
+                                                  <p className="text-xs  text-slate-700">{o.operation_name}</p>
+                                                  <p className="text-xs  text-slate-400 ">{o.cycle_time_min + o.setup_time_min} MIN @ ₹{parseFloat(o.hourly_rate || 0).toLocaleString('en-IN')}/hr</p>
+                                                </div>
+                                                <p className="text-xs  text-slate-600">₹{opCost.toLocaleString('en-IN')}</p>
+                                              </div>
+                                            );
+                                          }) : (
+                                            <p className="text-xs  text-slate-400 italic px-1">No operations listed</p>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                     </div>
                   </div>
                 )}

@@ -1023,7 +1023,6 @@ const createItem = async (itemData) => {
       itemCode = await generateItemCode(itemData.itemName, itemData.itemGroup);
     }
 
-
     const [existing] = await connection.query(
       'SELECT id FROM stock_balance WHERE item_code = ?',
       [itemCode]
@@ -1033,6 +1032,19 @@ const createItem = async (itemData) => {
       const error = new Error('Item code already exists');
       error.statusCode = 400;
       throw error;
+    }
+
+    const cleanDwg = (itemData.drawingNo || '').trim();
+    if (cleanDwg && cleanDwg !== '—' && cleanDwg.toUpperCase() !== 'N/A' && cleanDwg.toUpperCase() !== 'NA') {
+      const [existingDwg] = await connection.query(
+        'SELECT id FROM stock_balance WHERE UPPER(TRIM(drawing_no)) = UPPER(TRIM(?)) LIMIT 1',
+        [cleanDwg]
+      );
+      if (existingDwg.length > 0) {
+        const error = new Error('Drawing Number already exists in Items Master.');
+        error.statusCode = 400;
+        throw error;
+      }
     }
 
     const normalizedGroup = (itemData.itemGroup || '').toUpperCase().trim().replace(/ /g, '_');
@@ -1086,6 +1098,18 @@ const updateItem = async (id, itemData) => {
   try {
     await connection.beginTransaction();
 
+    const cleanDwg = (itemData.drawingNo || '').trim();
+    if (cleanDwg && cleanDwg !== '—' && cleanDwg.toUpperCase() !== 'N/A' && cleanDwg.toUpperCase() !== 'NA') {
+      const [existingDwg] = await connection.query(
+        'SELECT id FROM stock_balance WHERE UPPER(TRIM(drawing_no)) = UPPER(TRIM(?)) AND id != ? LIMIT 1',
+        [cleanDwg, id]
+      );
+      if (existingDwg.length > 0) {
+        const error = new Error('Drawing Number already exists in Items Master.');
+        error.statusCode = 400;
+        throw error;
+      }
+    }
 
     const normalizedGroup = (itemData.itemGroup || '').toUpperCase().trim().replace(/ /g, '_');
 
@@ -1168,10 +1192,10 @@ const promoteDrawingToItem = async (drawingData, connection = null) => {
   try {
     if (shouldRelease) await useConnection.beginTransaction();
 
-    // Check if item already exists for this drawing_no and description
+    // Check if item already exists for this drawing_no
     const [existing] = await useConnection.query(
-      'SELECT item_code FROM stock_balance WHERE drawing_no = ? AND material_name = ? LIMIT 1',
-      [drawing_no, description || 'Drawing Item']
+      'SELECT item_code FROM stock_balance WHERE UPPER(TRIM(drawing_no)) = UPPER(TRIM(?)) LIMIT 1',
+      [drawing_no]
     );
 
     if (existing.length > 0) {

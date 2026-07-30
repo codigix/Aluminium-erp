@@ -347,7 +347,7 @@ const ItemsMaster = () => {
         ...itemFormData,
         itemName: drawing.material_name || drawing.item_description || drawing.drawing_no,
         itemGroup: drawing.item_group || itemFormData.itemGroup,
-        drawingNo: drawing.drawing_no || '',
+        drawingNo: drawing.drawing_no || itemFormData.drawingNo || '',
         revision: drawing.revision_no || '',
         defaultUom: drawing.unit || itemFormData.defaultUom,
         hsnCode: drawing.hsn_code || ''
@@ -362,7 +362,7 @@ const ItemsMaster = () => {
         ...itemFormData,
         itemName: existingItem.material_name || existingItem.item_name,
         itemGroup: existingItem.material_type || existingItem.item_group || itemFormData.itemGroup,
-        drawingNo: existingItem.drawing_no || '',
+        drawingNo: itemFormData.drawingNo || '', // Preserve currently entered drawingNo
         revision: existingItem.revision || '',
         defaultUom: existingItem.unit || existingItem.uom || itemFormData.defaultUom,
         valuationRate: existingItem.valuation_rate !== undefined && existingItem.valuation_rate !== null ? existingItem.valuation_rate : '',
@@ -389,6 +389,18 @@ const ItemsMaster = () => {
     if (!itemFormData.itemCode || !itemFormData.itemName || !itemFormData.itemGroup) {
       errorToast('Please fill all required fields');
       return;
+    }
+
+    const trimmedDwg = (itemFormData.drawingNo || '').trim().toUpperCase();
+    if (trimmedDwg && trimmedDwg !== '—' && trimmedDwg !== 'N/A' && trimmedDwg !== 'NA') {
+      const existingDwg = itemsList.find(i => 
+        String(i.drawing_no || '').trim().toUpperCase() === trimmedDwg &&
+        (!isEditingItem || String(i.id) !== String(editingItemId))
+      );
+      if (existingDwg) {
+        errorToast('Drawing Number already exists in Items Master.');
+        return;
+      }
     }
     
     setIsSubmittingItem(true);
