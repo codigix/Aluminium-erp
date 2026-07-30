@@ -818,9 +818,9 @@ const checkDuplicateApprovedDrawing = async (connection, drawingNo, excludeDrawi
   if (!drawingNo) return;
   const cleanDwgNo = String(drawingNo).trim();
 
-  // 1. Check in customer_drawings for any existing Approved drawing with same drawing_no
+  // 1. Check in Drawing Master (customer_drawings)
   let cdQuery = `
-    SELECT id, drawing_no, client_name 
+    SELECT id 
     FROM customer_drawings 
     WHERE TRIM(drawing_no) = ? 
       AND UPPER(TRIM(status)) IN ('APPROVED', 'DESIGN_APPROVED')
@@ -831,18 +831,10 @@ const checkDuplicateApprovedDrawing = async (connection, drawingNo, excludeDrawi
     cdParams.push(excludeDrawingId, String(excludeDrawingId));
   }
   const [cdDupes] = await connection.query(cdQuery, cdParams);
-  if (cdDupes.length > 0) {
-    const error = new Error(
-      `Approval Failed\n\nDrawing Number "${cleanDwgNo}" already exists as an Approved Drawing.\n\nPlease change the Drawing Number before approving.`
-    );
-    error.statusCode = 400;
-    error.validationFailed = true;
-    throw error;
-  }
 
-  // 2. Check in sales_order_items for any existing Approved drawing with same drawing_no
+  // 2. Check in sales_order_items
   let soiQuery = `
-    SELECT id, drawing_no 
+    SELECT id 
     FROM sales_order_items 
     WHERE TRIM(drawing_no) = ? 
       AND UPPER(TRIM(status)) IN ('APPROVED', 'DESIGN_APPROVED')
@@ -854,7 +846,33 @@ const checkDuplicateApprovedDrawing = async (connection, drawingNo, excludeDrawi
     soiParams.push(excludeSalesOrderItemId);
   }
   const [soiDupes] = await connection.query(soiQuery, soiParams);
-  if (soiDupes.length > 0) {
+
+  const existsInDrawingMaster = cdDupes.length > 0 || soiDupes.length > 0;
+
+  // 3. Check in Items Master (stock_balance)
+  const sbQuery = `
+    SELECT id 
+    FROM stock_balance 
+    WHERE TRIM(drawing_no) = ?
+  `;
+  const [sbDupes] = await connection.query(sbQuery, [cleanDwgNo]);
+  const existsInItemsMaster = sbDupes.length > 0;
+
+  if (existsInDrawingMaster && existsInItemsMaster) {
+    const error = new Error(
+      `Approval Failed\n\nDrawing Number "${cleanDwgNo}" already exists in the system.\nFound in:\n✓ Drawing Master\n✓ Items Master\n\nPlease change the Drawing Number before approving.`
+    );
+    error.statusCode = 400;
+    error.validationFailed = true;
+    throw error;
+  } else if (existsInItemsMaster) {
+    const error = new Error(
+      `Approval Failed\n\nDrawing Number "${cleanDwgNo}" already exists in Items Master.\n\nPlease use a different Drawing Number before approving.`
+    );
+    error.statusCode = 400;
+    error.validationFailed = true;
+    throw error;
+  } else if (existsInDrawingMaster) {
     const error = new Error(
       `Approval Failed\n\nDrawing Number "${cleanDwgNo}" already exists as an Approved Drawing.\n\nPlease change the Drawing Number before approving.`
     );
@@ -2079,6 +2097,16 @@ const bulkUpdateItemStatus = async (itemIds, status, reason) => {
         );
       }
     } else if (status.trim().toUpperCase() === 'APPROVED') {
+      // Validate drawing duplicates first
+      for (const itemId of itemIds) {
+        const [itemRows] = await connection.query('SELECT id, drawing_no, drawing_id FROM sales_order_items WHERE id = ?', [itemId]);
+        if (itemRows.length > 0) {
+          const dwgNo = itemRows[0].drawing_no;
+          const dwgId = itemRows[0].drawing_id;
+          await checkDuplicateApprovedDrawing(connection, dwgNo, dwgId, itemId);
+        }
+      }
+
       // Promote drawings to Item Master
       for (const itemId of itemIds) {
         const itemData = await getSalesOrderItem(itemId);
