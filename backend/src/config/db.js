@@ -363,7 +363,8 @@ const ensureQuotationItemColumns = async () => {
       { name: 'density', definition: 'DECIMAL(12, 6) DEFAULT 0' },
       { name: 'weight_per_unit', definition: 'DECIMAL(12, 6) DEFAULT 0' },
       { name: 'is_selected', definition: 'TINYINT DEFAULT 1' },
-      { name: 'shape_type', definition: 'VARCHAR(100) NULL' }
+      { name: 'shape_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'laser_cutting', definition: 'VARCHAR(100) NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));

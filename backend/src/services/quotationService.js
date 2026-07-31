@@ -170,8 +170,8 @@ const createQuotation = async (payload) => {
             quotation_id, item_code, description, material_name, material_type, drawing_no, 
             quantity, design_qty, planned_qty, unit, unit_rate, amount, 
             cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, laser_cutting
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
@@ -198,7 +198,8 @@ const createQuotation = async (payload) => {
             parseFloat(item.outer_diameter || (item.dimensions && item.dimensions.outer_diameter)) || 0,
             parseFloat(item.density || (item.dimensions && item.dimensions.density)) || 0,
             parseFloat(item.weight_per_unit || (item.dimensions && item.dimensions.weight_per_unit)) || 0,
-            item.shape_type || item.shape_name || item.shape || null
+            item.shape_type || item.shape_name || item.shape || null,
+            item.laser_cutting || null
           ]
         );
       }
@@ -912,8 +913,8 @@ const updateQuotation = async (quotationId, payload) => {
             quotation_id, item_code, description, material_name, material_type, 
             drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, 
             amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, laser_cutting
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             newQuotationId,
             correctedItemCode,
@@ -939,7 +940,8 @@ const updateQuotation = async (quotationId, payload) => {
             parseFloat(item.outer_diameter || (item.dimensions && item.dimensions.outer_diameter)) || 0,
             parseFloat(item.density || (item.dimensions && item.dimensions.density)) || 0,
             parseFloat(item.weight_per_unit || (item.dimensions && item.dimensions.weight_per_unit)) || 0,
-            item.shape_type || item.shape_name || item.shape || null
+            item.shape_type || item.shape_name || item.shape || null,
+            item.laser_cutting || null
           ]
         );
       }
@@ -1553,7 +1555,11 @@ const generateQuotationPDF = async (quotationId) => {
               <td class="center-col">{{sr}}</td>
               {{#isRFQ}}
               <td style="font-family: monospace; font-weight: 500;">{{drawing_no}}</td>
-              <td><strong>{{material_name}}</strong></td>
+              <td>
+                <strong>{{material_name}}</strong>
+                {{#drawing_name}}<br><span style="font-family: sans-serif; font-size: 8px; font-weight: 700; color: #1e293b;">{{drawing_name}}</span>{{/drawing_name}}
+                {{#laser_cutting_label}}<br><span style="font-family: sans-serif; font-size: 8.5px; font-weight: 700; color: #2563eb;">{{laser_cutting_label}}</span>{{/laser_cutting_label}}
+              </td>
               <td>{{material_description}}</td>
               <td>{{material_type}}</td>
               <td class="center-col"><strong>{{design_qty_str}}</strong></td>
@@ -1567,6 +1573,7 @@ const generateQuotationPDF = async (quotationId) => {
               <td>
                 <strong>{{material_name}}</strong>
                 {{#drawing_name}}<br><span style="font-family: sans-serif; font-size: 8px; font-weight: 700; color: #1e293b;">{{drawing_name}}</span>{{/drawing_name}}
+                {{#laser_cutting_label}}<br><span style="font-family: sans-serif; font-size: 8.5px; font-weight: 700; color: #2563eb;">{{laser_cutting_label}}</span>{{/laser_cutting_label}}
               </td>
               <td><strong>{{item_size}}</strong></td>
               <td class="center-col"><strong>{{design_qty_str}}</strong></td>
@@ -1758,6 +1765,19 @@ const generateQuotationPDF = async (quotationId) => {
         required_weight_str = `${formattedQty} ${uom}`;
       }
 
+      let laser_cutting_label = null;
+      const rawLc = String(i.laser_cutting || '').trim();
+      const upperLc = rawLc.toUpperCase();
+      const lowerLc = rawLc.toLowerCase();
+
+      if (rawLc && !['SELECT', 'NONE', 'NULL', 'UNDEFINED', ''].includes(upperLc)) {
+        if (lowerLc.includes('with material') || upperLc === 'WITH_MATERIAL') {
+          laser_cutting_label = 'Laser Cutting (With Material)';
+        } else if (lowerLc.includes('without material') || upperLc === 'WITHOUT_MATERIAL') {
+          laser_cutting_label = 'Laser Cutting (Without Material)';
+        }
+      }
+
       return {
         ...i,
         isRFQ: isRFQVal,
@@ -1770,6 +1790,7 @@ const generateQuotationPDF = async (quotationId) => {
           }
           return cleanDwgName;
         })(),
+        laser_cutting_label,
         item_size: itemSize || '—',
         material_name: i.material_name || i.description || '—',
         material_description: dimsSpec || null,

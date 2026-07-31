@@ -590,7 +590,9 @@ const Quotations = () => {
               planned_qty: totalRequired, // Keep total required as reference
               quantity: finalQty,
               uom: req.uom || 'NOS',
-              unit_rate: parseFloat(req.rate || req.unit_rate) || 0
+              unit_rate: parseFloat(req.rate || req.unit_rate) || 0,
+              has_laser_cutting: Boolean(req.has_laser_cutting),
+              laser_cutting: req.laser_cutting || 'With Material'
             };
           });
 
@@ -1503,6 +1505,7 @@ const Quotations = () => {
       quantity: item.quantity || 0,
       uom: item.unit || item.uom || 'NOS',
       unit_rate: item.unit_rate || 0,
+      laser_cutting: item.laser_cutting || '',
       length: item.length || 0,
       width: item.width || 0,
       thickness: item.thickness || 0,
@@ -1723,6 +1726,7 @@ const Quotations = () => {
         planned_qty: parseFloat(item.planned_qty) || 0,
         uom: item.uom || 'NOS',
         unit_rate: 0,
+        laser_cutting: item.laser_cutting || '',
         length: item.length || 0,
         width: item.width || 0,
         thickness: item.thickness || 0,
@@ -1795,6 +1799,7 @@ const Quotations = () => {
           planned_qty: parseFloat(item.planned_qty) || 0,
           uom: item.uom || 'NOS',
           unit_rate: 0,
+          laser_cutting: item.laser_cutting || null,
           length: item.length || 0,
           width: item.width || 0,
           thickness: item.thickness || 0,
@@ -2698,12 +2703,12 @@ const Quotations = () => {
                       <div className="space-y-2">
                         <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-xs text-slate-500">
                           <div className="col-span-2">Item ID</div>
-                          <div className="col-span-3">Material Name & Dimensions</div>
+                          <div className="col-span-2">Material Name & Dimensions</div>
                           <div className="col-span-2">Vendor</div>
                           <div className="col-span-1">Type</div>
+                          <div className="col-span-2">Laser Cutting</div>
                           <div className="col-span-1 text-center">Design Qty</div>
                           <div className="col-span-2 text-center">Required</div>
-                          <div className="col-span-1"></div>
                         </div>
                         {formData.items.map((item, idx) => {
                           const alreadyAssignedIds = (item.assigned_vendors || []).map(v => String(v.vendor_id));
@@ -2728,7 +2733,7 @@ const Quotations = () => {
                                   className={`w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                                 />
                               </div>
-                              <div className="col-span-3 space-y-1">
+                              <div className="col-span-2 space-y-1">
                                 <input
                                   type="text"
                                   placeholder="Material Name"
@@ -2781,19 +2786,30 @@ const Quotations = () => {
                                 onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
                                 className={`col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                               />
+                              <div className="col-span-2">
+                                <select
+                                  value={item.laser_cutting || ''}
+                                  onChange={(e) => handleItemChange(idx, 'laser_cutting', e.target.value)}
+                                  className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer bg-white"
+                                >
+                                  <option value="">Select</option>
+                                  <option value="With Material">With Material</option>
+                                  <option value="Without Material">Without Material</option>
+                                </select>
+                              </div>
                               <div className="col-span-1 flex flex-col items-center">
-                               <div className="text-xs text-slate-400 mb-0.5">
-                                 {item.planned_qty !== null && item.planned_qty !== undefined
-                                   ? (['NOS', 'PCS', 'SETS', 'NO', 'PC'].includes((item.uom || '').toUpperCase())
-                                       ? Number(item.planned_qty).toFixed(0)
-                                       : Number(item.planned_qty).toFixed(3))
-                                   : '-'}
-                                 {item.planned_qty !== null && item.planned_qty !== undefined && ' Nos'}
-                               </div>
-                               <div className="text-xs text-slate-600">
-                                 Design Qty
-                               </div>
-                             </div>
+                                <div className="text-xs text-slate-400 mb-0.5">
+                                  {item.planned_qty !== null && item.planned_qty !== undefined
+                                    ? (['NOS', 'PCS', 'SETS', 'NO', 'PC'].includes((item.uom || '').toUpperCase())
+                                        ? Number(item.planned_qty).toFixed(0)
+                                        : Number(item.planned_qty).toFixed(3))
+                                    : '-'}
+                                  {item.planned_qty !== null && item.planned_qty !== undefined && ' Nos'}
+                                </div>
+                                <div className="text-xs text-slate-600">
+                                  Design Qty
+                                </div>
+                              </div>
                               <div className="col-span-2 flex gap-1">
                                 <input
                                   type="number"
@@ -2806,18 +2822,6 @@ const Quotations = () => {
                                 <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-500 flex items-center justify-center min-w-[40px]">
                                   {item.uom || 'Kg'}
                                 </div>
-                              </div>
-                              <div className="col-span-1 flex justify-center pt-1.5">
-                                {!formData.rfq_id && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveItem(idx)}
-                                    className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
-                                    title="Remove item"
-                                  >
-                                    ✕
-                                  </button>
-                                )}
                               </div>
                             </div>
                           );
@@ -3028,6 +3032,7 @@ const Quotations = () => {
                             <th className="p-2  text-slate-600" style={{ width: '150px' }}>ITEM ID</th>
                             <th className="p-2  text-slate-600">MATERIAL NAME</th>
                             <th className="p-2  text-slate-600" style={{ width: '100px' }}>TYPE</th>
+                            <th className="p-2  text-slate-600" style={{ width: '140px' }}>LASER CUTTING</th>
                             <th className="p-2 text-center  text-slate-600" style={{ width: '80px' }}>Design Qty</th>
                             <th className="p-2 text-center  text-slate-600" style={{ width: '100px' }}>Required</th>
                             <th className="p-2 text-center  text-slate-600" style={{ width: '120px' }}>UNIT RATE (₹/Nos)</th>
@@ -3038,7 +3043,7 @@ const Quotations = () => {
                         <tbody className="divide-y divide-slate-100">
                           {recordData.items.length === 0 ? (
                             <tr>
-                              <td colSpan="8" className="px-3 py-8 text-center text-slate-400">
+                              <td colSpan="9" className="px-3 py-8 text-center text-slate-400">
                                 Select a project and vendor to load items, or add manually.
                               </td>
                             </tr>
@@ -3107,6 +3112,17 @@ const Quotations = () => {
                                     className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
                                     placeholder="Type..."
                                   />
+                                </td>
+                                <td className="p-2">
+                                  <select
+                                    value={item.laser_cutting || ''}
+                                    onChange={(e) => handleRecordItemChange(idx, 'laser_cutting', e.target.value)}
+                                    className="w-full px-2 py-1 border border-slate-200 focus:border-blue-500 rounded outline-none text-xs bg-white cursor-pointer"
+                                  >
+                                    <option value="">Select</option>
+                                    <option value="With Material">With Material</option>
+                                    <option value="Without Material">Without Material</option>
+                                  </select>
                                 </td>
                                 <td className="p-2 text-center">
                                   <input
@@ -3554,20 +3570,22 @@ const Quotations = () => {
                       {activeTab === 'sent' ? (
                         <>
                           <div className="col-span-2">Drawing No</div>
-                          <div className="col-span-4">Material Name</div>
+                          <div className="col-span-3">Material Name</div>
                           <div className="col-span-1">Type</div>
-                          <div className="col-span-2 text-center">Design Qty</div>
+                          <div className="col-span-2">Laser Cutting</div>
+                          <div className="col-span-1 text-center">Design Qty</div>
                           <div className="col-span-2 text-center">Required</div>
                           <div className="col-span-1"></div>
                         </>
                       ) : (
                         <>
                           <div className="col-span-2">Drawing No</div>
-                          <div className="col-span-3">Material Name</div>
+                          <div className="col-span-2">Material Name</div>
                           <div className="col-span-1">Type</div>
+                          <div className="col-span-2">Laser Cutting</div>
                           <div className="col-span-1 text-center">Design Qty</div>
                           <div className="col-span-1 text-center">Quoted Qty</div>
-                          <div className="col-span-2 text-center">UNIT RATE (₹/Nos)</div>
+                          <div className="col-span-1 text-center">UNIT RATE (₹/Nos)</div>
                           <div className="col-span-1 text-right">Amount</div>
                           <div className="col-span-1"></div>
                         </>
@@ -3589,7 +3607,7 @@ const Quotations = () => {
                               }}
                               className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <div className="col-span-4 flex flex-col">
+                            <div className="col-span-3 flex flex-col">
                               <SearchableSelect
                                 options={stockItems}
                                 value={item.item_code || ''}
@@ -3638,6 +3656,21 @@ const Quotations = () => {
                               }}
                               className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
+                            <div className="col-span-2">
+                              <select
+                                value={item.laser_cutting || ''}
+                                onChange={(e) => {
+                                  const newItems = [...editFormData.items];
+                                  newItems[idx].laser_cutting = e.target.value;
+                                  setEditFormData({ ...editFormData, items: newItems });
+                                }}
+                                className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer bg-white"
+                              >
+                                <option value="">Select</option>
+                                <option value="With Material">With Material</option>
+                                <option value="Without Material">Without Material</option>
+                              </select>
+                            </div>
                             <div className="col-span-2 flex flex-col items-center">
                               <input
                                 type="number"
@@ -3685,7 +3718,7 @@ const Quotations = () => {
                               }}
                               className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <div className="col-span-3 flex flex-col">
+                            <div className="col-span-2 flex flex-col">
                               <SearchableSelect
                                 options={stockItems}
                                 value={item.item_code || item.material_name || ''}
@@ -3734,6 +3767,21 @@ const Quotations = () => {
                               }}
                               className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
+                            <div className="col-span-2">
+                              <select
+                                value={item.laser_cutting || ''}
+                                onChange={(e) => {
+                                  const newItems = [...editFormData.items];
+                                  newItems[idx].laser_cutting = e.target.value;
+                                  setEditFormData({ ...editFormData, items: newItems });
+                                }}
+                                className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer bg-white"
+                              >
+                                <option value="">Select</option>
+                                <option value="With Material">With Material</option>
+                                <option value="Without Material">Without Material</option>
+                              </select>
+                            </div>
                             <div className="col-span-1 flex flex-col items-center">
                               <input
                                 type="number"
@@ -3777,7 +3825,7 @@ const Quotations = () => {
                                 newItems[idx].unit_rate = parseFloat(e.target.value) || 0;
                                 setEditFormData({ ...editFormData, items: newItems });
                               }}
-                              className="col-span-2 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                              className="col-span-1 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
                             />
                             <div className="col-span-1 text-right text-xs text-slate-700 pt-2 font-medium">
                               {formatCurrency(((item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') ? (parseFloat(item.planned_qty) || 0) : (parseFloat(item.design_qty || item.quantity) || 0)) * (parseFloat(item.unit_rate) || 0))}

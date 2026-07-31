@@ -143,7 +143,23 @@ const getProjectMaterialRequirements = async (projectId) => {
   const itemCodes = items.map(i => i.item_code).filter(Boolean);
   const drawingNos = items.map(i => i.drawing_no).filter(Boolean);
 
-  // 2. Fetch all potentially relevant materials
+  // 2. Check operations for Laser Cutting
+  const [laserOps] = await pool.query(`
+    SELECT DISTINCT sales_order_item_id, item_code, drawing_no
+    FROM sales_order_item_operations
+    WHERE (sales_order_item_id IN (?) OR item_code IN (?) OR drawing_no IN (?))
+      AND LOWER(operation_name) LIKE '%laser%'
+  `, [
+    soiIds.length > 0 ? soiIds : [null], 
+    itemCodes.length > 0 ? itemCodes : [null], 
+    drawingNos.length > 0 ? drawingNos : [null]
+  ]);
+
+  const laserSoiSet = new Set(laserOps.map(o => o.sales_order_item_id).filter(Boolean));
+  const laserCodeSet = new Set(laserOps.map(o => o.item_code).filter(Boolean));
+  const laserDwgSet = new Set(laserOps.map(o => o.drawing_no).filter(Boolean));
+
+  // 3. Fetch all potentially relevant materials
   const [allMaterials] = await pool.query(`
     SELECT * FROM sales_order_item_materials 
     WHERE sales_order_item_id IN (?) 
@@ -176,9 +192,17 @@ const getProjectMaterialRequirements = async (projectId) => {
   for (const item of items) {
     const materials = materialsById[item.id] || materialsByCode[item.item_code] || materialsByDwg[item.drawing_no] || [];
     for (const m of materials) {
+      const hasLaser = (m.sales_order_item_id && laserSoiSet.has(m.sales_order_item_id)) ||
+                       (m.item_code && laserCodeSet.has(m.item_code)) ||
+                       (m.drawing_no && laserDwgSet.has(m.drawing_no)) ||
+                       (item.id && laserSoiSet.has(item.id)) ||
+                       (item.item_code && laserCodeSet.has(item.item_code)) ||
+                       (item.drawing_no && laserDwgSet.has(item.drawing_no));
+
       rows.push({
         material_name: m.material_name,
         material_type: m.material_type,
+        drawing_no: item.drawing_no || m.drawing_no || item.item_code,
         uom: m.uom,
         item_group: m.item_group,
         length: m.length || 0,
@@ -187,7 +211,8 @@ const getProjectMaterialRequirements = async (projectId) => {
         diameter: m.diameter || 0,
         outer_diameter: m.outer_diameter || 0,
         total_required: parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity),
-        project_name: item.project_name
+        project_name: item.project_name,
+        has_laser_cutting: Boolean(hasLaser)
       });
     }
   }
@@ -200,6 +225,7 @@ const getProjectMaterialRequirements = async (projectId) => {
       aggregated[key] = {
         material_name: row.material_name,
         material_type: row.material_type,
+        drawing_no: row.drawing_no,
         uom: row.uom,
         item_group: row.item_group,
         length: row.length,
@@ -208,8 +234,11 @@ const getProjectMaterialRequirements = async (projectId) => {
         diameter: row.diameter,
         outer_diameter: row.outer_diameter,
         total_required: 0,
-        project_name: row.project_name
+        project_name: row.project_name,
+        has_laser_cutting: row.has_laser_cutting
       };
+    } else if (row.has_laser_cutting) {
+      aggregated[key].has_laser_cutting = true;
     }
     aggregated[key].total_required += row.total_required;
   }
