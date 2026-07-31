@@ -314,7 +314,8 @@ const ensureQuotationItemColumns = async () => {
     const requiredQCols = [
       { name: 'tax_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
       { name: 'grand_total', definition: 'DECIMAL(14, 2) DEFAULT 0' },
-      { name: 'host_company_id', definition: 'INT DEFAULT NULL' }
+      { name: 'host_company_id', definition: 'INT DEFAULT NULL' },
+      { name: 'gst_percentage', definition: 'DECIMAL(10, 2) DEFAULT 18.00' }
     ];
 
     const missingQCols = requiredQCols.filter(c => !existingQCols.has(c.name));
@@ -523,7 +524,10 @@ const ensurePoMaterialRequestColumns = async () => {
       { name: 'mr_id', definition: 'INT NULL' },
       { name: 'approved_by', definition: 'INT NULL' },
       { name: 'approved_at', definition: 'TIMESTAMP NULL' },
-      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' }
+      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' },
+      { name: 'discount_type', definition: "VARCHAR(20) DEFAULT 'AMOUNT'" },
+      { name: 'discount_value', definition: "DECIMAL(14, 2) DEFAULT 0.00" },
+      { name: 'discount_amount', definition: "DECIMAL(14, 2) DEFAULT 0.00" }
     ];
 
     const missingPoCols = requiredPoCols.filter(c => !existingPoCols.has(c.name));

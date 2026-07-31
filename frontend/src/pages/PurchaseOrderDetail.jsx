@@ -157,20 +157,48 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
   });
 
   const subtotal = filteredItems.reduce((sum, item) => {
-    const qty = parseFloat(item.quantity) || 0;
+    const qty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
     const rate = parseFloat(item.unit_rate) || 0;
     return sum + (qty * rate);
   }, 0) || 0;
 
-  const totalTax = filteredItems.reduce((sum, item) => {
-    const qty = parseFloat(item.quantity) || 0;
+  const discountType = po?.discount_type || 'AMOUNT';
+  const discountVal = parseFloat(po?.discount_value) || 0;
+  let discountAmount = parseFloat(po?.discount_amount) || 0;
+  if (!discountAmount && discountVal > 0) {
+    if (discountType === 'PERCENTAGE') {
+      discountAmount = (subtotal * discountVal) / 100;
+    } else {
+      discountAmount = Math.min(discountVal, subtotal);
+    }
+  }
+
+  const taxableAmount = Math.max(0, subtotal - discountAmount);
+
+  const totalCgst = filteredItems.reduce((sum, item) => {
+    if (item.cgst_amount !== undefined && item.cgst_amount !== null && !isNaN(parseFloat(item.cgst_amount)) && discountAmount === 0) {
+      return sum + parseFloat(item.cgst_amount);
+    }
+    const qty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
     const rate = parseFloat(item.unit_rate) || 0;
-    const itemAmount = qty * rate;
-    const cgst = parseFloat(item.cgst_amount) || (itemAmount * 0.09);
-    const sgst = parseFloat(item.sgst_amount) || (itemAmount * 0.09);
-    return sum + cgst + sgst;
-  }, 0) || 0;
-  const grandTotal = subtotal + totalTax;
+    const amt = qty * rate;
+    const itemTaxable = subtotal > 0 ? (amt - (amt / subtotal) * discountAmount) : amt;
+    return sum + (itemTaxable * (parseFloat(item.cgst_percent || 9) / 100));
+  }, 0);
+
+  const totalSgst = filteredItems.reduce((sum, item) => {
+    if (item.sgst_amount !== undefined && item.sgst_amount !== null && !isNaN(parseFloat(item.sgst_amount)) && discountAmount === 0) {
+      return sum + parseFloat(item.sgst_amount);
+    }
+    const qty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
+    const rate = parseFloat(item.unit_rate) || 0;
+    const amt = qty * rate;
+    const itemTaxable = subtotal > 0 ? (amt - (amt / subtotal) * discountAmount) : amt;
+    return sum + (itemTaxable * (parseFloat(item.sgst_percent || 9) / 100));
+  }, 0);
+
+  const totalTax = totalCgst + totalSgst;
+  const grandTotal = parseFloat(po?.total_amount || (taxableAmount + totalTax));
 
   return (
     <>
@@ -434,7 +462,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                             <div className="flex flex-col items-end">
                               <span className="text-xs  text-slate-800">
                                 {(() => {
-                                  const qty = parseFloat(item.quantity) || 0;
+                                  const qty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
                                   const rate = parseFloat(item.unit_rate) || 0;
                                   return formatCurrency(qty * rate, po.currency);
                                 })()}
@@ -443,7 +471,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                           </td>
                           <td className="p-2  text-right font-bold text-slate-900">
                             {(() => {
-                              const qty = parseFloat(item.quantity) || 0;
+                              const qty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
                               const rate = parseFloat(item.unit_rate) || 0;
                               const cgst = parseFloat(item.cgst_amount) || 0;
                               const sgst = parseFloat(item.sgst_amount) || 0;
@@ -460,37 +488,39 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
 
               <div className="p-6 bg-slate-50/30 border-t border-slate-50 space-y-3">
                 <div className="flex justify-end gap-12 text-xs">
-                  <span className="text-slate-400   ">Subtotal</span>
-                  <span className="text-slate-600  w-32 text-right">
+                  <span className="text-slate-400">Subtotal</span>
+                  <span className="text-slate-600 font-medium w-32 text-right">
                     {formatCurrency(subtotal, po.currency)}
                   </span>
                 </div>
                 <div className="flex justify-end gap-12 text-xs">
-                  <span className="text-slate-400   ">CGST (9%)</span>
-                  <span className="text-emerald-500  w-32 text-right">
-                    + {formatCurrency(filteredItems.reduce((sum, i) => {
-                      const qty = parseFloat(i.quantity);
-                      const rate = parseFloat(i.unit_rate) || 0;
-                      const tax = parseFloat(i.cgst_amount) || (qty * rate * 0.09);
-                      return sum + tax;
-                    }, 0), po.currency)}
+                  <span className="text-slate-400">Discount {discountType === 'PERCENTAGE' && discountVal > 0 ? `(${discountVal}%)` : ''}</span>
+                  <span className="text-rose-500 font-medium w-32 text-right">
+                    - {formatCurrency(discountAmount, po.currency)}
+                  </span>
+                </div>
+                <div className="flex justify-end gap-12 text-xs font-semibold py-1 border-y border-slate-100">
+                  <span className="text-slate-600">Taxable Amount</span>
+                  <span className="text-slate-800 w-32 text-right">
+                    {formatCurrency(taxableAmount, po.currency)}
                   </span>
                 </div>
                 <div className="flex justify-end gap-12 text-xs">
-                  <span className="text-slate-400   ">SGST (9%)</span>
-                  <span className="text-emerald-500  w-32 text-right">
-                    + {formatCurrency(filteredItems.reduce((sum, i) => {
-                      const qty = parseFloat(i.quantity);
-                      const rate = parseFloat(i.unit_rate) || 0;
-                      const tax = parseFloat(i.sgst_amount) || (qty * rate * 0.09);
-                      return sum + tax;
-                    }, 0), po.currency)}
+                  <span className="text-slate-400">CGST (9%)</span>
+                  <span className="text-emerald-500 w-32 text-right">
+                    + {formatCurrency(totalCgst, po.currency)}
+                  </span>
+                </div>
+                <div className="flex justify-end gap-12 text-xs">
+                  <span className="text-slate-400">SGST (9%)</span>
+                  <span className="text-emerald-500 w-32 text-right">
+                    + {formatCurrency(totalSgst, po.currency)}
                   </span>
                 </div>
               </div>
-              <div className="bg-blue-600 p-2 flex justify-between items-center text-white">
-                <span className="text-xs   ">Grand Total</span>
-                <span className="text-sm ">
+              <div className="bg-blue-600 p-2.5 flex justify-between items-center text-white font-bold">
+                <span className="text-xs">Grand Total</span>
+                <span className="text-base">
                   {formatCurrency(grandTotal, po.currency)}
                 </span>
               </div>
@@ -776,8 +806,8 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                       {Number(item.quantity || 0).toFixed(3)} {item.unit || item.uom}
                     </td>
                     <td className="p-2 text-center border-r border-slate-200">{formatCurrency(item.unit_rate, po.currency)}</td>
-                    <td className="p-2 text-right border-r border-slate-200">{formatCurrency((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0), po.currency)}</td>
-                    <td className="p-2 text-right font-bold">{formatCurrency((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0) * 1.18, po.currency)}</td>
+                    <td className="p-2 text-right border-r border-slate-200">{formatCurrency((parseFloat(item.design_qty) || parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0), po.currency)}</td>
+                    <td className="p-2 text-right font-bold">{formatCurrency((parseFloat(item.design_qty) || parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0) * 1.18, po.currency)}</td>
                   </tr>
                 );
               })}
@@ -791,26 +821,20 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
               <span className="text-slate-800 font-semibold w-32 text-right">{formatCurrency(subtotal, po.currency)}</span>
             </div>
             <div className="flex justify-end gap-12 text-xs">
+              <span className="text-slate-500">Discount {discountType === 'PERCENTAGE' && discountVal > 0 ? `(${discountVal}%)` : ''}</span>
+              <span className="text-rose-600 font-semibold w-32 text-right">- {formatCurrency(discountAmount, po.currency)}</span>
+            </div>
+            <div className="flex justify-end gap-12 text-xs font-bold border-y border-slate-200 py-1">
+              <span className="text-slate-700">Taxable Amount</span>
+              <span className="text-slate-900 w-32 text-right">{formatCurrency(taxableAmount, po.currency)}</span>
+            </div>
+            <div className="flex justify-end gap-12 text-xs">
               <span className="text-slate-500">CGST (9%)</span>
-              <span className="text-slate-800 font-semibold w-32 text-right">
-                {formatCurrency(filteredItems.reduce((sum, i) => {
-                  const qty = parseFloat(i.quantity);
-                  const rate = parseFloat(i.unit_rate) || 0;
-                  const tax = parseFloat(i.cgst_amount) || (qty * rate * 0.09);
-                  return sum + tax;
-                }, 0), po.currency)}
-              </span>
+              <span className="text-slate-800 font-semibold w-32 text-right">{formatCurrency(totalCgst, po.currency)}</span>
             </div>
             <div className="flex justify-end gap-12 text-xs">
               <span className="text-slate-500">SGST (9%)</span>
-              <span className="text-slate-800 font-semibold w-32 text-right">
-                {formatCurrency(filteredItems.reduce((sum, i) => {
-                  const qty = parseFloat(i.quantity);
-                  const rate = parseFloat(i.unit_rate) || 0;
-                  const tax = parseFloat(i.sgst_amount) || (qty * rate * 0.09);
-                  return sum + tax;
-                }, 0), po.currency)}
-              </span>
+              <span className="text-slate-800 font-semibold w-32 text-right">{formatCurrency(totalSgst, po.currency)}</span>
             </div>
             <div className="flex justify-end gap-12 text-sm font-bold border-t border-slate-200 pt-2">
               <span>GRAND TOTAL</span>

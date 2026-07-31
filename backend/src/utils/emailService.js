@@ -55,7 +55,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
       const quantity = item.quantity || 1;
       const profitP = parseFloat(item.profit_percentage) || 0;
       const overrideP = parseFloat(item.override_percentage) || 0;
-      const gstRate = parseFloat(item.gst_percentage) || 18;
+      const gstRate = item.gst_percentage !== undefined && item.gst_percentage !== null && item.gst_percentage !== '' ? parseFloat(item.gst_percentage) : 18;
 
       // Calculate rates
       // item.quotedPrice already includes profit (it's the Unit Rate from UI)

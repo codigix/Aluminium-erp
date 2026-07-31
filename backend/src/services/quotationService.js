@@ -105,11 +105,17 @@ const createQuotation = async (payload) => {
 
     const quoteNumber = await generateQuoteNumber();
 
+    const gstPercentage = payload.gst_percentage !== undefined && payload.gst_percentage !== null && payload.gst_percentage !== '' 
+      ? parseFloat(payload.gst_percentage) 
+      : (payload.gstPercentage !== undefined && payload.gstPercentage !== null && payload.gstPercentage !== '' 
+          ? parseFloat(payload.gstPercentage) 
+          : 18);
+
     const [result] = await connection.execute(
-      `INSERT INTO quotations (quote_number, base_quote_number, version, vendor_id, sales_order_id, mr_id, rfq_id, rfq_group_id, status, valid_until, notes, host_company_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO quotations (quote_number, base_quote_number, version, vendor_id, sales_order_id, mr_id, rfq_id, rfq_group_id, status, valid_until, notes, host_company_id, gst_percentage)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ,
-      [quoteNumber, quoteNumber, 1, vendorId, salesOrderId || null, mrId || null, rfq_id || null, rfq_group_id || null, status, validUntil || null, notes || null, hostCompanyIdVal]
+      [quoteNumber, quoteNumber, 1, vendorId, salesOrderId || null, mrId || null, rfq_id || null, rfq_group_id || null, status, validUntil || null, notes || null, hostCompanyIdVal, gstPercentage]
     );
 
     const quotationId = result.insertId;
@@ -148,8 +154,8 @@ const createQuotation = async (payload) => {
         const qty = parseFloat(item.quantity) || designQty || 0;
         const rate = parseFloat(item.unit_rate) || 0;
         const amount = Number((designQty * rate).toFixed(2));
-        const cgstPercent = 9;
-        const sgstPercent = 9;
+        const cgstPercent = Number((gstPercentage / 2).toFixed(2));
+        const sgstPercent = Number((gstPercentage / 2).toFixed(2));
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
         const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
         const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
@@ -198,11 +204,11 @@ const createQuotation = async (payload) => {
       }
     }
 
-    const grandTotal = totalAmount + totalTaxAmount;
+    const grandTotal = Number((totalAmount + totalTaxAmount).toFixed(2));
 
     await connection.execute(
-      'UPDATE quotations SET total_amount = ?, tax_amount = ?, grand_total = ? WHERE id = ?',
-      [totalAmount, totalTaxAmount, grandTotal, quotationId]
+      'UPDATE quotations SET total_amount = ?, tax_amount = ?, grand_total = ?, gst_percentage = ? WHERE id = ?',
+      [totalAmount, totalTaxAmount, grandTotal, gstPercentage, quotationId]
     );
 
     // If status is RECEIVED, check for single vendor auto-approval
@@ -837,12 +843,18 @@ const updateQuotation = async (quotationId, payload) => {
     // New quote number reflects version
     const newQuoteNumber = `${baseQuoteNumber}-V${newVersion}`;
 
+    const gstPercentage = payload.gst_percentage !== undefined && payload.gst_percentage !== null && payload.gst_percentage !== '' 
+      ? parseFloat(payload.gst_percentage) 
+      : (payload.gstPercentage !== undefined && payload.gstPercentage !== null && payload.gstPercentage !== '' 
+          ? parseFloat(payload.gstPercentage) 
+          : (oldQuote.gst_percentage !== undefined && oldQuote.gst_percentage !== null ? parseFloat(oldQuote.gst_percentage) : 18));
+
     // 2. Insert new version of quotation
     const [result] = await connection.execute(
       `INSERT INTO quotations (
         quote_number, base_quote_number, version, vendor_id, sales_order_id, 
-        mr_id, rfq_id, rfq_group_id, status, valid_until, notes, received_pdf_path, host_company_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        mr_id, rfq_id, rfq_group_id, status, valid_until, notes, received_pdf_path, host_company_id, gst_percentage
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         newQuoteNumber,
         baseQuoteNumber,
@@ -856,7 +868,8 @@ const updateQuotation = async (quotationId, payload) => {
         validUntil !== undefined ? (validUntil === '' ? null : validUntil) : oldQuote.valid_until,
         notes !== undefined ? notes : oldQuote.notes,
         received_pdf_path !== undefined ? received_pdf_path : oldQuote.received_pdf_path,
-        hostCompanyIdVal !== undefined ? (hostCompanyIdVal === '' ? null : hostCompanyIdVal) : oldQuote.host_company_id
+        hostCompanyIdVal !== undefined ? (hostCompanyIdVal === '' ? null : hostCompanyIdVal) : oldQuote.host_company_id,
+        gstPercentage
       ]
     );
 
@@ -883,8 +896,8 @@ const updateQuotation = async (quotationId, payload) => {
         const qty = parseFloat(item.quantity) || designQty || 0;
         const rate = parseFloat(item.unit_rate) || 0;
         const amount = Number((designQty * rate).toFixed(2));
-        const cgstPercent = parseFloat(item.cgst_percent) || 9;
-        const sgstPercent = parseFloat(item.sgst_percent) || 9;
+        const cgstPercent = Number((gstPercentage / 2).toFixed(2));
+        const sgstPercent = Number((gstPercentage / 2).toFixed(2));
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
         const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
         const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
@@ -932,11 +945,11 @@ const updateQuotation = async (quotationId, payload) => {
       }
     }
 
-    const grandTotal = totalAmount + totalTaxAmount;
+    const grandTotal = Number((totalAmount + totalTaxAmount).toFixed(2));
 
     await connection.execute(
-      'UPDATE quotations SET total_amount = ?, tax_amount = ?, grand_total = ? WHERE id = ?',
-      [totalAmount, totalTaxAmount, grandTotal, newQuotationId]
+      'UPDATE quotations SET total_amount = ?, tax_amount = ?, grand_total = ?, gst_percentage = ? WHERE id = ?',
+      [totalAmount, totalTaxAmount, grandTotal, gstPercentage, newQuotationId]
     );
 
     // Optional: Mark old version as superseded if it was the previous latest
@@ -1523,14 +1536,14 @@ const generateQuotationPDF = async (quotationId) => {
             {{^isRFQ}}
             <tr>
               <th style="width: 5%; text-align: center;">Sr. No</th>
-              <th style="width: 20%">Drawing No</th>
-              <th style="width: 24%">Description / Material Name</th>
-              <th style="width: 12%">Item Size</th>
-              <th style="width: 8%; text-align: center;">Design Qty</th>
+              <th style="width: 13%">Drawing No</th>
+              <th style="width: 29%">Description / Material Name</th>
+              <th style="width: 16%">Item Size</th>
+              <th style="width: 7%; text-align: center;">Design Qty</th>
               <th style="width: 9%; text-align: center;">Required Weight</th>
               <th style="width: 8%; text-align: right;">Unit Rate (₹)</th>
               <th style="width: 5%; text-align: center;">GST</th>
-              <th style="width: 9%; text-align: right;">Total</th>
+              <th style="width: 8%; text-align: right;">Total</th>
             </tr>
             {{/isRFQ}}
           </thead>
@@ -1550,9 +1563,11 @@ const generateQuotationPDF = async (quotationId) => {
               {{^isRFQ}}
               <td style="font-family: monospace; font-weight: 500;">
                 {{drawing_no}}
+              </td>
+              <td>
+                <strong>{{material_name}}</strong>
                 {{#drawing_name}}<br><span style="font-family: sans-serif; font-size: 8px; font-weight: 700; color: #1e293b;">{{drawing_name}}</span>{{/drawing_name}}
               </td>
-              <td><strong>{{material_name}}</strong></td>
               <td><strong>{{item_size}}</strong></td>
               <td class="center-col"><strong>{{design_qty_str}}</strong></td>
               <td class="center-col"><strong>{{required_weight_str}}</strong></td>
@@ -1591,7 +1606,7 @@ const generateQuotationPDF = async (quotationId) => {
                 <td class="summary-value" style="color: #2563eb;">₹0.00</td>
               </tr>
               <tr>
-                <td class="summary-label">Tax (GST 18%)</td>
+                <td class="summary-label">Tax (GST {{gst_percentage}}%)</td>
                 <td class="summary-value">₹{{tax_amount}}</td>
               </tr>
               <tr class="grand-total-row">
@@ -1625,6 +1640,7 @@ const generateQuotationPDF = async (quotationId) => {
 
   const viewData = {
     ...quotation,
+    gst_percentage: quotation.gst_percentage !== undefined && quotation.gst_percentage !== null ? parseFloat(quotation.gst_percentage) : 18,
     isRFQ: isRFQVal,
     created_at: formatDate(quotation.created_at),
     valid_until: formatDate(quotation.valid_until),
@@ -1659,9 +1675,11 @@ const generateQuotationPDF = async (quotationId) => {
       const qty = parseFloat(i.quantity || 0);
       const rate = parseFloat(i.unit_rate || 0);
       const amt = parseFloat(i.amount || qty * rate);
+      const hasItemGst = (i.cgst_percent !== undefined && i.cgst_percent !== null && i.cgst_percent !== '') || (i.sgst_percent !== undefined && i.sgst_percent !== null && i.sgst_percent !== '');
       const cgst = parseFloat(i.cgst_percent || 0);
       const sgst = parseFloat(i.sgst_percent || 0);
-      const totalGst = cgst + sgst;
+      const quoteGstVal = (quotation.gst_percentage !== undefined && quotation.gst_percentage !== null && quotation.gst_percentage !== '') ? parseFloat(quotation.gst_percentage) : 18;
+      const totalGst = hasItemGst ? (cgst + sgst) : quoteGstVal;
 
       const len = parseFloat(i.length || 0);
       const wid = parseFloat(i.width || 0);
@@ -1761,7 +1779,7 @@ const generateQuotationPDF = async (quotationId) => {
         material_type: i.material_type || '—',
         quantity: qty.toFixed(3),
         unit: i.unit || 'NOS',
-        gst_percent: totalGst > 0 ? `${totalGst}%` : '18%',
+        gst_percent: `${totalGst}%`,
         unit_rate: rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         amount: amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       };

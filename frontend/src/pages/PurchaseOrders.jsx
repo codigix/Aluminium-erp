@@ -178,6 +178,8 @@ const PurchaseOrders = () => {
     expectedDeliveryDate: '',
     notes: '',
     currency: 'INR (Indian Rupee)',
+    discountType: 'AMOUNT',
+    discountValue: 0,
     items: []
   });
 
@@ -498,6 +500,15 @@ const PurchaseOrders = () => {
       const token = localStorage.getItem('authToken');
       // Calculate totals for consistency
       const subtotal = manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+      const discVal = parseFloat(manualFormData.discountValue) || 0;
+      let discAmt = 0;
+      if (discVal > 0) {
+        if (manualFormData.discountType === 'PERCENTAGE') {
+          discAmt = (subtotal * discVal) / 100;
+        } else {
+          discAmt = Math.min(discVal, subtotal);
+        }
+      }
 
       const payload = {
         vendorId: parseInt(manualFormData.vendorId),
@@ -505,7 +516,10 @@ const PurchaseOrders = () => {
         expectedDeliveryDate: manualFormData.expectedDeliveryDate || null,
         notes: manualFormData.notes || null,
         currency: manualFormData.currency?.split(' ')[0] || 'INR',
-        total_amount: subtotal,
+        discount_type: manualFormData.discountType || 'AMOUNT',
+        discount_value: discVal,
+        discount_amount: discAmt,
+        total_amount: Math.max(0, subtotal - discAmt) * 1.18,
         status: manualFormData.id ? 'DRAFT' : undefined,
         items: manualFormData.items.map(item => ({
           id: item.id || undefined,
@@ -910,6 +924,9 @@ const PurchaseOrders = () => {
           expectedDeliveryDate: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
           notes: data.notes || '',
           currency: data.currency ? `${data.currency} (${data.currency === 'INR' ? 'Indian Rupee' : 'US Dollar'})` : 'INR (Indian Rupee)',
+          discountType: data.discount_type || 'AMOUNT',
+          discountValue: data.discount_value || 0,
+          discountAmount: data.discount_amount || 0,
           items: (data.items || [])
             .filter(item => {
               const type = (item.material_type || '').toUpperCase();
@@ -937,7 +954,10 @@ const PurchaseOrders = () => {
           expectedDeliveryDate: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
           notes: data.notes || '',
           status: data.status || '',
-          vendorId: data.vendor_id || ''
+          vendorId: data.vendor_id || '',
+          discountType: data.discount_type || 'AMOUNT',
+          discountValue: data.discount_value || 0,
+          discountAmount: data.discount_amount || 0
         });
         setShowEditModal(true);
       }
@@ -1023,6 +1043,17 @@ const PurchaseOrders = () => {
 
     try {
       const token = localStorage.getItem('authToken');
+      const subtotal = poItems.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+      const discVal = parseFloat(editFormData.discountValue) || 0;
+      let discAmt = 0;
+      if (discVal > 0) {
+        if (editFormData.discountType === 'PERCENTAGE') {
+          discAmt = (subtotal * discVal) / 100;
+        } else {
+          discAmt = Math.min(discVal, subtotal);
+        }
+      }
+
       const response = await fetch(`${API_BASE}/purchase-orders/${selectedPO.id}`, {
         method: 'PATCH',
         headers: {
@@ -1035,6 +1066,9 @@ const PurchaseOrders = () => {
           expectedDeliveryDate: editFormData.expectedDeliveryDate || null,
           notes: editFormData.notes,
           vendorId: editFormData.vendorId || null,
+          discount_type: editFormData.discountType || 'AMOUNT',
+          discount_value: discVal,
+          discount_amount: discAmt,
           items: poItems
         })
       });
@@ -1991,32 +2025,88 @@ const PurchaseOrders = () => {
                   </div>
                   <div className="p-2 space-y-2">
                     <div className="space-y-1.5">
-                      <label className="text-xs  text-slate-400   ml-1">Currency</label>
+                      <label className="text-xs text-slate-400 ml-1">Currency</label>
                       <select
                         value={manualFormData.currency}
                         onChange={(e) => setManualFormData({ ...manualFormData, currency: e.target.value })}
-                        className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs outline-none"
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none"
                       >
                         <option>INR (Indian Rupee)</option>
                         <option>USD (US Dollar)</option>
                       </select>
                     </div>
+                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-slate-500 font-semibold mb-1 block">Discount Type</label>
+                          <select
+                            value={manualFormData.discountType || 'AMOUNT'}
+                            onChange={(e) => setManualFormData({ ...manualFormData, discountType: e.target.value })}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none font-medium"
+                          >
+                            <option value="AMOUNT">Fixed Amount (₹)</option>
+                            <option value="PERCENTAGE">Percentage (%)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-slate-500 font-semibold mb-1 block">Discount Value</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={manualFormData.discountValue !== undefined ? manualFormData.discountValue : ''}
+                            onChange={(e) => setManualFormData({ ...manualFormData, discountValue: e.target.value })}
+                            className="w-full p-2 bg-white border border-slate-300 rounded text-xs outline-none font-bold text-slate-800"
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 {/* Summary Box */}
-                <div className="bg-blue-600 rounded p-1 shadow-lg shadow-blue-200 overflow-hidden flex flex-col">
-                  <div className="flex-1 p-2 space-y-2">
-                    <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-3">
-                      <span className="text-sm ">Subtotal</span>
-                      <span className="text-lg ">
-                        {formatCurrency(manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0))}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-3">
-                      <span className="text-sm ">Tax Amount</span>
-                      <span className="text-lg ">{formatCurrency(0)}</span>
-                    </div>
+                <div className="bg-blue-600 rounded p-3 shadow-lg shadow-blue-200 overflow-hidden flex flex-col text-white">
+                  <div className="flex-1 space-y-2">
+                    {(() => {
+                      const subtotal = manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+                      const discVal = parseFloat(manualFormData.discountValue) || 0;
+                      const discType = manualFormData.discountType || 'AMOUNT';
+                      const discAmt = discVal > 0 ? (discType === 'PERCENTAGE' ? (subtotal * discVal) / 100 : Math.min(discVal, subtotal)) : 0;
+                      const taxable = Math.max(0, subtotal - discAmt);
+                      const cgst = taxable * 0.09;
+                      const sgst = taxable * 0.09;
+                      const grandTotal = taxable + cgst + sgst;
+
+                      return (
+                        <>
+                          <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-1.5 text-xs">
+                            <span>Subtotal</span>
+                            <span className="font-semibold">{formatCurrency(subtotal)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-1.5 text-xs">
+                            <span>Discount {discType === 'PERCENTAGE' && discVal > 0 ? `(${discVal}%)` : ''}</span>
+                            <span className="font-semibold text-rose-200">- {formatCurrency(discAmt)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-white/90 border-b border-white/10 pb-1.5 text-xs font-bold">
+                            <span>Taxable Amount</span>
+                            <span>{formatCurrency(taxable)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-1.5 text-xs">
+                            <span>CGST (9%)</span>
+                            <span>+ {formatCurrency(cgst)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-1.5 text-xs">
+                            <span>SGST (9%)</span>
+                            <span>+ {formatCurrency(sgst)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-white pt-1 text-sm font-bold">
+                            <span>Grand Total</span>
+                            <span className="text-base">{formatCurrency(grandTotal)}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -2436,6 +2526,78 @@ const PurchaseOrders = () => {
                     onChange={(e) => setEditFormData({ ...editFormData, expectedDeliveryDate: e.target.value })}
                     className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   />
+                </div>
+              </div>
+
+              <div className="bg-slate-50/30 p-3 rounded border border-slate-100/50 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-slate-500 font-semibold mb-1 block">Discount Type</label>
+                    <select
+                      value={editFormData.discountType || 'AMOUNT'}
+                      onChange={(e) => setEditFormData({ ...editFormData, discountType: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none font-medium"
+                    >
+                      <option value="AMOUNT">Fixed Amount (₹)</option>
+                      <option value="PERCENTAGE">Percentage (%)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 font-semibold mb-1 block">Discount Value</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={editFormData.discountValue !== undefined ? editFormData.discountValue : ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, discountValue: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none font-bold text-slate-800"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-600 rounded p-3 shadow-lg shadow-blue-200 overflow-hidden flex flex-col text-white my-3">
+                <div className="flex-1 space-y-2">
+                  {(() => {
+                    const subtotal = poItems.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+                    const discVal = parseFloat(editFormData.discountValue) || 0;
+                    const discType = editFormData.discountType || 'AMOUNT';
+                    const discAmt = discVal > 0 ? (discType === 'PERCENTAGE' ? (subtotal * discVal) / 100 : Math.min(discVal, subtotal)) : 0;
+                    const taxable = Math.max(0, subtotal - discAmt);
+                    const cgst = taxable * 0.09;
+                    const sgst = taxable * 0.09;
+                    const grandTotal = taxable + cgst + sgst;
+
+                    return (
+                      <>
+                        <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-1.5 text-xs">
+                          <span>Subtotal</span>
+                          <span className="font-semibold">{formatCurrency(subtotal)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-1.5 text-xs">
+                          <span>Discount {discType === 'PERCENTAGE' && discVal > 0 ? `(${discVal}%)` : ''}</span>
+                          <span className="font-semibold text-rose-200">- {formatCurrency(discAmt)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-white/90 border-b border-white/10 pb-1.5 text-xs font-bold">
+                          <span>Taxable Amount</span>
+                          <span>{formatCurrency(taxable)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-1.5 text-xs">
+                          <span>CGST (9%)</span>
+                          <span>+ {formatCurrency(cgst)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-1.5 text-xs">
+                          <span>SGST (9%)</span>
+                          <span>+ {formatCurrency(sgst)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-white pt-1 text-sm font-bold">
+                          <span>Grand Total</span>
+                          <span className="text-base">{formatCurrency(grandTotal)}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 

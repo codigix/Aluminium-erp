@@ -136,7 +136,8 @@ const previewPurchaseOrder = async (quotationId) => {
 };
 
 const createPurchaseOrder = async (data, existingConnection = null) => {
-  const { quotationId, mrId: providedMrId, expectedDeliveryDate, notes, poNumber: manualPoNumber, items: manualItems, vendorId, vendor_id } = data;
+  const { quotationId, mrId: providedMrId, expectedDeliveryDate, notes, poNumber: manualPoNumber, items: manualItems, vendorId, vendor_id, discount_type, discount_value, discount_amount } = data;
+  const publicId = crypto.randomUUID();
 
   const connection = existingConnection || await pool.getConnection();
   const shouldManageConnection = !existingConnection;
@@ -295,7 +296,6 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
       });
 
       total_amount = items.reduce((sum, item) => Number(sum) + (Number(item.total_amount) || 0), 0);
-      // Removed: if (!finalVendorId) throw new Error('Vendor is required for PO from Material Request');
     } else {
       // Manual PO
       if (!finalVendorId) throw new Error('Vendor is required for manual PO');
@@ -342,11 +342,28 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
     }
 
     const poStatus = (actualMrId && !finalVendorId) ? 'PO_REQUEST' : 'DRAFT';
-    const publicId = crypto.randomUUID();
+    const discType = discount_type || 'AMOUNT';
+    const discVal = parseFloat(discount_value) || 0;
+    
+    // Calculate subtotal and discount amount
+    const subtotal = items.reduce((sum, item) => sum + ((parseFloat(item.design_qty) || parseFloat(item.quantity) || 0) * parseFloat(item.unit_rate || item.rate || 0)), 0);
+    let discAmt = parseFloat(discount_amount) || 0;
+    if (!discAmt && discVal > 0) {
+      if (discType === 'PERCENTAGE') {
+        discAmt = Number(((subtotal * discVal) / 100).toFixed(2));
+      } else {
+        discAmt = Number(Math.min(discVal, subtotal).toFixed(2));
+      }
+    }
+
+    const taxableAmount = Number(Math.max(0, subtotal - discAmt).toFixed(2));
+    const cgstTotal = Number((taxableAmount * 0.09).toFixed(2));
+    const sgstTotal = Number((taxableAmount * 0.09).toFixed(2));
+    const actualTotalAmount = Number((taxableAmount + cgstTotal + sgstTotal).toFixed(2));
 
     const [result] = await connection.execute(
-      `INSERT INTO purchase_orders (po_number, public_id, quotation_id, mr_id, vendor_id, sales_order_id, status, total_amount, expected_delivery_date, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO purchase_orders (po_number, public_id, quotation_id, mr_id, vendor_id, sales_order_id, status, total_amount, expected_delivery_date, notes, discount_type, discount_value, discount_amount)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         poNumber,
         publicId,
@@ -355,9 +372,12 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
         finalVendorId || null,
         sales_order_id || null,
         poStatus,
-        total_amount || 0,
+        actualTotalAmount,
         actualExpectedDeliveryDate || null,
-        notes || null
+        notes || null,
+        discType,
+        discVal,
+        discAmt
       ]
     );
 
@@ -370,7 +390,6 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
       );
     }
 
-    let actualTotalAmount = 0;
     const parentDrawingNo = await getParentDrawingNumber(connection, { quotation_id: quotationId, sales_order_id: sales_order_id, mr_id: actualMrId });
 
     if (items.length > 0) {
@@ -378,8 +397,9 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
         if (item.sales_order_item_status === 'Rejected') continue;
 
         const qty = parseFloat(item.quantity) || 0;
+        const designQty = parseFloat(item.design_qty) || qty;
         const rate = parseFloat(item.unit_rate || item.rate) || 0;
-        const amount = qty * rate;
+        const amount = designQty * rate;
         const cgstPercent = parseFloat(item.cgst_percent) || 0;
         const sgstPercent = parseFloat(item.sgst_percent) || 0;
         const cgstAmount = parseFloat(item.cgst_amount) || (amount * cgstPercent) / 100;
@@ -387,8 +407,6 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
 
         // Force numeric calculation to avoid string concatenation
         const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
-
-        actualTotalAmount = Number((actualTotalAmount + totalItemAmount).toFixed(2));
 
         const correctedItemCode = await getCorrectItemCode(item, connection);
 
@@ -1266,7 +1284,7 @@ const getPurchaseOrderById = async (poId) => {
 };
 
 const updatePurchaseOrder = async (poId, payload) => {
-  const { status, poNumber, expectedDeliveryDate, notes, items, vendorId } = payload;
+  const { status, poNumber, expectedDeliveryDate, notes, items, vendorId, discount_type, discount_value, discount_amount } = payload;
 
   const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'APPROVED', 'PENDING_PAYMENT', 'PAID', 'COMPLETED', 'CLOSED', 'FULFILLED'];
   if (status && !validStatuses.includes(status)) {
@@ -1315,6 +1333,18 @@ const updatePurchaseOrder = async (poId, payload) => {
       updates.push('vendor_id = ?');
       params.push(vendorId);
     }
+    if (discount_type !== undefined) {
+      updates.push('discount_type = ?');
+      params.push(discount_type);
+    }
+    if (discount_value !== undefined) {
+      updates.push('discount_value = ?');
+      params.push(parseFloat(discount_value) || 0);
+    }
+    if (discount_amount !== undefined) {
+      updates.push('discount_amount = ?');
+      params.push(parseFloat(discount_amount) || 0);
+    }
 
     if (updates.length > 0) {
       params.push(poId);
@@ -1325,7 +1355,6 @@ const updatePurchaseOrder = async (poId, payload) => {
     }
 
     if (items && Array.isArray(items)) {
-      let totalAmount = 0;
       const parentDrawingNo = await getParentDrawingNumber(connection, {
         quotation_id: existing[0].quotation_id,
         mr_id: existing[0].mr_id,
@@ -1336,7 +1365,7 @@ const updatePurchaseOrder = async (poId, payload) => {
         const qty = parseFloat(item.quantity) || 0;
         const designQty = parseFloat(item.design_qty) || qty;
         const rate = parseFloat(item.unit_rate) || parseFloat(item.rate) || 0;
-        const amount = Number((qty * rate).toFixed(2));
+        const amount = Number((designQty * rate).toFixed(2));
 
         // Default to 18% GST (9% CGST + 9% SGST)
         const cgstPercent = item.cgst_percent || 9;
@@ -1344,8 +1373,6 @@ const updatePurchaseOrder = async (poId, payload) => {
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
         const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
         const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
-
-        totalAmount = Number((totalAmount + totalItemAmount).toFixed(2));
 
         let targetDrawingNo = item.drawing_no;
         if (targetDrawingNo) {
@@ -1388,9 +1415,33 @@ const updatePurchaseOrder = async (poId, payload) => {
         }
       }
 
+      const targetDiscType = discount_type !== undefined ? discount_type : (existing[0].discount_type || 'AMOUNT');
+      const targetDiscVal = discount_value !== undefined ? (parseFloat(discount_value) || 0) : (parseFloat(existing[0].discount_value) || 0);
+      let targetDiscAmt = discount_amount !== undefined ? (parseFloat(discount_amount) || 0) : (parseFloat(existing[0].discount_amount) || 0);
+
+      const subtotal = items.reduce((sum, item) => {
+        const qty = parseFloat(item.quantity) || 0;
+        const designQty = parseFloat(item.design_qty) || qty;
+        const rate = parseFloat(item.unit_rate || item.rate) || 0;
+        return sum + (designQty * rate);
+      }, 0);
+
+      if (targetDiscAmt === 0 && targetDiscVal > 0) {
+        if (targetDiscType === 'PERCENTAGE') {
+          targetDiscAmt = Number(((subtotal * targetDiscVal) / 100).toFixed(2));
+        } else {
+          targetDiscAmt = Number(Math.min(targetDiscVal, subtotal).toFixed(2));
+        }
+      }
+
+      const taxableAmount = Number(Math.max(0, subtotal - targetDiscAmt).toFixed(2));
+      const cgstTotal = Number((taxableAmount * 0.09).toFixed(2));
+      const sgstTotal = Number((taxableAmount * 0.09).toFixed(2));
+      const grandTotal = Number((taxableAmount + cgstTotal + sgstTotal).toFixed(2));
+
       await connection.execute(
-        'UPDATE purchase_orders SET total_amount = ? WHERE id = ?',
-        [totalAmount, poId]
+        'UPDATE purchase_orders SET total_amount = ?, discount_type = ?, discount_value = ?, discount_amount = ? WHERE id = ?',
+        [grandTotal, targetDiscType, targetDiscVal, targetDiscAmt, poId]
       );
     }
 
@@ -1881,8 +1932,8 @@ const generatePurchaseOrderPDF = async (poId) => {
 
   .items-table th {
     border: 0.5px solid #000;
-    padding: 3.5px 4px;
-    font-size: 7.5px;
+    padding: 5px 4px;
+    font-size: 7px;
     vertical-align: middle;
     background: #f2f2f2;
     font-weight: bold;
@@ -1893,9 +1944,9 @@ const generatePurchaseOrderPDF = async (poId) => {
   .items-table td {
     border: none;
     border-bottom: 0.5px solid #000;
-    padding: 3.5px 4px;
-    font-size: 7.5px;
-    vertical-align: top;
+    padding: 5px 4px;
+    font-size: 7px;
+    vertical-align: middle;
   }
 
   .items-table tr.sub-assembly-row td {
@@ -2143,22 +2194,22 @@ const generatePurchaseOrderPDF = async (poId) => {
   <table class="items-table">
     <thead>
       <tr>
-        <th style="width: 3%;">SL No.</th>
-        <th style="width: 10%; text-align: left; vertical-align: top; line-height: 1.3;">Drawing No</th>
-        <th style="width: 17%; text-align: left; vertical-align: top; line-height: 1.3;">Item No.<br/>Item Description</th>
-        <th style="width: 10%; text-align: left; vertical-align: top; line-height: 1.3;">Size</th>
-        <th style="width: 4%;">HSN Code</th>
-        <th style="width: 6%; text-align: right;">Rate</th>
-        <th style="width: 5%; text-align: right; line-height: 1.2;">Qty</th>
-        <th style="width: 9%; text-align: right; line-height: 1.2;">Weight</th>
-        <th style="width: 6%; text-align: right;">Amount</th>
+        <th style="width: 2%;">SL No.</th>
+        <th style="width: 10%; text-align: left; line-height: 1.3;">Drawing No</th>
+        <th style="width: 30%; text-align: left; line-height: 1.3;">GRADE</th>
+        <th style="width: 21%; text-align: center; line-height: 1.3;">Size</th>
+        <th style="width: 3%;">HSN Code</th>
+        <th style="width: 4%; text-align: right;">Rate</th>
+        <th style="width: 3%; text-align: right; line-height: 1.2;">Qty</th>
+        <th style="width: 4%; text-align: right; line-height: 1.2;">Weight</th>
+        <th style="width: 4%; text-align: right;">Amount</th>
         <th style="width: 3%; text-align: right;">Discount</th>
-        <th style="width: 5%; text-align: right;">Transaction Amount</th>
-        <th style="width: 3%; text-align: right; line-height: 1.2;">CGST<br/>%</th>
-        <th style="width: 5%; text-align: right;">CGST Amt</th>
-        <th style="width: 3%; text-align: right; line-height: 1.2;">SGST<br/>%</th>
-        <th style="width: 5%; text-align: right;">SGST Amt</th>
-        <th style="width: 6%; text-align: right;">Total Amount</th>
+        <th style="width: 4%; text-align: right;">Transaction Amount</th>
+        <th style="width: 2%; text-align: right; line-height: 1.2;">CGST<br/>%</th>
+        <th style="width: 3%; text-align: right;">CGST Amt</th>
+        <th style="width: 2%; text-align: right; line-height: 1.2;">SGST<br/>%</th>
+        <th style="width: 3%; text-align: right;">SGST Amt</th>
+        <th style="width: 5%; text-align: right;">Total Amount</th>
       </tr>
     </thead>
     <tbody>
@@ -2172,7 +2223,7 @@ const generatePurchaseOrderPDF = async (poId) => {
             <strong>{{material_name}}</strong>
           </div>
         </td>
-        <td style="text-align: left; font-family: monospace; font-weight: bold; color: #000;">{{size}}</td>
+        <td style="text-align: center; vertical-align: middle; font-family: monospace; font-weight: bold; color: #000;">{{size}}</td>
         <td style="text-align: center;">{{hsn_code}}</td>
         <td style="text-align: right;">{{unit_rate}}</td>
         <td style="text-align: right;">{{design_qty}}</td>
@@ -2222,22 +2273,32 @@ const generatePurchaseOrderPDF = async (poId) => {
       <td style="width: 40%; padding: 0;">
         <table class="totals-subtable">
           <tr>
-            <td style="width: 55%; padding: 3px 5px; font-weight: bold;">Sub Total</td>
+            <td style="width: 55%; padding: 3px 5px; font-weight: bold;">Subtotal</td>
             <td style="width: 5%; text-align: center; padding: 3px 0;">:</td>
-            <td style="text-align: right; padding: 3px 5px;">{{subtotal}}</td>
+            <td style="text-align: right; padding: 3px 5px;">₹ {{subtotal}}</td>
+          </tr>
+          <tr>
+            <td style="padding: 3px 5px; font-weight: bold;">Discount {{#discount_label}}({{discount_label}}){{/discount_label}}</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">- ₹ {{discount_amount_str}}</td>
+          </tr>
+          <tr style="border-top: 0.5px solid #000; border-bottom: 0.5px solid #000;">
+            <td style="padding: 3px 5px; font-weight: bold;">Taxable Amount</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px; font-weight: bold;">₹ {{taxable_amount_str}}</td>
           </tr>
           {{#cgst_total}}
           <tr>
             <td style="padding: 3px 5px; font-weight: bold;">CGST @ {{cgst_rate_summary}}%</td>
             <td style="text-align: center; padding: 3px 0;">:</td>
-            <td style="text-align: right; padding: 3px 5px;">{{cgst_total}}</td>
+            <td style="text-align: right; padding: 3px 5px;">+ ₹ {{cgst_total}}</td>
           </tr>
           {{/cgst_total}}
           {{#sgst_total}}
           <tr>
             <td style="padding: 3px 5px; font-weight: bold;">SGST @ {{sgst_rate_summary}}%</td>
             <td style="text-align: center; padding: 3px 0;">:</td>
-            <td style="text-align: right; padding: 3px 5px;">{{sgst_total}}</td>
+            <td style="text-align: right; padding: 3px 5px;">+ ₹ {{sgst_total}}</td>
           </tr>
           {{/sgst_total}}
           <tr class="grand-total-row">
@@ -2359,13 +2420,41 @@ const generatePurchaseOrderPDF = async (poId) => {
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '—';
 
   const subtotal = po.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-  const cgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.cgst_amount) || 0), 0);
-  const sgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.sgst_amount) || 0), 0);
-  const grand_total = parseFloat(po.total_amount || (subtotal + cgst_total + sgst_total));
+  const discountType = po.discount_type || 'AMOUNT';
+  const discountVal = parseFloat(po.discount_value) || 0;
+  let discountAmount = parseFloat(po.discount_amount) || 0;
+  if (!discountAmount && discountVal > 0) {
+    if (discountType === 'PERCENTAGE') {
+      discountAmount = (subtotal * discountVal) / 100;
+    } else {
+      discountAmount = Math.min(discountVal, subtotal);
+    }
+  }
+  const taxableAmount = Math.max(0, subtotal - discountAmount);
+
+  const cgst_total = po.items.reduce((sum, item) => {
+    if (item.cgst_amount !== undefined && item.cgst_amount !== null && !isNaN(parseFloat(item.cgst_amount)) && discountAmount === 0) {
+      return sum + parseFloat(item.cgst_amount);
+    }
+    const amt = parseFloat(item.amount) || 0;
+    const itemTaxable = subtotal > 0 ? (amt - (amt / subtotal) * discountAmount) : amt;
+    return sum + (itemTaxable * (parseFloat(item.cgst_percent || 9) / 100));
+  }, 0);
+
+  const sgst_total = po.items.reduce((sum, item) => {
+    if (item.sgst_amount !== undefined && item.sgst_amount !== null && !isNaN(parseFloat(item.sgst_amount)) && discountAmount === 0) {
+      return sum + parseFloat(item.sgst_amount);
+    }
+    const amt = parseFloat(item.amount) || 0;
+    const itemTaxable = subtotal > 0 ? (amt - (amt / subtotal) * discountAmount) : amt;
+    return sum + (itemTaxable * (parseFloat(item.sgst_percent || 9) / 100));
+  }, 0);
+
+  const grand_total = parseFloat(po.total_amount || (taxableAmount + cgst_total + sgst_total));
 
   const firstItem = po.items[0] || {};
-  const cgst_rate_summary = parseFloat(firstItem.cgst_percent || 0).toFixed(0);
-  const sgst_rate_summary = parseFloat(firstItem.sgst_percent || 0).toFixed(0);
+  const cgst_rate_summary = parseFloat(firstItem.cgst_percent || 9).toFixed(0);
+  const sgst_rate_summary = parseFloat(firstItem.sgst_percent || 9).toFixed(0);
 
   // Basic number to words for the words section
   const numberToWords = (num) => {
@@ -2400,7 +2489,11 @@ const generatePurchaseOrderPDF = async (poId) => {
     project_name: po.project_name || 'General Procurement',
     project_ref: po.mr_number ? `MR-${po.mr_number}` : (po.sales_order_id ? `SO-${po.so_number || po.sales_order_id}` : 'Direct Procurement'),
     subtotal: subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    cgst_total: cgst_total > 0 ? cgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
+    discount_label: discountType === 'PERCENTAGE' && discountVal > 0 ? `${discountVal}%` : null,
+    discount_amount_str: discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    taxable_amount_str: taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    cgst_total: cgst_total > 0 ? cgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00',
+    sgst_total: sgst_total > 0 ? sgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00',
     sgst_total: sgst_total > 0 ? sgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
     cgst_rate_summary,
     sgst_rate_summary,
@@ -2526,13 +2619,38 @@ const generatePurchaseOrderPDF = async (poId) => {
         unit: (i.unit || 'NOS').toUpperCase(),
         unit_rate: parseFloat(i.unit_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        discount: (0).toFixed(2),
-        transaction_amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        cgst_rate: parseFloat(i.cgst_percent || 0).toFixed(2),
-        cgst_amount: parseFloat(i.cgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        sgst_rate: parseFloat(i.sgst_percent || 0).toFixed(2),
-        sgst_amount: parseFloat(i.sgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        total_amount: (parseFloat(i.amount || 0) + parseFloat(i.cgst_amount || 0) + parseFloat(i.sgst_amount || 0) + parseFloat(i.igst_amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        discount: (() => {
+          const amt = parseFloat(i.amount || 0);
+          const itemDiscount = subtotal > 0 ? ((amt / subtotal) * discountAmount) : 0;
+          return itemDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        })(),
+        transaction_amount: (() => {
+          const amt = parseFloat(i.amount || 0);
+          const itemDiscount = subtotal > 0 ? ((amt / subtotal) * discountAmount) : 0;
+          return (amt - itemDiscount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        })(),
+        cgst_rate: parseFloat(i.cgst_percent || 9).toFixed(2),
+        cgst_amount: (() => {
+          const amt = parseFloat(i.amount || 0);
+          const itemDiscount = subtotal > 0 ? ((amt / subtotal) * discountAmount) : 0;
+          const itemTransactionAmount = amt - itemDiscount;
+          return (itemTransactionAmount * (parseFloat(i.cgst_percent || 9) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        })(),
+        sgst_rate: parseFloat(i.sgst_percent || 9).toFixed(2),
+        sgst_amount: (() => {
+          const amt = parseFloat(i.amount || 0);
+          const itemDiscount = subtotal > 0 ? ((amt / subtotal) * discountAmount) : 0;
+          const itemTransactionAmount = amt - itemDiscount;
+          return (itemTransactionAmount * (parseFloat(i.sgst_percent || 9) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        })(),
+        total_amount: (() => {
+          const amt = parseFloat(i.amount || 0);
+          const itemDiscount = subtotal > 0 ? ((amt / subtotal) * discountAmount) : 0;
+          const itemTransactionAmount = amt - itemDiscount;
+          const itemCgstAmount = itemTransactionAmount * (parseFloat(i.cgst_percent || 9) / 100);
+          const itemSgstAmount = itemTransactionAmount * (parseFloat(i.sgst_percent || 9) / 100);
+          return (itemTransactionAmount + itemCgstAmount + itemSgstAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        })()
       };
     })),
     empty_rows: []

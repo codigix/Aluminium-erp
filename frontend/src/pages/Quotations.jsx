@@ -122,6 +122,7 @@ const Quotations = () => {
     validUntil: '',
     notes: '',
     hostCompanyId: '',
+    gstPercentage: 18,
     items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
   });
   const [recordData, setRecordData] = useState({
@@ -129,6 +130,7 @@ const Quotations = () => {
     vendorId: '',
     quotationId: '',
     amount: 0,
+    gstPercentage: 18,
     validUntil: '',
     items: [],
     notes: '',
@@ -144,6 +146,7 @@ const Quotations = () => {
     vendorId: '',
     validUntil: '',
     hostCompanyId: '',
+    gstPercentage: 18,
     items: []
   });
 
@@ -706,10 +709,15 @@ const Quotations = () => {
             return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type) && !code.startsWith('ASSEMBLY');
           });
 
+          const loadedGst = detailedQuotation.gst_percentage !== undefined && detailedQuotation.gst_percentage !== null
+            ? parseFloat(detailedQuotation.gst_percentage)
+            : 18;
+
           setRecordData({
             ...recordData,
             vendorId,
             quotationId: quotation.id,
+            gstPercentage: loadedGst,
             items: filteredItems.map(item => ({
               ...item,
               unit_rate: 0,
@@ -730,6 +738,7 @@ const Quotations = () => {
         ...recordData,
         vendorId,
         quotationId: '',
+        gstPercentage: 18,
         items: [],
         amount: 0,
         notes: ''
@@ -993,6 +1002,7 @@ const Quotations = () => {
           ...formData,
           vendorId: parseInt(vId),
           validUntil: formData.validUntil || null,
+          gst_percentage: formData.gstPercentage !== '' && formData.gstPercentage !== undefined ? parseFloat(formData.gstPercentage) : 18,
           status: forcedStatus || 'SENT',
           rfq_group_id: rfqGroupId,
           items: vendorItems
@@ -1031,6 +1041,8 @@ const Quotations = () => {
         rfq_id: null,
         validUntil: '',
         notes: '',
+        hostCompanyId: '',
+        gstPercentage: 18,
         items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
       });
 
@@ -1068,6 +1080,7 @@ const Quotations = () => {
           validUntil: recordData.validUntil || null,
           items: recordData.items,
           notes: recordData.notes,
+          gst_percentage: recordData.gstPercentage !== undefined ? recordData.gstPercentage : 18,
           status: 'RECEIVED'
         })
       });
@@ -1109,7 +1122,7 @@ const Quotations = () => {
 
       successToast('Quote details recorded successfully');
       navigate(`${deptPrefix}/quotations`);
-      setRecordData({ projectId: '', vendorId: '', quotationId: '', amount: 0, validUntil: '', items: [], notes: '', recordFile: null });
+      setRecordData({ projectId: '', vendorId: '', quotationId: '', amount: 0, gstPercentage: 18, validUntil: '', items: [], notes: '', recordFile: null });
       setRecordFiles([]);
       fetchQuotations();
       fetchStats();
@@ -1155,6 +1168,32 @@ const Quotations = () => {
     } catch (error) {
       if (printWindow && !printWindow.closed) printWindow.close();
       errorToast('Could not view PDF');
+      console.error(error);
+    }
+  };
+
+  const handleDownloadPDF = async (quotationId, quoteNumber) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotations/${quotationId}/pdf`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `RFQ_${quoteNumber || quotationId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      errorToast('Could not download PDF');
       console.error(error);
     }
   };
@@ -1483,6 +1522,7 @@ const Quotations = () => {
       status: quotation.status || 'SENT',
       validUntil: quotation.valid_until ? new Date(quotation.valid_until).toISOString().split('T')[0] : '',
       hostCompanyId: String(defaultHostId),
+      gstPercentage: quotation.gst_percentage !== undefined && quotation.gst_percentage !== null ? parseFloat(quotation.gst_percentage) : 18,
       items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
     });
     setShowEditModal(true);
@@ -1533,6 +1573,7 @@ const Quotations = () => {
           vendorId: parseInt(editFormData.vendorId),
           validUntil: editFormData.validUntil || null,
           hostCompanyId: editFormData.hostCompanyId ? parseInt(editFormData.hostCompanyId) : null,
+          gst_percentage: editFormData.gstPercentage !== undefined ? editFormData.gstPercentage : 18,
           items: editFormData.items,
           received_pdf_path: finalPaths.join(','),
           status: editFormData.status || selectedQuotation.status
@@ -2039,16 +2080,28 @@ const Quotations = () => {
         render: (_, q) => (
           <div className="flex justify-end gap-1.5">
             {!q.isRFQOnly && q.status !== 'REJECTED' && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`${deptPrefix}/quotations/view/${q.id}`, { state: { autoPrint: true } });
-                }}
-                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all border border-transparent hover:border-indigo-100"
-                title="Print RFQ"
-              >
-                <Printer className="w-4 h-4" />
-              </button>
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`${deptPrefix}/quotations/view/${q.id}`, { state: { autoPrint: true } });
+                  }}
+                  className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all border border-transparent hover:border-indigo-100"
+                  title="Print RFQ"
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownloadPDF(q.id, q.quote_number);
+                  }}
+                  className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all border border-transparent hover:border-emerald-100"
+                  title="Download PDF"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+              </>
             )}
             {q.isRFQOnly && (
               <button
@@ -2563,14 +2616,51 @@ const Quotations = () => {
                     );
                   })()}
 
-                  <div className="w-1/2">
-                    <label className="block text-xs  text-slate-700 mb-1">Valid Until</label>
-                    <input
-                      type="date"
-                      value={formData.validUntil}
-                      onChange={(e) => setFormData({ ...formData, validUntil: e.target.value })}
-                      className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Valid Until</label>
+                      <input
+                        type="date"
+                        value={formData.validUntil}
+                        onChange={(e) => setFormData({ ...formData, validUntil: e.target.value })}
+                        className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Overall GST (%)</label>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="any"
+                          value={formData.gstPercentage !== undefined && formData.gstPercentage !== null ? formData.gstPercentage : 18}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0);
+                            setFormData({ ...formData, gstPercentage: val });
+                          }}
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="18"
+                        />
+                        <select
+                          value={[0, 5, 12, 18, 28].includes(Number(formData.gstPercentage)) ? Number(formData.gstPercentage) : 'custom'}
+                          onChange={(e) => {
+                            if (e.target.value !== 'custom') {
+                              setFormData({ ...formData, gstPercentage: parseFloat(e.target.value) });
+                            }
+                          }}
+                          className="p-2 bg-slate-100 border border-slate-300 rounded text-xs text-slate-600 focus:outline-none cursor-pointer shrink-0"
+                          title="Quick select standard GST rate"
+                        >
+                          <option value="custom">Preset</option>
+                          <option value={0}>0%</option>
+                          <option value={5}>5%</option>
+                          <option value={12}>12%</option>
+                          <option value={18}>18%</option>
+                          <option value={28}>28%</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
                   <div>
@@ -2806,18 +2896,61 @@ const Quotations = () => {
                     );
                   })()}
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="bg-slate-50 p-2 rounded  border border-slate-200">
-                        <label className="block text-xs  text-slate-500   mb-1  ">Subtotal</label>
-                        <div className="text-sm  text-slate-700">{recordData.amount > 0 ? formatCurrency(recordData.amount) : '—'}</div>
+                    <div className="grid grid-cols-4 gap-2">
+                      <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                        <label className="block text-xs text-slate-500 mb-1 font-semibold">Subtotal</label>
+                        <div className="text-sm font-semibold text-slate-700">{recordData.amount > 0 ? formatCurrency(recordData.amount) : '—'}</div>
                       </div>
-                      <div className="bg-slate-50 p-2 rounded  border border-slate-200">
-                        <label className="block text-xs  text-slate-500   mb-1  ">GST (18%)</label>
-                        <div className="text-sm  text-slate-700">{recordData.amount > 0 ? formatCurrency(recordData.amount * 0.18) : '—'}</div>
+                      <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                        <label className="block text-xs text-slate-500 mb-1 font-semibold">Overall GST (%)</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="any"
+                            value={recordData.gstPercentage !== undefined && recordData.gstPercentage !== null ? recordData.gstPercentage : 18}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0);
+                              setRecordData({ ...recordData, gstPercentage: val });
+                            }}
+                            className="w-full p-1 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="18"
+                          />
+                          <select
+                            value={[0, 5, 12, 18, 28].includes(Number(recordData.gstPercentage)) ? Number(recordData.gstPercentage) : 'custom'}
+                            onChange={(e) => {
+                              if (e.target.value !== 'custom') {
+                                setRecordData({ ...recordData, gstPercentage: parseFloat(e.target.value) });
+                              }
+                            }}
+                            className="p-1 bg-slate-100 border border-slate-300 rounded text-xs text-slate-600 focus:outline-none cursor-pointer shrink-0"
+                            title="Quick select standard GST rate"
+                          >
+                            <option value="custom">Preset</option>
+                            <option value={0}>0%</option>
+                            <option value={5}>5%</option>
+                            <option value={12}>12%</option>
+                            <option value={18}>18%</option>
+                            <option value={28}>28%</option>
+                          </select>
+                        </div>
                       </div>
-                      <div className="bg-blue-50 p-2 rounded  border border-blue-200">
-                        <label className="block text-xs  text-blue-500   mb-1  ">Total</label>
-                        <div className="text-base  text-blue-900">{recordData.amount > 0 ? formatCurrency(recordData.amount * 1.18) : '—'}</div>
+                      <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                        <label className="block text-xs text-slate-500 mb-1 font-semibold">GST ({recordData.gstPercentage !== undefined ? recordData.gstPercentage : 18}%)</label>
+                        <div className="text-sm font-semibold text-slate-700">
+                          {recordData.amount > 0 
+                            ? formatCurrency(recordData.amount * ((recordData.gstPercentage !== undefined ? recordData.gstPercentage : 18) / 100)) 
+                            : '—'}
+                        </div>
+                      </div>
+                      <div className="bg-blue-50 p-2 rounded border border-blue-200">
+                        <label className="block text-xs text-blue-600 mb-1 font-bold">Grand Total</label>
+                        <div className="text-base font-bold text-blue-900">
+                          {recordData.amount > 0 
+                            ? formatCurrency(recordData.amount * (1 + (recordData.gstPercentage !== undefined ? recordData.gstPercentage : 18) / 100)) 
+                            : '—'}
+                        </div>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-2">
@@ -3032,18 +3165,26 @@ const Quotations = () => {
                     </div>
 
                     {recordData.items.length > 0 && (
-                      <div className="mt-4 p-2 bg-blue-50 rounded  flex flex-col gap-2 border border-blue-100">
+                      <div className="mt-4 p-2 bg-blue-50 rounded flex flex-col gap-2 border border-blue-100">
                         <div className="flex justify-between items-center text-xs text-blue-600">
                           <span>Subtotal</span>
-                          <span>{recordData.amount > 0 ? formatCurrency(recordData.amount) : '—'}</span>
+                          <span className="font-semibold">{recordData.amount > 0 ? formatCurrency(recordData.amount) : '—'}</span>
                         </div>
-                        <div className="flex justify-between items-center text-xs text-emerald-600  border-t border-blue-100 pt-2">
-                          <span>GST (18%)</span>
-                          <span>{recordData.amount > 0 ? `+ ${formatCurrency(recordData.amount * 0.18)}` : '—'}</span>
+                        <div className="flex justify-between items-center text-xs text-emerald-600 border-t border-blue-100 pt-2">
+                          <span>GST ({recordData.gstPercentage !== undefined ? recordData.gstPercentage : 18}%)</span>
+                          <span className="font-semibold">
+                            {recordData.amount > 0 
+                              ? `+ ${formatCurrency(recordData.amount * ((recordData.gstPercentage !== undefined ? recordData.gstPercentage : 18) / 100))}` 
+                              : '—'}
+                          </span>
                         </div>
                         <div className="flex justify-between items-center border-t-2 border-blue-200 pt-2">
-                          <span className="text-sm  text-blue-800  ">Grand Total</span>
-                          <span className="text-xl   text-blue-900">{recordData.amount > 0 ? formatCurrency(recordData.amount * 1.18) : '—'}</span>
+                          <span className="text-sm font-bold text-blue-800">Grand Total</span>
+                          <span className="text-xl font-bold text-blue-900">
+                            {recordData.amount > 0 
+                              ? formatCurrency(recordData.amount * (1 + (recordData.gstPercentage !== undefined ? recordData.gstPercentage : 18) / 100)) 
+                              : '—'}
+                          </span>
                         </div>
                       </div>
                     )}
@@ -3310,7 +3451,7 @@ const Quotations = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Vendor *</label>
                   <select
@@ -3348,6 +3489,42 @@ const Quotations = () => {
                     <option value="APPROVED">APPROVED</option>
                     <option value="REJECTED">REJECTED</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Overall GST (%)</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="any"
+                      value={editFormData.gstPercentage !== undefined && editFormData.gstPercentage !== null ? editFormData.gstPercentage : 18}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0);
+                        setEditFormData({ ...editFormData, gstPercentage: val });
+                      }}
+                      className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="18"
+                    />
+                    <select
+                      value={[0, 5, 12, 18, 28].includes(Number(editFormData.gstPercentage)) ? Number(editFormData.gstPercentage) : 'custom'}
+                      onChange={(e) => {
+                        if (e.target.value !== 'custom') {
+                          setEditFormData({ ...editFormData, gstPercentage: parseFloat(e.target.value) });
+                        }
+                      }}
+                      className="p-2 bg-slate-100 border border-slate-300 rounded text-xs text-slate-600 focus:outline-none cursor-pointer shrink-0"
+                      title="Quick select standard GST rate"
+                    >
+                      <option value="custom">Preset</option>
+                      <option value={0}>0%</option>
+                      <option value={5}>5%</option>
+                      <option value={12}>12%</option>
+                      <option value={18}>18%</option>
+                      <option value={28}>28%</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -3623,6 +3800,36 @@ const Quotations = () => {
                     ))}
                   </div>
                 )}
+
+                {editFormData.items.length > 0 && (() => {
+                  const editSubtotal = editFormData.items.reduce((sum, item) => {
+                    const qty = (item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') 
+                      ? (parseFloat(item.planned_qty) || 0) 
+                      : (parseFloat(item.design_qty || item.quantity) || 0);
+                    const rate = parseFloat(item.unit_rate) || 0;
+                    return sum + (qty * rate);
+                  }, 0);
+                  const editGstRate = editFormData.gstPercentage !== undefined ? editFormData.gstPercentage : 18;
+                  const editGstAmount = editSubtotal * (editGstRate / 100);
+                  const editGrandTotal = editSubtotal + editGstAmount;
+
+                  return (
+                    <div className="mt-4 p-3 bg-blue-50 rounded flex flex-col gap-2 border border-blue-100">
+                      <div className="flex justify-between items-center text-xs text-blue-600">
+                        <span>Subtotal</span>
+                        <span className="font-semibold">{editSubtotal > 0 ? formatCurrency(editSubtotal) : '—'}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs text-emerald-600 border-t border-blue-100 pt-2">
+                        <span>GST ({editGstRate}%)</span>
+                        <span className="font-semibold">{editSubtotal > 0 ? `+ ${formatCurrency(editGstAmount)}` : '—'}</span>
+                      </div>
+                      <div className="flex justify-between items-center border-t-2 border-blue-200 pt-2">
+                        <span className="text-sm font-bold text-blue-800">Grand Total</span>
+                        <span className="text-xl font-bold text-blue-900">{editSubtotal > 0 ? formatCurrency(editGrandTotal) : '—'}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Attachments Section inside Edit Modal */}

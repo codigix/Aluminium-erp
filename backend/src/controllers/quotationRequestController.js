@@ -1048,7 +1048,7 @@ const downloadQuotationPDF = async (req, res, next) => {
         profit_percentage: q.profit_percentage || 0,
         override_percentage: q.override_percentage || 0,
         bom_cost: parseFloat(q.bom_cost) || 0,
-        gst_percentage: q.gst_percentage || 18,
+        gst_percentage: q.gst_percentage !== undefined && q.gst_percentage !== null && q.gst_percentage !== '' ? parseFloat(q.gst_percentage) : 18,
         status: q.status,
         item_notes: q.item_notes || null,
         sub_assemblies: components.map(sa => ({
