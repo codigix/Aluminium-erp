@@ -3369,9 +3369,15 @@ const BOMFormPage = () => {
                       <label className="text-xs  text-slate-500 ml-1">Item Group</label>
                       <select className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.itemGroup} onChange={(e) => setMaterialForm(prev => ({ ...prev, itemGroup: e.target.value }))}>
                         <option value="">Select Group</option>
-                        {itemGroups.map(group => (
-                          <option key={group.id} value={group.name}>{group.name}</option>
-                        ))}
+                        {itemGroups
+                          .filter(group => {
+                            const name = (group.name || '').toLowerCase().trim();
+                            return !name.includes('assembly') && name !== 'part';
+                          })
+                          .map(group => (
+                            <option key={group.id} value={group.name}>{group.name}</option>
+                          ))
+                        }
                       </select>
                     </div>
 

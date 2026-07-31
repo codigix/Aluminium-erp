@@ -85,7 +85,36 @@ const getQuotationRequests = async (req, res, next) => {
 
     query += ' ORDER BY created_at DESC';
 
-    const [rows] = await pool.query(query, params);
+    const [rawRows] = await pool.query(query, params);
+
+    // Deduplicate top-level standalone entries by batch_id and drawing_no / drawing_id
+    const seenMap = new Map();
+    const rows = [];
+
+    for (const r of rawRows) {
+      const dNo = (r.drawing_no && r.drawing_no !== '—' && r.drawing_no !== 'NA')
+        ? r.drawing_no.trim().toUpperCase()
+        : (r.drawing_id ? `DWGID_${r.drawing_id}` : (r.item_code || 'NA'));
+      const groupCalc = (r.item_group || '').toUpperCase().includes('PART') ? 'PART' : 'ASSEMBLY';
+      const key = `${r.batch_id || r.company_id || 'NOBATCH'}_${dNo}_${groupCalc}`;
+
+      if (!seenMap.has(key)) {
+        seenMap.set(key, r);
+        rows.push(r);
+      } else {
+        const existing = seenMap.get(key);
+        const existingCost = Number(existing.bom_cost || existing.latest_bom_cost || existing.total_amount || 0);
+        const rCost = Number(r.bom_cost || r.latest_bom_cost || r.total_amount || 0);
+
+        if (rCost > existingCost || (rCost === existingCost && r.id > existing.id)) {
+          const idx = rows.indexOf(existing);
+          if (idx !== -1) {
+            rows[idx] = r;
+          }
+          seenMap.set(key, r);
+        }
+      }
+    }
 
     // Fetch all components for all requested batches
     const batchIds = [...new Set(rows.map(r => r.batch_id).filter(Boolean))];

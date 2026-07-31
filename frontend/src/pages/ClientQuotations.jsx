@@ -339,15 +339,20 @@ const ClientQuotations = () => {
           // Hide sub-assemblies/parts from top-level if they are part of another item (identified by is_component > 0)
           if (item.is_component > 0) return;
 
-          const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}_${item.item_group_calc}`;
+          const drawingKey = (item.drawing_no && item.drawing_no !== '—' && item.drawing_no !== 'NA')
+            ? item.drawing_no.trim().toUpperCase()
+            : (item.drawing_id ? `DWGID_${item.drawing_id}` : (item.item_code || 'NA'));
+          const identity = `${drawingKey}_${item.item_group_calc}`;
           const existing = grouped[groupKey].all_items_map[identity];
 
           if (!existing) {
             grouped[groupKey].all_items_map[identity] = { ...item, project_name: order.project_name };
           } else {
             const comp = compareVersions(item.revision_no || item.version, existing.revision_no || existing.version);
-            // Prioritize higher revision, then higher ID
-            if (comp > 0 || (comp === 0 && parseInt(item.id) > parseInt(existing.id))) {
+            const itemCost = Number(item.bom_cost || item.unit_rate || item.latest_bom_cost || 0);
+            const existingCost = Number(existing.bom_cost || existing.unit_rate || existing.latest_bom_cost || 0);
+            // Prioritize higher revision, non-zero cost, then higher ID
+            if (comp > 0 || (comp === 0 && (itemCost > existingCost || (itemCost === existingCost && parseInt(item.id) > parseInt(existing.id))))) {
               grouped[groupKey].all_items_map[identity] = { ...item, project_name: order.project_name };
             }
           }
@@ -489,12 +494,19 @@ const ClientQuotations = () => {
           };
         }
         
-        // Deduplicate within the same batch by drawing_no and item_code
-        const identity = `${quote.drawing_no || 'NA'}_${quote.item_code || 'NA'}_${(quote.item_group || quote.item_group_calc || '').toUpperCase()}`;
+        // Deduplicate within the same batch by drawing_no / drawing_id
+        const dNo = (quote.drawing_no && quote.drawing_no !== '—' && quote.drawing_no !== 'NA')
+          ? quote.drawing_no.trim().toUpperCase()
+          : (quote.drawing_id ? `DWGID_${quote.drawing_id}` : (quote.item_code || 'NA'));
+        const gCalc = (quote.item_group || quote.item_group_calc || '').toUpperCase().includes('PART') ? 'PART' : 'ASSEMBLY';
+        const identity = `${dNo}_${gCalc}`;
         const existingInBatch = versionBatches[bId].items_map[identity];
-        
-        // Keep the latest ID/revision within the same batch
-        if (!existingInBatch || parseInt(quote.id) > parseInt(existingInBatch.id)) {
+
+        const qCost = Number(quote.bom_cost || quote.unit_rate || quote.total_amount || 0);
+        const exCost = Number(existingInBatch?.bom_cost || existingInBatch?.unit_rate || existingInBatch?.total_amount || 0);
+
+        // Keep item with non-zero cost or higher ID within the same batch
+        if (!existingInBatch || qCost > exCost || (qCost === exCost && parseInt(quote.id) > parseInt(existingInBatch.id))) {
           versionBatches[bId].items_map[identity] = quote;
         }
       });
@@ -666,7 +678,18 @@ const ClientQuotations = () => {
           };
         }
 
-        grouped[groupKey].quotes.push(quote);
+        if (!grouped[groupKey].quotes_map) grouped[groupKey].quotes_map = {};
+        const dNo = (quote.drawing_no && quote.drawing_no !== '—' && quote.drawing_no !== 'NA')
+          ? quote.drawing_no.trim().toUpperCase()
+          : (quote.drawing_id ? `DWGID_${quote.drawing_id}` : (quote.item_code || 'NA'));
+        const gCalc = (quote.item_group || quote.item_group_calc || '').toUpperCase().includes('PART') ? 'PART' : 'ASSEMBLY';
+        const identity = `${dNo}_${gCalc}`;
+        const existingInGroup = grouped[groupKey].quotes_map[identity];
+
+        if (!existingInGroup || (parseFloat(quote.total_amount) > parseFloat(existingInGroup.total_amount) || parseInt(quote.id) > parseInt(existingInGroup.id))) {
+          grouped[groupKey].quotes_map[identity] = quote;
+        }
+        grouped[groupKey].quotes = Object.values(grouped[groupKey].quotes_map);
 
         const currentVersion = grouped[groupKey].version || 0;
         const quoteVersion = quote.version || 1;
@@ -2088,14 +2111,6 @@ const ClientQuotations = () => {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/sales/quotation-form')}
-            className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-all shadow-md flex items-center gap-2 text-xs"
-          >
-            <Plus size={15} />
-            Create Quotation
-          </button>
-
-          <button
             onClick={fetchAllData}
             disabled={loading}
             className="p-2 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200 flex items-center gap-2 text-xs "
@@ -2122,7 +2137,8 @@ const ClientQuotations = () => {
           columns={columns}
           data={combinedQuotations}
           loading={loading}
-          renderExpanded={renderExpanded}
+          renderExpanded={activeTab === 'pending' ? renderExpanded : undefined}
+          hideExpander={activeTab !== 'pending'}
           onRowClick={(group, e) => {
             // Check if the click was on an interactive element or the expander
             if (e && (e.target.closest('button') || e.target.closest('a') || e.target.closest('input') || e.target.closest('select') || e.target.closest('[data-expander="true"]'))) {
