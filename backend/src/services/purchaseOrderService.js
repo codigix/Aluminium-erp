@@ -14,6 +14,11 @@ const path = require('path');
 const getCorrectItemCode = async (item, connection) => {
   let itemCode = item.item_code || item.drawing_no;
 
+  let materialName = item.material_name;
+  if (materialName && materialName.trim().toLowerCase() === 'ss') {
+    materialName = 'SS 304';
+  }
+
   // 0. If we already have a specific item code that exists in stock_balance and matches the name, use it!
   if (itemCode && itemCode !== 'auto-generated') {
     const [existing] = await connection.query(
@@ -21,7 +26,7 @@ const getCorrectItemCode = async (item, connection) => {
        WHERE (item_code = ? OR drawing_no = ?) 
        AND LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
        LIMIT 1`,
-      [itemCode, itemCode, item.material_name]
+      [itemCode, itemCode, materialName]
     );
     if (existing.length > 0) {
       // Update item type to match the existing one if needed
@@ -32,14 +37,14 @@ const getCorrectItemCode = async (item, connection) => {
     }
   }
 
-  if (item.material_name) {
+  if (materialName) {
     // 1. Try matching by name and material type
     const [sb] = await connection.query(
       `SELECT item_code FROM stock_balance 
        WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
        AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
        LIMIT 1`,
-      [item.material_name, item.material_type, item.material_type]
+      [materialName, item.material_type, item.material_type]
     );
 
     if (sb.length > 0) {
@@ -51,7 +56,7 @@ const getCorrectItemCode = async (item, connection) => {
       `SELECT item_code FROM stock_balance 
        WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
        LIMIT 1`,
-      [item.material_name]
+      [materialName]
     );
 
     if (sbNameOnly.length > 0) {
@@ -63,8 +68,8 @@ const getCorrectItemCode = async (item, connection) => {
   if (itemCode && itemCode !== 'auto-generated') return itemCode;
 
   // 3. Fallback: Generate a standard item code using stockService logic if we have name/type
-  if (item.material_name) {
-    return await stockService.generateItemCode(item.material_name, item.material_type);
+  if (materialName) {
+    return await stockService.generateItemCode(materialName, item.material_type);
   }
 
   return null;
@@ -728,7 +733,11 @@ const getPurchaseOrders = async (filters = {}) => {
         poi.drawing_id, poi.length, poi.width, poi.thickness, poi.diameter, poi.outer_diameter,
         poi.density, poi.weight_per_unit, poi.shape_type, poi.shape_type as shape_name,
         COALESCE(
-          NULLIF(NULLIF(TRIM(poi.drawing_no), TRIM(poi.item_code)), ''),
+          IF(
+            poi.drawing_no LIKE 'RM-%' OR poi.drawing_no LIKE 'OTH-%' OR poi.drawing_no LIKE 'SFG-%' OR poi.drawing_no LIKE 'FG-%' OR poi.drawing_no LIKE 'GEN-%' OR poi.drawing_no LIKE 'CAT-%',
+            NULLIF(NULLIF(TRIM(poi.drawing_no), TRIM(poi.item_code)), ''),
+            NULLIF(TRIM(poi.drawing_no), '')
+          ),
           (
             SELECT NULLIF(ppm.bom_ref, '')
             FROM material_requests mr
@@ -755,14 +764,22 @@ const getPurchaseOrders = async (filters = {}) => {
             LIMIT 1
           ),
           (
-            SELECT NULLIF(soi.drawing_no, soi.item_code)
+            SELECT IF(
+              soi.drawing_no LIKE 'RM-%' OR soi.drawing_no LIKE 'OTH-%' OR soi.drawing_no LIKE 'SFG-%' OR soi.drawing_no LIKE 'FG-%' OR soi.drawing_no LIKE 'GEN-%' OR soi.drawing_no LIKE 'CAT-%',
+              NULLIF(soi.drawing_no, soi.item_code),
+              NULLIF(soi.drawing_no, '')
+            )
             FROM sales_order_items soi 
             WHERE soi.sales_order_id = po.sales_order_id
             AND soi.item_code = poi.item_code
             LIMIT 1
           ),
           (
-            SELECT NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code)
+            SELECT IF(
+              COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'RM-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'OTH-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'SFG-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'FG-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'GEN-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'CAT-%',
+              NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code),
+              NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), '')
+            )
             FROM material_requests mr
             JOIN production_plans pp ON mr.plan_id = pp.id
             JOIN production_plan_items ppi ON pp.id = ppi.plan_id
@@ -772,7 +789,11 @@ const getPurchaseOrders = async (filters = {}) => {
             LIMIT 1
           ),
           (
-            SELECT NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code)
+            SELECT IF(
+              COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'RM-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'OTH-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'SFG-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'FG-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'GEN-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'CAT-%',
+              NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code),
+              NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), '')
+            )
             FROM production_plans pp
             JOIN production_plan_items ppi ON pp.id = ppi.plan_id
             LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
@@ -812,7 +833,7 @@ const getPurchaseOrders = async (filters = {}) => {
 
         if (item.drawing_no) {
           const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no);
-          if (isItemCodePattern || item.drawing_no === item.item_code || item.drawing_no === '—') {
+          if (isItemCodePattern || item.drawing_no === '—') {
             item.drawing_no = null;
           }
         }
@@ -1143,7 +1164,11 @@ const getPurchaseOrderById = async (poId) => {
       COALESCE(poi.material_name, sb.material_name, poi.item_code) as material_name,
       poi.material_type,
       COALESCE(
-        NULLIF(NULLIF(TRIM(poi.drawing_no), TRIM(poi.item_code)), ''),
+        IF(
+          poi.drawing_no LIKE 'RM-%' OR poi.drawing_no LIKE 'OTH-%' OR poi.drawing_no LIKE 'SFG-%' OR poi.drawing_no LIKE 'FG-%' OR poi.drawing_no LIKE 'GEN-%' OR poi.drawing_no LIKE 'CAT-%',
+          NULLIF(NULLIF(TRIM(poi.drawing_no), TRIM(poi.item_code)), ''),
+          NULLIF(TRIM(poi.drawing_no), '')
+        ),
         (
           SELECT NULLIF(ppm.bom_ref, '')
           FROM material_requests mr
@@ -1170,14 +1195,22 @@ const getPurchaseOrderById = async (poId) => {
           LIMIT 1
         ),
         (
-          SELECT NULLIF(soi.drawing_no, soi.item_code)
+          SELECT IF(
+            soi.drawing_no LIKE 'RM-%' OR soi.drawing_no LIKE 'OTH-%' OR soi.drawing_no LIKE 'SFG-%' OR soi.drawing_no LIKE 'FG-%' OR soi.drawing_no LIKE 'GEN-%' OR soi.drawing_no LIKE 'CAT-%',
+            NULLIF(soi.drawing_no, soi.item_code),
+            NULLIF(soi.drawing_no, '')
+          )
           FROM sales_order_items soi 
           WHERE soi.sales_order_id = po.sales_order_id
           AND soi.item_code = poi.item_code
           LIMIT 1
         ),
         (
-          SELECT NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code)
+          SELECT IF(
+            COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'RM-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'OTH-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'SFG-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'FG-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'GEN-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'CAT-%',
+            NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code),
+            NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), '')
+          )
           FROM material_requests mr
           JOIN production_plans pp ON mr.plan_id = pp.id
           JOIN production_plan_items ppi ON pp.id = ppi.plan_id
@@ -1187,7 +1220,11 @@ const getPurchaseOrderById = async (poId) => {
           LIMIT 1
         ),
         (
-          SELECT NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code)
+          SELECT IF(
+            COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'RM-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'OTH-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'SFG-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'FG-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'GEN-%' OR COALESCE(soi.drawing_no, oi.drawing_no) LIKE 'CAT-%',
+            NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code),
+            NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), '')
+          )
           FROM production_plans pp
           JOIN production_plan_items ppi ON pp.id = ppi.plan_id
           LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
@@ -1267,7 +1304,7 @@ const getPurchaseOrderById = async (poId) => {
 
     if (item.drawing_no) {
       const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no);
-      if (isItemCodePattern || item.drawing_no === item.item_code || item.drawing_no === '—') {
+      if (isItemCodePattern || item.drawing_no === '—') {
         item.drawing_no = '—';
       }
     } else {
