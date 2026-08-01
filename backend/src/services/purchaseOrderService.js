@@ -1984,6 +1984,7 @@ const generatePurchaseOrderPDF = async (poId) => {
     padding: 5px 4px;
     font-size: 7px;
     vertical-align: middle;
+    text-align: center;
   }
 
   .items-table tr.sub-assembly-row td {
@@ -2232,47 +2233,43 @@ const generatePurchaseOrderPDF = async (poId) => {
     <thead>
       <tr>
         <th style="width: 2%;">SL No.</th>
-        <th style="width: 10%; text-align: left; line-height: 1.3;">Drawing No</th>
-        <th style="width: 30%; text-align: left; line-height: 1.3;">GRADE</th>
-        <th style="width: 21%; text-align: center; line-height: 1.3;">Size</th>
-        <th style="width: 3%;">HSN Code</th>
-        <th style="width: 4%; text-align: right;">Rate</th>
-        <th style="width: 3%; text-align: right; line-height: 1.2;">Qty</th>
-        <th style="width: 4%; text-align: right; line-height: 1.2;">Weight</th>
-        <th style="width: 4%; text-align: right;">Amount</th>
-        <th style="width: 3%; text-align: right;">Discount</th>
-        <th style="width: 4%; text-align: right;">Transaction Amount</th>
-        <th style="width: 2%; text-align: right; line-height: 1.2;">CGST<br/>%</th>
-        <th style="width: 3%; text-align: right;">CGST Amt</th>
-        <th style="width: 2%; text-align: right; line-height: 1.2;">SGST<br/>%</th>
-        <th style="width: 3%; text-align: right;">SGST Amt</th>
-        <th style="width: 5%; text-align: right;">Total Amount</th>
+        <th style="width: 8%; text-align: center; line-height: 1.3;">Drawing No</th>
+        <th style="width: 23%; text-align: center; line-height: 1.3;">GRADE</th>
+        <th style="width: 33%; text-align: center; line-height: 1.3;">Size</th>
+        <th style="width: 3%; text-align: center;">HSN Code</th>
+        <th style="width: 4%; text-align: center;">Rate</th>
+        <th style="width: 3%; text-align: center; line-height: 1.2;">Qty</th>
+        <th style="width: 4%; text-align: center; line-height: 1.2;">Weight</th>
+        <th style="width: 4%; text-align: center;">Amount</th>
+        <th style="width: 4%; text-align: center;">Transaction Amount</th>
+        <th style="width: 2%; text-align: center; line-height: 1.2;">CGST<br/>%</th>
+        <th style="width: 3%; text-align: center;">CGST Amt</th>
+        <th style="width: 2%; text-align: center; line-height: 1.2;">SGST<br/>%</th>
+        <th style="width: 3%; text-align: center;">SGST Amt</th>
+        <th style="width: 5%; text-align: center;">Total Amount</th>
       </tr>
     </thead>
     <tbody>
       {{#items}}
       <tr {{#has_sub_assemblies}}class="parent-with-subs"{{/has_sub_assemblies}}>
         <td style="text-align: center;">{{sl_no}}</td>
-        <td style="text-align: left; font-weight: bold; color: #000;">{{drawing_no}}</td>
-        <td style="text-align: left; line-height: 1.35; padding-left: 5px;">
+        <td style="text-align: center; font-weight: bold; color: #000;">{{drawing_no}}</td>
+        <td style="text-align: center; line-height: 1.35;">
           {{item_no}}<br/>
-          <div style="padding-left: 10px;">
-            <strong>{{material_name}}</strong>
-          </div>
+          <strong>{{material_name}}</strong>
         </td>
         <td style="text-align: center; vertical-align: middle; font-family: monospace; font-weight: bold; color: #000;">{{size}}</td>
         <td style="text-align: center;">{{hsn_code}}</td>
-        <td style="text-align: right;">{{unit_rate}}</td>
-        <td style="text-align: right;">{{design_qty}}</td>
-        <td style="text-align: right;">{{required_qty}} {{unit}}</td>
-        <td style="text-align: right;">{{amount}}</td>
-        <td style="text-align: right;">{{discount}}</td>
-        <td style="text-align: right;">{{transaction_amount}}</td>
-        <td style="text-align: right;">{{cgst_rate}}%</td>
-        <td style="text-align: right;">{{cgst_amount}}</td>
-        <td style="text-align: right;">{{sgst_rate}}%</td>
-        <td style="text-align: right;">{{sgst_amount}}</td>
-        <td style="text-align: right; font-weight: bold; color: #000;">{{total_amount}}</td>
+        <td style="text-align: center;">{{unit_rate}}</td>
+        <td style="text-align: center;">{{design_qty}}</td>
+        <td style="text-align: center;">{{required_qty}} {{unit}}</td>
+        <td style="text-align: center;">{{amount}}</td>
+        <td style="text-align: center;">{{transaction_amount}}</td>
+        <td style="text-align: center;">{{cgst_rate}}%</td>
+        <td style="text-align: center;">{{cgst_amount}}</td>
+        <td style="text-align: center;">{{sgst_rate}}%</td>
+        <td style="text-align: center;">{{sgst_amount}}</td>
+        <td style="text-align: center; font-weight: bold; color: #000;">{{total_amount}}</td>
       </tr>
       {{#sub_assemblies}}
       <tr class="sub-assembly-row {{#is_last}}last-sub-assembly{{/is_last}}" style="background: #fafafa; font-size: 6.5px;">
@@ -2285,7 +2282,6 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td></td>
         <td style="text-align: right;">{{displayQuantity}} {{unit}}</td>
         <td style="text-align: right; font-weight: bold;">{{displayTotal}}</td>
-        <td></td>
         <td></td>
         <td></td>
         <td></td>

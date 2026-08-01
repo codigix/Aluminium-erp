@@ -1279,7 +1279,8 @@ const generateQuotationPDF = async (quotationId) => {
           border: 1px solid #1e293b;
           padding: 5px 6px;
           font-size: 9.5px;
-          text-align: left;
+          text-align: center;
+          vertical-align: middle;
         }
 
         .details-table th {
@@ -1538,9 +1539,9 @@ const generateQuotationPDF = async (quotationId) => {
             {{^isRFQ}}
             <tr>
               <th style="width: 5%; text-align: center;">Sr. No</th>
-              <th style="width: 13%">Drawing No</th>
-              <th style="width: 29%">Description / Material Name</th>
-              <th style="width: 16%">Item Size</th>
+              <th style="width: 11%">Drawing No</th>
+              <th style="width: 18%">Grade</th>
+              <th style="width: 29%">Item Size</th>
               <th style="width: 7%; text-align: center;">Design Qty</th>
               <th style="width: 9%; text-align: center;">Required Weight</th>
               <th style="width: 8%; text-align: right;">Unit Rate (₹)</th>
