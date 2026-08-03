@@ -262,7 +262,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       query += " WHERE " + conditions.join(" AND ");
     }
 
-    query += ` GROUP BY sb.material_name, sb.material_type ORDER BY id DESC `;
+    query += " GROUP BY sb.material_name, sb.material_type, sb.item_code, sb.drawing_no ORDER BY id DESC ";
 
     const [balances] = await pool.query(query, params);
 
