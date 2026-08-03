@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { Card, DataTable, SearchableSelect } from '../components/ui.jsx'
 import SendEmailModal from '../components/SendEmailModal'
+import OcrUploadCameraModal from '../components/OcrUploadCameraModal'
 import { getFileUrl } from '../utils/url'
 
 const poStatusColors = {
@@ -320,6 +321,7 @@ const CustomerPO = ({
   const [allDrawings, setAllDrawings] = useState([])
   const [uploadLoading, setUploadLoading] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showOcrModal, setShowOcrModal] = useState(false)
   const [selectedPoForModal, setSelectedPoForModal] = useState(null)
   const [attachments, setAttachments] = useState([])
   const [existingAttachments, setExistingAttachments] = useState([])
@@ -2370,6 +2372,12 @@ const CustomerPO = ({
             <RefreshCw className="w-5 h-5" />
           </button>
           <button
+            onClick={() => setShowOcrModal(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-3 py-2 rounded text-xs font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95"
+          >
+            📷 OCR + AI Scan PO
+          </button>
+          <button
             onClick={() => openPoInMode('CREATE')}
             className="flex items-center gap-2 bg-indigo-600 text-white p-2  rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95"
           >
@@ -2565,6 +2573,15 @@ const CustomerPO = ({
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {formMode !== 'VIEW' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowOcrModal(true)}
+                    className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                  >
+                    📷 Scan via OCR + AI
+                  </button>
+                )}
                 {formMode === 'VIEW' && (
                   <>
                     <button
@@ -3400,6 +3417,62 @@ const CustomerPO = ({
           attachmentName={emailPoData.attachmentName}
         />
       )}
+
+      <OcrUploadCameraModal
+        isOpen={showOcrModal}
+        onClose={() => setShowOcrModal(false)}
+        showToast={showToast}
+        onExtractedData={(payload) => {
+          if (!payload) return;
+          setShowPoForm(true);
+          setFormMode('CREATE');
+
+          // Standardize payload structure (Python AI vs Node Fallback)
+          const data = payload.extractedData ? payload.extractedData : payload;
+          const header = data.header || data;
+          const rawItems = Array.isArray(data.items) ? data.items : (Array.isArray(payload.items) ? payload.items : []);
+
+          // Clean poNumber leading symbols like '.: ' or '.:'
+          let rawPoNo = (header.poNumber || '').replace(/^[.:\s]+/, '').trim();
+
+          // Auto-match companyId by companyName if available
+          let matchedCompanyId = '';
+          const compName = header.companyName || header.company_name || '';
+          if (compName && companies.length > 0) {
+            const comp = companies.find(c =>
+              c.company_name?.toLowerCase().includes(compName.toLowerCase()) ||
+              compName.toLowerCase().includes(c.company_name?.toLowerCase())
+            );
+            if (comp) matchedCompanyId = String(comp.id);
+          }
+
+          setPoForm((prev) => ({
+            ...prev,
+            companyId: matchedCompanyId || prev.companyId,
+            poNumber: rawPoNo || prev.poNumber,
+            poDate: header.poDate || prev.poDate,
+            paymentTerms: header.paymentTerms || prev.paymentTerms,
+            creditDays: header.creditDays || prev.creditDays,
+            remarks: header.remarks || prev.remarks,
+            customerGstin: header.customerGstin || prev.customerGstin,
+            customerBillingAddress: header.billingAddress || prev.customerBillingAddress,
+            items: rawItems.length > 0
+              ? rawItems.map((item) => ({
+                  drawingNo: (item.drawingNo || item.itemCode || item.code || '').replace(/^DRW:\s*/i, '').trim(),
+                  description: item.description || '',
+                  hsnCode: item.hsnCode || item.hsn || '',
+                  deliveryDate: item.deliveryDate || '',
+                  quantity: Number(item.quantity) || 1,
+                  unit: item.unit || 'NOS',
+                  rate: Number(item.rate) || 0,
+                  cgstPercent: Number(item.cgstPercent || item.cgst || 0),
+                  sgstPercent: Number(item.sgstPercent || item.sgst || 0),
+                  igstPercent: Number(item.igstPercent || item.igst || 0)
+                }))
+              : prev.items
+          }));
+        }}
+      />
     </div>
   )
 }

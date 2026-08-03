@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google-cloud/documentai": "^9.6.2",
     "@prisma/client": "^7.8.0",
     "adm-zip": "^0.5.16",
     "bcrypt": "^5.1.0",
@@ -28,9 +29,11 @@
     "mustache": "^4.2.0",
     "mysql2": "^3.16.0",
     "nodemailer": "^7.0.12",
+    "openai": "^7.3.0",
     "pdf-parse": "^2.4.5",
     "prisma": "^7.8.0",
     "puppeteer": "^21.0.0",
+    "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

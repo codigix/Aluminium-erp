@@ -171,6 +171,53 @@ const parseCustomerPoPdf = async (req, res, next) => {
   }
 };
 
+const ocrParseCustomerPo = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Upload a Customer PO PDF or Photo' });
+    }
+
+    const filePath = req.file.path;
+    const fileBuffer = fs.readFileSync(filePath);
+    
+    // Call Python FastAPI AI Service on Port 8000
+    try {
+      const Blob = globalThis.Blob;
+      const formData = new FormData();
+      const fileBlob = new Blob([fileBuffer], { type: req.file.mimetype || 'application/octet-stream' });
+      formData.append('file', fileBlob, req.file.originalname || 'document.pdf');
+
+      const pyResponse = await fetch('http://localhost:8000/api/ai/parse-po', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (pyResponse.ok) {
+        const pyData = await pyResponse.json();
+        fs.unlink(filePath, () => {});
+        return res.json(pyData);
+      }
+    } catch (pyErr) {
+      console.warn('[Python AI Service Notice]: Python service on port 8000 not reachable, using Node.js PDF fallback parser:', pyErr.message);
+    }
+
+    // Fallback if Python service is offline
+    const pdfInsights = await parsePoPdf(fileBuffer);
+    fs.unlink(filePath, () => {});
+
+    res.json({
+      ocrEngine: 'Node_PDF_Parser_Fallback',
+      extractedData: pdfInsights
+    });
+  } catch (error) {
+    console.error('[OCR+AI Controller Error]:', error);
+    if (req.file && req.file.path) {
+      fs.unlink(req.file.path, () => {});
+    }
+    next(error);
+  }
+};
+
 const listCustomerPos = async (req, res, next) => {
   try {
     const filters = {
@@ -443,6 +490,7 @@ const getPendingFilterOptions = async (req, res, next) => {
 module.exports = {
   createCustomerPo,
   parseCustomerPoPdf,
+  ocrParseCustomerPo,
   listCustomerPos,
   getCustomerPo,
   generateCustomerPoPdf,
