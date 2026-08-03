@@ -2697,8 +2697,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       key: 'bom_no',
       sortable: true,
       render: (val, row) => {
-        // Show drawing_no if available, fallback to item_code (if non-numeric), and then finally bom_no.
-        const displayDrawing = row.drawing_no || ((row.item_code && isNaN(row.item_code)) ? row.item_code : (val || 'No Drawing'));
+        const displayDrawing = row.drawing_no || row.item_code || val || '—';
         return (
           <div className="flex flex-col">
             <span className="text-xs font-medium text-indigo-600">{displayDrawing}</span>

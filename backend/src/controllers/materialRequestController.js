@@ -419,7 +419,13 @@ const materialRequestController = {
             WHERE ppi_dr.plan_id = pp.id
             LIMIT 1
           ),
-          pp.bom_no
+          (
+            SELECT cd.drawing_no 
+            FROM customer_drawings cd 
+            WHERE (pp.bom_no REGEXP '^[0-9]+$' AND cd.id = CAST(pp.bom_no AS UNSIGNED)) OR (cd.drawing_no = pp.bom_no)
+            LIMIT 1
+          ),
+          CASE WHEN pp.bom_no NOT REGEXP '^[0-9]+$' THEN pp.bom_no ELSE NULL END
         ) as drawing_no,
         ppi.description as finished_good,
         COALESCE(
@@ -539,7 +545,13 @@ const materialRequestController = {
             WHERE ppi_dr.plan_id = pp.id
             LIMIT 1
           ),
-          pp.bom_no
+          (
+            SELECT cd.drawing_no 
+            FROM customer_drawings cd 
+            WHERE (pp.bom_no REGEXP '^[0-9]+$' AND cd.id = CAST(pp.bom_no AS UNSIGNED)) OR (cd.drawing_no = pp.bom_no)
+            LIMIT 1
+          ),
+          CASE WHEN pp.bom_no NOT REGEXP '^[0-9]+$' THEN pp.bom_no ELSE NULL END
         ) as drawing_no,
         ppi.description as finished_good,
         COALESCE(

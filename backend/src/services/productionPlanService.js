@@ -10,7 +10,12 @@ const listProductionPlans = async () => {
             so.project_name as so_project_name,
             o.project_name as o_project_name,
             o_direct.project_name as o_direct_project_name,
-            COALESCE(soi.drawing_no, oi.drawing_no) as drawing_no,
+            COALESCE(
+              cd_bom.drawing_no,
+              soi.drawing_no,
+              oi.drawing_no,
+              CASE WHEN pp.bom_no NOT REGEXP '^[0-9]+$' THEN pp.bom_no ELSE NULL END
+            ) as drawing_no,
             COALESCE(ppi.item_code, 
               CASE 
                 WHEN o_direct.id IS NOT NULL THEN oi.item_code 
@@ -18,6 +23,7 @@ const listProductionPlans = async () => {
               END
             ) as item_code, 
             COALESCE(ppi.description,
+              cd_bom.description,
               CASE 
                 WHEN o_direct.id IS NOT NULL THEN oi.description 
                 ELSE COALESCE(soi.description, oi.description) 
@@ -51,6 +57,10 @@ const listProductionPlans = async () => {
      LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND (soi.id IS NULL OR soi.sales_order_id != pp.sales_order_id)
      LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+     LEFT JOIN customer_drawings cd_bom ON (
+       (pp.bom_no REGEXP '^[0-9]+$' AND cd_bom.id = CAST(pp.bom_no AS UNSIGNED)) OR
+       (cd_bom.drawing_no = pp.bom_no)
+     )
      ORDER BY pp.created_at DESC`
   );
 
