@@ -932,6 +932,7 @@ const ItemsMaster = () => {
               loading={itemsLoading}
               pageSize={10}
               hideHeader={false}
+              hideSearch={true}
             />
           </div>
         </Card>
