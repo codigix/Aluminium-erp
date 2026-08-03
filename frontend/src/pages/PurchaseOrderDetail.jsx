@@ -156,49 +156,30 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
     return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
   });
 
-  const subtotal = filteredItems.reduce((sum, item) => {
+  const taxInclusiveSubtotal = filteredItems.reduce((sum, item) => {
     const qty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
     const rate = parseFloat(item.unit_rate) || 0;
-    return sum + (qty * rate);
+    const amt = qty * rate;
+    const cgst = amt * (parseFloat(item.cgst_percent || 9) / 100);
+    const sgst = amt * (parseFloat(item.sgst_percent || 9) / 100);
+    return sum + (amt + cgst + sgst);
   }, 0) || 0;
 
   const discountType = po?.discount_type || 'AMOUNT';
   const discountVal = parseFloat(po?.discount_value) || 0;
-  let discountAmount = parseFloat(po?.discount_amount) || 0;
-  if (!discountAmount && discountVal > 0) {
-    if (discountType === 'PERCENTAGE') {
-      discountAmount = (subtotal * discountVal) / 100;
+  let discountAmount = 0;
+  if (discountType === 'PERCENTAGE') {
+    discountAmount = (taxInclusiveSubtotal * discountVal) / 100;
+  } else {
+    discountAmount = parseFloat(po?.discount_amount) || 0;
+    if (!discountAmount && discountVal > 0) {
+      discountAmount = Math.min(discountVal, taxInclusiveSubtotal);
     } else {
-      discountAmount = Math.min(discountVal, subtotal);
+      discountAmount = Math.min(discountAmount, taxInclusiveSubtotal);
     }
   }
 
-  const taxableAmount = Math.max(0, subtotal - discountAmount);
-
-  const totalCgst = filteredItems.reduce((sum, item) => {
-    if (item.cgst_amount !== undefined && item.cgst_amount !== null && !isNaN(parseFloat(item.cgst_amount)) && discountAmount === 0) {
-      return sum + parseFloat(item.cgst_amount);
-    }
-    const qty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
-    const rate = parseFloat(item.unit_rate) || 0;
-    const amt = qty * rate;
-    const itemTaxable = subtotal > 0 ? (amt - (amt / subtotal) * discountAmount) : amt;
-    return sum + (itemTaxable * (parseFloat(item.cgst_percent || 9) / 100));
-  }, 0);
-
-  const totalSgst = filteredItems.reduce((sum, item) => {
-    if (item.sgst_amount !== undefined && item.sgst_amount !== null && !isNaN(parseFloat(item.sgst_amount)) && discountAmount === 0) {
-      return sum + parseFloat(item.sgst_amount);
-    }
-    const qty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
-    const rate = parseFloat(item.unit_rate) || 0;
-    const amt = qty * rate;
-    const itemTaxable = subtotal > 0 ? (amt - (amt / subtotal) * discountAmount) : amt;
-    return sum + (itemTaxable * (parseFloat(item.sgst_percent || 9) / 100));
-  }, 0);
-
-  const totalTax = totalCgst + totalSgst;
-  const grandTotal = parseFloat(po?.total_amount || (taxableAmount + totalTax));
+  const grandTotal = taxInclusiveSubtotal - discountAmount;
 
   return (
     <>
@@ -488,33 +469,15 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
 
               <div className="p-6 bg-slate-50/30 border-t border-slate-50 space-y-3">
                 <div className="flex justify-end gap-12 text-xs">
-                  <span className="text-slate-400">Subtotal</span>
+                  <span className="text-slate-400">Total Amount</span>
                   <span className="text-slate-600 font-medium w-32 text-right">
-                    {formatCurrency(subtotal, po.currency)}
+                    {formatCurrency(taxInclusiveSubtotal, po.currency)}
                   </span>
                 </div>
                 <div className="flex justify-end gap-12 text-xs">
                   <span className="text-slate-400">Discount {discountType === 'PERCENTAGE' && discountVal > 0 ? `(${discountVal}%)` : ''}</span>
                   <span className="text-rose-500 font-medium w-32 text-right">
                     - {formatCurrency(discountAmount, po.currency)}
-                  </span>
-                </div>
-                <div className="flex justify-end gap-12 text-xs font-semibold py-1 border-y border-slate-100">
-                  <span className="text-slate-600">Taxable Amount</span>
-                  <span className="text-slate-800 w-32 text-right">
-                    {formatCurrency(taxableAmount, po.currency)}
-                  </span>
-                </div>
-                <div className="flex justify-end gap-12 text-xs">
-                  <span className="text-slate-400">CGST (9%)</span>
-                  <span className="text-emerald-500 w-32 text-right">
-                    + {formatCurrency(totalCgst, po.currency)}
-                  </span>
-                </div>
-                <div className="flex justify-end gap-12 text-xs">
-                  <span className="text-slate-400">SGST (9%)</span>
-                  <span className="text-emerald-500 w-32 text-right">
-                    + {formatCurrency(totalSgst, po.currency)}
                   </span>
                 </div>
               </div>
@@ -817,24 +780,12 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
           {/* Totals inside print items list */}
           <div className="border-t border-slate-200 bg-slate-50/50 p-3 space-y-2">
             <div className="flex justify-end gap-12 text-xs">
-              <span className="text-slate-500">Subtotal</span>
-              <span className="text-slate-800 font-semibold w-32 text-right">{formatCurrency(subtotal, po.currency)}</span>
+              <span className="text-slate-500">Total Amount</span>
+              <span className="text-slate-800 font-semibold w-32 text-right">{formatCurrency(taxInclusiveSubtotal, po.currency)}</span>
             </div>
             <div className="flex justify-end gap-12 text-xs">
               <span className="text-slate-500">Discount {discountType === 'PERCENTAGE' && discountVal > 0 ? `(${discountVal}%)` : ''}</span>
               <span className="text-rose-600 font-semibold w-32 text-right">- {formatCurrency(discountAmount, po.currency)}</span>
-            </div>
-            <div className="flex justify-end gap-12 text-xs font-bold border-y border-slate-200 py-1">
-              <span className="text-slate-700">Taxable Amount</span>
-              <span className="text-slate-900 w-32 text-right">{formatCurrency(taxableAmount, po.currency)}</span>
-            </div>
-            <div className="flex justify-end gap-12 text-xs">
-              <span className="text-slate-500">CGST (9%)</span>
-              <span className="text-slate-800 font-semibold w-32 text-right">{formatCurrency(totalCgst, po.currency)}</span>
-            </div>
-            <div className="flex justify-end gap-12 text-xs">
-              <span className="text-slate-500">SGST (9%)</span>
-              <span className="text-slate-800 font-semibold w-32 text-right">{formatCurrency(totalSgst, po.currency)}</span>
             </div>
             <div className="flex justify-end gap-12 text-sm font-bold border-t border-slate-200 pt-2">
               <span>GRAND TOTAL</span>
