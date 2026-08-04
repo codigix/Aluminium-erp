@@ -49,8 +49,36 @@ const CustomerPO = ({
     }
   };
 
-  // Fetch companies locally for the pending/dispatched filter dropdowns
+  // Fetch companies locally and sort alphabetically
   const [companiesList, setCompaniesList] = useState([]);
+  const [activeCompanies, setActiveCompanies] = useState(companies);
+
+  const fetchLatestCompanies = async () => {
+    try {
+      const data = await apiRequest('/companies');
+      let list = [];
+      if (Array.isArray(data)) list = data;
+      else if (data?.data) list = data.data;
+
+      // Sort alphabetically by company_name
+      list.sort((a, b) => (a.company_name || '').localeCompare(b.company_name || ''));
+      setActiveCompanies(list);
+    } catch (err) {
+      console.error('Failed to fetch companies:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchLatestCompanies();
+  }, []);
+
+  useEffect(() => {
+    if (companies && companies.length > 0) {
+      const sorted = [...companies].sort((a, b) => (a.company_name || '').localeCompare(b.company_name || ''));
+      setActiveCompanies(sorted);
+    }
+  }, [companies]);
+
   // Filter option lists from backend (PO No, Drawing No, Drawing Name, Project)
   const [filterOptions, setFilterOptions] = useState({
     poNumbers: [], drawingNos: [], drawingNames: [], projects: []
@@ -1056,7 +1084,10 @@ const CustomerPO = ({
               sgstPercent: 0,
               igstPercent: 0,
               hsnCode: sa.hsn_code || sa.hsnCode || masterDwg.hsn_code || '',
-              deliveryDate: sa.delivery_date || sa.deliveryDate || (masterDwg.delivery_date ? new Date(masterDwg.delivery_date).toISOString().split('T')[0] : '')
+              deliveryDate: sa.delivery_date || sa.deliveryDate || (masterDwg.delivery_date ? new Date(masterDwg.delivery_date).toISOString().split('T')[0] : ''),
+              item_group: sa.item_group || sa.drawing_type || (sa.is_assembly ? 'ASM' : 'PART'),
+              drawing_type: sa.drawing_type || sa.item_group || (sa.is_assembly ? 'ASM' : 'Part'),
+              is_assembly: !!(sa.is_assembly || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASM') || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASSEMBLY'))
             }))
           : (matchedQuoteDwg.sub_assemblies || []);
 
@@ -1119,7 +1150,10 @@ const CustomerPO = ({
               sgstPercent: 0,
               igstPercent: 0,
               hsnCode: sa.hsn_code || sa.hsnCode || matchedDwg.hsn_code || '',
-              deliveryDate: sa.delivery_date || sa.deliveryDate || (matchedDwg.delivery_date ? new Date(matchedDwg.delivery_date).toISOString().split('T')[0] : '')
+              deliveryDate: sa.delivery_date || sa.deliveryDate || (matchedDwg.delivery_date ? new Date(matchedDwg.delivery_date).toISOString().split('T')[0] : ''),
+              item_group: sa.item_group || sa.drawing_type || (sa.is_assembly ? 'ASM' : 'PART'),
+              drawing_type: sa.drawing_type || sa.item_group || (sa.is_assembly ? 'ASM' : 'Part'),
+              is_assembly: !!(sa.is_assembly || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASM') || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASSEMBLY'))
             }));
           }
         }
@@ -1181,6 +1215,7 @@ const CustomerPO = ({
   const openPoInMode = async (mode, poId = null) => {
     setFormMode(mode);
     setLocalError('');
+    fetchLatestCompanies();
     if (poId) {
       setEditingPoId(poId);
       setPoFormLoading(true);
@@ -1247,7 +1282,9 @@ const CustomerPO = ({
                 quantity: parseFloat(sa.quantity || sa.qty || 0),
                 unit: sa.uom || sa.unit || 'NOS',
                 rate: parseFloat(sa.rate || sa.bom_cost || 0).toFixed(2),
-                item_group: sa.item_group || 'SA'
+                item_group: sa.item_group || sa.drawing_type || (sa.is_assembly ? 'ASM' : 'PART'),
+                drawing_type: sa.drawing_type || sa.item_group || (sa.is_assembly ? 'ASM' : 'Part'),
+                is_assembly: !!(sa.is_assembly || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASM') || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASSEMBLY'))
               }));
             })()
           }))
@@ -2733,14 +2770,32 @@ const CustomerPO = ({
 
                   <div className="grid grid-cols-1">
                     <div className="space-y-2">
-                      <label className="text-xs  text-slate-400   ml-1">Company / Client *</label>
-                      <select
-                        disabled={formMode === 'VIEW'}
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs text-slate-400 ml-1">Company / Client *</label>
+                        <button
+                          type="button"
+                          onClick={fetchLatestCompanies}
+                          className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                          title="Refresh Company list"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          <span>Refresh</span>
+                        </button>
+                      </div>
+                      <SearchableSelect
+                        options={activeCompanies.map(c => ({
+                          value: c.id,
+                          label: c.company_name,
+                          company: c
+                        }))}
                         value={poForm.companyId}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const comp = companies.find(c => String(c.id) === String(val));
-                          
+                        placeholder="Search & Select Company..."
+                        disabled={formMode === 'VIEW'}
+                        onFocus={fetchLatestCompanies}
+                        onChange={(eOrVal) => {
+                          const val = (eOrVal && typeof eOrVal === 'object' && 'target' in eOrVal) ? eOrVal.target.value : eOrVal;
+                          const comp = activeCompanies.find(c => String(c.id) === String(val));
+
                           let customerContactPerson = '';
                           let customerEmail = '';
                           let customerPhone = '';
@@ -2778,13 +2833,7 @@ const CustomerPO = ({
                           setSelectedDrawingVal('');
                           setSelectedQuoteContact(null);
                         }}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none font-medium"
-                      >
-                        <option value="">Select Company</option>
-                        {companies.map(c => (
-                          <option key={c.id} value={c.id}>{c.company_name}</option>
-                        ))}
-                      </select>
+                      />
                     </div>
                   </div>
 
@@ -3156,14 +3205,14 @@ const CustomerPO = ({
                                     <div className="flex flex-col pl-3">
                                       <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
                                       {(() => {
-                                        const saGroup = (sa.item_group || '').toUpperCase();
-                                        const isSaPart = saGroup.includes('PART');
-                                        const displaySaGroup = 'PART';
+                                        const saGroup = (sa.item_group || sa.drawing_type || '').toUpperCase();
+                                        const isSaPart = saGroup.includes('PART') || (saGroup !== 'ASM' && saGroup !== 'ASSEMBLY' && !saGroup.includes('ASSEMBLY') && !sa.is_assembly);
+                                        const displaySaGroup = isSaPart ? 'PART' : 'ASM';
                                         return (
                                           <div className="flex items-center gap-2 mt-0.5">
-                                            <span className={`px-1 py-0.5 rounded-[3px] text-[8px] ${isSaPart
+                                            <span className={`px-1 py-0.5 rounded-[3px] text-[8px] font-semibold ${isSaPart
                                               ? 'bg-blue-50 text-blue-600 border border-blue-100/50'
-                                              : 'bg-emerald-50 text-emerald-600 border border-emerald-100/50'
+                                              : 'bg-indigo-50 text-indigo-600 border border-indigo-100/50'
                                               }`}>
                                               {displaySaGroup}
                                             </span>

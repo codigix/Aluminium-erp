@@ -724,10 +724,10 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (token && user && companies.length === 0) {
+    if (token && user) {
       loadCompanies().catch(() => null)
     }
-  }, [loadCompanies, token, user, companies])
+  }, [loadCompanies, token, user])
 
   useEffect(() => {
     if (token && user && salesOrders.length === 0) {
