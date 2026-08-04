@@ -29,7 +29,7 @@ const checkProductionPlanFulfilled = async (connectionOrPool, { jobCardId, workO
 
 const listJobCards = async () => {
   const [rows] = await pool.query(
-    `SELECT jc.id, jc.job_card_no, jc.work_order_id, jc.operation_id, jc.workstation_id, jc.assigned_to, jc.planned_qty, jc.status, jc.execution_mode, jc.public_id,
+    `SELECT jc.id, jc.job_card_no, jc.work_order_id, jc.operation_id, COALESCE(jc.workstation_id, w.id) as workstation_id, jc.assigned_to, jc.planned_qty, jc.status, jc.execution_mode, jc.public_id,
             jc.sequence_no, jc.actual_start_date, jc.created_at,
             jc.start_time, jc.end_time, jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.rework_qty, jc.scrap_qty, jc.remarks, jc.vendor_id, jc.vendor_rate,
             ROW_NUMBER() OVER (PARTITION BY COALESCE(wo.plan_id, wo.parent_wo_id, wo.id) ORDER BY CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC) as operation_sequence,
@@ -84,10 +84,60 @@ const listJobCards = async () => {
      ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC`
   );
 
+  // Batch load all child work orders for all job cards in 1 bulk query (eliminates N+1 loop queries)
+  const planIds = [...new Set(rows.map(r => r.plan_id).filter(Boolean))];
+  let allChildWos = [];
+  if (planIds.length > 0) {
+    const [childWoRows] = await pool.query(
+      `SELECT id, plan_id, parent_wo_id, source_fg, item_code, item_name, quantity 
+       FROM work_orders 
+       WHERE plan_id IN (?) AND status NOT IN ("DRAFT", "CANCELLED")`,
+      [planIds]
+    );
+    allChildWos = childWoRows;
+  }
+
+  // Batch load last transferred quantities for child work orders in 1 bulk query
+  const childWoIds = allChildWos.map(w => w.id);
+  const transferredMap = {};
+  if (childWoIds.length > 0) {
+    const [transferredRows] = await pool.query(
+      `SELECT j1.work_order_id, COALESCE(j1.transferred_qty, 0) as transferred_qty
+       FROM job_cards j1
+       INNER JOIN (
+         SELECT work_order_id, MAX(id) as max_id
+         FROM job_cards
+         WHERE work_order_id IN (?)
+         GROUP BY work_order_id
+       ) j2 ON j1.id = j2.max_id`,
+      [childWoIds]
+    );
+    transferredRows.forEach(t => {
+      transferredMap[t.work_order_id] = parseFloat(t.transferred_qty || 0);
+    });
+  }
+
+  // Batch load max sequence per work order in 1 bulk query
+  const workOrderIds = [...new Set(rows.map(r => r.work_order_id).filter(Boolean))];
+  const maxSeqMap = {};
+  if (workOrderIds.length > 0) {
+    const [seqRows] = await pool.query(
+      `SELECT work_order_id, MAX(sequence_no) as max_seq
+       FROM job_cards
+       WHERE work_order_id IN (?)
+       GROUP BY work_order_id`,
+      [workOrderIds]
+    );
+    seqRows.forEach(s => {
+      maxSeqMap[s.work_order_id] = s.max_seq;
+    });
+  }
+
   for (const row of rows) {
-    const [childWos] = await pool.query(
-      'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ? AND status NOT IN ("DRAFT", "CANCELLED")',
-      [row.plan_id, row.work_order_id, row.item_code, row.work_order_id]
+    const childWos = allChildWos.filter(w => 
+      w.plan_id === row.plan_id && 
+      (w.parent_wo_id === row.work_order_id || w.source_fg === row.item_code) && 
+      w.id !== row.work_order_id
     );
 
     if (childWos.length > 0) {
@@ -96,11 +146,7 @@ const listJobCards = async () => {
       const parentQty = minPossibleQty;
 
       for (const childWo of childWos) {
-        const [finalJc] = await pool.query(
-          'SELECT COALESCE(transferred_qty, 0) as transferred_qty FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no DESC, id DESC LIMIT 1',
-          [childWo.id]
-        );
-        const transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+        const transferred = transferredMap[childWo.id] || 0;
 
         row.child_parts.push({
           item_code: childWo.item_code,
@@ -117,12 +163,9 @@ const listJobCards = async () => {
       }
 
       row.assembly_available_qty = minPossibleQty;
-      const [maxSeqRow] = await pool.query(
-        'SELECT MAX(sequence_no) as max_seq FROM job_cards WHERE work_order_id = ?',
-        [row.work_order_id]
-      );
+      const maxSeq = maxSeqMap[row.work_order_id] || 0;
       const opNameLower = String(row.operation_name || '').toLowerCase();
-      const isLastOp = (row.sequence_no === maxSeqRow[0]?.max_seq) || opNameLower === 'shipment' || opNameLower === 'dispatch';
+      const isLastOp = (row.sequence_no === maxSeq) || opNameLower === 'shipment' || opNameLower === 'dispatch';
 
       row.is_first_op = (row.sequence_no === 1);
       row.is_last_op = isLastOp;
@@ -1413,6 +1456,27 @@ const addTimeLog = async (data) => {
         if (isAssemblyWaiting) {
           throw new Error('Cannot add production entry: Assembly is waiting for components.');
         }
+      }
+    }
+
+    // Check Max Produced Quantity Limit for this Operation
+    const [prodLimitRows] = await connection.query(
+      `SELECT jc.planned_qty, jc.rework_qty, jc.sequence_no, jc.work_order_id, wo.item_code, wo.item_name,
+              (SELECT COALESCE(SUM(produced_qty), 0) FROM job_card_time_logs WHERE job_card_id = ?) as current_produced
+       FROM job_cards jc
+       LEFT JOIN work_orders wo ON jc.work_order_id = wo.id
+       WHERE jc.id = ?`,
+      [jobCardId, jobCardId]
+    );
+
+    if (prodLimitRows.length > 0) {
+      const jcRow = prodLimitRows[0];
+      const maxAllowed = parseFloat(jcRow.planned_qty || 0) + parseFloat(jcRow.rework_qty || 0);
+      const newTotal = parseFloat(jcRow.current_produced || 0) + parseFloat(producedQty || 0);
+
+      if (newTotal > maxAllowed) {
+        const remainingAllowed = Math.max(0, maxAllowed - parseFloat(jcRow.current_produced || 0));
+        throw new Error(`Cannot log production: Total produced quantity (${newTotal}) would exceed the allowed operation limit (${maxAllowed}). Maximum remaining produceable quantity is ${remainingAllowed}.`);
       }
     }
 

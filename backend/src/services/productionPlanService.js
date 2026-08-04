@@ -274,7 +274,8 @@ const getProductionPlanById = async (id) => {
 
     // Step 3: fetch all operations for that latest BOM item
     const [bomOps] = await pool.query(
-      `SELECT soio.*, COALESCE(om.hourly_rate, soio.hourly_rate, 0) as hourly_rate
+      `SELECT soio.*, 
+              COALESCE(om.hourly_rate, soio.hourly_rate, 0) as hourly_rate
        FROM sales_order_item_operations soio
        LEFT JOIN operations om ON LOWER(TRIM(om.operation_name)) = LOWER(TRIM(soio.operation_name))
        WHERE soio.sales_order_item_id = ?

@@ -388,6 +388,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     );
   };
 
+  const [refreshingOperations, setRefreshingOperations] = useState(false);
+
   const handleOpenConfig = async (plan) => {
     try {
       setLoading(true);
@@ -408,6 +410,33 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       errorToast('Failed to load configuration details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefreshPlanConfig = async () => {
+    if (!selectedPlanConfig?.id) return;
+    const currentPlanId = selectedPlanConfig.id;
+    const currentWoCount = selectedPlanConfig.wo_count || 0;
+    try {
+      setRefreshingOperations(true);
+      // Clear previous cached state immediately
+      setSelectedPlanConfig(null);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/production-plans/${currentPlanId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedPlanConfig({ ...data, wo_count: currentWoCount });
+        successToast('Operations & process routing refreshed from BOM!');
+      } else {
+        errorToast('Failed to refresh configuration');
+      }
+    } catch (error) {
+      console.error('Error refreshing plan config:', error);
+      errorToast('Failed to refresh configuration');
+    } finally {
+      setRefreshingOperations(false);
     }
   };
 
@@ -3587,17 +3616,28 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         isOpen={configModalOpen}
         onClose={() => !initiatingProduction && setConfigModalOpen(false)}
         title={
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
-              <Zap className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-lg text-slate-800  ">Configure Work Order</h2>
-              <div className="flex items-center gap-1 text-xs text-indigo-500   ">
-                <Activity className="w-3 h-3" />
-                Strategy Implementation Phase
+          <div className="flex items-center justify-between w-full pr-6">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
+                <Zap className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-lg text-slate-800  ">Configure Work Order</h2>
+                <div className="flex items-center gap-1 text-xs text-indigo-500   ">
+                  <Activity className="w-3 h-3" />
+                  Strategy Implementation Phase
+                </div>
               </div>
             </div>
+            <button
+              onClick={handleRefreshPlanConfig}
+              disabled={refreshingOperations}
+              title="Refresh operations & workstation assignments from master database"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded text-xs font-medium transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshingOperations ? 'animate-spin' : ''}`} />
+              <span>Refresh Operations</span>
+            </button>
           </div>
         }
         size="5xl"
