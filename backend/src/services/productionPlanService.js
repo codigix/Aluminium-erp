@@ -219,16 +219,18 @@ const getProductionPlanById = async (id) => {
   // Key insight: production_plan_items.sales_order_item_id references order_items (not sales_order_items).
   // The BOM operations live in sales_order_item_operations keyed to sales_order_items.id.
   // We look up by drawing_no: order_items.drawing_no → sales_order_items (latest with that drawing_no).
-  const allPlanItems = [...items, ...(subAssemblies || [])];
+  // Put sub-assemblies (parts) first so part operations precede FG assembly operations
+  const allPlanItems = [...(subAssemblies || []), ...items];
   const seenDrawingKeys = new Set();
   const seenOpIds = new Set(); // dedup only by row ID — allows same-named ops (e.g., 2x Cutting)
   const bomOpsList = [];
 
   for (const planItem of allPlanItems) {
-    const soiId = planItem.sales_order_item_id; // this is an order_items.id
+    const soiId = planItem.sales_order_item_id;
     const itemCode = planItem.item_code;
+    const bomNo = planItem.bom_no;
 
-    const dedupeKey = soiId || itemCode;
+    const dedupeKey = soiId || bomNo || itemCode;
     if (!dedupeKey || seenDrawingKeys.has(dedupeKey)) continue;
     seenDrawingKeys.add(dedupeKey);
 
@@ -243,18 +245,29 @@ const getProductionPlanById = async (id) => {
         drawingNo = orderItem[0].drawing_no;
       }
     }
-    // Fallback: use item_code as drawing_no (common pattern in this ERP)
     if (!drawingNo) drawingNo = itemCode;
 
-    // Step 2: find the latest sales_order_item matching this drawing_no
-    // (get the highest ID so we always pick up the most recent BOM revision)
+    // Step 2: find the latest sales_order_item matching bom_no, soiId, drawing_no, or item_code
     let latestSoiId = null;
-    if (drawingNo) {
-      const [latestItem] = await pool.query(
-        `SELECT id FROM sales_order_items WHERE TRIM(drawing_no) = ? ORDER BY id DESC LIMIT 1`,
-        [drawingNo]
-      );
-      if (latestItem.length > 0) latestSoiId = latestItem[0].id;
+    if (bomNo && !isNaN(bomNo)) {
+      const [byBomId] = await pool.query(`SELECT id FROM sales_order_items WHERE id = ? LIMIT 1`, [bomNo]);
+      if (byBomId.length > 0) latestSoiId = byBomId[0].id;
+    }
+    if (!latestSoiId && soiId) {
+      const [bySoiId] = await pool.query(`SELECT id FROM sales_order_items WHERE id = ? LIMIT 1`, [soiId]);
+      if (bySoiId.length > 0) latestSoiId = bySoiId[0].id;
+    }
+    if (!latestSoiId) {
+      const searchTerms = [bomNo, drawingNo, itemCode].filter(Boolean);
+      if (searchTerms.length > 0) {
+        const [bySearch] = await pool.query(
+          `SELECT id FROM sales_order_items 
+           WHERE TRIM(drawing_no) IN (?) OR TRIM(item_code) IN (?) 
+           ORDER BY id DESC LIMIT 1`,
+          [searchTerms, searchTerms]
+        );
+        if (bySearch.length > 0) latestSoiId = bySearch[0].id;
+      }
     }
 
     if (!latestSoiId) continue;
@@ -285,8 +298,8 @@ const getProductionPlanById = async (id) => {
         hourly_rate: op.hourly_rate || 0,
         base_time: op.base_time || 0,
         net_time: op.net_time || 0,
-        source_item: planItem.item_code || null,
-        item_type: planItem.source_type === 'SA' ? 'SA' : (op.item_type || 'FG')
+        source_item: planItem.item_code || op.item_code || op.drawing_no || null,
+        item_type: planItem.source_type === 'SA' || (bomNo && bomNo !== plan.bom_no) ? 'SA' : (op.item_type || 'FG')
       });
     }
   }

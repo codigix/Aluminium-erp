@@ -40,17 +40,23 @@ const createWorkOrdersFromPlan = async (planId) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Fetch Plan Details
+    // 1. Fetch Plan Details & LIVE operations
     const [plans] = await connection.query('SELECT * FROM production_plans WHERE id = ?', [planId]);
     if (plans.length === 0) throw new Error('Production Plan not found');
     const plan = plans[0];
+
+    // Fetch LIVE operations from BOM (via productionPlanService)
+    const productionPlanService = require('./productionPlanService');
+    const livePlanData = await productionPlanService.getProductionPlanById(planId);
+    const planOps = (livePlanData && livePlanData.operations && livePlanData.operations.length > 0)
+      ? livePlanData.operations
+      : (await connection.query('SELECT * FROM production_plan_operations WHERE plan_id = ? ORDER BY step_no ASC', [planId]))[0];
 
     // 2. Fetch Finished Goods
     const [items] = await connection.query('SELECT * FROM production_plan_items WHERE plan_id = ?', [planId]);
     
     // 3. Fetch Sub Assemblies
     const [subAssemblies] = await connection.query('SELECT * FROM production_plan_sub_assemblies WHERE plan_id = ?', [planId]);
-    const [planOps] = await connection.query('SELECT * FROM production_plan_operations WHERE plan_id = ? ORDER BY step_no ASC', [planId]);
 
     const createdWorkOrders = [];
     const saWorkOrderIds = [];
@@ -84,10 +90,18 @@ const createWorkOrdersFromPlan = async (planId) => {
 
       // Check if WO already exists for this plan and item
       const [existing] = await connection.query(
-        'SELECT id FROM work_orders WHERE plan_id = ? AND item_code = ? AND source_type = ?',
+        'SELECT id, status FROM work_orders WHERE plan_id = ? AND item_code = ? AND source_type = ?',
         [planId, itemCode, sourceType]
       );
-      if (existing.length > 0) return existing[0].id;
+      if (existing.length > 0) {
+        const woId = existing[0].id;
+        // If WO is still DRAFT/PENDING, update its job cards to reflect latest updated BOM operations
+        if (existing[0].status === 'DRAFT' || existing[0].status === 'PENDING') {
+          await connection.execute('DELETE FROM job_cards WHERE work_order_id = ? AND status = "PENDING"', [woId]);
+          await createJobCardsForWorkOrder(woId, connection, 'PENDING', planOps);
+        }
+        return woId;
+      }
 
       // Ensure we have a valid sales_order_id if available
       const effectiveSalesOrderId = plan.sales_order_id || (itemData.sales_order_id) || null;
@@ -110,7 +124,7 @@ const createWorkOrdersFromPlan = async (planId) => {
 
       const workOrderId = result.insertId;
       
-      // Create Job Cards for both Finished Goods (FG) and Sub-Assemblies (SA)
+      // Create Job Cards for both Finished Goods (FG) and Sub-Assemblies (SA) using LIVE operations
       await createJobCardsForWorkOrder(workOrderId, connection, 'PENDING', planOps);
       
       return workOrderId;
@@ -487,12 +501,12 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     }));
   }
   
-  // Auto-append Shipment operation if it does not exist
+  // Auto-append Shipment operation ONLY for top-level Finished Goods (FG) work orders
   const hasShipment = operationsToUse.some(op => {
     const name = String(op.operation_name || op.operationName || '').toLowerCase();
     return name === 'shipment' || name === 'dispatch';
   });
-  if (!hasShipment) {
+  if (!hasShipment && wo.source_type === 'FG') {
     operationsToUse.push({
       operation_name: 'Shipment',
       workstation: 'Dispatch',

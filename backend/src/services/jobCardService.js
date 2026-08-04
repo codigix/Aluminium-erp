@@ -117,14 +117,16 @@ const listJobCards = async () => {
       }
 
       row.assembly_available_qty = minPossibleQty;
-      const [minSeqRow] = await pool.query(
-        'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
+      const [maxSeqRow] = await pool.query(
+        'SELECT MAX(sequence_no) as max_seq FROM job_cards WHERE work_order_id = ?',
         [row.work_order_id]
       );
-      const isFirstOp = row.sequence_no === minSeqRow[0]?.min_seq;
+      const opNameLower = String(row.operation_name || '').toLowerCase();
+      const isLastOp = (row.sequence_no === maxSeqRow[0]?.max_seq) || opNameLower === 'shipment' || opNameLower === 'dispatch';
 
-      row.is_first_op = isFirstOp;
-      row.is_assembly_waiting = isFirstOp && row.child_parts.some(cp => cp.transferred_qty === 0);
+      row.is_first_op = (row.sequence_no === 1);
+      row.is_last_op = isLastOp;
+      row.is_assembly_waiting = isLastOp && row.child_parts.some(cp => cp.transferred_qty === 0);
     } else {
       row.child_parts = null;
       row.assembly_available_qty = parseFloat(row.planned_qty || 0);
@@ -1241,14 +1243,16 @@ const getJobCardById = async (id) => {
       }
 
       row.assembly_available_qty = minPossibleQty;
-      const [minSeqRow] = await pool.query(
-        'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
+      const [maxSeqRow] = await pool.query(
+        'SELECT MAX(sequence_no) as max_seq FROM job_cards WHERE work_order_id = ?',
         [row.work_order_id]
       );
-      const isFirstOp = row.sequence_no === minSeqRow[0]?.min_seq;
+      const opNameLower = String(row.operation_name || '').toLowerCase();
+      const isLastOp = (row.sequence_no === maxSeqRow[0]?.max_seq) || opNameLower === 'shipment' || opNameLower === 'dispatch';
 
-      row.is_first_op = isFirstOp;
-      row.is_assembly_waiting = isFirstOp && row.child_parts.some(cp => cp.transferred_qty === 0);
+      row.is_first_op = (row.sequence_no === 1);
+      row.is_last_op = isLastOp;
+      row.is_assembly_waiting = isLastOp && row.child_parts.some(cp => cp.transferred_qty === 0);
     } else {
       row.child_parts = null;
       row.assembly_available_qty = parseFloat(row.planned_qty || 0);
@@ -1397,22 +1401,62 @@ const addTimeLog = async (data) => {
         }
 
         const assemblyAvailableQty = minPossibleQty;
-        const [minSeqRow] = await connection.query(
-          'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
+        const [maxSeqRow] = await connection.query(
+          'SELECT MAX(sequence_no) as max_seq FROM job_cards WHERE work_order_id = ?',
           [jcDetail.work_order_id]
         );
-        const isFirstOp = jcDetail.sequence_no === minSeqRow[0]?.min_seq;
+        const [jcOpRow] = await connection.query('SELECT operation_name FROM job_cards WHERE id = ?', [jobCardId]);
+        const opNameLower = String(jcOpRow[0]?.operation_name || '').toLowerCase();
+        const isLastOp = (jcDetail.sequence_no === maxSeqRow[0]?.max_seq) || opNameLower === 'shipment' || opNameLower === 'dispatch';
 
-        const isAssemblyWaiting = isFirstOp && childParts.some(cp => cp.transferred_qty === 0);
+        const isAssemblyWaiting = isLastOp && childParts.some(cp => cp.transferred_qty === 0);
         if (isAssemblyWaiting) {
           throw new Error('Cannot add production entry: Assembly is waiting for components.');
         }
       }
     }
 
-    // 1b. Check Operator and Workstation availability with time overlap
+    // 1b. Check Operator, Workstation, and Sequence availability with time overlap
     const fullStartTime = (logDate && startTime) ? `${logDate} ${startTime}` : null;
     const fullEndTime = (logDate && endTime) ? `${logDate} ${endTime}` : null;
+
+    const formatTimeStr = (dtStr) => {
+      if (!dtStr) return '';
+      const d = new Date(dtStr);
+      if (isNaN(d.getTime())) return String(dtStr);
+      let hours = d.getHours();
+      const minutes = d.getMinutes().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+    };
+
+    // Sequence Overlap Check: Current operation cannot start before preceding operation's end time
+    if (fullStartTime) {
+      const [jcSeqRows] = await connection.query(
+        'SELECT sequence_no, work_order_id FROM job_cards WHERE id = ?',
+        [jobCardId]
+      );
+      if (jcSeqRows.length > 0) {
+        const { sequence_no, work_order_id } = jcSeqRows[0];
+        const [prevLogs] = await connection.query(
+          `SELECT tl.end_time, jc.operation_name 
+           FROM job_card_time_logs tl
+           JOIN job_cards jc ON tl.job_card_id = jc.id
+           WHERE jc.work_order_id = ? AND jc.sequence_no < ?
+           ORDER BY tl.end_time DESC LIMIT 1`,
+          [work_order_id, sequence_no]
+        );
+        if (prevLogs.length > 0 && prevLogs[0].end_time) {
+          const prevEnd = new Date(prevLogs[0].end_time);
+          const currentStart = new Date(fullStartTime);
+          if (currentStart < prevEnd) {
+            const formattedPrevEnd = formatTimeStr(prevLogs[0].end_time);
+            throw new Error(`❌ Sequence Violation: Operation cannot start before preceding operation "${prevLogs[0].operation_name}" ended at ${formattedPrevEnd}.`);
+          }
+        }
+      }
+    }
 
     // 1. Prevent overlapping time log for this same Job Card
     if (fullStartTime && fullEndTime) {
@@ -1429,22 +1473,26 @@ const addTimeLog = async (data) => {
     }
 
     if (workstationId) {
-      const [wsRows] = await connection.query('SELECT IFNULL(capacity, 1) as capacity FROM workstations WHERE id = ?', [workstationId]);
+      const [wsRows] = await connection.query('SELECT IFNULL(capacity, 1) as capacity, workstation_name FROM workstations WHERE id = ?', [workstationId]);
       const capacity = wsRows.length > 0 ? wsRows[0].capacity : 1;
+      const wsName = wsRows.length > 0 ? wsRows[0].workstation_name : 'Selected Workstation';
 
       if (fullStartTime && fullEndTime) {
         const [overlappingWS] = await connection.query(
-          `SELECT jc.job_card_no 
+          `SELECT jc.job_card_no, jc.operation_name, tl.start_time, tl.end_time 
            FROM job_card_time_logs tl
            JOIN job_cards jc ON tl.job_card_id = jc.id
            WHERE tl.workstation_id = ? 
              AND tl.start_time < ? 
              AND tl.end_time > ?
-             AND jc.status != 'CANCELLED' AND jc.status != 'COMPLETED'`,
+             AND jc.status != 'CANCELLED'`,
           [workstationId, fullEndTime, fullStartTime]
         );
         if (overlappingWS.length >= capacity) {
-          throw new Error(`Workstation is busy with Job Card ${overlappingWS[0].job_card_no}`);
+          const overlap = overlappingWS[0];
+          const overlapStart = formatTimeStr(overlap.start_time);
+          const overlapEnd = formatTimeStr(overlap.end_time);
+          throw new Error(`❌ Workstation "${wsName}" is already allocated to Job Card ${overlap.job_card_no} (${overlap.operation_name}) from ${overlapStart} to ${overlapEnd}. Please select another time slot or workstation.`);
         }
       } else {
         const [activeJobs] = await connection.query(
@@ -1452,25 +1500,31 @@ const addTimeLog = async (data) => {
           [workstationId, jobCardId]
         );
         if (activeJobs.length >= capacity) {
-          throw new Error(`Workstation is busy with Job Card ${activeJobs[0].job_card_no}`);
+          throw new Error(`Workstation "${wsName}" is busy with Job Card ${activeJobs[0].job_card_no}.`);
         }
       }
     }
 
     if (operatorId) {
+      const [userRows] = await connection.query('SELECT username FROM users WHERE id = ?', [operatorId]);
+      const opName = userRows.length > 0 ? userRows[0].username : 'Selected Operator';
+
       if (fullStartTime && fullEndTime) {
         const [overlapOp] = await connection.query(
-          `SELECT jc.job_card_no 
+          `SELECT jc.job_card_no, jc.operation_name, tl.start_time, tl.end_time 
            FROM job_card_time_logs tl
            JOIN job_cards jc ON tl.job_card_id = jc.id
            WHERE tl.operator_id = ? 
              AND tl.start_time < ? 
              AND tl.end_time > ?
-             AND jc.status != 'CANCELLED' AND jc.status != 'COMPLETED'`,
+             AND jc.status != 'CANCELLED'`,
           [operatorId, fullEndTime, fullStartTime]
         );
         if (overlapOp.length > 0) {
-          throw new Error(`Operator is busy with Job Card ${overlapOp[0].job_card_no}`);
+          const overlap = overlapOp[0];
+          const overlapStart = formatTimeStr(overlap.start_time);
+          const overlapEnd = formatTimeStr(overlap.end_time);
+          throw new Error(`❌ Operator "${opName}" is busy on Job Card ${overlap.job_card_no} (${overlap.operation_name}) from ${overlapStart} to ${overlapEnd}. Please select another operator or time slot.`);
         }
       } else {
         const [busyOp] = await connection.query(
@@ -1478,7 +1532,7 @@ const addTimeLog = async (data) => {
           [operatorId, jobCardId]
         );
         if (busyOp.length > 0) {
-          throw new Error(`Operator is busy with Job Card ${busyOp[0].job_card_no}`);
+          throw new Error(`Operator "${opName}" is busy on Job Card ${busyOp[0].job_card_no}.`);
         }
       }
     }
@@ -1940,13 +1994,15 @@ const updateJobCard = async (id, data) => {
       }
 
       const assemblyAvailableQty = minPossibleQty;
-      const [minSeqRow] = await pool.query(
-        'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
+      const [maxSeqRow] = await pool.query(
+        'SELECT MAX(sequence_no) as max_seq FROM job_cards WHERE work_order_id = ?',
         [jcDetail.work_order_id]
       );
-      const isFirstOp = jcDetail.sequence_no === minSeqRow[0]?.min_seq;
+      const [jcOpRow] = await pool.query('SELECT operation_name FROM job_cards WHERE id = ?', [id]);
+      const opNameLower = String(jcOpRow[0]?.operation_name || '').toLowerCase();
+      const isLastOp = (jcDetail.sequence_no === maxSeqRow[0]?.max_seq) || opNameLower === 'shipment' || opNameLower === 'dispatch';
 
-      const isAssemblyWaiting = isFirstOp && childParts.some(cp => cp.transferred_qty === 0);
+      const isAssemblyWaiting = isLastOp && childParts.some(cp => cp.transferred_qty === 0);
       if (isAssemblyWaiting) {
         const isAssigning = (workstationId !== undefined && workstationId !== null) || (assignedTo !== undefined && assignedTo !== null);
         const isStartingOrCompleting = (status === 'IN_PROGRESS' || status === 'COMPLETED');

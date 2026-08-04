@@ -3671,16 +3671,18 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                                   {(() => {
                                     const itemCodeStr = (op.source_item || op.itemCode || '').toUpperCase();
                                     const itemType = (op.item_type || '').toUpperCase();
-                                    const displayType = itemCodeStr.startsWith('ASSEMBLY-')
-                                      ? 'ASSEMBLY'
-                                      : (itemCodeStr.startsWith('PART-')
-                                        ? 'PART'
-                                        : (itemType === 'SA' || itemType === 'SUB ASSEMBLY' || itemType === 'SUB-ASSEMBLY' ? 'ASSEMBLY' : 'PART')
-                                      );
-                                    const isAssembly = displayType === 'ASSEMBLY';
+
+                                    let isPart = false;
+                                    if (itemType === 'SA' || itemType === 'SUB ASSEMBLY' || itemType === 'SUB-ASSEMBLY' || itemCodeStr.startsWith('PART-')) {
+                                      isPart = true;
+                                    }
+
+                                    const badgeColor = isPart ? 'text-rose-500 font-semibold' : 'text-indigo-500 font-semibold';
+                                    const labelText = isPart ? 'PART' : 'ASSEMBLY';
+
                                     return (
-                                      <span className={isAssembly ? 'text-indigo-500' : 'text-rose-500'}>
-                                        {displayType}:
+                                      <span className={badgeColor}>
+                                        {labelText}:
                                       </span>
                                     );
                                   })()}

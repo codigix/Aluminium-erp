@@ -2107,17 +2107,24 @@ const JobCard = () => {
     return true;
   };
 
-  const prefillProductionEntryForm = (jc, timeLogs) => {
+  const prefillProductionEntryForm = (jc, timeLogs, precedingJC = null) => {
     const today = new Date().toISOString().split('T')[0];
-    let rawStart = jc.start_time;
-    if (timeLogs.length > 0 && timeLogs[0].end_time) {
+    const hasLogs = timeLogs && timeLogs.length > 0;
+    let rawStart = null;
+    let rawEnd = null;
+
+    if (hasLogs && timeLogs[0].end_time) {
       rawStart = timeLogs[0].end_time;
+    } else {
+      rawStart = jc.start_time;
+      rawEnd = jc.end_time;
     }
+
     const startDate = rawStart ? (String(rawStart).includes('T') ? String(rawStart).split('T')[0] : String(rawStart).split(' ')[0]) : today;
     const diffDays = calculateDayOffset(jc, startDate);
 
     // Sum produced qty from all logs to calculate remaining qty correctly
-    const totalProduced = timeLogs.reduce((sum, log) => sum + parseFloat(log.produced_qty || 0), 0);
+    const totalProduced = (timeLogs || []).reduce((sum, log) => sum + parseFloat(log.produced_qty || 0), 0);
     const logRemainingQty = Math.max(0, (parseFloat(jc.wo_quantity || jc.planned_qty || 0) + parseFloat(jc.rework_qty || 0)) - parseFloat(jc.accepted_qty || 0));
 
     const startStr = formatLocalTime(rawStart);
@@ -2126,20 +2133,20 @@ const JobCard = () => {
     let endTimeVal = '04:00';
     let endAMPMVal = 'PM';
 
-    if (timeLogs.length === 0) {
-      const endStr = formatLocalTime(jc.end_time);
+    if (!hasLogs && rawEnd) {
+      const endStr = formatLocalTime(rawEnd);
       const [eTime, eAMPM] = endStr.includes(' ') ? endStr.split(' ') : ['04:00', 'PM'];
       endTimeVal = eTime;
       endAMPMVal = eAMPM;
     } else {
-      const startDateObj = new Date(String(rawStart).replace(' ', 'T'));
-      if (!isNaN(startDateObj.getTime())) {
+      const startDateObj = rawStart ? new Date(String(rawStart).replace(' ', 'T')) : null;
+      if (startDateObj && !isNaN(startDateObj.getTime())) {
         let stdTime = parseFloat(jc.std_time || 0);
         const uom = (jc.time_uom || 'min').toLowerCase();
         if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
         else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
 
-        const totalMinsToAdd = Math.round(stdTime * logRemainingQty);
+        const totalMinsToAdd = Math.round(stdTime * (logRemainingQty || 1)) || (stdTime > 0 ? Math.round(stdTime) : 30);
         const endDateObj = new Date(startDateObj.getTime() + totalMinsToAdd * 60000);
 
         let endHours = endDateObj.getHours();
@@ -2149,6 +2156,11 @@ const JobCard = () => {
 
         endTimeVal = `${endHours.toString().padStart(2, '0')}:${endMinutes}`;
         endAMPMVal = endAMPM;
+      } else {
+        const endStr = formatLocalTime(jc.end_time);
+        const [eTime, eAMPM] = endStr.includes(' ') ? endStr.split(' ') : ['04:00', 'PM'];
+        endTimeVal = eTime;
+        endAMPMVal = eAMPM;
       }
     }
 
@@ -2300,8 +2312,8 @@ const JobCard = () => {
       enableAutoTransfer: false
     });
 
-    // Prefill the forms dynamically using the helper function
-    prefillProductionEntryForm(jc, fetchedLogs ? (fetchedLogs.timeLogs || []) : []);
+    // Prefill the forms dynamically using the helper function (passing precedingJC for auto-suggested start time)
+    prefillProductionEntryForm(jc, fetchedLogs ? (fetchedLogs.timeLogs || []) : [], precedingJC);
 
     // Set machine status based on current job state
     const mState = getMachineState(jc, jobCards);
@@ -6427,13 +6439,11 @@ const JobCard = () => {
         const itemName = (row.item_name || '').toUpperCase();
         const itemCode = (row.item_code || '').toUpperCase();
 
-        const isAssembly = itemCode.startsWith('ASSEMBLY-') ||
-                           itemCode.includes('ASSEMBLY') ||
-                           itemName.includes('ASSEMBLY') ||
-                           sourceType === 'SA' ||
-                           sourceType === 'SUB ASSEMBLY' ||
-                           sourceType === 'SUB-ASSEMBLY' ||
-                           sourceType === 'SFG';
+        const isAssembly = sourceType === 'FG' ||
+                           sourceType === 'FINISHED GOOD' ||
+                           sourceType === 'FINISHED GOODS' ||
+                           itemCode.startsWith('ASSEMBLY-') ||
+                           (itemName.includes('ASSEMBLY') && !itemCode.startsWith('PART-'));
 
         const isPart = !isAssembly;
 

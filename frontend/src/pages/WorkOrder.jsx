@@ -123,19 +123,17 @@ const WorkOrder = () => {
         const itemNameUpper = (row.item_name || '').toUpperCase();
         const valUpper = (val || '').toUpperCase();
 
-        const isAssembly = itemCodeUpper.startsWith('ASSEMBLY-') ||
-                           itemCodeUpper.includes('ASSEMBLY') ||
-                           itemNameUpper.includes('ASSEMBLY') ||
-                           valUpper === 'SA' ||
-                           valUpper === 'SUB ASSEMBLY' ||
-                           valUpper === 'SUB-ASSEMBLY' ||
-                           valUpper === 'SFG';
+        const isAssembly = valUpper === 'FG' ||
+                           valUpper === 'FINISHED GOOD' ||
+                           valUpper === 'FINISHED GOODS' ||
+                           itemCodeUpper.startsWith('ASSEMBLY-') ||
+                           (itemNameUpper.includes('ASSEMBLY') && !itemCodeUpper.startsWith('PART-'));
 
         const isPart = !isAssembly;
 
         return (
-          <span className={`text-[10px]  ${
-            isPart ? 'text-amber-600' : 'text-indigo-600'
+          <span className={`text-[10px] font-semibold ${
+            isPart ? 'text-rose-500' : 'text-indigo-600'
           }`}>
             {isPart ? 'PART' : 'ASSEMBLY'}
           </span>
