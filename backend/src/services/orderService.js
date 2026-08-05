@@ -122,46 +122,7 @@ const createOrder = async (orderData) => {
     host_company_id
   } = orderData;
 
-  // Check if any drawing in the items list already has an associated sales order under the same customer PO/quotation
-  if (items && items.length > 0) {
-    for (const item of items) {
-      if (item.drawing_no) {
-        let exists = [];
-        if (source_type === 'DIRECT' && quotation_id) {
-          // If linked to a specific Customer PO, check that combination
-          [exists] = await pool.query(
-            `SELECT oi.id 
-             FROM order_items oi
-             JOIN orders o ON oi.order_id = o.id
-             WHERE TRIM(UPPER(oi.drawing_no)) = TRIM(UPPER(?)) 
-               AND o.quotation_id = ? 
-               AND o.source_type = 'DIRECT'
-               AND o.status != 'Cancelled'
-             LIMIT 1`,
-            [item.drawing_no, quotation_id]
-          );
-        } else {
-          // Default fallback check (pure drawing check for standalone drawings)
-          [exists] = await pool.query(
-            `SELECT oi.id 
-             FROM order_items oi
-             JOIN orders o ON oi.order_id = o.id
-             WHERE TRIM(UPPER(oi.drawing_no)) = TRIM(UPPER(?)) 
-               AND o.status != 'Cancelled'
-               AND (o.quotation_id IS NULL OR o.source_type != 'DIRECT')
-             LIMIT 1`,
-            [item.drawing_no]
-          );
-        }
-
-        if (exists.length > 0) {
-          const err = new Error('Sales Order already exists for the selected Drawing and Customer PO combination.');
-          err.statusCode = 400;
-          throw err;
-        }
-      }
-    }
-  }
+  // Duplicate Drawing / Customer PO check disabled to allow multiple Sales Orders for the same combination
 
   const publicId = crypto.randomUUID();
 
