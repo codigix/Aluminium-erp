@@ -722,6 +722,8 @@ const Quotations = () => {
             gstPercentage: loadedGst,
             items: filteredItems.map(item => ({
               ...item,
+              required_weight: parseFloat(item.required_weight) || parseFloat(item.quantity) || 0,
+              quantity: parseFloat(item.quantity) || parseFloat(item.required_weight) || 0,
               unit_rate: 0,
               amount: 0,
               material_type: getCorrectMaterialType(item.item_code || item.drawing_no, item.material_type)
@@ -756,27 +758,31 @@ const Quotations = () => {
       newItems[index].material_type = getCorrectMaterialType(value, newItems[index].material_type);
     }
 
-    const getItemDesignQty = (item) => {
-      if (item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') {
-        return parseFloat(item.planned_qty) || 0;
+    const getItemEffectiveQty = (item) => {
+      const isLaserCutting = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || item.laser_cutting === "WITH_MATERIAL" || item.laser_cutting === "WITHOUT_MATERIAL";
+      if (isLaserCutting) {
+        if (item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') return parseFloat(item.planned_qty) || 0;
+        return parseFloat(item.design_qty) || 0;
       }
-      return parseFloat(item.design_qty || item.quantity) || 0;
+      if (item.required_weight !== null && item.required_weight !== undefined && item.required_weight !== '') return parseFloat(item.required_weight) || 0;
+      if (item.quantity !== null && item.quantity !== undefined && item.quantity !== '') return parseFloat(item.quantity) || 0;
+      return 0;
     };
 
     // Recalculate item amount
-    if (field === 'quantity' || field === 'unit_rate' || field === 'design_qty' || field === 'planned_qty') {
-      if (field === 'design_qty') {
+    if (field === 'quantity' || field === 'required_weight' || field === 'unit_rate' || field === 'design_qty' || field === 'planned_qty' || field === 'laser_cutting') {
+      if (field === 'quantity' || field === 'required_weight') {
         newItems[index].quantity = value;
+        newItems[index].required_weight = value;
       }
-
-      const qty = getItemDesignQty(newItems[index]);
+      const qty = getItemEffectiveQty(newItems[index]);
       const rate = parseFloat(newItems[index].unit_rate) || 0;
       newItems[index].amount = qty * rate;
     }
 
     // Recalculate total amount (subtotal)
     const totalAmount = newItems.reduce((sum, item) => {
-      const qty = getItemDesignQty(item);
+      const qty = getItemEffectiveQty(item);
       const rate = parseFloat(item.unit_rate) || 0;
       return sum + (qty * rate);
     }, 0);
@@ -1502,7 +1508,8 @@ const Quotations = () => {
       material_type: getCorrectMaterialType(item.drawing_no || item.item_code, item.material_type),
       design_qty: item.design_qty || item.quantity || 0,
       planned_qty: item.planned_qty,
-      quantity: item.quantity || 0,
+      required_weight: parseFloat(item.required_weight) || parseFloat(item.quantity) || 0,
+      quantity: parseFloat(item.quantity) || parseFloat(item.required_weight) || 0,
       uom: item.unit || item.uom || 'NOS',
       unit_rate: item.unit_rate || 0,
       laser_cutting: item.laser_cutting || '',
@@ -3035,7 +3042,9 @@ const Quotations = () => {
                             <th className="p-2  text-slate-600" style={{ width: '140px' }}>LASER CUTTING</th>
                             <th className="p-2 text-center  text-slate-600" style={{ width: '80px' }}>Design Qty</th>
                             <th className="p-2 text-center  text-slate-600" style={{ width: '100px' }}>Required</th>
-                            <th className="p-2 text-center  text-slate-600" style={{ width: '120px' }}>UNIT RATE (₹/Nos)</th>
+                            <th className="p-2 text-center  text-slate-600" style={{ width: '120px' }}>
+                              {recordData.items.some(i => i.laser_cutting === "With Material" || i.laser_cutting === "Without Material" || i.laser_cutting === "WITH_MATERIAL" || i.laser_cutting === "WITHOUT_MATERIAL") ? 'UNIT RATE (₹/Nos)' : 'UNIT RATE (₹/Kg)'}
+                            </th>
                             <th className="p-2 text-right  text-slate-600" style={{ width: '100px' }}>AMOUNT</th>
                             <th className="p-2 text-center" style={{ width: '40px' }}></th>
                           </tr>
@@ -3048,133 +3057,139 @@ const Quotations = () => {
                               </td>
                             </tr>
                           ) : (
-                            recordData.items.map((item, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50">
-                                <td className="p-2">
-                                  <div className="relative">
+                            recordData.items.map((item, idx) => {
+                              const isLaserCutting = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || item.laser_cutting === "WITH_MATERIAL" || item.laser_cutting === "WITHOUT_MATERIAL";
+                              const effectiveQty = isLaserCutting
+                                ? (parseFloat(item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '' ? item.planned_qty : item.design_qty) || 0)
+                                : (parseFloat(item.required_weight !== null && item.required_weight !== undefined && item.required_weight !== '' ? item.required_weight : item.quantity) || 0);
+                              const itemAmount = effectiveQty * (parseFloat(item.unit_rate) || 0);
+
+                              return (
+                                <tr key={idx} className="hover:bg-slate-50">
+                                  <td className="p-2">
+                                    <div className="relative">
+                                      <input
+                                        type="text"
+                                        value={item.drawing_no || item.item_code || ''}
+                                        onChange={(e) => handleRecordItemChange(idx, 'drawing_no', e.target.value)}
+                                        className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
+                                        placeholder="Drawing..."
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="p-2">
+                                    <div className="min-w-[200px]">
+                                      <SearchableSelect
+                                        options={stockItems}
+                                        value={item.item_code || item.material_name || ''}
+                                        onChange={(e) => {
+                                          const selected = stockItems.find(i => i.item_code === e.target.value);
+                                          handleRecordItemChange(idx, 'item_code', e.target.value);
+                                          handleRecordItemChange(idx, 'material_name', selected?.material_name || e.target.value);
+                                          handleRecordItemChange(idx, 'material_type', selected?.material_type || item.material_type);
+                                          if (selected?.unit) {
+                                            handleRecordItemChange(idx, 'uom', selected.unit);
+                                          }
+                                          if (selected?.length) handleRecordItemChange(idx, 'length', selected.length);
+                                          if (selected?.width) handleRecordItemChange(idx, 'width', selected.width);
+                                          if (selected?.thickness) handleRecordItemChange(idx, 'thickness', selected.thickness);
+                                          if (selected?.diameter) handleRecordItemChange(idx, 'diameter', selected.diameter);
+                                          if (selected?.outer_diameter) handleRecordItemChange(idx, 'outer_diameter', selected.outer_diameter);
+                                          if (selected?.density) handleRecordItemChange(idx, 'density', selected.density);
+                                          if (selected?.weight_per_unit) handleRecordItemChange(idx, 'weight_per_unit', selected.weight_per_unit);
+                                          if (selected?.shape_type || selected?.shape_name) {
+                                            handleRecordItemChange(idx, 'shape_type', selected.shape_type || selected.shape_name);
+                                            handleRecordItemChange(idx, 'shape_name', selected.shape_name || selected.shape_type);
+                                          }
+                                        }}
+                                        placeholder="Select Item"
+                                        labelField="material_name"
+                                        valueField="item_code"
+                                        subLabelField="item_code"
+                                        allowCustom={true}
+                                      />
+                                    </div>
+                                    {item.item_code && item.item_code !== item.drawing_no && (
+                                      <div className="px-2 text-xs text-slate-400   truncate max-w-[150px]">
+                                        Code: {item.item_code}
+                                      </div>
+                                    )}
+                                    {formatDimensions(item) && (
+                                      <div className="px-2 text-[10px] text-slate-500 mt-0.5 font-mono">
+                                        {formatDimensions(item)}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="p-2">
                                     <input
                                       type="text"
-                                      value={item.drawing_no || item.item_code || ''}
-                                      onChange={(e) => handleRecordItemChange(idx, 'drawing_no', e.target.value)}
+                                      value={item.material_type}
+                                      onChange={(e) => handleRecordItemChange(idx, 'material_type', e.target.value)}
                                       className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
-                                      placeholder="Drawing..."
+                                      placeholder="Type..."
                                     />
-                                  </div>
-                                </td>
-                                <td className="p-2">
-                                  <div className="min-w-[200px]">
-                                    <SearchableSelect
-                                      options={stockItems}
-                                      value={item.item_code || item.material_name || ''}
-                                      onChange={(e) => {
-                                        const selected = stockItems.find(i => i.item_code === e.target.value);
-                                        handleRecordItemChange(idx, 'item_code', e.target.value);
-                                        handleRecordItemChange(idx, 'material_name', selected?.material_name || e.target.value);
-                                        handleRecordItemChange(idx, 'material_type', selected?.material_type || item.material_type);
-                                        if (selected?.unit) {
-                                          handleRecordItemChange(idx, 'uom', selected.unit);
-                                        }
-                                        if (selected?.length) handleRecordItemChange(idx, 'length', selected.length);
-                                        if (selected?.width) handleRecordItemChange(idx, 'width', selected.width);
-                                        if (selected?.thickness) handleRecordItemChange(idx, 'thickness', selected.thickness);
-                                        if (selected?.diameter) handleRecordItemChange(idx, 'diameter', selected.diameter);
-                                        if (selected?.outer_diameter) handleRecordItemChange(idx, 'outer_diameter', selected.outer_diameter);
-                                        if (selected?.density) handleRecordItemChange(idx, 'density', selected.density);
-                                        if (selected?.weight_per_unit) handleRecordItemChange(idx, 'weight_per_unit', selected.weight_per_unit);
-                                        if (selected?.shape_type || selected?.shape_name) {
-                                          handleRecordItemChange(idx, 'shape_type', selected.shape_type || selected.shape_name);
-                                          handleRecordItemChange(idx, 'shape_name', selected.shape_name || selected.shape_type);
-                                        }
-                                      }}
-                                      placeholder="Select Item"
-                                      labelField="material_name"
-                                      valueField="item_code"
-                                      subLabelField="item_code"
-                                      allowCustom={true}
-                                    />
-                                  </div>
-                                  {item.item_code && item.item_code !== item.drawing_no && (
-                                    <div className="px-2 text-xs text-slate-400   truncate max-w-[150px]">
-                                      Code: {item.item_code}
-                                    </div>
-                                  )}
-                                  {formatDimensions(item) && (
-                                    <div className="px-2 text-[10px] text-slate-500 mt-0.5 font-mono">
-                                      {formatDimensions(item)}
-                                    </div>
-                                  )}
-                                </td>
-                                <td className="p-2">
-                                  <input
-                                    type="text"
-                                    value={item.material_type}
-                                    onChange={(e) => handleRecordItemChange(idx, 'material_type', e.target.value)}
-                                    className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
-                                    placeholder="Type..."
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <select
-                                    value={item.laser_cutting || ''}
-                                    onChange={(e) => handleRecordItemChange(idx, 'laser_cutting', e.target.value)}
-                                    className="w-full px-2 py-1 border border-slate-200 focus:border-blue-500 rounded outline-none text-xs bg-white cursor-pointer"
-                                  >
-                                    <option value="">Select</option>
-                                    <option value="With Material">With Material</option>
-                                    <option value="Without Material">Without Material</option>
-                                  </select>
-                                </td>
-                                <td className="p-2 text-center">
-                                  <input
-                                    type="number"
-                                    value={item.planned_qty === null || item.planned_qty === undefined ? '' : item.planned_qty}
-                                    onChange={(e) => handleRecordItemChange(idx, 'planned_qty', e.target.value === '' ? null : parseFloat(e.target.value))}
-                                    className="w-16 p-1 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium text-slate-700"
-                                    placeholder="0"
-                                  />
-                                  <div className="text-[9px] text-slate-400 mt-1">
-                                    Nos
-                                  </div>
-                                </td>
-                                <td className="p-2">
-                                  <div className="flex flex-col items-center gap-1">
+                                  </td>
+                                  <td className="p-2">
+                                    <select
+                                      value={item.laser_cutting || ''}
+                                      onChange={(e) => handleRecordItemChange(idx, 'laser_cutting', e.target.value)}
+                                      className="w-full px-2 py-1 border border-slate-200 focus:border-blue-500 rounded outline-none text-xs bg-white cursor-pointer"
+                                    >
+                                      <option value="">Select</option>
+                                      <option value="With Material">With Material</option>
+                                      <option value="Without Material">Without Material</option>
+                                    </select>
+                                  </td>
+                                  <td className="p-2 text-center">
                                     <input
                                       type="number"
-                                      value={item.design_qty === 0 ? 0 : (item.design_qty || item.quantity || '')}
-                                      onChange={(e) => handleRecordItemChange(idx, 'design_qty', e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
-                                      className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-center  text-indigo-600"
-                                      placeholder="0.000"
+                                      value={item.planned_qty === null || item.planned_qty === undefined ? '' : item.planned_qty}
+                                      onChange={(e) => handleRecordItemChange(idx, 'planned_qty', e.target.value === '' ? null : parseFloat(e.target.value))}
+                                      className="w-16 p-1 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium text-slate-700"
+                                      placeholder="0"
                                     />
-                                    <div className="text-[9px] text-slate-400 ">
-                                      {item.uom || 'Kg'}
+                                    <div className="text-[9px] text-slate-400 mt-1">
+                                      Nos
                                     </div>
-                                  </div>
-                                </td>
-                                <td className="p-2">
-                                  <input
-                                    type="number"
-                                    value={item.unit_rate || ''}
-                                    onChange={(e) => handleRecordItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
-                                    className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500 font-medium"
-                                    placeholder="0"
-                                  />
-                                </td>
-                                <td className="p-2 text-right text-slate-700 font-medium">
-                                  {(((item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') ? (parseFloat(item.planned_qty) || 0) : (parseFloat(item.design_qty || item.quantity) || 0)) * (parseFloat(item.unit_rate) || 0)) > 0
-                                    ? formatCurrency(((item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') ? (parseFloat(item.planned_qty) || 0) : (parseFloat(item.design_qty || item.quantity) || 0)) * (parseFloat(item.unit_rate) || 0))
-                                    : '—'}
-                                </td>
-                                <td className="p-2 text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRecordRemoveItem(idx)}
-                                    className="text-red-400 hover:text-red-600 transition-colors"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
+                                  </td>
+                                  <td className="p-2">
+                                    <div className="flex flex-col items-center gap-1">
+                                      <input
+                                        type="number"
+                                        value={item.required_weight !== undefined && item.required_weight !== null && item.required_weight !== '' ? item.required_weight : (item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? item.quantity : (item.design_qty || ''))}
+                                        onChange={(e) => handleRecordItemChange(idx, 'required_weight', e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
+                                        className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-center  text-indigo-600"
+                                        placeholder="0.000"
+                                      />
+                                      <div className="text-[9px] text-slate-400 ">
+                                        {item.uom || 'Kg'}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-2">
+                                    <input
+                                      type="number"
+                                      value={item.unit_rate || ''}
+                                      onChange={(e) => handleRecordItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
+                                      className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                                      placeholder="0"
+                                    />
+                                  </td>
+                                  <td className="p-2 text-right text-slate-700 font-medium">
+                                    {itemAmount > 0 ? formatCurrency(itemAmount) : '—'}
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRecordRemoveItem(idx)}
+                                      className="text-red-400 hover:text-red-600 transition-colors"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
                           )}
                         </tbody>
                       </table>
@@ -3585,13 +3600,22 @@ const Quotations = () => {
                           <div className="col-span-2">Laser Cutting</div>
                           <div className="col-span-1 text-center">Design Qty</div>
                           <div className="col-span-1 text-center">Quoted Qty</div>
-                          <div className="col-span-1 text-center">UNIT RATE (₹/Nos)</div>
+                          <div className="col-span-1 text-center">
+                            {editFormData.items.some(i => i.laser_cutting === "With Material" || i.laser_cutting === "Without Material" || i.laser_cutting === "WITH_MATERIAL" || i.laser_cutting === "WITHOUT_MATERIAL") ? 'UNIT RATE (₹/Nos)' : 'UNIT RATE (₹/Kg)'}
+                          </div>
                           <div className="col-span-1 text-right">Amount</div>
                           <div className="col-span-1"></div>
                         </>
                       )}
                     </div>
-                    {editFormData.items.map((item, idx) => (
+                    {editFormData.items.map((item, idx) => {
+                      const isLaserCutting = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || item.laser_cutting === "WITH_MATERIAL" || item.laser_cutting === "WITHOUT_MATERIAL";
+                      const effectiveQty = isLaserCutting
+                        ? (parseFloat(item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '' ? item.planned_qty : item.design_qty) || 0)
+                        : (parseFloat(item.required_weight !== null && item.required_weight !== undefined && item.required_weight !== '' ? item.required_weight : item.quantity) || 0);
+                      const itemAmount = effectiveQty * (parseFloat(item.unit_rate) || 0);
+
+                      return (
                       <div key={idx} className="grid grid-cols-12 gap-2 items-start py-1">
                         {activeTab === 'sent' ? (
                           <>
@@ -3802,11 +3826,11 @@ const Quotations = () => {
                               <input
                                 type="number"
                                 placeholder="Qty"
-                                value={item.quantity === 0 ? 0 : (item.quantity || item.design_qty || '')}
+                                value={item.required_weight !== undefined && item.required_weight !== null && item.required_weight !== '' ? item.required_weight : (item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? item.quantity : (item.design_qty || ''))}
                                 onChange={(e) => {
                                   const newItems = [...editFormData.items];
                                   const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
-                                  newItems[idx].design_qty = val;
+                                  newItems[idx].required_weight = val;
                                   newItems[idx].quantity = val;
                                   setEditFormData({ ...editFormData, items: newItems });
                                 }}
@@ -3828,7 +3852,7 @@ const Quotations = () => {
                               className="col-span-1 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
                             />
                             <div className="col-span-1 text-right text-xs text-slate-700 pt-2 font-medium">
-                              {formatCurrency(((item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') ? (parseFloat(item.planned_qty) || 0) : (parseFloat(item.design_qty || item.quantity) || 0)) * (parseFloat(item.unit_rate) || 0))}
+                              {itemAmount > 0 ? formatCurrency(itemAmount) : '—'}
                             </div>
                           </>
                         )}
@@ -3845,15 +3869,17 @@ const Quotations = () => {
                           </button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
                 {editFormData.items.length > 0 && (() => {
                   const editSubtotal = editFormData.items.reduce((sum, item) => {
-                    const qty = (item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '') 
-                      ? (parseFloat(item.planned_qty) || 0) 
-                      : (parseFloat(item.design_qty || item.quantity) || 0);
+                    const isLaserCutting = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || item.laser_cutting === "WITH_MATERIAL" || item.laser_cutting === "WITHOUT_MATERIAL";
+                    const qty = isLaserCutting
+                      ? (parseFloat(item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== '' ? item.planned_qty : item.design_qty) || 0)
+                      : (parseFloat(item.required_weight !== null && item.required_weight !== undefined && item.required_weight !== '' ? item.required_weight : item.quantity) || 0);
                     const rate = parseFloat(item.unit_rate) || 0;
                     return sum + (qty * rate);
                   }, 0);
