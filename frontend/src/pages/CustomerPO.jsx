@@ -692,7 +692,7 @@ const CustomerPO = ({
     }
   };
 
-  // Fetch drawings for lookup when company changes
+  // Fetch drawings for lookup when form is opened
   React.useEffect(() => {
     const fetchAllDrawings = async () => {
       try {
@@ -1042,7 +1042,6 @@ const CustomerPO = ({
   }
 
   const handleRemoveItem = (index) => {
-    if (poForm.items.length === 1) return
     setPoForm(prev => ({
       ...prev,
       items: prev.items.filter((_, i) => i !== index)
@@ -1313,40 +1312,6 @@ const CustomerPO = ({
           if (matchedDwg) {
             setSelectedDrawingVal(String(matchedDwg.id));
             setSelectedQuoteId(String(matchedDwg.id));
-            try {
-              const versions = await apiRequest(`/quotation-requests/versions/${matchedDwg.id}`);
-              let quote = null;
-              for (const vGroup of versions) {
-                const match = vGroup.items?.find(it => it.id === matchedDwg.id);
-                if (match) { quote = vGroup; break; }
-              }
-              if (quote && quote.items) {
-                const items = quote.items.filter(it => (it.item_group || it.item_type || '').toUpperCase() !== 'SA').map(item => {
-                  const qty = parseFloat(item.item_qty || item.quantity) || 0;
-                  const totalAmount = parseFloat(item.total_amount || item.total) || 0;
-                  const unitRate = qty > 0 ? (totalAmount / qty) : totalAmount;
-                  const gst = item.gst_percentage || 18;
-                  return {
-                    id: item.id || item.qr_id,
-                    drawingNo: (item.drawing_no || item.drawingNo || '') !== '—' ? (item.drawing_no || item.drawingNo || '').toUpperCase() : '',
-                    description: item.item_description || item.description,
-                    hsnCode: item.hsn_code || item.hsnCode || '',
-                    deliveryDate: item.delivery_date || item.deliveryDate ? new Date(item.delivery_date || item.deliveryDate).toISOString().split('T')[0] : '',
-                    quantity: qty,
-                    unit: item.item_unit || item.unit || 'NOS',
-                    rate: unitRate.toFixed(2),
-                    cgstPercent: gst / 2,
-                    sgstPercent: gst / 2,
-                    igstPercent: 0,
-                    item_group: item.item_group,
-                    sub_assemblies: []
-                  };
-                });
-                setQuotationDrawings(items);
-              }
-            } catch (err) {
-              console.error('Error fetching version details for VIEW/EDIT modes:', err);
-            }
           }
         }
       } catch (error) {
@@ -1811,7 +1776,7 @@ const CustomerPO = ({
                 setPoForm({
                   companyId: data.company_id || '',
                   projectName: data.project_name || '',
-                  poNumber: autoPo, // Generate and set fresh PO number here
+                  poNumber: data.po_number || autoPo, // Keep existing PO number if available, else auto generate
                   poDate: new Date().toISOString().split('T')[0],
                   poVersion: '1.0',
                   orderType: data.order_type || 'STANDARD',
@@ -2642,7 +2607,15 @@ const CustomerPO = ({
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar relative">
+              {poFormLoading && (
+                <div className="absolute inset-0 bg-white/80 backdrop-blur-xs z-50 flex items-center justify-center min-h-[300px]">
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                    <p className="text-xs font-semibold text-slate-600">Loading details...</p>
+                  </div>
+                </div>
+              )}
               <form onSubmit={handlePoSubmit} id="po-manual-form" className="space-y-10">
                 {/* Host Company Profile Details */}
                 <div className="space-y-2">
@@ -2917,6 +2890,7 @@ const CustomerPO = ({
                         disabled={formMode === 'VIEW'}
                         value={poForm.poNumber}
                         onChange={(e) => setPoForm(prev => ({ ...prev, poNumber: e.target.value }))}
+                        placeholder="Enter Customer PO Number..."
                         className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-900 "
                       />
                     </div>
@@ -3173,7 +3147,7 @@ const CustomerPO = ({
                                 <span className="text-xs   text-slate-900">{formatCurrency(total)}</span>
                               </td>
                               <td className="p-2 text-center">
-                                {formMode !== 'VIEW' && poForm.items.length > 1 && (
+                                {formMode !== 'VIEW' && (
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveItem(index)}

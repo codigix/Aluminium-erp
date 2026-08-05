@@ -119,15 +119,6 @@ const createCustomerPo = async payload => {
 
     const trimmedPoNumber = header.poNumber.trim();
 
-    // Check for duplicate PO Number
-    const [existingPo] = await connection.execute(
-      `SELECT id FROM customer_pos WHERE po_number = ?`,
-      [trimmedPoNumber]
-    );
-    if (existingPo.length > 0) {
-      throw new Error(`Customer PO Number "${trimmedPoNumber}" already exists.`);
-    }
-
     const [poResult] = await connection.execute(
       `INSERT INTO customer_pos
         (company_id, project_name, po_number, po_date, po_version, order_type, plant, currency, payment_terms,
@@ -586,15 +577,6 @@ const updateCustomerPo = async (id, payload) => {
     }
 
     const trimmedPoNumber = header.poNumber.trim();
-
-    // Check for duplicate PO Number
-    const [existingPo] = await connection.execute(
-      `SELECT id FROM customer_pos WHERE po_number = ? AND id != ?`,
-      [trimmedPoNumber, id]
-    );
-    if (existingPo.length > 0) {
-      throw new Error(`Customer PO Number "${trimmedPoNumber}" already exists.`);
-    }
 
     await connection.execute(
       `UPDATE customer_pos
