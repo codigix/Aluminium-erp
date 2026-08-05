@@ -118,26 +118,43 @@ const SalesOrders = () => {
       })).filter(po => po.items.length > 0);
     }
 
+    // Sort filtered Customer POs by latest PO Date (descending)
+    const sortedPos = [...filteredPos].sort((a, b) => {
+      const dateValA = a.po_date || a.created_at;
+      const dateValB = b.po_date || b.created_at;
+      const dateA = dateValA ? new Date(dateValA).getTime() : 0;
+      const dateB = dateValB ? new Date(dateValB).getTime() : 0;
+      return dateB - dateA;
+    });
+
     const options = [];
 
-    filteredPos
+    sortedPos
       .filter(po => po.items && po.items.length > 0)
       .forEach(po => {
-        po.items.forEach((item, idx) => {
+        const dateVal = po.po_date || po.created_at;
+        const formattedDate = dateVal
+          ? new Date(dateVal).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
+          : '—';
+        po.items.forEach((item) => {
           options.push({
             value: String(po.uniqueKey),
-            label: `(${po.po_number || '—'}) ${item.drawing_no || '—'} — ${item.description || '—'}`
+            label: `(${po.po_number || '—'}) | PO Date: ${formattedDate} | ${item.drawing_no || '—'} – ${item.description || '—'}`
           });
         });
       });
 
     if (!targetDrawingNo) {
-      filteredPos
+      sortedPos
         .filter(po => !po.items || po.items.length === 0)
         .forEach(po => {
+          const dateVal = po.po_date || po.created_at;
+          const formattedDate = dateVal
+            ? new Date(dateVal).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
+            : '—';
           options.push({
             value: String(po.uniqueKey),
-            label: `${po.po_number} — ${po.company_name || ''}`
+            label: `(${po.po_number || '—'}) | PO Date: ${formattedDate} | ${po.company_name || ''}`
           });
         });
     }
@@ -511,13 +528,20 @@ const SalesOrders = () => {
             dbId: po.id,
             uniqueKey: `PO_${po.id}`,
             company_id: po.company_id,
+            po_date: po.po_date,
             created_at: po.created_at,
             status: po.status,
             po_number: po.po_number,
             company_name: po.company_name,
             host_company_id: po.host_company_id || po.hostCompanyId || null,
             isCustomerPo: true,
-            items: [] // Items will be fetched when selected if needed, or we can fetch them here
+            items: (po.items || []).map(item => ({
+              id: item.id,
+              drawing_no: item.drawing_no,
+              description: item.description,
+              quantity: item.quantity,
+              rate: item.rate
+            }))
           });
         });
       }
@@ -585,7 +609,7 @@ const SalesOrders = () => {
         if (response.ok) {
           const poData = await response.json();
           sourceType = 'DIRECT';
-          projectName = poData.project_name || poData.remarks || `Order for ${poData.company_name}`;
+          projectName = poData.project_name || `Order for ${poData.company_name}`;
           finalHostId = poData.host_company_id || null;
           poNumber = poData.po_number || group.po_number || '';
 
