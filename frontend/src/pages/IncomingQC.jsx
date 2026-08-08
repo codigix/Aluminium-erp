@@ -792,18 +792,31 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'drawing_no',
       sortable: true,
       width: '18%',
-      render: (val, row) => (
-        <div className="flex flex-col">
-          <span className="text-xs font-semibold text-[#111827] leading-[16px]">
-            {row.drawing_no || '—'}
-          </span>
-          {row.finished_good && (
-            <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
-              {row.finished_good}
-            </span>
-          )}
-        </div>
-      )
+      render: (val, row) => {
+        const drawings = row.drawing_no ? String(row.drawing_no).split(',').map(d => d.trim()).filter(Boolean) : [];
+        return (
+          <div className="flex flex-col max-w-[220px]">
+            <div className="flex flex-wrap gap-1">
+              {drawings.slice(0, 3).map((dwg, idx) => (
+                <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 text-[10px] font-medium border border-slate-200 whitespace-nowrap">
+                  {dwg}
+                </span>
+              ))}
+              {drawings.length > 3 && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-bold" title={drawings.slice(3).join(', ')}>
+                  +{drawings.length - 3} more
+                </span>
+              )}
+              {drawings.length === 0 && <span className="text-slate-300 text-xs">—</span>}
+            </div>
+            {row.finished_good && (
+              <span className="text-[10px] text-[#6B7280] leading-[14px] mt-1 font-medium truncate max-w-[200px]">
+                {row.finished_good}
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       label: 'PO No',
@@ -986,13 +999,25 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     {
       label: 'Drawing No',
       key: 'drawing_no',
-      render: (val) => val ? (
-        <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-medium whitespace-nowrap">
-          {val}
-        </span>
-      ) : (
-        <span className="text-slate-300 text-xs">—</span>
-      )
+      render: (val) => {
+        const drawings = val ? String(val).split(',').map(d => d.trim()).filter(Boolean) : [];
+        return drawings.length > 0 ? (
+          <div className="flex flex-wrap gap-1 max-w-[220px]">
+            {drawings.slice(0, 3).map((dwg, idx) => (
+              <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-medium whitespace-nowrap">
+                {dwg}
+              </span>
+            ))}
+            {drawings.length > 3 && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200 text-xs font-bold" title={drawings.slice(3).join(', ')}>
+                +{drawings.length - 3} more
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-slate-300 text-xs">—</span>
+        );
+      }
     },
     {
       label: 'Warehouse',
@@ -1112,13 +1137,25 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     {
       label: 'Drawing No',
       key: 'drawing_no',
-      render: (val) => val ? (
-        <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-medium whitespace-nowrap">
-          {val}
-        </span>
-      ) : (
-        <span className="text-slate-300 text-xs">—</span>
-      )
+      render: (val) => {
+        const drawings = val ? String(val).split(',').map(d => d.trim()).filter(Boolean) : [];
+        return drawings.length > 0 ? (
+          <div className="flex flex-wrap gap-1 max-w-[220px]">
+            {drawings.slice(0, 3).map((dwg, idx) => (
+              <span key={idx} className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-medium whitespace-nowrap">
+                {dwg}
+              </span>
+            ))}
+            {drawings.length > 3 && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200 text-xs font-bold" title={drawings.slice(3).join(', ')}>
+                +{drawings.length - 3} more
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-slate-300 text-xs">—</span>
+        );
+      }
     },
     {
       label: 'Design Qty (NOS)',
