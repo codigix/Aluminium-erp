@@ -2259,11 +2259,6 @@ const generatePurchaseOrderPDF = async (poId) => {
             <td>{{vendor_gstin}}</td>
           </tr>
           <tr>
-            <td style="font-weight: bold;">Contact Person</td>
-            <td>:</td>
-            <td>{{contact_person}}</td>
-          </tr>
-          <tr>
             <td style="font-weight: bold;">Email</td>
             <td>:</td>
             <td style="word-break: break-all;">{{vendor_email}}</td>
