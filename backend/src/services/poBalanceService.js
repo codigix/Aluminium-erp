@@ -56,9 +56,11 @@ const calculatePOBalance = async (poId) => {
       poi.id,
       poi.item_code,
       poi.description,
-      poi.quantity as po_qty,
+      COALESCE(poi.design_qty, poi.planned_qty, 0) as design_qty,
+      COALESCE(poi.quantity, 0) as po_qty,
       poi.unit,
-      COALESCE(SUM(CASE WHEN gi.status IN ('RECEIVED', 'EXCESS_ACCEPTED', 'Approved ', 'APPROVED', 'PASSED', 'ACCEPTED', 'SHORTAGE') THEN gi.accepted_qty ELSE 0 END), 0) as total_accepted_qty,
+      COALESCE(SUM(COALESCE(gi.receiving_qty, gi.received_qty, gi.accepted_qty, 0)), 0) as total_received_qty,
+      COALESCE(SUM(COALESCE(gi.receiving_weight, gi.received_weight, gi.received_qty, 0)), 0) as total_received_weight,
       COALESCE(SUM(CASE WHEN gi.status = 'REJECTED' THEN gi.rejected_qty ELSE 0 END), 0) as total_rejected_qty
     FROM purchase_order_items poi
     LEFT JOIN grn_items gi ON poi.id = gi.po_item_id
@@ -74,33 +76,47 @@ const calculatePOBalance = async (poId) => {
   let closedItemsCount = 0;
 
   const itemBalances = items.map(item => {
-    const balanceQty = item.po_qty - item.total_accepted_qty;
-    const status = balanceQty > 0 ? PO_ITEM_STATUS.OPEN : (balanceQty === 0 ? PO_ITEM_STATUS.CLOSED : PO_ITEM_STATUS.EXCESS);
+    const dQty = parseFloat(item.design_qty || 0);
+    const reqWt = parseFloat(item.po_qty || 0);
+    const recQty = parseFloat(item.total_received_qty || 0);
+    const recWt = parseFloat(item.total_received_weight || 0);
 
-    totalPOQty += item.po_qty;
-    totalAcceptedQty += item.total_accepted_qty;
+    const pendingQty = Math.max(0, dQty - recQty);
+    const pendingWeight = Math.max(0, reqWt - recWt);
+
+    const isClosed = (pendingQty <= 0.0005) && (pendingWeight <= 0.0005);
+    const status = isClosed ? PO_ITEM_STATUS.CLOSED : PO_ITEM_STATUS.OPEN;
+
+    totalPOQty += reqWt;
+    totalAcceptedQty += recWt;
     totalRejectedQty += item.total_rejected_qty;
 
-    if (status === PO_ITEM_STATUS.OPEN) {
-      openItemsCount++;
-    } else if (status === PO_ITEM_STATUS.CLOSED) {
+    if (isClosed) {
       closedItemsCount++;
+    } else {
+      openItemsCount++;
     }
 
     return {
       po_item_id: item.id,
       item_code: item.item_code,
       description: item.description,
-      po_qty: item.po_qty,
+      po_qty: reqWt,
+      design_qty: dQty,
       unit: item.unit,
-      accepted_qty: item.total_accepted_qty,
-      rejected_qty: item.total_rejected_qty,
-      balance_qty: balanceQty,
+      accepted_qty: recWt,
+      received_qty: recQty,
+      received_weight: recWt,
+      pending_qty: pendingQty,
+      pending_weight: pendingWeight,
       status
     };
   });
 
-  const overallStatus = closedItemsCount === items.length ? 'COMPLETED' : (openItemsCount > 0 ? 'PARTIALLY_RECEIVED' : 'ORDERED');
+  const hasAnyReceipt = items.some(i => i.total_received_qty > 0 || i.total_received_weight > 0);
+  const overallStatus = (closedItemsCount === items.length && items.length > 0)
+    ? 'FULFILLED'
+    : (hasAnyReceipt ? 'PARTIALLY_RECEIVED' : 'ORDERED');
 
   return {
     po_id: poId,

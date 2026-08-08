@@ -597,11 +597,8 @@ const processStockMovement = async (entryId, connection, userId) => {
     }
 
     if (entry.entry_type === 'Material Receipt') {
-      if (entry.grn_id) {
-        console.log(`[StockMovement] Stock entry ${entry.entry_no} is linked to GRN ${entry.grn_id} (QC Pass already posted stock). Skipping duplicate ledger entry.`);
-        continue;
-      }
       ledgerOptions.warehouse = toWarehouseName;
+      ledgerOptions.connection = connection;
       await stockService.addStockLedgerEntry(
         item.item_code,
         'IN',
@@ -615,6 +612,7 @@ const processStockMovement = async (entryId, connection, userId) => {
       );
     } else if (entry.entry_type === 'Material Issue') {
       ledgerOptions.warehouse = fromWarehouseName;
+      ledgerOptions.connection = connection;
       await stockService.addStockLedgerEntry(
         item.item_code,
         'OUT',
@@ -628,7 +626,7 @@ const processStockMovement = async (entryId, connection, userId) => {
       );
     } else if (entry.entry_type === 'Material Transfer') {
       // OUT from source
-      const outOptions = { ...ledgerOptions, warehouse: fromWarehouseName };
+      const outOptions = { ...ledgerOptions, warehouse: fromWarehouseName, connection };
       await stockService.addStockLedgerEntry(
         item.item_code,
         'OUT',
@@ -641,7 +639,7 @@ const processStockMovement = async (entryId, connection, userId) => {
         outOptions
       );
       // IN to destination
-      const inOptions = { ...ledgerOptions, warehouse: toWarehouseName };
+      const inOptions = { ...ledgerOptions, warehouse: toWarehouseName, connection };
       await stockService.addStockLedgerEntry(
         item.item_code,
         'IN',
@@ -655,6 +653,7 @@ const processStockMovement = async (entryId, connection, userId) => {
       );
     } else if (entry.entry_type === 'Material Adjustment') {
       const type = item.quantity >= 0 ? 'IN' : 'OUT';
+      ledgerOptions.connection = connection;
       await stockService.addStockLedgerEntry(
         item.item_code,
         type === 'IN' ? 'ADJUSTMENT' : 'OUT',
@@ -708,7 +707,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
     SELECT 
       COALESCE(qci.item_code, poi.item_code) as item_code,
       gi.id as grn_item_id,
-      gi.accepted_qty as quantity,
+      COALESCE(gi.received_qty, gi.accepted_qty, 0) as quantity,
       COALESCE(poi.unit, gi.uom, 'NOS') as uom,
       COALESCE(poi.unit_rate, 0) as valuation_rate,
       poi.material_type,

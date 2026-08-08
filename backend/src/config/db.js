@@ -2687,6 +2687,39 @@ const ensureQCInspectionsTable = async () => {
       console.log('QC Inspection items remarks column added');
     }
 
+    // Ensure NOS and KG columns exist in grn_items
+    const [grnWeightCol] = await connection.query("SHOW COLUMNS FROM grn_items LIKE 'received_weight'");
+    if (grnWeightCol.length === 0) {
+      await connection.query("ALTER TABLE grn_items ADD COLUMN received_weight DECIMAL(12, 3) DEFAULT 0 AFTER received_qty");
+    }
+
+    // Ensure NOS and KG columns exist in po_receipt_items
+    const [priWeightCol] = await connection.query("SHOW COLUMNS FROM po_receipt_items LIKE 'received_weight'");
+    if (priWeightCol.length === 0) {
+      await connection.query("ALTER TABLE po_receipt_items ADD COLUMN received_weight DECIMAL(12, 3) DEFAULT 0 AFTER received_quantity");
+    }
+
+    // Ensure NOS and KG columns exist in qc_inspection_items
+    const [qcQtyCol] = await connection.query("SHOW COLUMNS FROM qc_inspection_items LIKE 'qc_inspection_qty'");
+    if (qcQtyCol.length === 0) {
+      await connection.query("ALTER TABLE qc_inspection_items ADD COLUMN qc_inspection_qty DECIMAL(12, 3) NULL AFTER received_qty");
+    }
+
+    const [qcWtCol] = await connection.query("SHOW COLUMNS FROM qc_inspection_items LIKE 'qc_inspection_weight'");
+    if (qcWtCol.length === 0) {
+      await connection.query("ALTER TABLE qc_inspection_items ADD COLUMN qc_inspection_weight DECIMAL(12, 3) NULL AFTER qc_inspection_qty");
+    }
+
+    const [qcAccWtCol] = await connection.query("SHOW COLUMNS FROM qc_inspection_items LIKE 'accepted_weight'");
+    if (qcAccWtCol.length === 0) {
+      await connection.query("ALTER TABLE qc_inspection_items ADD COLUMN accepted_weight DECIMAL(12, 3) DEFAULT 0 AFTER accepted_qty");
+    }
+
+    const [qcRejWtCol] = await connection.query("SHOW COLUMNS FROM qc_inspection_items LIKE 'rejected_weight'");
+    if (qcRejWtCol.length === 0) {
+      await connection.query("ALTER TABLE qc_inspection_items ADD COLUMN rejected_weight DECIMAL(12, 3) DEFAULT 0 AFTER rejected_qty");
+    }
+
     console.log('QC Inspections tables synchronized');
   } catch (error) {
     console.error('QC Inspections table sync failed', error.message);

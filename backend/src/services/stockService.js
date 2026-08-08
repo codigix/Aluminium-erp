@@ -6,7 +6,10 @@ const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, con
     SELECT 
       SUM(qty_in) as accepted_qty,
       SUM(qty_out) as issued_qty,
-      SUM(qty_in - qty_out) as current_balance
+      SUM(qty_in - qty_out) as current_balance,
+      SUM(weight_in) as total_weight_in,
+      SUM(weight_out) as total_weight_out,
+      SUM(weight_in - weight_out) as current_weight
     FROM stock_ledger 
     WHERE item_code = ?
   `;
@@ -27,7 +30,8 @@ const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, con
     received_qty: parseFloat(ledger.accepted_qty) || 0,
     accepted_qty: parseFloat(ledger.accepted_qty) || 0,
     issued_qty: parseFloat(ledger.issued_qty) || 0,
-    current_balance: Math.max(0, parseFloat(ledger.current_balance) || 0)
+    current_balance: Math.max(0, parseFloat(ledger.current_balance) || 0),
+    current_weight: Math.max(0, parseFloat(ledger.current_weight) || 0)
   };
 };
 
@@ -55,9 +59,9 @@ const deleteStockLedgerEntry = async (id, externalConnection = null) => {
 
     await connection.execute(`
       UPDATE stock_balance 
-      SET current_balance = ?, last_updated = CURRENT_TIMESTAMP
+      SET current_balance = ?, current_weight = ?, last_updated = CURRENT_TIMESTAMP
       WHERE item_code = ? AND (warehouse = ? OR (warehouse IS NULL AND ? IS NULL))
-    `, [details.current_balance, item_code, warehouse, warehouse]);
+    `, [details.current_balance, details.current_weight, item_code, warehouse, warehouse]);
 
     if (shouldRelease) {
       await connection.commit();
@@ -125,6 +129,9 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
     sl.transaction_date,
     sl.transaction_type,
     sl.quantity,
+    sl.weight_in,
+    sl.weight_out,
+    sl.weight_after,
     sl.reference_doc_type,
     sl.reference_doc_id,
     sl.reference_doc_number,
@@ -234,6 +241,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
         MAX(sb.max_stock) as max_stock,
         MAX(sb.reorder_level) as reorder_level,
         SUM(sb.current_balance) as current_balance,
+        SUM(sb.current_weight) as current_weight,
         0 as accepted_qty,
         0 as issued_qty,
         0 as po_qty
@@ -278,6 +286,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       accepted_qty: 0,
       issued_qty: 0,
       current_balance: Math.max(0, parseFloat(balance.current_balance || 0)),
+      current_weight: Math.max(0, parseFloat(balance.current_weight || 0)),
       unit: balance.unit || 'NOS',
       valuation_rate: balance.valuation_rate,
       selling_rate: balance.selling_rate,
@@ -343,6 +352,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
         MAX(sb.max_stock) as max_stock,
         MAX(sb.reorder_level) as reorder_level,
         SUM(sb.current_balance) as current_balance,
+        SUM(sb.current_weight) as current_weight,
         0 as accepted_qty,
         0 as issued_qty,
         0 as po_qty
@@ -400,6 +410,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       accepted_qty: parseFloat(balance.accepted_qty || 0),
       issued_qty: parseFloat(balance.issued_qty || 0),
       current_balance: Math.max(0, parseFloat(balance.current_balance || 0)),
+      current_weight: Math.max(0, parseFloat(balance.current_weight || 0)),
       unit: balance.unit || 'NOS',
       valuation_rate: balance.valuation_rate,
       selling_rate: balance.selling_rate,
@@ -630,39 +641,45 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
     let qtyIn = 0;
     let qtyOut = 0;
+    const weight = parseFloat(options.weight || 0);
+    let weightIn = 0;
+    let weightOut = 0;
 
     if (transactionType === 'IN' || transactionType === 'GRN_IN' || transactionType === 'ADJUSTMENT') {
-      if (qty >= 0) qtyIn = Math.abs(qty);
-      else qtyOut = Math.abs(qty);
+      if (qty >= 0) { qtyIn = Math.abs(qty); weightIn = Math.abs(weight); }
+      else { qtyOut = Math.abs(qty); weightOut = Math.abs(weight); }
     } else if (transactionType === 'OUT') {
       qtyOut = Math.abs(qty);
+      weightOut = Math.abs(weight);
     } else if (transactionType === 'RETURN') {
       qtyIn = Math.abs(qty);
+      weightIn = Math.abs(weight);
     }
 
     // Insert into stock_ledger
-    // Removed drawing_no and drawing_id as they don't exist in stock_ledger table
-    // Added transaction_date
     await useConnection.execute(`
       INSERT INTO stock_ledger 
-      (item_code, material_name, material_type, transaction_type, transaction_date, quantity, qty_in, qty_out, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate, qc_id, grn_item_id)
-      VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [itemCode, matName, matType, transactionType, quantity, qtyIn, qtyOut, refDocType, refDocId, refDocNumber, 0, remarks, userId, warehouse, valuationRate, qcId, grnItemId]);
+      (item_code, material_name, material_type, transaction_type, transaction_date, quantity, qty_in, qty_out, weight_in, weight_out, weight_after, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate, qc_id, grn_item_id)
+      VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [itemCode, matName, matType, transactionType, quantity, qtyIn, qtyOut, weightIn, weightOut, refDocType, refDocId, refDocNumber, 0, remarks, userId, warehouse, valuationRate, qcId, grnItemId]);
 
     const ledgerId = (await useConnection.query('SELECT LAST_INSERT_ID() as id'))[0][0].id;
 
     // Recalculate balances for accuracy
     const globalDetails = await calculateBalanceDetailsFromLedger(itemCode, 'ALL', useConnection);
     const globalBalance = globalDetails.current_balance;
+    const globalWeight = globalDetails.current_weight;
 
     let warehouseBalance = globalBalance;
+    let warehouseWeight = globalWeight;
     if (warehouse && warehouse !== 'ALL') {
       const whDetails = await calculateBalanceDetailsFromLedger(itemCode, warehouse, useConnection);
       warehouseBalance = whDetails.current_balance;
+      warehouseWeight = whDetails.current_weight;
     }
 
-    // Update the ledger entry with the correct global balance_after
-    await useConnection.execute('UPDATE stock_ledger SET balance_after = ? WHERE id = ?', [globalBalance, ledgerId]);
+    // Update the ledger entry with the correct global balance_after and weight_after
+    await useConnection.execute('UPDATE stock_ledger SET balance_after = ?, weight_after = ? WHERE id = ?', [globalBalance, globalWeight, ledgerId]);
 
     // Ensure we have a warehouse string for the query
     const whName = warehouse || '';
@@ -691,11 +708,12 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     // This handles both new warehouse records and updates to existing ones
     await useConnection.execute(`
       INSERT INTO stock_balance 
-      (item_code, material_name, material_type, warehouse, unit, current_balance, valuation_rate, item_description,
+      (item_code, material_name, material_type, warehouse, unit, current_balance, current_weight, valuation_rate, item_description,
        length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_id, material_id, last_updated)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON DUPLICATE KEY UPDATE 
         current_balance = ?,
+        current_weight = ?,
         material_name = COALESCE(?, material_name),
         material_type = COALESCE(?, material_type),
         valuation_rate = CASE WHEN ? > 0 THEN ? ELSE valuation_rate END,
@@ -716,6 +734,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
       whName,
       options.unit || existingBalance?.unit || 'NOS',
       warehouseBalance,
+      warehouseWeight,
       valuationRate,
       options.remarks || options.description || existingBalance?.item_description || null,
       length,
@@ -728,6 +747,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
       shapeId,
       materialId,
       warehouseBalance, // for update
+      warehouseWeight,  // for update
       matName, // for update
       matType, // for update
       valuationRate, // for check
@@ -759,7 +779,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
   }
 };
 
-const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQty, connection = null) => {
+const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQty, connection = null, passWeight = 0) => {
   const useConnection = connection || (await pool.getConnection());
 
   try {
@@ -810,7 +830,7 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
       return { success: true, duplicate: true };
     }
 
-    // Use addStockLedgerEntry for consistency and to ensure qty_in/qty_out are set
+    // Use addStockLedgerEntry for consistency and to ensure qty_in/qty_out/weight_in/weight_out are set
     await addStockLedgerEntry(
       itemCode,
       'IN',
@@ -825,6 +845,7 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
         qcId: qcId,
         grnItemId: grnItemId,
         warehouse: 'RM-HOLD', // Default warehouse for GRN Receipt as per warehouseAllocationService
+        weight: parseFloat(passWeight) || 0,
         length: itemDims.length !== null && itemDims.length !== undefined ? parseFloat(itemDims.length) : undefined,
         width: itemDims.width !== null && itemDims.width !== undefined ? parseFloat(itemDims.width) : undefined,
         thickness: itemDims.thickness !== null && itemDims.thickness !== undefined ? parseFloat(itemDims.thickness) : undefined,

@@ -509,7 +509,7 @@ const POMaterialRequest = () => {
     try {
       const result = await Swal.fire({
         title: 'Release Material?',
-        text: 'This will mark the material request as fulfilled.',
+        text: 'This will issue the available stock to production, update stock balance, and create a Material Issue entry.',
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#10b981',
@@ -520,21 +520,26 @@ const POMaterialRequest = () => {
       if (result.isConfirmed) {
         setLoading(true);
         const token = localStorage.getItem('authToken');
+        // Use PARTIALLY_RELEASED — backend auto-promotes to FULFILLED when all items covered.
+        // This path correctly: creates Material Issue, deducts stock ledger (OUT), updates
+        // allocated_quantity per item, and sets Remaining Qty = 0 when fully released.
         const response = await fetch(`${API_BASE}/material-requests/${id}/status`, {
           method: 'PATCH',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ status: 'FULFILLED' })
+          body: JSON.stringify({ status: 'PARTIALLY_RELEASED' })
         });
 
         if (response.ok) {
-          successToast("Material released successfully");
+          const data = await response.json();
+          successToast(data.message || "Material released successfully");
           fetchRequests();
           handleViewRequest(id);
         } else {
-          errorToast("Failed to release material");
+          const err = await response.json().catch(() => ({}));
+          errorToast(err.message || "Failed to release material");
         }
       }
     } catch (error) {
@@ -1203,12 +1208,12 @@ const POMaterialRequest = () => {
              };
 
              const allAvailable = filteredItems.length > 0 && filteredItems.every(item => {
-               const required = parseFloat(item.quantity || 0);
-               const released = parseFloat(item.allocated_quantity || 0);
-               const remaining = Math.max(0, required - released);
-               const available = parseFloat(item.total_stock || 0);
-               // Item is "available" if nothing remains OR available stock covers the remaining qty
-               return remaining === 0 || (available + 0.0001) >= remaining;
+               const rem = parseFloat(item.remaining_qty || 0);
+               const remW = parseFloat(item.remaining_weight || 0);
+               const stockVal = parseFloat(item.total_stock || 0);
+               const stockWeight = parseFloat(item.total_weight || 0);
+               return (rem === 0 || (stockVal + 0.0001) >= rem) &&
+                      (remW === 0 || (stockWeight + 0.0001) >= remW);
              });
              
              const releasedMaterialsCount = filteredItems.filter(item => parseFloat(item.allocated_quantity || 0) > 0).length;
@@ -1394,10 +1399,13 @@ const POMaterialRequest = () => {
                     <tr className="bg-slate-50/50 border-b border-slate-100">
                       <th className="p-2  text-left text-xs   text-slate-400  ">Item</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Design Qty</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Required Qty</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Available Stock</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Required Weight</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Available Qty</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Available Weight</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Released Qty</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Released Weight</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Remaining Qty</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Remaining Weight</th>
                       <th className="p-2  text-right text-xs   text-slate-400  ">Status</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Actions</th>
                     </tr>
@@ -1437,82 +1445,103 @@ const POMaterialRequest = () => {
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
-                              <span className="text-xs text-slate-800 font-medium">
-                                {isWeightBased(item.uom) ? Number(item.quantity || 0).toFixed(3) : Number(item.quantity || 0).toFixed(0)}
+                              <span className="text-xs text-slate-800 font-medium font-semibold text-indigo-600">
+                                {Number(item.required_weight || 0).toFixed(3)}
                               </span>
-                              <span className="text-xs  text-slate-400 ">{item.uom}</span>
+                              <span className="text-xs  text-slate-400 ">KG</span>
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex items-center justify-center gap-1.5">
                               <span className={`w-2 h-2 rounded-full ${parseFloat(item.total_stock || 0) > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
                               <span className={`text-xs font-semibold ${parseFloat(item.total_stock || 0) > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                                {isWeightBased(item.uom) 
-                                  ? Number(item.total_stock || 0).toFixed(3) 
-                                  : Number(item.total_stock || 0).toFixed(0)} {item.uom}
+                                {Number(item.total_stock || 0).toFixed(0)} Nos
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full ${parseFloat(item.total_weight || 0) > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                              <span className={`text-xs font-semibold ${parseFloat(item.total_weight || 0) > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                                {Number(item.total_weight || 0).toFixed(3)} KG
                               </span>
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
                               <span className="text-xs text-slate-800 font-medium">
-                                {isWeightBased(item.uom) ? Number(item.allocated_quantity || 0).toFixed(3) : Number(item.allocated_quantity || 0).toFixed(0)}
+                                {Number(item.allocated_quantity || 0).toFixed(0)}
                               </span>
-                              <span className="text-xs  text-slate-400 ">{item.uom}</span>
+                              <span className="text-xs  text-slate-400 ">Nos</span>
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
                               <span className="text-xs text-slate-800 font-medium">
-                                {(() => {
-                                  const req = parseFloat(item.quantity || 0);
-                                  const rel = parseFloat(item.allocated_quantity || 0);
-                                  const rem = Math.max(0, req - rel);
-                                  return isWeightBased(item.uom) ? rem.toFixed(3) : rem.toFixed(0);
-                                })()}
+                                {Number(item.allocated_weight || 0).toFixed(3)}
                               </span>
-                              <span className="text-xs  text-slate-400 ">{item.uom}</span>
+                              <span className="text-xs  text-slate-400 ">KG</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            <div className="flex flex-col items-center">
+                              <span className="text-xs text-slate-800 font-medium">
+                                {Number(item.remaining_qty || 0).toFixed(0)}
+                              </span>
+                              <span className="text-xs  text-slate-400 ">Nos</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            <div className="flex flex-col items-center">
+                              <span className="text-xs text-slate-800 font-medium">
+                                {Number(item.remaining_weight || 0).toFixed(3)}
+                              </span>
+                              <span className="text-xs  text-slate-400 ">KG</span>
                             </div>
                           </td>
                           <td className="px-6 py-5 text-right">
                             <div className="flex flex-col items-end gap-1.5">
                               {(() => {
-                                const req = parseFloat(item.quantity || 0);
                                 const rel = parseFloat(item.allocated_quantity || 0);
+                                const relW = parseFloat(item.allocated_weight || 0);
+                                const rem = parseFloat(item.remaining_qty || 0);
+                                const remW = parseFloat(item.remaining_weight || 0);
                                 
-                                if (rel <= 0) {
+                                if (rel <= 0 && relW <= 0) {
                                   return (
                                     <span className="px-2.5 py-1 rounded text-xs border bg-slate-50 text-slate-600 border-slate-100">
                                       Awaiting Release
                                     </span>
                                   );
-                                } else if (rel < req) {
+                                } else if (rem > 0 || remW > 0) {
                                   return (
-                                    <span className="px-2.5 py-1 rounded text-xs border bg-amber-50 text-amber-600 border-amber-100 font-medium">
+                                    <span className="px-2.5 py-1 rounded text-xs border bg-amber-50 text-amber-600 border-amber-100 font-semibold">
                                       Partially Released
                                     </span>
                                   );
                                 } else {
                                   return (
-                                    <span className="px-2.5 py-1 rounded text-xs border bg-emerald-50 text-emerald-600 border-emerald-100 font-medium">
+                                    <span className="px-2.5 py-1 rounded text-xs border bg-emerald-50 text-emerald-600 border-emerald-100">
                                       Released
                                     </span>
                                   );
                                 }
                               })()}
                               {(() => {
-                                const req = parseFloat(item.quantity || 0);
-                                const rel = parseFloat(item.allocated_quantity || 0);
-                                const rem = Math.max(0, req - rel);
+                                const rem = parseFloat(item.remaining_qty || 0);
+                                const remW = parseFloat(item.remaining_weight || 0);
                                 const stockVal = parseFloat(item.total_stock || 0);
-                                if (rem <= 0 || rel > 0) return null;
+                                const stockWeight = parseFloat(item.total_weight || 0);
+
+                                if (rem <= 0 && remW <= 0) return null;
+                                const isStockAvailable = (stockVal + 0.0001) >= rem && (stockWeight + 0.0001) >= remW;
                                 return (
                                   <span className={`px-2 py-0.5 rounded text-[10px] border ${
-                                    (stockVal + 0.0001) >= rem 
+                                    isStockAvailable 
                                       ? 'bg-emerald-50/50 text-emerald-500 border-emerald-100/50' 
                                       : 'bg-rose-50/50 text-rose-500 border-rose-100/50'
                                   }`}>
-                                    {(stockVal + 0.0001) >= rem ? 'in stock' : 'out of stock'}
+                                    {isStockAvailable ? 'in stock' : 'out of stock'}
                                   </span>
                                 );
                               })()}
@@ -1754,80 +1783,83 @@ const POMaterialRequest = () => {
                 const type = (item.material_type || '').toUpperCase();
                 return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
               }) || [];
+
               const allAvailable = filteredItems.length > 0 && filteredItems.every(item => {
-                const req = parseFloat(item.quantity || 0);
-                const rel = parseFloat(item.allocated_quantity || 0);
-                const rem = Math.max(0, req - rel);
-                return rem === 0 || (parseFloat(item.total_stock || 0) + 0.0001) >= rem;
+                const rem = parseFloat(item.remaining_qty || 0);
+                const remW = parseFloat(item.remaining_weight || 0);
+                const stockVal = parseFloat(item.total_stock || 0);
+                const stockWeight = parseFloat(item.total_weight || 0);
+                return (rem === 0 || (stockVal + 0.0001) >= rem) &&
+                       (remW === 0 || (stockWeight + 0.0001) >= remW);
               });
-              const hasInsufficientStock = filteredItems.some(item => {
-                const req = parseFloat(item.quantity || 0);
-                const rel = parseFloat(item.allocated_quantity || 0);
-                const rem = Math.max(0, req - rel);
-                return rem > 0 && (parseFloat(item.total_stock || 0) + 0.0001) < rem;
-              });
+
+              const hasInsufficientStock = !allAvailable;
+
               const anyAvailableStock = filteredItems.some(item => {
-                const req = parseFloat(item.quantity || 0);
-                const rel = parseFloat(item.allocated_quantity || 0);
-                const rem = Math.max(0, req - rel);
-                return rem > 0 && parseFloat(item.total_stock || 0) > 0;
+                const rem = parseFloat(item.remaining_qty || 0);
+                const remW = parseFloat(item.remaining_weight || 0);
+                const stockVal = parseFloat(item.total_stock || 0);
+                const stockWeight = parseFloat(item.total_weight || 0);
+                return (rem > 0 && stockVal > 0) ||
+                       (remW > 0 && stockWeight > 0);
               });
+
               const currentStatus = (selectedRequest?.status || '').toUpperCase().trim();
-              const isFinalStatus = ['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED'].includes(currentStatus);
-              const hasReleasedItems = filteredItems.some(item => parseFloat(item.allocated_quantity || 0) > 0);
-              
-              return (
-                <>
-                  {hasInsufficientStock && !selectedRequest?.linked_po_id && !isFinalStatus && 
-                    (!rfqs || rfqs.length === 0) &&
-                    !['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED', 'RFQ_CREATED', 'PO_CREATED'].includes(currentStatus) && (
-                    <button 
-                      onClick={() => handleRequestQuote(selectedRequest)}
-                      className="p-2  bg-indigo-500 text-white rounded  text-xs  hover:bg-indigo-600 flex items-center gap-2 shadow-xl shadow-indigo-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                    >
-                      Create RFQ
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                    </button>
-                  )}
-                  {hasInsufficientStock && anyAvailableStock && !isFinalStatus && !hasReleasedItems && (
-                    <button 
-                      onClick={() => handleReleasePartialStock(selectedRequest?.id)}
-                      className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                    >
-                      Release Partial Stock
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-                    </button>
-                  )}
-                  {hasInsufficientStock && anyAvailableStock && !isFinalStatus && hasReleasedItems && (
-                    <button 
-                      onClick={() => handleReleasePartialStock(selectedRequest?.id)}
-                      className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                    >
-                      Release Available Stock
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-                    </button>
-                  )}
-                  {allAvailable && !isFinalStatus && !hasReleasedItems && (
-                    <button 
-                      onClick={() => handleReleaseMaterial(selectedRequest?.id)}
-                      className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                    >
-                      Release Material
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-                    </button>
-                  )}
-                  {allAvailable && !isFinalStatus && hasReleasedItems && (
-                    <button 
-                      onClick={() => handleReleaseMaterial(selectedRequest?.id)}
-                      className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                    >
-                      Release Remaining Stock
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-                    </button>
-                  )}
-                </>
-              );
-            })()}
+                const isFinalStatus = ['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED'].includes(currentStatus);
+                const hasReleasedItems = filteredItems.some(item => parseFloat(item.allocated_quantity || 0) > 0);
+                
+                return (
+                  <>
+                    {hasInsufficientStock && !selectedRequest?.linked_po_id && !isFinalStatus && 
+                      (!rfqs || rfqs.length === 0) &&
+                      !['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED', 'RFQ_CREATED', 'PO_CREATED'].includes(currentStatus) && (
+                      <button 
+                        onClick={() => handleRequestQuote(selectedRequest)}
+                        className="p-2  bg-indigo-500 text-white rounded  text-xs  hover:bg-indigo-600 flex items-center gap-2 shadow-xl shadow-indigo-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                      >
+                        Create RFQ
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                      </button>
+                    )}
+                    {hasInsufficientStock && anyAvailableStock && !isFinalStatus && !hasReleasedItems && (
+                      <button 
+                        onClick={() => handleReleasePartialStock(selectedRequest?.id)}
+                        className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                      >
+                        Release Partial Stock
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                      </button>
+                    )}
+                    {hasInsufficientStock && anyAvailableStock && !isFinalStatus && hasReleasedItems && (
+                      <button 
+                        onClick={() => handleReleasePartialStock(selectedRequest?.id)}
+                        className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                      >
+                        Release Available Stock
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                      </button>
+                    )}
+                    {allAvailable && !isFinalStatus && !hasReleasedItems && (
+                      <button 
+                        onClick={() => handleReleaseMaterial(selectedRequest?.id)}
+                        className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                      >
+                        Release Material
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                      </button>
+                    )}
+                    {allAvailable && !isFinalStatus && hasReleasedItems && (
+                      <button 
+                        onClick={() => handleReleaseMaterial(selectedRequest?.id)}
+                        className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                      >
+                        Release Remaining Stock
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
           </div>
           </>
              );
@@ -1839,5 +1871,3 @@ const POMaterialRequest = () => {
 };
 
 export default POMaterialRequest;
-
-

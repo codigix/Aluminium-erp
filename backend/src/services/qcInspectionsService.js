@@ -246,6 +246,10 @@ const getQCWithDetails = async (qcId) => {
         qci.received_qty,
         qci.accepted_qty, 
         qci.rejected_qty, 
+        qci.qc_inspection_qty,
+        qci.qc_inspection_weight,
+        qci.accepted_weight,
+        qci.rejected_weight,
         qci.status,
         grn.po_number as po_number,
         COALESCE(poi.material_name, pri.material_name) as material_name,
@@ -256,7 +260,9 @@ const getQCWithDetails = async (qcId) => {
         poi.quantity,
         COALESCE(poi.drawing_no, pri.drawing_no) as drawing_no,
         COALESCE(NULLIF(qci.item_code,''), poi.item_code, pri.item_code) as item_code,
-        COALESCE(poi.uom, poi.unit, pri.unit) as uom,
+        COALESCE(gi.receiving_qty, gi.received_qty, gi.accepted_qty, 0) as grn_received_qty,
+        COALESCE(gi.receiving_weight, gi.received_weight, gi.received_qty, 0) as grn_received_weight,
+        COALESCE(poi.quantity, pri.po_qty, 0) as required_weight,
         CASE WHEN gi.length > 0 THEN gi.length ELSE COALESCE(poi.length, 0) END as length,
         CASE WHEN gi.width > 0 THEN gi.width ELSE COALESCE(poi.width, 0) END as width,
         CASE WHEN gi.thickness > 0 THEN gi.thickness ELSE COALESCE(poi.thickness, 0) END as thickness,
@@ -306,7 +312,9 @@ const getQCWithDetails = async (qcId) => {
       planned_qty: parseFloat(item.planned_qty || 0),
       warehouse_name: item.warehouse_name,
       ordered_qty: parseFloat(item.quantity || item.po_qty) || 0,
-      received_qty: parseFloat(item.received_qty) || 0,
+      required_weight: parseFloat(item.required_weight) || 0,
+      received_qty: parseFloat(item.grn_received_qty) || 0,
+      received_weight: parseFloat(item.grn_received_weight) || 0,
       accepted_qty: parseFloat(item.accepted_qty) || 0,
       rejected_qty: parseFloat(item.rejected_qty) || 0,
       shortage: Math.max(0, (parseFloat(item.po_qty) || 0) - (parseFloat(item.accepted_qty) || 0)),
@@ -470,8 +478,13 @@ const getAllQCs = async () => {
         qci.item_code, 
         qci.po_qty, 
         qci.received_qty, 
+        qci.qc_inspection_qty,
+        qci.qc_inspection_weight,
         qci.accepted_qty, 
+        qci.accepted_weight,
         qci.rejected_qty, 
+        qci.rejected_weight,
+        qci.remarks,
         qci.status,
         COALESCE(poi.material_name, pri.material_name) as material_name,
         COALESCE(poi.description, pri.material_name, pri.item_code) as description,
@@ -484,6 +497,9 @@ const getAllQCs = async () => {
         COALESCE(poi.uom, poi.unit, pri.unit) as uom,
         COALESCE(gi.shape_type, poi.shape_type) as shape_type,
         COALESCE(gi.shape_type, poi.shape_type) as shape_name,
+        gi.receiving_qty as grn_received_qty,
+        gi.receiving_weight as grn_received_weight,
+        gi.received_weight as gi_received_weight,
         CASE WHEN gi.length > 0 THEN gi.length ELSE COALESCE(poi.length, 0) END as length,
         CASE WHEN gi.width > 0 THEN gi.width ELSE COALESCE(poi.width, 0) END as width,
         CASE WHEN gi.thickness > 0 THEN gi.thickness ELSE COALESCE(poi.thickness, 0) END as thickness,
@@ -513,34 +529,51 @@ const getAllQCs = async () => {
       overage: acceptedQty > orderedQty ? acceptedQty - orderedQty : 0,
       items: qcItems.length,
       accepted_quantity: acceptedQty,
-      items_detail: qcItems.map(item => ({
-        id: item.id,
-        item_code: item.item_code,
-        material_name: item.material_name,
-        description: item.description,
-        drawing_no: item.drawing_no || null,
-        uom: item.uom,
-        length: item.length,
-        width: item.width,
-        thickness: item.thickness,
-        diameter: item.diameter,
-        outer_diameter: item.outer_diameter,
-        density: item.density,
-        weight_per_unit: item.weight_per_unit,
-        shape_type: item.shape_type,
-        shape_name: item.shape_name,
-        rate: parseFloat(item.unit_rate) || 0,
-        design_qty: parseFloat(item.planned_qty || item.design_qty || 0),
-        planned_qty: parseFloat(item.planned_qty || 0),
-        warehouse_name: item.warehouse_name,
-        ordered_qty: parseFloat(item.quantity || item.po_qty) || 0,
-        received_qty: parseFloat(item.received_qty) || 0,
-        accepted_qty: parseFloat(item.accepted_qty) || 0,
-        rejected_qty: parseFloat(item.rejected_qty) || 0,
-        shortage: Math.max(0, (parseFloat(item.po_qty) || 0) - (parseFloat(item.accepted_qty) || 0)),
-        overage: Math.max(0, (parseFloat(item.accepted_qty) || 0) - (parseFloat(item.po_qty) || 0)),
-        status: item.status
-      }))
+      items_detail: qcItems.map(item => {
+          // received_qty: what was actually entered on the GRN (receiving_qty field)
+          const grnRecQty = parseFloat(item.grn_received_qty !== null && item.grn_received_qty !== undefined ? item.grn_received_qty : item.received_qty) || 0;
+          // received_weight: gi.receiving_weight is primary, fall back to gi.received_weight
+          const grnRecWt = parseFloat(item.grn_received_weight !== null && item.grn_received_weight !== undefined ? item.grn_received_weight : (item.gi_received_weight || 0)) || 0;
+
+          return {
+            id: item.id,
+            item_code: item.item_code,
+            material_name: item.material_name,
+            description: item.description,
+            drawing_no: item.drawing_no || null,
+            uom: item.uom,
+            remarks: item.remarks || '',
+            length: item.length,
+            width: item.width,
+            thickness: item.thickness,
+            diameter: item.diameter,
+            outer_diameter: item.outer_diameter,
+            density: item.density,
+            weight_per_unit: item.weight_per_unit,
+            shape_type: item.shape_type,
+            shape_name: item.shape_name,
+            rate: parseFloat(item.unit_rate) || 0,
+            design_qty: parseFloat(item.planned_qty || item.design_qty || 0),
+            planned_qty: parseFloat(item.planned_qty || 0),
+            warehouse_name: item.warehouse_name,
+            grn_received_qty: grnRecQty,
+            grn_received_weight: grnRecWt,
+            // QC columns - read directly from qc_inspection_items
+            qc_inspection_qty: parseFloat(item.qc_inspection_qty !== null && item.qc_inspection_qty !== undefined ? item.qc_inspection_qty : grnRecQty) || 0,
+            qc_inspection_weight: parseFloat(item.qc_inspection_weight !== null && item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : grnRecWt) || 0,
+            accepted_weight: parseFloat(item.accepted_weight !== null && item.accepted_weight !== undefined ? item.accepted_weight : grnRecWt) || 0,
+            rejected_weight: parseFloat(item.rejected_weight) || 0,
+            invoice_weight: grnRecWt,
+            ordered_qty: parseFloat(item.quantity || item.po_qty) || 0,
+            received_qty: grnRecQty,
+            received_weight: grnRecWt,
+            accepted_qty: parseFloat(item.accepted_qty) || 0,
+            rejected_qty: parseFloat(item.rejected_qty) || 0,
+            shortage: Math.max(0, (parseFloat(item.po_qty) || 0) - (parseFloat(item.accepted_qty) || 0)),
+            overage: Math.max(0, (parseFloat(item.accepted_qty) || 0) - (parseFloat(item.po_qty) || 0)),
+            status: item.status
+          };
+        })
     });
   }
 
@@ -588,6 +621,9 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
         poi.material_type,
         gi.po_qty, 
         gi.received_qty, 
+        gi.received_weight,
+        gi.receiving_qty,
+        gi.receiving_weight,
         gi.accepted_qty, 
         gi.rejected_qty, 
         gi.status,
@@ -608,12 +644,14 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
 
     for (const item of grnItems) {
       const correctedItemCode = await getCorrectItemCode(item, connection);
+      const recQty = parseFloat(item.receiving_qty !== null && item.receiving_qty !== undefined ? item.receiving_qty : item.received_qty) || 0;
+      const recWt = parseFloat(item.receiving_weight !== null && item.receiving_weight !== undefined ? item.receiving_weight : item.received_weight) || 0;
 
       await connection.execute(
         `INSERT INTO qc_inspection_items 
-         (qc_inspection_id, grn_item_id, warehouse_id, item_code, po_qty, received_qty, accepted_qty, rejected_qty, status) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [qcId, item.id, item.warehouse_id, correctedItemCode, item.po_qty, item.received_qty, item.accepted_qty, item.rejected_qty, 'PENDING']
+         (qc_inspection_id, grn_item_id, warehouse_id, item_code, po_qty, received_qty, accepted_qty, rejected_qty, qc_inspection_qty, qc_inspection_weight, accepted_weight, rejected_weight, status) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+        [qcId, item.id, item.warehouse_id, correctedItemCode, item.po_qty, recQty, recQty, item.rejected_qty || 0, recQty, recWt, recWt, 'PENDING']
       );
     }
 
@@ -757,15 +795,16 @@ const updateQC = async (qcId, updates) => {
 
           // Trigger stock ledger IN entry for approved QC item
           const [qciData] = await connection.query(
-            'SELECT accepted_qty, item_code FROM qc_inspection_items WHERE qc_inspection_id = ? AND grn_item_id = ? LIMIT 1',
+            'SELECT accepted_qty, accepted_weight, item_code FROM qc_inspection_items WHERE qc_inspection_id = ? AND grn_item_id = ? LIMIT 1',
             [qcId, item.id]
           );
 
           const passQty = qciData.length > 0 ? parseFloat(qciData[0].accepted_qty || 0) : parseFloat(item.accepted_qty || 0);
+          const passWeight = qciData.length > 0 ? parseFloat(qciData[0].accepted_weight || 0) : 0;
           const itemCode = qciData.length > 0 ? qciData[0].item_code : null;
 
           if (passQty > 0 && itemCode) {
-            await stockService.createQCStockLedgerEntry(qcId, grnId, item.id, itemCode, passQty, connection);
+            await stockService.createQCStockLedgerEntry(qcId, grnId, item.id, itemCode, passQty, connection, passWeight);
           }
         }
       } else if (currentStatus === 'FAILED' || currentStatus === 'REJECTED') {
@@ -864,7 +903,7 @@ const updateQCItem = async (qcItemId, updates) => {
     );
 
     const [qcItem] = await connection.query(
-      'SELECT grn_item_id, item_code, accepted_qty, rejected_qty, status FROM qc_inspection_items WHERE id = ?',
+      'SELECT grn_item_id, item_code, accepted_qty, accepted_weight, rejected_qty, status FROM qc_inspection_items WHERE id = ?',
       [qcItemId]
     );
 
@@ -881,6 +920,7 @@ const updateQCItem = async (qcItemId, updates) => {
 
       // Trigger stock ledger entry if item is passed/accepted/available
       const passQty = parseFloat(finalAcceptedQty || 0);
+      const passWeight = parseFloat(qcItem[0].accepted_weight || 0);
       const statusUpper = (finalStatus || '').toUpperCase();
       if (passQty > 0 && (statusUpper === 'PASSED' || statusUpper === 'ACCEPTED' || statusUpper === 'AVAILABLE' || statusUpper === 'APPROVED')) {
         const [qcData] = await connection.query('SELECT qc_inspection_id FROM qc_inspection_items WHERE id = ?', [qcItemId]);
@@ -894,7 +934,8 @@ const updateQCItem = async (qcItemId, updates) => {
               grnItemId,
               qcItem[0].item_code,
               passQty,
-              connection
+              connection,
+              passWeight
             );
           }
         }

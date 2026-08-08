@@ -189,40 +189,73 @@ const POReceiptDetails = () => {
             </div>
 
             {/* Items Table */}
-            {poItems.length > 0 && (
+            {((receipt?.items && receipt.items.length > 0) || poItems.length > 0) && (
               <div className="mb-8">
-                <h3 className="text-md text-slate-900 text-xs mb-4">PO Items</h3>
-                <div className="overflow-x-auto">
+                <h3 className="text-md text-slate-900 font-bold mb-4">Received Items</h3>
+                <div className="overflow-x-auto border border-slate-200 rounded-lg">
                   <table className="w-full text-xs">
-                    <thead className="bg-slate-100 text-slate-600 ">
+                    <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200">
                       <tr>
-                        <th className="p-2 text-left ">Description</th>
-                        <th className="p-2  text-center ">Qty</th>
-                        <th className="p-2  text-right ">Rate</th>
-                        <th className="p-2  text-right ">Amount</th>
+                        <th className="p-2.5 text-left">Drawing No</th>
+                        <th className="p-2.5 text-left">Item</th>
+                        <th className="p-2.5 text-center">Design Qty</th>
+                        <th className="p-2.5 text-center">Required Weight</th>
+                        <th className="p-2.5 text-center">Received Qty</th>
+                        <th className="p-2.5 text-center">Received Weight</th>
+                        <th className="p-2.5 text-center">Pending Qty</th>
+                        <th className="p-2.5 text-center">Pending Weight</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {poItems.map((item, idx) => (
-                        <tr key={idx} className="border-t border-slate-100">
-                          <td className="p-2  text-slate-600">
-                            <div>{item.material_name || item.description || '—'}</div>
-                            {formatDimensions(item) && (
-                              <div className="mt-1 opacity-70">
-                                <span className="text-xs text-slate-400">{formatDimensions(item)}</span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-2  text-center  text-slate-900">
-                            <div className="flex flex-col items-center">
-                              <span>{item.quantity}</span>
-                              <span className="text-xs  text-slate-400 uppercase tracking-wider">{item.unit || item.uom || 'NOS'}</span>
-                            </div>
-                          </td>
-                          <td className="p-2  text-right text-slate-600">₹{parseFloat(item.unit_rate || 0).toLocaleString('en-IN')}</td>
-                          <td className="p-2  text-right  text-emerald-600">₹{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
-                        </tr>
-                      ))}
+                    <tbody className="divide-y divide-slate-100">
+                      {((receipt?.items && receipt.items.length > 0) ? receipt.items : poItems).map((item, idx) => {
+                        const dQty = parseFloat(item.planned_qty || item.design_qty || 0);
+                        const reqWt = parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0);
+                        
+                        const rawRecQty = parseFloat(item.received_qty);
+                        const rawRecWt = parseFloat(item.received_weight);
+                        
+                        const recWt = (!isNaN(rawRecWt) && rawRecWt > 0) ? rawRecWt : parseFloat(item.received_quantity || 0);
+                        const recQty = (!isNaN(rawRecQty) && rawRecQty > 0 && Math.abs(rawRecQty - recWt) > 0.001)
+                          ? rawRecQty
+                          : (dQty > 0 ? dQty : (recWt > 0 ? recWt : 0));
+
+                        const pQty = Math.max(0, dQty - recQty);
+                        const pWt = parseFloat(Math.max(0, reqWt - recWt).toFixed(3));
+                        const unitStr = (item.unit || item.uom || 'KG').toUpperCase();
+
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="p-2.5 font-bold text-slate-900">{item.drawing_no || '—'}</td>
+                            <td className="p-2.5">
+                              <div className="font-semibold text-slate-900">{item.item_code}</div>
+                              <div className="text-slate-500 mt-0.5">{item.material_name || item.description}</div>
+                              {formatDimensions(item) && (
+                                <div className="mt-0.5">
+                                  <span className="text-[10px] text-slate-400">{formatDimensions(item)}</span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-2.5 text-center text-slate-600">
+                              <span className="font-medium">{dQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
+                            </td>
+                            <td className="p-2.5 text-center text-slate-700">
+                              <span className="font-medium">{reqWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span>
+                            </td>
+                            <td className="p-2.5 text-center text-blue-600 font-bold">
+                              <span>{recQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
+                            </td>
+                            <td className="p-2.5 text-center text-indigo-600 font-bold">
+                              <span>{recWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span>
+                            </td>
+                            <td className="p-2.5 text-center text-amber-600 font-semibold">
+                              <span>{pQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
+                            </td>
+                            <td className="p-2.5 text-center text-amber-600 font-semibold">
+                              <span>{pWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

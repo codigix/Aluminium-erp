@@ -190,25 +190,38 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
       items = quoteItems.map(item => {
         const qty = parseFloat(item.quantity) || 0;
         const designQty = parseFloat(item.design_qty) || qty;
+        const rate = parseFloat(item.unit_rate) || 0;
+        
+        const lcRaw = String(item.laser_cutting || '').trim().toUpperCase();
+        const hasLaserCutting = lcRaw && !['SELECT', 'NONE', 'NULL', 'UNDEFINED', ''].includes(lcRaw);
+        const baseQty = hasLaserCutting ? designQty : qty;
+        const amount = Number((baseQty * rate).toFixed(2));
+        const cgstPercent = parseFloat(item.cgst_percent) || 9;
+        const sgstPercent = parseFloat(item.sgst_percent) || 9;
+        const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
+        const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
+        const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
+
         return {
           ...item,
           quantity: qty,
           design_qty: designQty,
           planned_qty: parseFloat(item.planned_qty) || designQty || 0,
-          unit_rate: parseFloat(item.unit_rate) || 0,
-          amount: parseFloat(item.amount) || (qty * parseFloat(item.unit_rate || 0)),
-          cgst_percent: parseFloat(item.cgst_percent) || 9,
-          cgst_amount: parseFloat(item.cgst_amount) || 0,
-          sgst_percent: parseFloat(item.sgst_percent) || 9,
-          sgst_amount: parseFloat(item.sgst_amount) || 0,
-          total_amount: parseFloat(item.total_amount) || 0,
+          unit_rate: rate,
+          amount: amount,
+          cgst_percent: cgstPercent,
+          cgst_amount: cgstAmount,
+          sgst_percent: sgstPercent,
+          sgst_amount: sgstAmount,
+          total_amount: totalItemAmount,
           length: item.length || 0,
           width: item.width || 0,
           thickness: item.thickness || 0,
           diameter: item.diameter || 0,
           outer_diameter: item.outer_diameter || 0,
           density: item.density || 0,
-          weight_per_unit: item.weight_per_unit || 0
+          weight_per_unit: item.weight_per_unit || 0,
+          laser_cutting: item.laser_cutting || null
         };
       });
       total_amount = items.reduce((sum, item) => Number(sum) + (Number(item.total_amount) || 0), 0);
@@ -351,7 +364,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
     const discVal = parseFloat(discount_value) || 0;
     
     // Calculate subtotal and discount amount
-    const subtotal = items.reduce((sum, item) => sum + ((parseFloat(item.design_qty) || parseFloat(item.quantity) || 0) * parseFloat(item.unit_rate || item.rate || 0)), 0);
+    const subtotal = items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
     let discAmt = parseFloat(discount_amount) || 0;
     if (discType === 'PERCENTAGE') {
       discAmt = Number(((subtotal * discVal) / 100).toFixed(2));
@@ -406,7 +419,11 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
         const qty = parseFloat(item.quantity) || 0;
         const designQty = parseFloat(item.design_qty) || qty;
         const rate = parseFloat(item.unit_rate || item.rate) || 0;
-        const amount = designQty * rate;
+        
+        const lcRaw = String(item.laser_cutting || '').trim().toUpperCase();
+        const hasLaserCutting = lcRaw && !['SELECT', 'NONE', 'NULL', 'UNDEFINED', ''].includes(lcRaw);
+        const baseQty = hasLaserCutting ? designQty : qty;
+        const amount = item.amount !== undefined ? parseFloat(item.amount) : Number((baseQty * rate).toFixed(2));
         const cgstPercent = parseFloat(item.cgst_percent) || 0;
         const sgstPercent = parseFloat(item.sgst_percent) || 0;
         const cgstAmount = parseFloat(item.cgst_amount) || (amount * cgstPercent) / 100;
@@ -734,6 +751,34 @@ const getPurchaseOrders = async (filters = {}) => {
         poi.sgst_percent, poi.sgst_amount, poi.total_amount, poi.material_name, poi.material_type,
         poi.drawing_id, poi.length, poi.width, poi.thickness, poi.diameter, poi.outer_diameter,
         poi.density, poi.weight_per_unit, poi.shape_type, poi.shape_type as shape_name,
+        COALESCE(
+          (
+            SELECT qi.laser_cutting
+            FROM quotation_items qi
+            JOIN quotations q ON qi.quotation_id = q.id
+            JOIN purchase_orders po_sub ON po_sub.quotation_id = q.id
+            WHERE po_sub.id = poi.purchase_order_id
+            AND (
+              (poi.source_po_item_id IS NOT NULL AND qi.id = poi.source_po_item_id)
+              OR (LOWER(TRIM(qi.material_name)) = LOWER(TRIM(poi.material_name)) AND ABS(COALESCE(qi.design_qty, 0) - COALESCE(poi.design_qty, 0)) < 0.01)
+              OR (qi.item_code = poi.item_code)
+            )
+            LIMIT 1
+          ),
+          'Select'
+        ) as laser_cutting,
+        COALESCE((
+          SELECT SUM(COALESCE(gi.receiving_qty, gi.received_qty, gi.accepted_qty, 0))
+          FROM grn_items gi
+          JOIN grns g ON gi.grn_id = g.id
+          WHERE gi.po_item_id = poi.id
+        ), 0) as received_qty,
+        COALESCE((
+          SELECT SUM(COALESCE(gi.receiving_weight, gi.received_weight, gi.received_qty, 0))
+          FROM grn_items gi
+          JOIN grns g ON gi.grn_id = g.id
+          WHERE gi.po_item_id = poi.id
+        ), 0) as received_weight,
         COALESCE(
           IF(
             poi.drawing_no LIKE 'RM-%' OR poi.drawing_no LIKE 'OTH-%' OR poi.drawing_no LIKE 'SFG-%' OR poi.drawing_no LIKE 'FG-%' OR poi.drawing_no LIKE 'GEN-%' OR poi.drawing_no LIKE 'CAT-%',
@@ -1165,6 +1210,30 @@ const getPurchaseOrderById = async (poId) => {
       poi.total_amount,
       COALESCE(poi.material_name, sb.material_name, poi.item_code) as material_name,
       poi.material_type,
+      (
+        SELECT qi.laser_cutting 
+        FROM quotation_items qi 
+        WHERE qi.quotation_id = po.quotation_id 
+        AND (
+          qi.id = poi.source_po_item_id OR
+          (LOWER(TRIM(qi.material_name)) = LOWER(TRIM(poi.material_name)) AND ABS(COALESCE(qi.quantity,0) - COALESCE(poi.quantity,0)) < 0.001) OR
+          (qi.item_code = poi.item_code AND qi.item_code IS NOT NULL AND qi.item_code != '') OR
+          (qi.drawing_no = poi.drawing_no AND (poi.drawing_no IS NOT NULL AND poi.drawing_no NOT LIKE 'RM-%' AND poi.drawing_no NOT LIKE 'OTH-%'))
+        ) 
+        LIMIT 1
+      ) as laser_cutting,
+      COALESCE((
+        SELECT SUM(COALESCE(gi.receiving_qty, gi.received_qty, gi.accepted_qty, 0))
+        FROM grn_items gi
+        JOIN grns g ON gi.grn_id = g.id
+        WHERE gi.po_item_id = poi.id
+      ), 0) as received_qty,
+      COALESCE((
+        SELECT SUM(COALESCE(gi.receiving_weight, gi.received_weight, gi.received_qty, 0))
+        FROM grn_items gi
+        JOIN grns g ON gi.grn_id = g.id
+        WHERE gi.po_item_id = poi.id
+      ), 0) as received_weight,
       COALESCE(
         IF(
           poi.drawing_no LIKE 'RM-%' OR poi.drawing_no LIKE 'OTH-%' OR poi.drawing_no LIKE 'SFG-%' OR poi.drawing_no LIKE 'FG-%' OR poi.drawing_no LIKE 'GEN-%' OR poi.drawing_no LIKE 'CAT-%',

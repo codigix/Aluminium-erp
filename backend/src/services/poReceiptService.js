@@ -210,6 +210,8 @@ const getPOReceiptById = async (receiptId) => {
     `SELECT pri.*,
             pri.id as id,
             pri.po_item_id as po_item_id,
+            COALESCE(gi.receiving_qty, (CASE WHEN (COALESCE(poi.quantity, pri.received_quantity, 0) > 0 AND ABS(COALESCE(pri.received_weight, pri.received_quantity, 0) - COALESCE(poi.quantity, pri.received_quantity, 0)) < 0.001) THEN COALESCE(poi.design_qty, 1) ELSE COALESCE(poi.design_qty, 1) END)) as received_qty,
+            COALESCE(gi.receiving_weight, gi.received_qty, pri.received_weight, pri.received_quantity, 0) as received_weight,
             COALESCE(poi.item_code, pri.item_code) as item_code,
             COALESCE(poi.description, pri.material_name) as description,
             COALESCE(poi.material_name, pri.material_name) as material_name,
@@ -249,6 +251,8 @@ const getPOReceiptById = async (receiptId) => {
             ) as shape_type
      FROM po_receipt_items pri
      LEFT JOIN purchase_order_items poi ON poi.id = pri.po_item_id
+     LEFT JOIN grns g ON g.po_receipt_id = pri.receipt_id
+     LEFT JOIN grn_items gi ON gi.grn_id = g.id AND (gi.po_item_id = pri.po_item_id OR (gi.po_item_id IS NULL AND pri.po_item_id IS NULL))
      WHERE pri.receipt_id = ?`,
     [receiptId]
   );
@@ -325,7 +329,11 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
       } catch (e) { /* already nullable - continue */ }
 
       for (const item of filteredItems) {
-        const receivedQty = item.received_qty || item.receivedQty || 0;
+        const rawQty = item.current_receiving_qty !== undefined && item.current_receiving_qty !== '' ? item.current_receiving_qty : item.received_qty;
+        const currQty = parseFloat(rawQty) || 0;
+        
+        const rawWeight = item.current_receiving_weight !== undefined && item.current_receiving_weight !== '' ? item.current_receiving_weight : item.received_weight;
+        const currWeight = parseFloat(rawWeight !== undefined && rawWeight !== '' ? rawWeight : currQty) || 0;
         const poItemId = item.id != null ? item.id : null;
 
         await connection.execute(
@@ -338,7 +346,7 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
           [
             receiptId, 
             poItemId, 
-            receivedQty,
+            currWeight,
             item.quantity || item.planned_qty || item.design_qty || 0,
             item.length || 0,
             item.width || 0,
@@ -361,20 +369,34 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
         );
         const warehouseId = warehouse ? warehouse.id : null;
 
-        // Also create GRN item
+        // Ensure columns exist on grn_items dynamically
+        try {
+          await connection.query(`ALTER TABLE grn_items ADD COLUMN receiving_qty DECIMAL(12,3) NULL`);
+        } catch (e) {}
+        try {
+          await connection.query(`ALTER TABLE grn_items ADD COLUMN receiving_weight DECIMAL(12,3) NULL`);
+        } catch (e) {}
+        try {
+          await connection.query(`ALTER TABLE grn_items ADD COLUMN received_weight DECIMAL(12,3) NULL`);
+        } catch (e) {}
+
+        // Also create GRN item with receiving_qty (Nos), received_qty (Nos), receiving_weight (Kg), received_weight (Kg)
         await connection.execute(
           `INSERT INTO grn_items (
-            grn_id, po_item_id, po_qty, received_qty, accepted_qty, status, warehouse_id,
+            grn_id, po_item_id, po_qty, received_qty, received_weight, accepted_qty, receiving_qty, receiving_weight, status, warehouse_id,
             length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, uom
           )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             grnId, 
             poItemId, 
-            item.quantity || item.required_qty || item.design_qty || 0, 
-            receivedQty, 
-            receivedQty, 
-            'PENDING',
+            item.ordered_weight || item.quantity || item.required_qty || item.design_qty || 0, 
+            currQty,
+            currWeight, 
+            currQty, 
+            currQty,
+            currWeight,
+            'RECEIVED',
             warehouseId,
             item.length || 0,
             item.width || 0,
@@ -406,11 +428,9 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
       console.error('[PO Receipt] QC auto-creation failed:', qcError.message);
     }
 
-    // Update PO status to RECEIVED
-    await connection.execute(
-      'UPDATE purchase_orders SET status = ? WHERE id = ?',
-      ['RECEIVED', poId]
-    );
+    // Calculate dynamic PO balance status (Partially Received vs Fulfilled)
+    const poBalanceService = require('./poBalanceService');
+    await poBalanceService.updatePOStatus(poId);
 
     await connection.commit();
     return { id: receiptId, po_id: poId };
