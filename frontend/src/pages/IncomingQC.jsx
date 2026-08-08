@@ -75,15 +75,18 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     else setActiveTab('incoming');
 
     // Modal Sync
-    if (id && qcInspections.length > 0) {
-      const qc = qcInspections.find(q => q.id === parseInt(id));
-      if (qc) {
-        if (segments.includes('view')) {
+    if (id) {
+      if (segments.includes('view')) {
+        const qc = qcInspections.find(q => q.id === parseInt(id));
+        if (qc) {
           setSelectedQC(qc);
           setShowViewModal(true);
-        } else if (segments.includes('edit')) {
-          handleEditQC(qc);
-        } else if (segments.includes('email')) {
+        }
+      } else if (segments.includes('edit')) {
+        handleEditQC(id);
+      } else if (segments.includes('email')) {
+        const qc = qcInspections.find(q => q.id === parseInt(id));
+        if (qc) {
           setSelectedQC(qc);
           openEmailModal(qc);
         }
@@ -161,44 +164,68 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     fetchAttachments(qc.id);
   };
 
-  const handleEditQC = (qc) => {
+  const handleEditQC = async (qcOrId) => {
+    const qcId = typeof qcOrId === 'object' ? qcOrId.id : parseInt(qcOrId);
     const tabPath = activeTab === 'incoming' ? `${deptPrefix}/incoming-qc` : `${deptPrefix}/incoming-qc/${activeTab}`;
-    // If we're already on the edit path (e.g. from URL sync), don't navigate again
     if (!location.pathname.includes('/edit')) {
-      navigate(`${tabPath}/edit?id=${qc.id}`);
-      return;
+      navigate(`${tabPath}/edit?id=${qcId}`);
     }
     
+    let qc = typeof qcOrId === 'object' ? qcOrId : qcInspections.find(q => q.id === qcId);
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/qc-inspections/${qcId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const fullQc = await res.json();
+        if (fullQc) qc = fullQc;
+      }
+    } catch (e) {
+      console.error('Error fetching QC details:', e);
+    }
+
+    if (!qc) return;
+
     setSelectedQC(qc);
     fetchAttachments(qc.id);
     const items = (qc.items_detail || []).map(item => {
-      const initialAcceptedQty = item.accepted_qty !== undefined && item.accepted_qty !== null ? item.accepted_qty : (item.received_qty || 0);
+      const recQty = parseFloat(item.received_qty) || 0;
+      const recWt = parseFloat(item.received_weight) || 0;
+      
+      const inspQty = (item.qc_inspection_qty !== undefined && item.qc_inspection_qty !== null && parseFloat(item.qc_inspection_qty) > 0)
+        ? parseFloat(item.qc_inspection_qty)
+        : recQty;
+      const inspWt = (item.qc_inspection_weight !== undefined && item.qc_inspection_weight !== null && parseFloat(item.qc_inspection_weight) > 0)
+        ? parseFloat(item.qc_inspection_weight)
+        : recWt;
+      
+      const rejQty = item.rejected_qty !== undefined && item.rejected_qty !== null ? parseFloat(item.rejected_qty) : 0;
+      const accQty = item.accepted_qty !== undefined && item.accepted_qty !== null
+        ? parseFloat(item.accepted_qty)
+        : Math.max(0, inspQty - rejQty);
+
+      const rejWt = item.rejected_weight !== undefined && item.rejected_weight !== null ? parseFloat(item.rejected_weight) : 0;
+      const accWt = item.accepted_weight !== undefined && item.accepted_weight !== null
+        ? parseFloat(item.accepted_weight)
+        : Math.max(0, inspWt - rejWt);
+
       return {
         ...item,
-        accepted_qty: parseFloat(initialAcceptedQty).toFixed(3),
-        rejected_qty: item.rejected_qty !== undefined && item.rejected_qty !== null ? item.rejected_qty : 0,
+        received_qty: recQty,
+        received_weight: recWt,
+        qc_inspection_qty: inspQty,
+        qc_inspection_weight: inspWt,
+        accepted_qty: accQty,
+        rejected_qty: rejQty,
+        accepted_weight: accWt,
+        rejected_weight: rejWt,
         remarks: item.remarks || ''
       };
     });
 
-    // Calculate initial status based on items ONLY if status is PENDING
-    let hasShortageOverage = false;
-
-    items.forEach(item => {
-      const ordQty = parseFloat(item.ordered_qty || 0);
-      const accQty = parseFloat(item.accepted_qty || 0);
-      
-      const discrepancy = Math.abs(ordQty - accQty);
-
-      if (discrepancy > 0.001) {
-        hasShortageOverage = true;
-      }
-    });
-
     let overallStatus = qc.status;
-    if (qc.status === 'PENDING') {
-      overallStatus = hasShortageOverage ? 'IN_PROGRESS' : 'PASSED';
-    }
+    overallStatus = deriveQCStatus(items);
 
     setEditFormData({
       status: overallStatus,
@@ -344,6 +371,82 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     const newItems = [...editFormData.items];
     newItems[idx].remarks = value;
     setEditFormData({ ...editFormData, items: newItems });
+  };
+
+  // Shared helper: derive overall QC status from all items comparing inspection values vs GRN received values
+  const deriveQCStatus = (itemList) => {
+    let allPassed = true;
+    let allRejected = true;
+
+    itemList.forEach(item => {
+      const recWt = parseFloat(item.received_weight !== undefined && item.received_weight !== null ? item.received_weight : (item.received_qty || 0));
+      const inspWt = parseFloat(item.qc_inspection_weight !== undefined && item.qc_inspection_weight !== null ? item.qc_inspection_weight : recWt);
+      const rejWt = parseFloat(item.rejected_weight || 0);
+
+      const recQty = parseFloat(item.received_qty || 0);
+      const inspQty = parseFloat(item.qc_inspection_qty !== undefined && item.qc_inspection_qty !== null ? item.qc_inspection_qty : recQty);
+      const rejQty = parseFloat(item.rejected_qty || 0);
+
+      const wtShortage = Math.max(0, recWt - inspWt);
+      const wtOverage = Math.max(0, inspWt - recWt);
+      const qtyShortage = Math.max(0, recQty - inspQty);
+      const qtyOverage = Math.max(0, inspQty - recQty);
+
+      if (wtShortage > 0.0005 || wtOverage > 0.0005 || qtyShortage > 0.0005 || qtyOverage > 0.0005 || rejWt > 0.0005 || rejQty > 0.0005) {
+        allPassed = false;
+      }
+      if (inspWt > 0.0005 || inspQty > 0.0005) allRejected = false;
+    });
+
+    if (itemList.length === 0) return 'PENDING';
+    if (allRejected) return 'FAILED';
+    if (allPassed) return 'PASSED';
+    return 'IN_PROGRESS';
+  };
+
+  const handleQcQtyChange = (idx, value) => {
+    const newItems = [...editFormData.items];
+    const inspQty = value === '' ? '' : (parseFloat(value) || 0);
+    newItems[idx].qc_inspection_qty = inspQty;
+    const rejQty = parseFloat(newItems[idx].rejected_qty || 0);
+    const numInsp = typeof inspQty === 'number' ? inspQty : 0;
+    newItems[idx].accepted_qty = Math.max(0, numInsp - rejQty);
+    const newStatus = deriveQCStatus(newItems);
+    setEditFormData({ ...editFormData, items: newItems, status: newStatus });
+  };
+
+  const handleRejectedQtyChange = (idx, value) => {
+    const newItems = [...editFormData.items];
+    const rejQty = value === '' ? '' : (parseFloat(value) || 0);
+    newItems[idx].rejected_qty = rejQty;
+    const inspQty = parseFloat(newItems[idx].qc_inspection_qty !== undefined ? newItems[idx].qc_inspection_qty : (newItems[idx].received_qty || 0));
+    const numRej = typeof rejQty === 'number' ? rejQty : 0;
+    newItems[idx].accepted_qty = Math.max(0, inspQty - numRej);
+    const newStatus = deriveQCStatus(newItems);
+    setEditFormData({ ...editFormData, items: newItems, status: newStatus });
+  };
+
+  const handleQcWeightChange = (idx, value) => {
+    const newItems = [...editFormData.items];
+    const inspWt = value === '' ? '' : (parseFloat(value) || 0);
+    newItems[idx].qc_inspection_weight = inspWt;
+    const rejWt = parseFloat(newItems[idx].rejected_weight || 0);
+    const numInsp = typeof inspWt === 'number' ? inspWt : 0;
+    newItems[idx].accepted_weight = Math.max(0, numInsp - rejWt);
+    const newStatus = deriveQCStatus(newItems);
+    setEditFormData({ ...editFormData, items: newItems, status: newStatus });
+  };
+
+  const handleRejectedWeightChange = (idx, value) => {
+    const newItems = [...editFormData.items];
+    const rejWt = value === '' ? '' : (parseFloat(value) || 0);
+    newItems[idx].rejected_weight = rejWt;
+    const recWt = parseFloat(newItems[idx].received_weight !== undefined && newItems[idx].received_weight !== null ? newItems[idx].received_weight : (newItems[idx].received_qty || 0));
+    const inspWt = parseFloat(newItems[idx].qc_inspection_weight !== undefined ? newItems[idx].qc_inspection_weight : recWt);
+    const numRej = typeof rejWt === 'number' ? rejWt : 0;
+    newItems[idx].accepted_weight = Math.max(0, inspWt - numRej);
+    const newStatus = deriveQCStatus(newItems);
+    setEditFormData({ ...editFormData, items: newItems, status: newStatus });
   };
 
   const handleUpdateQC = async (e) => {
@@ -816,7 +919,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               {!row.stock_entry_no && (
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
-                  className="p-1.5 text-blue-500 hover:text-emerald-600 hover:bg-emerald-50 rounded  transition-colors bg-white border border-slate-100"
+                  className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors bg-white border border-slate-100"
                   title="Create Stock Entry"
                 >
                   <Database className="w-3.5 h-3.5" />
@@ -824,22 +927,20 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               )}
               <button 
                 onClick={(e) => { e.stopPropagation(); handleDownloadPdf(row); }} 
-                className="px-2 py-1 text-[10px]  text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
+                className="px-2 py-1 text-[10px] text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
               >
                 QC Report
               </button>
             </>
           )}
           {['PASSED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && activeTab !== 'in-process' && !row.stock_entry_no && (
-            <>
-              <button 
-                onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
-                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded  transition-colors bg-white border border-slate-100"
-                title="Create Stock Entry"
-              >
-                <Database className="w-3.5 h-3.5" />
-              </button>
-            </>
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
+              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors bg-white border border-slate-100"
+              title="Create Stock Entry"
+            >
+              <Database className="w-3.5 h-3.5" />
+            </button>
           )}
           {['PASSED', 'FAILED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && activeTab === 'final' && (
             <button 
@@ -903,50 +1004,83 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       )
     },
     {
-      label: 'Design Qty',
+      label: 'Design Qty (NOS)',
       key: 'design_qty',
       className: 'text-center',
       render: (val, item) => (
-        <span className="text-xs text-slate-400">
-          {parseFloat(item.planned_qty || val || 0).toFixed(3)}
-          <span className="ml-1 text-xs  text-slate-300 uppercase">Nos</span>
+        <span className="text-xs text-slate-500 font-medium">
+          {parseFloat(item.planned_qty || val || 0).toFixed(0)} <span className="text-[9px] text-slate-400">NOS</span>
         </span>
       )
     },
     {
-      label: 'Required',
+      label: 'Required Weight (KG)',
       key: 'ordered_qty',
       className: 'text-center',
       render: (val, item) => (
-        <span className="text-xs text-slate-600">
-          {parseFloat(val || 0).toFixed(3)}
-          <span className="ml-1 text-xs  text-slate-400 uppercase">{item.uom || 'Nos'}</span>
+        <span className="text-xs text-slate-600 font-medium">
+          {parseFloat(item.required_weight || val || 0).toFixed(3)} <span className="text-[9px] text-slate-400">KG</span>
         </span>
       )
     },
     {
-      label: 'Received',
+      label: 'Received Qty (NOS)',
       key: 'received_qty',
       className: 'text-center',
-      render: (val, item) => (
-        <span className="text-xs text-slate-600">
-          {parseFloat(val || 0).toFixed(3)}
-          <span className="ml-1 text-xs  text-slate-400 uppercase">{item.uom || 'Nos'}</span>
-        </span>
-      )
+      render: (val, item) => {
+        const recQty = parseFloat(item.received_qty !== undefined ? item.received_qty : (item.quantity || 0));
+        return (
+          <span className="text-xs text-blue-600 font-bold">
+            {recQty.toFixed(0)} <span className="text-[9px] text-slate-400">NOS</span>
+          </span>
+        );
+      }
     },
     {
-      label: 'Accepted',
+      label: 'Received Weight (KG)',
+      key: 'received_weight',
+      className: 'text-center',
+      render: (_, item) => {
+        const recWt = parseFloat(item.received_weight !== undefined && item.received_weight !== null ? item.received_weight : (item.received_qty || 0));
+        return (
+          <span className="text-xs text-indigo-600 font-bold">
+            {recWt.toFixed(3)} <span className="text-[9px] text-slate-400">KG</span>
+          </span>
+        );
+      }
+    },
+    {
+      label: 'Accepted Qty (NOS)',
       key: 'accepted_qty',
       className: 'text-center',
-      render: (val, item) => (
-        selectedQC?.status === 'PENDING' ? 'Pending' : (
-          <span className="text-xs text-emerald-600">
-            {parseFloat(val || 0).toFixed(3)}
-            <span className="ml-1 text-xs  text-emerald-300 uppercase">{item.uom || 'Nos'}</span>
+      render: (val, item) => {
+        if (selectedQC?.status === 'PENDING') return <span className="text-xs text-slate-400">Pending</span>;
+        const inspQty = parseFloat(item.qc_inspection_qty !== undefined ? item.qc_inspection_qty : (item.received_qty || 0));
+        const rejQty = parseFloat(item.rejected_qty || 0);
+        const accQty = Math.max(0, inspQty - rejQty);
+        return (
+          <span className="text-xs text-emerald-600 font-bold">
+            {accQty.toFixed(0)} <span className="text-[9px] text-emerald-400">NOS</span>
           </span>
-        )
-      )
+        );
+      }
+    },
+    {
+      label: 'Accepted Weight (KG)',
+      key: 'accepted_weight',
+      className: 'text-center',
+      render: (val, item) => {
+        if (selectedQC?.status === 'PENDING') return <span className="text-xs text-slate-400">Pending</span>;
+        const recWt = parseFloat(item.received_weight !== undefined && item.received_weight !== null ? item.received_weight : (item.received_qty || 0));
+        const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
+        const rejWt = parseFloat(item.rejected_weight || 0);
+        const accWt = Math.max(0, inspWt - rejWt);
+        return (
+          <span className="text-xs text-emerald-600 font-bold">
+            {accWt.toFixed(3)} <span className="text-[9px] text-emerald-400">KG</span>
+          </span>
+        );
+      }
     }
   ];
 
@@ -955,9 +1089,9 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       label: 'Item Details',
       key: 'material_name',
       render: (val, item) => (
-        <div className="flex flex-col gap-0.5">
-          <div className=" text-slate-900 text-xs ">{val || item.item_code || 'Unnamed Item'}</div>
-          <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-xs  w-fit  border border-slate-200">
+        <div className="flex flex-col gap-0.5 min-w-[140px]">
+          <div className="text-slate-900 text-xs font-semibold">{val || item.item_code || 'Unnamed Item'}</div>
+          <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-xs w-fit border border-slate-200">
             {item.item_code}
           </div>
           {formatDimensions(item) && (
@@ -987,85 +1121,220 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       )
     },
     {
-      label: 'Design Qty',
+      label: 'Design Qty (NOS)',
       key: 'design_qty',
       className: 'text-center',
       render: (val, item) => (
-        <span className="text-xs text-slate-400">
-          {parseFloat(item.planned_qty || val || 0).toFixed(3)}
-          <span className="ml-1 text-xs  text-slate-300 uppercase">Nos</span>
+        <span className="text-xs font-medium text-slate-500">
+          {parseFloat(item.planned_qty || val || 0).toFixed(0)} <span className="text-[10px] text-slate-400">NOS</span>
         </span>
       )
     },
     {
-      label: 'Required',
+      label: 'Required Weight (KG)',
       key: 'ordered_qty',
       className: 'text-center',
       render: (val, item) => (
-        <span className="text-xs text-slate-600">
-          {parseFloat(val || 0).toFixed(3)}
-          <span className="ml-1 text-xs  text-slate-400 uppercase">{item.uom || 'Nos'}</span>
+        <span className="text-xs font-medium text-slate-600">
+          {parseFloat(item.required_weight || val || 0).toFixed(3)} <span className="text-[10px] text-slate-400">KG</span>
         </span>
       )
     },
     {
-      label: 'Invoice',
+      label: 'Invoice Weight (KG)',
+      key: 'invoice_weight',
+      className: 'text-center',
+      render: (_, item) => {
+        const invWt = parseFloat(item.invoice_weight || item.received_weight || 0);
+        return (
+          <span className="text-xs font-medium text-slate-700">
+            {invWt.toFixed(3)} <span className="text-[10px] text-slate-400">KG</span>
+          </span>
+        );
+      }
+    },
+    {
+      label: 'Received Qty (NOS)',
       key: 'received_qty',
       className: 'text-center',
-      render: (val, item) => (
-        <span className="text-xs text-slate-900">
-          {parseFloat(val || 0).toFixed(3)}
-          <span className="ml-1 text-xs  text-slate-400 uppercase">{item.uom || 'Nos'}</span>
-        </span>
-      )
+      render: (val, item) => {
+        const recQty = parseFloat(item.received_qty || 0);
+        return (
+          <div className="flex flex-col items-center">
+            <span className="text-xs font-bold text-blue-600">
+              {recQty.toFixed(0)}
+            </span>
+            <span className="text-[9px] text-slate-400 uppercase">NOS</span>
+          </div>
+        );
+      }
     },
     {
-      label: 'Received Quantity',
+      label: 'Received Weight (KG)',
+      key: 'received_weight',
+      className: 'text-center',
+      render: (_, item) => {
+        const recWt = parseFloat(item.received_weight || 0);
+        return (
+          <div className="flex flex-col items-center">
+            <span className="text-xs font-bold text-indigo-600">
+              {recWt.toFixed(3)}
+            </span>
+            <span className="text-[9px] text-slate-400 uppercase">KG</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'QC Inspection Qty (NOS)',
+      key: 'qc_inspection_qty',
+      className: 'text-center',
+      render: (val, item, idx) => {
+        const currentVal = val !== undefined && val !== null ? val : (item.received_qty || 0);
+        return (
+          <div className="flex flex-col items-center gap-1">
+            <input
+              type="number"
+              step="1"
+              min="0"
+              value={currentVal}
+              onChange={(e) => handleQcQtyChange(idx, e.target.value)}
+              className="w-20 p-2 bg-white border border-blue-300 rounded text-center text-xs text-blue-700 font-bold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+            />
+            <span className="text-[10px] text-slate-400 uppercase">NOS</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'QC Inspection Weight (KG)',
+      key: 'qc_inspection_weight',
+      className: 'text-center',
+      render: (val, item, idx) => {
+        const recWt = parseFloat(item.received_weight || 0);
+        const currentVal = val !== undefined && val !== null ? val : recWt;
+        return (
+          <div className="flex flex-col items-center gap-1">
+            <input
+              type="number"
+              step="0.001"
+              min="0"
+              value={currentVal}
+              onChange={(e) => handleQcWeightChange(idx, e.target.value)}
+              className="w-24 p-2 bg-white border border-violet-300 rounded text-center text-xs text-violet-700 font-bold focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 outline-none transition-all"
+            />
+            <span className="text-[10px] text-slate-400 uppercase">KG</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Accepted Qty (NOS)',
       key: 'accepted_qty',
       className: 'text-center',
-      render: (val, item, idx) => (
-        <div className="flex flex-col items-center gap-1">
-          <input
-            type="number"
-            step="0.001"
-            value={val === undefined || val === null ? '' : val}
-            onChange={(e) => handleItemQtyChange(idx, e.target.value)}
-            onBlur={(e) => {
-              const formattedVal = parseFloat(e.target.value || 0).toFixed(3);
-              handleItemQtyChange(idx, formattedVal);
-            }}
-            className="w-24 p-2.5 bg-white border border-blue-200 rounded text-center text-xs text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
-          />
-          <span className="text-xs  text-slate-400 uppercase">{item.uom || 'Nos'}</span>
-        </div>
-      )
+      render: (val, item) => {
+        const inspQty = parseFloat(item.qc_inspection_qty !== undefined ? item.qc_inspection_qty : (item.received_qty || 0));
+        const rejQty = parseFloat(item.rejected_qty || 0);
+        const accQty = Math.max(0, inspQty - rejQty);
+        return (
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-xs font-bold text-emerald-600">
+              {accQty.toFixed(0)}
+            </span>
+            <span className="text-[9px] text-emerald-400 uppercase">NOS</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Rejected Qty (NOS)',
+      key: 'rejected_qty',
+      className: 'text-center',
+      render: (val, item, idx) => {
+        const rejQty = parseFloat(item.rejected_qty || 0);
+        return (
+          <div className="flex flex-col items-center gap-1">
+            <input
+              type="number"
+              step="1"
+              min="0"
+              value={rejQty}
+              onChange={(e) => handleRejectedQtyChange(idx, e.target.value)}
+              className="w-16 p-1.5 bg-white border border-rose-200 rounded text-center text-xs text-rose-600 font-semibold focus:ring-2 focus:ring-rose-500/20 outline-none"
+            />
+            <span className="text-[9px] text-rose-400 uppercase">NOS</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Accepted Weight (KG)',
+      key: 'accepted_weight',
+      className: 'text-center',
+      render: (val, item) => {
+        const recWt = parseFloat(item.received_weight || 0);
+        const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
+        const rejWt = parseFloat(item.rejected_weight || 0);
+        const accWt = Math.max(0, inspWt - rejWt);
+        return (
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-xs font-bold text-emerald-600">
+              {accWt.toFixed(3)}
+            </span>
+            <span className="text-[9px] text-emerald-400 uppercase">KG</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Rejected Weight (KG)',
+      key: 'rejected_weight',
+      className: 'text-center',
+      render: (val, item, idx) => {
+        const rejWt = parseFloat(item.rejected_weight || 0);
+        return (
+          <div className="flex flex-col items-center gap-1">
+            <input
+              type="number"
+              step="0.001"
+              min="0"
+              value={rejWt}
+              onChange={(e) => handleRejectedWeightChange(idx, e.target.value)}
+              className="w-20 p-1.5 bg-white border border-rose-200 rounded text-center text-xs text-rose-600 font-semibold focus:ring-2 focus:ring-rose-500/20 outline-none"
+            />
+            <span className="text-[9px] text-rose-400 uppercase">KG</span>
+          </div>
+        );
+      }
     },
     {
       label: 'Shortage',
       key: 'shortage',
-      className: 'text-center text-rose-500 ',
+      className: 'text-center text-rose-500',
       render: (_, item) => {
-        const shortage = Math.max(0, parseFloat(item.ordered_qty || 0) - parseFloat(item.accepted_qty || 0));
-        return shortage > 0 ? (
-          <span className="text-xs">
-            {shortage.toFixed(3)}
-            <span className="ml-1 text-[9px] uppercase">{item.uom || 'Nos'}</span>
+        const recWt = parseFloat(item.received_weight || 0);
+        const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
+        const shortage = Math.max(0, recWt - inspWt);
+        return shortage > 0.0005 ? (
+          <span className="text-xs font-semibold">
+            {shortage.toFixed(3)} <span className="text-[9px] uppercase">KG</span>
           </span>
-        ) : '0.000';
+        ) : <span className="text-slate-300 text-xs">0.000</span>;
       }
     },
     {
       label: 'Overage',
       key: 'overage',
-      className: 'text-center text-blue-500 ',
+      className: 'text-center text-blue-500',
       render: (_, item) => {
-        const overage = Math.max(0, parseFloat(item.accepted_qty || 0) - parseFloat(item.ordered_qty || 0));
-        return overage > 0 ? (
-          <span className="text-xs">
-            {overage.toFixed(3)}
-            <span className="ml-1 text-[9px] uppercase">{item.uom || 'Nos'}</span>
+        const recWt = parseFloat(item.received_weight || 0);
+        const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
+        const overage = Math.max(0, inspWt - recWt);
+        return overage > 0.0005 ? (
+          <span className="text-xs font-semibold">
+            {overage.toFixed(3)} <span className="text-[9px] uppercase">KG</span>
           </span>
-        ) : '0.000';
+        ) : <span className="text-slate-300 text-xs">0.000</span>;
       }
     },
     {
@@ -1073,11 +1342,13 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'status',
       className: 'text-center whitespace-nowrap',
       render: (_, item) => {
-        const shortage = Math.max(0, parseFloat(item.ordered_qty || 0) - parseFloat(item.accepted_qty || 0));
-        const overage = Math.max(0, parseFloat(item.accepted_qty || 0) - parseFloat(item.ordered_qty || 0));
-        if (shortage > 0) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-100 text-xs">SHORTAGE ✅</span>;
-        if (overage > 0) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 text-xs">OVERAGE ✅</span>;
-        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100 text-xs">AVAILABLE ✅</span>;
+        const recWt = parseFloat(item.received_weight || 0);
+        const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
+        const shortage = recWt - inspWt;
+        const overage = inspWt - recWt;
+        if (shortage > 0.0005) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-100 text-xs font-bold">SHORTAGE ✅</span>;
+        if (overage > 0.0005) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 text-xs font-bold">OVERAGE ✅</span>;
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100 text-xs font-bold">AVAILABLE ✅</span>;
       }
     },
     {

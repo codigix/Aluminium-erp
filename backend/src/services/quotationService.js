@@ -153,7 +153,13 @@ const createQuotation = async (payload) => {
         const designQty = (plannedQty !== null && !isNaN(plannedQty)) ? plannedQty : (parseFloat(item.design_qty) || parseFloat(item.quantity) || 0);
         const qty = parseFloat(item.quantity) || designQty || 0;
         const rate = parseFloat(item.unit_rate) || 0;
-        const amount = Number((designQty * rate).toFixed(2));
+        // If Laser Cutting selected: Amount = Design Qty × Rate (₹/Nos)
+        // If no Laser Cutting:       Amount = Required Weight × Rate (₹/Kg)
+        const lcRawA = String(item.laser_cutting || '').trim().toUpperCase();
+        const hasLaserCuttingA = lcRawA && !['SELECT', 'NONE', 'NULL', 'UNDEFINED', ''].includes(lcRawA);
+        const amountBaseA = hasLaserCuttingA ? designQty : qty;
+        const amount = Number((amountBaseA * rate).toFixed(2));
+
         const cgstPercent = Number((gstPercentage / 2).toFixed(2));
         const sgstPercent = Number((gstPercentage / 2).toFixed(2));
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
@@ -896,7 +902,13 @@ const updateQuotation = async (quotationId, payload) => {
         const designQty = (plannedQty !== null && !isNaN(plannedQty)) ? plannedQty : (parseFloat(item.design_qty) || parseFloat(item.quantity) || 0);
         const qty = parseFloat(item.quantity) || designQty || 0;
         const rate = parseFloat(item.unit_rate) || 0;
-        const amount = Number((designQty * rate).toFixed(2));
+        // If Laser Cutting selected: Amount = Design Qty × Rate (₹/Nos)
+        // If no Laser Cutting:       Amount = Required Weight × Rate (₹/Kg)
+        const lcRawB = String(item.laser_cutting || '').trim().toUpperCase();
+        const hasLaserCuttingB = lcRawB && !['SELECT', 'NONE', 'NULL', 'UNDEFINED', ''].includes(lcRawB);
+        const amountBaseB = hasLaserCuttingB ? designQty : qty;
+        const amount = Number((amountBaseB * rate).toFixed(2));
+
         const cgstPercent = Number((gstPercentage / 2).toFixed(2));
         const sgstPercent = Number((gstPercentage / 2).toFixed(2));
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
@@ -1646,9 +1658,27 @@ const generateQuotationPDF = async (quotationId) => {
 
   const isRFQVal = ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING', 'PENDING_ITEMS'].includes(quotation.status);
 
+  // Recalculate PDF totals on-the-fly using corrected laser-cutting-aware formula
+  const quoteGstPct = (quotation.gst_percentage !== undefined && quotation.gst_percentage !== null && quotation.gst_percentage !== '')
+    ? parseFloat(quotation.gst_percentage) : 18;
+  let recalcSubtotal = 0;
+  for (const pi of (quotation.items || [])) {
+    const piqty = parseFloat(pi.quantity || 0);
+    const pirate = parseFloat(pi.unit_rate || 0);
+    const pilcRaw = String(pi.laser_cutting || '').trim().toUpperCase();
+    const pihasLC = pilcRaw && !['SELECT', 'NONE', 'NULL', 'UNDEFINED', ''].includes(pilcRaw);
+    const piBase = pihasLC ? (parseFloat(pi.planned_qty) || parseFloat(pi.design_qty) || piqty) : piqty;
+    recalcSubtotal = Number((recalcSubtotal + piBase * pirate).toFixed(2));
+  }
+  const recalcTax = Number(((recalcSubtotal * quoteGstPct) / 100).toFixed(2));
+  const recalcGrandTotal = Number((recalcSubtotal + recalcTax).toFixed(2));
+  const pdfTotalAmount = recalcSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pdfTaxAmount = recalcTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pdfGrandTotal = recalcGrandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const viewData = {
     ...quotation,
-    gst_percentage: quotation.gst_percentage !== undefined && quotation.gst_percentage !== null ? parseFloat(quotation.gst_percentage) : 18,
+    gst_percentage: quoteGstPct,
     isRFQ: isRFQVal,
     created_at: formatDate(quotation.created_at),
     valid_until: formatDate(quotation.valid_until),
@@ -1675,14 +1705,23 @@ const generateQuotationPDF = async (quotationId) => {
     vendor_gstin: vendor?.gstin || '22ABCDE1234F1Z5',
     project_name: quotation.project_name,
     project_ref: quotation.mr_id ? `MR: ${quotation.mr_number}` : (quotation.sales_order_id ? `SO: ${quotation.so_number || quotation.sales_order_id}` : 'General Requirement'),
-    total_amount: parseFloat(quotation.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    tax_amount: parseFloat(quotation.tax_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    grand_total: parseFloat(quotation.grand_total || quotation.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    total_amount: pdfTotalAmount,
+    tax_amount: pdfTaxAmount,
+    grand_total: pdfGrandTotal,
+    gst_percentage: quoteGstPct,
     rfq_ref: quotation.rfq_group_id ? `RFQ-${quotation.rfq_group_id}` : `RFQ-${quotation.quote_number || '1780046352127'}`,
     items: (quotation.items || []).map((i, idx) => {
       const qty = parseFloat(i.quantity || 0);
       const rate = parseFloat(i.unit_rate || 0);
-      const amt = parseFloat(i.amount || qty * rate);
+
+      // If Laser Cutting selected: Amount = Design Qty × Rate (₹/Nos)
+      // If no Laser Cutting:       Amount = Required Weight × Rate (₹/Kg)
+      const lcRawPdf = String(i.laser_cutting || '').trim().toUpperCase();
+      const hasLaserCuttingPdf = lcRawPdf && !['SELECT', 'NONE', 'NULL', 'UNDEFINED', ''].includes(lcRawPdf);
+      const amountBasePdf = hasLaserCuttingPdf
+        ? ((parseFloat(i.planned_qty) || parseFloat(i.design_qty) || qty))
+        : qty;
+      const amt = Number((amountBasePdf * rate).toFixed(2));
       const hasItemGst = (i.cgst_percent !== undefined && i.cgst_percent !== null && i.cgst_percent !== '') || (i.sgst_percent !== undefined && i.sgst_percent !== null && i.sgst_percent !== '');
       const cgst = parseFloat(i.cgst_percent || 0);
       const sgst = parseFloat(i.sgst_percent || 0);

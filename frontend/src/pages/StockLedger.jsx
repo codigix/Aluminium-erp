@@ -181,21 +181,52 @@ const StockLedger = () => {
       sortable: true,
       className: 'text-right',
       render: (val, row) => (
-        <span className={` ${row.transaction_type === 'IN' ? 'text-emerald-600' : 'text-slate-900'}`}>
-          {row.transaction_type === 'IN' ? '+' : '-'}{parseFloat(val).toFixed(3)}
+        <span className={`font-semibold ${row.transaction_type === 'IN' ? 'text-emerald-600' : 'text-slate-900'}`}>
+          {row.transaction_type === 'IN' ? '+' : '-'}{parseFloat(val || 0).toFixed(0)} <span className="text-[10px] text-slate-400">NOS</span>
         </span>
       )
     },
     {
+      key: 'weight_in',
+      label: 'Weight',
+      sortable: false,
+      className: 'text-right',
+      render: (val, row) => {
+        const wt = row.transaction_type === 'IN'
+          ? parseFloat(row.weight_in || 0)
+          : parseFloat(row.weight_out || 0);
+        if (wt === 0) return <span className="text-slate-300 text-xs">—</span>;
+        return (
+          <span className={`font-semibold ${row.transaction_type === 'IN' ? 'text-indigo-600' : 'text-orange-600'}`}>
+            {row.transaction_type === 'IN' ? '+' : '-'}{wt.toFixed(3)} <span className="text-[10px] text-slate-400">KG</span>
+          </span>
+        );
+      }
+    },
+    {
       key: 'balance_after',
-      label: 'Balance',
+      label: 'Bal. Qty',
       sortable: true,
       className: 'text-right',
       render: (val) => (
-        <span className=" text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-100">
-          {parseFloat(val || 0).toFixed(3)}
+        <span className=" text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-100 text-xs font-semibold">
+          {parseFloat(val || 0).toFixed(0)} <span className="text-[10px] text-slate-400">NOS</span>
         </span>
       )
+    },
+    {
+      key: 'weight_after',
+      label: 'Bal. Weight',
+      sortable: false,
+      className: 'text-right',
+      render: (val) => {
+        const wt = parseFloat(val || 0);
+        return (
+          <span className="text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 text-xs font-semibold">
+            {wt.toFixed(3)} <span className="text-[10px] text-indigo-400">KG</span>
+          </span>
+        );
+      }
     },
     {
       key: 'reference',

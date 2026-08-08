@@ -608,6 +608,8 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', size =
     '5xl': 'max-w-5xl',
     '6xl': 'max-w-6xl',
     '7xl': 'max-w-7xl',
+    '8xl': 'max-w-[92rem]',
+    '9xl': 'max-w-[98rem]',
     'full': 'max-w-full'
   };
 

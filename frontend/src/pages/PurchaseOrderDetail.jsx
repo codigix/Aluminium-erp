@@ -156,10 +156,34 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
     return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
   });
 
-  const taxInclusiveSubtotal = filteredItems.reduce((sum, item) => {
-    const qty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
+  const pureSubtotal = filteredItems.reduce((sum, item) => {
+    if (item.amount && parseFloat(item.amount) > 0) {
+      return sum + parseFloat(item.amount);
+    }
+    const designQty = parseFloat(item.design_qty) || 0;
+    const reqWeight = parseFloat(item.quantity) || 0;
     const rate = parseFloat(item.unit_rate) || 0;
-    const amt = qty * rate;
+    const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
+    const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
+                    lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+                    lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
+    const effectiveQty = isLaser ? designQty : reqWeight;
+    return sum + (effectiveQty * rate);
+  }, 0) || 0;
+
+  const taxInclusiveSubtotal = filteredItems.reduce((sum, item) => {
+    if (item.total_amount && parseFloat(item.total_amount) > 0) {
+      return sum + parseFloat(item.total_amount);
+    }
+    const designQty = parseFloat(item.design_qty) || 0;
+    const reqWeight = parseFloat(item.quantity) || 0;
+    const rate = parseFloat(item.unit_rate) || 0;
+    const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
+    const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
+                    lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+                    lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
+    const effectiveQty = isLaser ? designQty : reqWeight;
+    const amt = effectiveQty * rate;
     const cgst = amt * (parseFloat(item.cgst_percent || 9) / 100);
     const sgst = amt * (parseFloat(item.sgst_percent || 9) / 100);
     return sum + (amt + cgst + sgst);
@@ -179,7 +203,9 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
     }
   }
 
-  const grandTotal = taxInclusiveSubtotal - discountAmount;
+  const grandTotal = (po.total_amount && parseFloat(po.total_amount) > 0) 
+    ? parseFloat(po.total_amount) 
+    : (taxInclusiveSubtotal - discountAmount);
 
   return (
     <>
@@ -386,79 +412,95 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50/50">
-                    <tr className="border-b border-slate-100 text-left bg-slate-50/50">
-                      <th className="p-2  text-xs  text-slate-400  ">Drawing No</th>
-                      <th className="p-2  text-xs  text-slate-400  ">Item / Description</th>
-                      <th className="p-2  text-xs  text-slate-400  ">Size</th>
-                      <th className="p-2  text-xs  text-slate-400   text-center">Design Qty</th>
-                      <th className="p-2  text-xs  text-slate-400   text-center">Required</th>
-                      <th className="p-2  text-xs  text-slate-400   text-center">Rate</th>
-                      <th className="p-2  text-xs  text-slate-400   text-right">Amount</th>
-                      <th className="p-2  text-xs  text-slate-400   text-right">Total Amount</th>
+                    <tr className="border-b border-slate-100 text-left bg-slate-50/50 text-[11px] text-slate-500 font-semibold uppercase">
+                      <th className="p-2">Drawing No</th>
+                      <th className="p-2">Item / Description</th>
+                      <th className="p-2 text-center">Design Qty</th>
+                      <th className="p-2 text-center">Required Weight</th>
+                      <th className="p-2 text-center">Received Qty</th>
+                      <th className="p-2 text-center">Received Weight</th>
+                      <th className="p-2 text-center">Pending Qty</th>
+                      <th className="p-2 text-center">Pending Weight</th>
+                      <th className="p-2 text-center">Rate</th>
+                      <th className="p-2 text-right">Amount</th>
+                      <th className="p-2 text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {filteredItems.map((item, idx) => {
-                      const received = parseFloat(item.accepted_quantity) || 0;
-                      const total = parseFloat(item.quantity) || 1;
-                      const percent = Math.min(100, Math.round((received / total) * 100));
+                      const designQty = parseFloat(item.planned_qty || item.design_qty || 0);
+                      const reqWeight = parseFloat(item.quantity || item.required_weight || 0);
+                      const recQty = parseFloat(item.received_qty || item.accepted_quantity || 0);
+                      const recWeight = parseFloat(item.received_weight || item.accepted_quantity || 0);
+
+                      const pendingQty = Math.max(0, designQty - recQty);
+                      const pendingWeight = Math.max(0, reqWeight - recWeight);
+
+                      const isFulfilled = (reqWeight > 0 && recWeight >= reqWeight) || (designQty > 0 && recQty >= designQty);
+                      const isPartial = (recQty > 0 || recWeight > 0) && !isFulfilled;
 
                       const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no || '');
                       const cleanDwgNo = isDwgCodePattern ? '—' : (item.drawing_no || '—');
 
                       return (
-                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
-                          <td className="p-2 text-xs font-bold text-slate-900">
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
+                          <td className="p-2 font-bold text-slate-900">
                             {cleanDwgNo}
                           </td>
                           <td className="p-2">
-                            <p className="text-xs text-slate-800 ">{item.material_name || item.description || 'N/A'}</p>
+                            <p className="text-slate-800 font-medium">{item.material_name || item.description || 'N/A'}</p>
                             {item.item_code && (
-                              <span className="inline-flex items-center p-1 rounded text-xs  bg-slate-100 text-slate-500 mt-1 uppercase tracking-wider">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600 mt-0.5 font-mono">
                                 {item.item_code}
                               </span>
                             )}
                           </td>
-                          <td className="p-2 text-xs text-slate-900 font-mono font-bold">
-                            {formatDimensions(item) || '—'}
+                          <td className="p-2 text-center">
+                            <span className="font-semibold text-slate-800">{designQty.toFixed(0)}</span>
+                            <span className="text-[10px] text-slate-400 ml-1">Nos</span>
                           </td>
-                          <td className="p-2  text-center">
-                            <span className="text-xs  text-slate-800">
-                              {Number(item.planned_qty || item.design_qty || 0).toFixed(3)}
-                            </span>
-                            <span className="text-xs  text-slate-400  ml-1 uppercase">NOS</span>
+                          <td className="p-2 text-center">
+                            <span className="font-semibold text-indigo-600">{reqWeight.toFixed(3)}</span>
+                            <span className="text-[10px] text-slate-400 ml-1">Kg</span>
                           </td>
-                          <td className="p-2  text-center">
-                            <span className="text-xs  text-slate-800">
-                              {Number(item.quantity || 0).toFixed(3)}
-                            </span>
-                            <span className="text-xs  text-slate-400  ml-1 uppercase">{item.unit || item.uom}</span>
+                          <td className="p-2 text-center">
+                            <span className="font-semibold text-emerald-600">{recQty.toFixed(0)}</span>
+                            <span className="text-[10px] text-slate-400 ml-1">Nos</span>
                           </td>
-                          <td className="p-2  text-center">
-                            <div className="flex flex-col items-center">
-                              <span className="text-xs  text-slate-700">{formatCurrency(item.unit_rate, po.currency)}</span>
-                            </div>
+                          <td className="p-2 text-center">
+                            <span className="font-semibold text-emerald-600">{recWeight.toFixed(3)}</span>
+                            <span className="text-[10px] text-slate-400 ml-1">Kg</span>
                           </td>
-                          <td className="p-2  text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="text-xs  text-slate-800">
-                                {(() => {
-                                  const qty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
-                                  const rate = parseFloat(item.unit_rate) || 0;
-                                  return formatCurrency(qty * rate, po.currency);
-                                })()}
-                              </span>
-                            </div>
+                          <td className="p-2 text-center">
+                            <span className={`font-semibold ${pendingQty > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{pendingQty.toFixed(0)}</span>
+                            <span className="text-[10px] text-slate-400 ml-1">Nos</span>
                           </td>
-                          <td className="p-2  text-right font-bold text-slate-900">
+                          <td className="p-2 text-center">
+                            <span className={`font-semibold ${pendingWeight > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{pendingWeight.toFixed(3)}</span>
+                            <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                          </td>
+                          <td className="p-2 text-center text-slate-700">
+                            {formatCurrency(item.unit_rate, po.currency)}
+                          </td>
+                          <td className="p-2 text-right font-medium text-slate-900">
                             {(() => {
-                              const qty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
-                              const rate = parseFloat(item.unit_rate) || 0;
-                              const cgst = parseFloat(item.cgst_amount) || 0;
-                              const sgst = parseFloat(item.sgst_amount) || 0;
-                              const igst = parseFloat(item.igst_amount) || 0;
-                              return formatCurrency((qty * rate) + cgst + sgst + igst, po.currency);
+                              if (item.amount && parseFloat(item.amount) > 0) {
+                                return formatCurrency(parseFloat(item.amount), po.currency);
+                              }
+                              const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
+                              const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
+                                              lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+                                              lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
+                              const effectiveQty = isLaser ? designQty : reqWeight;
+                              return formatCurrency(effectiveQty * (parseFloat(item.unit_rate) || 0), po.currency);
                             })()}
+                          </td>
+                          <td className="p-2 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider ${
+                              isFulfilled ? 'bg-emerald-100 text-emerald-800' : isPartial ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {isFulfilled ? 'Fulfilled' : isPartial ? 'Partially Received' : 'Pending'}
+                            </span>
                           </td>
                         </tr>
                       );
@@ -471,7 +513,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                 <div className="flex justify-end gap-12 text-xs">
                   <span className="text-slate-400">Total Amount</span>
                   <span className="text-slate-600 font-medium w-32 text-right">
-                    {formatCurrency(taxInclusiveSubtotal, po.currency)}
+                    {formatCurrency(pureSubtotal, po.currency)}
                   </span>
                 </div>
                 <div className="flex justify-end gap-12 text-xs">

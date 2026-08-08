@@ -266,10 +266,21 @@ const POReceipts = () => {
     const newItems = [...formData.items];
     newItems[index][field] = value;
 
-    if (field === 'received_qty' || field === 'rate') {
-      const qty = parseFloat(newItems[index].received_qty) || 0;
-      const rate = parseFloat(newItems[index].rate) || 0;
-      newItems[index].amount = qty * rate;
+    if (field === 'received_qty' || field === 'current_receiving_qty' || field === 'current_receiving_weight' || field === 'rate' || field === 'unit_rate') {
+      const item = newItems[index];
+      const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
+      const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
+                      lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+                      lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
+
+      const currQty = parseFloat(item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty) || 0;
+      const currWeight = parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : item.received_qty) || 0;
+      const effectiveQty = isLaser ? currQty : currWeight;
+      const rate = parseFloat(item.rate !== undefined && item.rate !== '' ? item.rate : (item.unit_rate || 0)) || 0;
+
+      newItems[index].rate = rate;
+      newItems[index].unit_rate = rate;
+      newItems[index].amount = effectiveQty * rate;
     }
 
     const totalQty = newItems.reduce((sum, it) => sum + (parseFloat(it.received_qty) || 0), 0);
@@ -492,21 +503,47 @@ const POReceipts = () => {
             })
             .map(item => {
               const dQty = parseFloat(item.planned_qty || item.design_qty || 0);
-              const qQty = parseFloat(item.quantity || 0);
+              const reqWeight = parseFloat(item.required_weight || item.quantity || 0);
+              
+              const rawPrevRecQty = parseFloat(item.received_qty);
+              const rawPrevRecWt = parseFloat(item.received_weight);
+              
+              const prevRecWeight = (!isNaN(rawPrevRecWt) && rawPrevRecWt > 0)
+                ? rawPrevRecWt
+                : (!isNaN(rawPrevRecQty) ? rawPrevRecQty : 0);
+              const prevRecQty = (!isNaN(rawPrevRecQty) && rawPrevRecQty > 0 && Math.abs(rawPrevRecQty - prevRecWeight) > 0.001)
+                ? rawPrevRecQty
+                : (dQty > 0 && prevRecWeight >= reqWeight ? dQty : (prevRecWeight > 0 ? 1 : 0));
+
+              const defaultCurrentQty = Math.max(0, dQty - prevRecQty);
+              const defaultCurrentWeight = parseFloat(Math.max(0, reqWeight - prevRecWeight).toFixed(3));
+
+              const rate = parseFloat(item.unit_rate || item.rate || 0);
+              const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
+              const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
+                              lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+                              lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
+              const effectiveQty = isLaser ? defaultCurrentQty : defaultCurrentWeight;
 
               return {
                 ...item,
                 item_code: item.item_code || '',
                 material_name: item.material_name || item.description,
                 description: item.description || '',
+                ordered_qty: dQty,
+                ordered_weight: reqWeight,
+                prev_received_qty: prevRecQty,
+                prev_received_weight: prevRecWeight,
+                current_receiving_qty: defaultCurrentQty,
+                current_receiving_weight: defaultCurrentWeight,
                 design_qty: dQty,
-                required_qty: qQty,
-                quantity: qQty,
-                received_qty: qQty,
-                rate: parseFloat(item.unit_rate || item.rate || 0),
-                amount: qQty * parseFloat(item.unit_rate || item.rate || 0),
+                quantity: reqWeight,
+                received_qty: defaultCurrentQty,
+                received_weight: defaultCurrentWeight,
+                rate: rate,
+                amount: effectiveQty * rate,
                 warehouse: warehouses[0]?.warehouse_code || 'main',
-                unit: item.unit || 'NOS'
+                unit: item.unit || 'KG'
               };
             });
 
@@ -932,6 +969,530 @@ const POReceipts = () => {
     }
   ];
 
+  if (showCreateModal) {
+    return (
+      <div className="p-4 animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-4">
+        {/* Header Bar */}
+        <div className="flex items-center justify-between bg-white border border-slate-100 p-4 rounded-xl shadow-sm">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(`${deptPrefix}/po-receipts`)}
+              className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
+              title="Back to List"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">Create GRN Request</h1>
+              <p className="text-xs text-slate-500">Record incoming goods receipts against approved Purchase Orders</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate(`${deptPrefix}/po-receipts`)}
+              className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-all active:scale-95"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleCreateReceipt}
+              disabled={formData.items.length === 0}
+              className={`px-6 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-200 active:scale-95 ${
+                formData.items.length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-blue-700'
+              }`}
+            >
+              Create GRN Request
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleCreateReceipt} className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm relative">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-2">
+            {/* Sidebar: Receipt Context */}
+            <div className="lg:col-span-1 space-y-4 border-r border-slate-100 pr-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white shadow-lg shadow-blue-100">
+                    <AlertCircle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800">Receipt Context</h4>
+                    <p className="text-[10px] text-slate-400">Link source and set date</p>
+                  </div>
+                </div>
+
+                <FormControl label="GRN Number">
+                  <input
+                    type="text"
+                    value={`GRN-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(receipts.length + 1).padStart(4, '0')}`}
+                    readOnly
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded text-xs font-mono font-bold text-slate-900 outline-none"
+                  />
+                </FormControl>
+
+                <FormControl label="Select Drawing *">
+                  <SearchableSelect
+                    options={purchaseOrders.filter(po => po.drawing_no).map(po => ({
+                      label: `${po.drawing_no} - ${po.finished_good || 'No description'}`,
+                      value: String(po.id)
+                    }))}
+                    value={formData.poId || ''}
+                    onChange={(e) => handlePoChange(e.target.value)}
+                    placeholder="Search & Select Drawing No..."
+                    allowCustom={false}
+                  />
+                </FormControl>
+
+                <FormControl label="Receipt Date *">
+                  <input
+                    type="date"
+                    value={formData.receiptDate}
+                    onChange={(e) => setFormData({ ...formData, receiptDate: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                    required
+                  />
+                </FormControl>
+              </div>
+
+              <div className="pt-6 border-t border-slate-100">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-6 h-6 bg-slate-100 rounded flex items-center justify-center text-slate-500">
+                    <ClipboardCheck className="w-4 h-4 text-slate-500" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-semibold text-slate-800">Drawing & PO Info</h4>
+                    <p className="text-[10px] text-slate-400">Auto-fetched drawing context</p>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50/80 rounded-lg border border-slate-100 space-y-3">
+                  {formData.poId ? (() => {
+                    const poDetails = purchaseOrders.find(po => String(po.id) === String(formData.poId));
+                    const orderedQty = formData.items.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0);
+                    const receivedQty = formData.items.reduce((sum, item) => sum + parseFloat(item.received_qty || 0), 0);
+                    const pendingQty = Math.max(0, orderedQty - receivedQty);
+
+                    return (
+                      <div className="space-y-2 text-xs animate-in fade-in duration-300">
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Drawing No.</span>
+                          <span className="text-xs font-bold text-slate-800">{poDetails?.drawing_no || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Finished Good</span>
+                          <span className="text-xs font-medium text-slate-700 block whitespace-normal leading-normal">{poDetails?.finished_good || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">PO Number</span>
+                          <span className="text-xs font-semibold text-slate-700">{poDetails?.po_number || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Supplier</span>
+                          <span className="text-xs font-bold text-slate-850">{formData.vendorName || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Project No.</span>
+                          <span className="text-xs font-semibold text-slate-700">{formData.project_name || '—'}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200">
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-semibold uppercase block">Ordered</span>
+                            <span className="text-[11px] font-semibold text-slate-700">{orderedQty}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-semibold uppercase block">Received</span>
+                            <span className="text-[11px] font-semibold text-emerald-600">{receivedQty}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-semibold uppercase block">Pending</span>
+                            <span className="text-[11px] font-semibold text-rose-600">{pendingQty}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })() : (
+                    <div className="text-center py-4">
+                      <p className="text-xs text-slate-400 italic">No Drawing Selected</p>
+                      <p className="text-[9px] text-slate-400 mt-1">Select a drawing above to fetch details</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Host Billing Entity Details */}
+              <div className="pt-6 border-t border-slate-100 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-rose-50 rounded flex items-center justify-center text-rose-600">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-semibold text-slate-800">Host Billing Entity Details</h4>
+                    <p className="text-[10px] text-slate-400">Issuing profile for this request</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-lg border border-slate-100 p-3 space-y-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400 font-medium ml-1">Select Issuing Billing Profile *</label>
+                    <select
+                      value={formData.host_company_id || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, host_company_id: e.target.value }))}
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all cursor-pointer font-medium text-slate-700"
+                      disabled={isHostCompanyLocked}
+                    >
+                      <option value="">Select billing profile...</option>
+                      {hostCompanies.map(h => (
+                        <option key={h.id} value={h.id}>
+                          {h.company_name} {h.status === 'ACTIVE' ? '(ACTIVE)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {isHostCompanyLocked && (
+                      <p className="text-[8px] text-indigo-500 italic mt-0.5 ml-1">Autofetched and locked from linked Purchase Order</p>
+                    )}
+                  </div>
+
+                  {selectedHostCompany && (
+                    <div className="pt-2 border-t border-slate-200/60 flex flex-col items-center text-center animate-in fade-in duration-300">
+                      {selectedHostCompany.company_logo ? (
+                        <img
+                          src={getFileUrl(selectedHostCompany.company_logo)}
+                          alt="Logo"
+                          className="h-10 max-w-full object-contain mb-1.5 bg-white border border-slate-100 p-0.5 rounded shadow-sm"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs mb-1">
+                          {selectedHostCompany.company_name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="text-[10px] font-bold text-slate-800 truncate w-full">{selectedHostCompany.company_name}</span>
+                      <span className={`text-[8px] mt-1 px-2 py-0.5 rounded-full font-semibold border ${selectedHostCompany.status === 'ACTIVE'
+                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                        : 'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}>
+                        {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Main Content: Receipt Items */}
+            <div className="lg:col-span-3 space-y-4 min-w-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
+                    <ClipboardCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800">Receipt Items</h3>
+                    <p className="text-xs text-slate-400">Verify received quantities against PO</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50/80">
+                    <tr className="text-[11px] text-slate-500 border-b border-slate-200 font-semibold uppercase">
+                      <th className="p-3 pl-4">Drawing No</th>
+                      <th className="p-3">Item ID</th>
+                      <th className="p-3">Material Name & Dimensions</th>
+                      <th className="p-3 text-center">Ordered Qty</th>
+                      <th className="p-3 text-center">Ordered Weight</th>
+                      <th className="p-3 text-center">Prev. Received</th>
+                      <th className="p-3 text-center">Receiving Qty (Nos)</th>
+                      <th className="p-3 text-center">Receiving Weight (Kg)</th>
+                      <th className="p-3 text-center">Pending Qty</th>
+                      <th className="p-3 text-center">Pending Weight</th>
+                      <th className="p-3 text-center">Rate</th>
+                      <th className="p-3 text-right pr-4">Amount</th>
+                      <th className="p-3 text-center"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {formData.items.map((item, idx) => {
+                      const ordQty = parseFloat(item.ordered_qty || item.design_qty || 0);
+                      const ordWeight = parseFloat(item.ordered_weight || item.quantity || 0);
+                      const prevQty = parseFloat(item.prev_received_qty || 0);
+                      const prevWeight = parseFloat(item.prev_received_weight || 0);
+                      const currQty = parseFloat(item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty) || 0;
+                      const currWeight = parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : item.received_qty) || 0;
+
+                      const pendingQty = Math.max(0, ordQty - (prevQty + currQty));
+                      const pendingWeight = parseFloat(Math.max(0, ordWeight - (prevWeight + currWeight)).toFixed(3));
+
+                      return (
+                        <tr key={idx} className="group hover:bg-slate-50/50 transition-all text-xs">
+                          <td className="p-3 pl-4 font-bold text-slate-900">
+                            <input
+                              type="text"
+                              value={item.drawing_no || ''}
+                              placeholder="Drawing No"
+                              onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
+                              className="w-28 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <div className="flex flex-col min-w-[150px]">
+                              <SearchableSelect
+                                options={stockItems}
+                                value={item.item_code}
+                                onChange={(e) => handleItemChange(idx, 'item_code', e.target.value)}
+                                placeholder="Select Item ID"
+                                labelField="item_code"
+                                valueField="item_code"
+                                subLabelField="material_name"
+                                allowCustom={true}
+                              />
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex flex-col gap-1 min-w-[200px]">
+                              <SearchableSelect
+                                options={stockItems}
+                                value={item.material_name}
+                                onChange={(e) => {
+                                  handleItemChange(idx, 'material_name', e.target.value);
+                                  const selectedItem = stockItems.find(it => it.material_name === e.target.value);
+                                  if (selectedItem) {
+                                    handleItemChange(idx, 'item_code', selectedItem.item_code);
+                                  }
+                                }}
+                                placeholder="Select Material Name"
+                                labelField="material_name"
+                                valueField="material_name"
+                                subLabelField="item_code"
+                                allowCustom={true}
+                              />
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[9px] font-semibold text-slate-400 uppercase">Store:</span>
+                                <select
+                                  value={item.warehouse || 'main'}
+                                  onChange={(e) => handleItemChange(idx, 'warehouse', e.target.value)}
+                                  className="bg-transparent text-xs text-slate-600 outline-none border-b border-slate-200 cursor-pointer font-medium pb-0.5"
+                                >
+                                  {warehouses.length > 0 ? (
+                                    warehouses.map(w => (
+                                      <option key={w.id} value={w.warehouse_code}>{w.warehouse_name || w.warehouse_code}</option>
+                                    ))
+                                  ) : (
+                                    <option value="main">Main Warehouse</option>
+                                  )}
+                                </select>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="font-semibold text-slate-800">{ordQty.toFixed(0)}</span>
+                            <span className="text-[10px] text-slate-400 ml-1">Nos</span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="font-semibold text-indigo-600">{ordWeight.toFixed(3)}</span>
+                            <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex flex-col items-center text-[11px]">
+                              <span className="font-medium text-slate-700">{prevQty.toFixed(0)} Nos</span>
+                              <span className="text-[10px] text-slate-400">{prevWeight.toFixed(3)} Kg</span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-center">
+                            <input
+                              type="number"
+                              value={item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
+                                handleItemChange(idx, 'current_receiving_qty', val);
+                                handleItemChange(idx, 'received_qty', val);
+                              }}
+                              className="w-16 p-1.5 bg-white border border-blue-200 rounded-lg text-center text-xs text-blue-600 font-semibold focus:ring-2 focus:ring-blue-500/20 outline-none"
+                              placeholder="0"
+                            />
+                          </td>
+                          <td className="p-3 text-center">
+                            <input
+                              type="number"
+                              step="0.001"
+                              value={item.current_receiving_weight !== undefined && item.current_receiving_weight !== null ? item.current_receiving_weight : (item.received_weight !== undefined ? item.received_weight : '')}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
+                                handleItemChange(idx, 'current_receiving_weight', val);
+                              }}
+                              className="w-20 p-1.5 bg-white border border-indigo-300 rounded-lg text-center text-xs text-indigo-700 font-semibold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                              placeholder="0.000"
+                            />
+                          </td>
+                          <td className="p-3 text-center font-semibold text-amber-600">
+                            {pendingQty.toFixed(0)} <span className="text-[9px] text-slate-400 font-normal">Nos</span>
+                          </td>
+                          <td className="p-3 text-center font-semibold text-amber-600">
+                            {pendingWeight.toFixed(3)} <span className="text-[9px] text-slate-400 font-normal">Kg</span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <input
+                              type="number"
+                              value={item.rate !== undefined && item.rate !== null ? item.rate : (item.unit_rate || '')}
+                              onChange={(e) => {
+                                const rateVal = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
+                                handleItemChange(idx, 'rate', rateVal);
+                                handleItemChange(idx, 'unit_rate', rateVal);
+                              }}
+                              className="w-16 p-1.5 bg-white border border-slate-200 rounded-lg text-center text-xs text-emerald-600 font-semibold outline-none"
+                            />
+                          </td>
+                          <td className="p-3 text-right pr-4">
+                            <div className="flex flex-col items-end">
+                              <span className="text-slate-900 text-xs font-bold">
+                                {(() => {
+                                  const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
+                                  const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
+                                                  lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+                                                  lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
+                                  const effectiveQty = isLaser ? currQty : currWeight;
+                                  const rate = parseFloat(item.rate || item.unit_rate) || 0;
+                                  return formatCurrency(effectiveQty * rate);
+                                })()}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(idx)}
+                              className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {formData.items.length === 0 && (
+                  <div className="p-12 text-center">
+                    <div className="w-16 h-16 bg-slate-50 text-slate-200 rounded-xl flex items-center justify-center mx-auto mb-4">
+                      <Package className="w-8 h-8" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-700">No Items Added</p>
+                    <p className="text-xs text-slate-400 mt-1">Select a drawing to populate receipt line items</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Attachments Section */}
+              <div className="bg-slate-50/60 rounded-xl border border-slate-200/80 p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800">Attachments & Documents <span className="text-rose-500">*</span></h4>
+                    <p className="text-[10px] text-slate-400">Upload vendor invoice, challan, or material test certificates</p>
+                  </div>
+                </div>
+
+                <div className="relative border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors bg-white/50 group">
+                  <input
+                    type="file"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      setAttachments(prev => [...prev, ...files]);
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                  />
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="p-3 bg-blue-50 text-blue-600 rounded-full group-hover:scale-110 transition-transform">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-700">Click or drag files here to upload GRN / Challan Documents</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">PDF, PNG, JPG, JPEG (Multiple files allowed)</p>
+                    </div>
+                  </div>
+                </div>
+
+                {attachments && attachments.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2">
+                    {attachments.map((doc, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2.5 bg-white border border-slate-200/80 rounded-xl text-xs shadow-sm">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="p-1.5 bg-slate-100 text-slate-600 rounded-lg shrink-0">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 truncate">{doc.name}</p>
+                            <p className="text-[10px] text-slate-400">{(doc.size / 1024).toFixed(1)} KB</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAttachments(prev => prev.filter((_, i) => i !== idx));
+                          }}
+                          className="p-1 bg-white border border-slate-200 rounded text-slate-400 hover:text-rose-600 hover:border-rose-100 transition-all hover:bg-rose-50 active:scale-95 shrink-0"
+                          title="Remove Document"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Footer Bar */}
+          <div className="border-t border-slate-200 p-4 mt-6 flex items-center justify-between bg-slate-50 rounded-xl">
+            <div className="flex items-center gap-12">
+              <div>
+                <p className="text-xs text-slate-500 font-semibold">Total Quantity</p>
+                <p className="text-xl font-bold text-slate-900">{formData.receivedQuantity || 0} <span className="text-xs text-slate-400 font-normal ml-1">Units</span></p>
+              </div>
+              <div className="h-10 w-[1px] bg-slate-200"></div>
+              <div>
+                <p className="text-xs text-emerald-600 font-semibold">Total Valuation</p>
+                <p className="text-xl font-bold text-emerald-600">{formatCurrency(formData.totalValuation || 0)}</p>
+              </div>
+              <div className="h-10 w-[1px] bg-slate-200"></div>
+              <div>
+                <p className="text-xs text-indigo-600 font-semibold">Grand Total (18% GST)</p>
+                <p className="text-xl font-bold text-indigo-600">{formatCurrency((formData.totalValuation || 0) * 1.18)}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate(`${deptPrefix}/po-receipts`)}
+                className="px-5 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={formData.items.length === 0}
+                className={`flex items-center gap-2 px-8 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-200 active:scale-95 ${
+                  formData.items.length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-blue-700'
+                }`}
+              >
+                Create GRN Request
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-in p-4 fade-in duration-500">
       {/* Page Header */}
@@ -1232,121 +1793,171 @@ const POReceipts = () => {
               <div className="bg-white border border-slate-200 rounded  overflow-visible ">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50/50">
-                    <tr className="text-xs  text-slate-400   border-b border-slate-200">
-                      <th className="p-2 ">Drawing No</th>
-                      <th className="p-2 ">Item</th>
-                      <th className="p-2  text-center">Design Qty</th>
-                      <th className="p-2  text-center">Required</th>
-                      <th className="p-2  text-right">Received Qty</th>
+                    <tr className="text-xs text-slate-400 border-b border-slate-200">
+                      <th className="p-2">Drawing No</th>
+                      <th className="p-2">Item</th>
+                      <th className="p-2 text-center">Design Qty</th>
+                      <th className="p-2 text-center">Required Weight</th>
+                      <th className="p-2 text-center">Received Qty</th>
+                      <th className="p-2 text-center">Received Weight</th>
+                      <th className="p-2 text-center">Pending Qty</th>
+                      <th className="p-2 text-center">Pending Weight</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {(isViewEditMode ? viewEditItems : (selectedReceiptForView.items || [])).map((item, idx) => (
-                      <tr key={idx} className={`group transition-colors ${isViewEditMode ? 'bg-blue-50/20 hover:bg-blue-50/40' : 'hover:bg-slate-50/50'}`}>
-                        {/* Drawing No — editable in edit mode */}
-                        <td className="p-2 text-xs font-bold text-slate-900">
-                          {isViewEditMode ? (
-                            <input
-                              type="text"
-                              value={item.drawing_no || ''}
-                              onChange={e => handleViewItemChange(idx, 'drawing_no', e.target.value)}
-                              placeholder="Drawing No"
-                              className="w-28 px-2 py-1 border border-blue-300 rounded text-xs focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
-                            />
-                          ) : (
-                            item.drawing_no || '—'
-                          )}
-                        </td>
+                    {(isViewEditMode ? viewEditItems : (selectedReceiptForView.items || [])).map((item, idx) => {
+                      const dQty = parseFloat(item.planned_qty || item.design_qty || 0);
+                      const reqWt = parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0);
+                      
+                      const rawRecQty = parseFloat(item.received_qty);
+                      const rawRecWt = parseFloat(item.received_weight);
+                      
+                      const recWt = (!isNaN(rawRecWt) && rawRecWt > 0) ? rawRecWt : parseFloat(item.received_quantity || 0);
+                      const recQty = (!isNaN(rawRecQty) && rawRecQty > 0 && Math.abs(rawRecQty - recWt) > 0.001)
+                        ? rawRecQty
+                        : (dQty > 0 ? dQty : (recWt > 0 ? recWt : 0));
 
-                        {/* Item — always static / read-only */}
-                        <td className="p-2">
-                          <div className="text-xs text-slate-900 font-medium">{item.item_code}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">{item.material_name || item.description}</div>
-                          {formatDimensions(item) && (
-                            <div className="mt-1">
-                              <span className="text-xs text-slate-400">{formatDimensions(item)}</span>
-                            </div>
-                          )}
-                        </td>
+                      const pQty = Math.max(0, dQty - recQty);
+                      const pWt = parseFloat(Math.max(0, reqWt - recWt).toFixed(3));
+                      const unitStr = (item.unit || 'KG').toUpperCase();
 
-                        {/* Design Qty — editable in edit mode */}
-                        <td className="p-2 text-center text-slate-500 text-xs">
-                          {isViewEditMode ? (
-                            <div className="flex flex-col items-center gap-1">
+                      return (
+                        <tr key={idx} className={`group transition-colors ${isViewEditMode ? 'bg-blue-50/20 hover:bg-blue-50/40' : 'hover:bg-slate-50/50'}`}>
+                          {/* Drawing No */}
+                          <td className="p-2 text-xs font-bold text-slate-900">
+                            {isViewEditMode ? (
                               <input
-                                type="number"
-                                step="0.001"
-                                min="0"
-                                value={(item.planned_qty === 0 || item.design_qty === 0) ? 0 : (item.planned_qty || item.design_qty || '')}
-                                onChange={e => {
-                                  handleViewItemChange(idx, 'planned_qty', e.target.value);
-                                  handleViewItemChange(idx, 'design_qty', e.target.value);
-                                }}
-                                className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                                type="text"
+                                value={item.drawing_no || ''}
+                                onChange={e => handleViewItemChange(idx, 'drawing_no', e.target.value)}
+                                placeholder="Drawing No"
+                                className="w-28 px-2 py-1 border border-blue-300 rounded text-xs focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
                               />
+                            ) : (
+                              item.drawing_no || '—'
+                            )}
+                          </td>
+
+                          {/* Item */}
+                          <td className="p-2">
+                            <div className="text-xs text-slate-900 font-medium">{item.item_code}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">{item.material_name || item.description}</div>
+                            {formatDimensions(item) && (
+                              <div className="mt-1">
+                                <span className="text-xs text-slate-400">{formatDimensions(item)}</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Design Qty (NOS) */}
+                          <td className="p-2 text-center text-slate-500 text-xs">
+                            {isViewEditMode ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  value={(item.planned_qty === 0 || item.design_qty === 0) ? 0 : (item.planned_qty || item.design_qty || '')}
+                                  onChange={e => {
+                                    handleViewItemChange(idx, 'planned_qty', e.target.value);
+                                    handleViewItemChange(idx, 'design_qty', e.target.value);
+                                  }}
+                                  className="w-20 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                                />
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span>{dQty.toFixed(0)}</span>
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Required Weight */}
+                          <td className="p-2 text-center text-slate-500 text-xs">
+                            {isViewEditMode ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={(item.required_qty === 0 || item.expected_quantity === 0 || item.quantity === 0) ? 0 : (item.required_qty || item.expected_quantity || item.quantity || '')}
+                                  onChange={e => handleViewItemChange(idx, 'required_qty', e.target.value)}
+                                  className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                                />
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span className="text-slate-700 font-medium">{reqWt.toFixed(3)}</span>
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Received Qty (NOS) */}
+                          <td className="p-2 text-center text-slate-900 text-xs">
+                            {isViewEditMode ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  value={item.received_qty === 0 ? 0 : (item.received_qty || '')}
+                                  onChange={e => handleViewItemChange(idx, 'received_qty', e.target.value)}
+                                  className="w-20 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                                />
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span className="font-bold text-blue-600">{recQty.toFixed(0)}</span>
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Received Weight (KG) */}
+                          <td className="p-2 text-center text-slate-900 text-xs">
+                            {isViewEditMode ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={item.received_weight === 0 ? 0 : (item.received_weight || item.received_quantity || '')}
+                                  onChange={e => handleViewItemChange(idx, 'received_weight', e.target.value)}
+                                  className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                                />
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span className="font-bold text-indigo-600">{recWt.toFixed(3)}</span>
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Pending Qty (NOS) */}
+                          <td className="p-2 text-center text-amber-600 font-semibold text-xs">
+                            <div className="flex flex-col items-center">
+                              <span>{pQty.toFixed(0)}</span>
                               <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
                             </div>
-                          ) : (
-                            <div className="flex flex-col items-center">
-                              <span>{parseFloat(item.planned_qty || item.design_qty || 0).toFixed(3)}</span>
-                              <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
-                            </div>
-                          )}
-                        </td>
+                          </td>
 
-                        {/* Required Qty — editable in edit mode */}
-                        <td className="p-2 text-center text-slate-500 text-xs">
-                          {isViewEditMode ? (
-                            <div className="flex flex-col items-center gap-1">
-                              <input
-                                type="number"
-                                step="0.001"
-                                min="0"
-                                value={(item.required_qty === 0 || item.expected_quantity === 0 || item.quantity === 0) ? 0 : (item.required_qty || item.expected_quantity || item.quantity || '')}
-                                onChange={e => handleViewItemChange(idx, 'required_qty', e.target.value)}
-                                className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
-                              />
-                              <span className="text-xs text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
-                            </div>
-                          ) : (
+                          {/* Pending Weight (KG) */}
+                          <td className="p-2 text-center text-amber-600 font-semibold text-xs">
                             <div className="flex flex-col items-center">
-                              <span className="text-blue-600">{parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0).toFixed(3)}</span>
-                              <span className="text-xs text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                              <span>{pWt.toFixed(3)}</span>
+                              <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
                             </div>
-                          )}
-                        </td>
-
-                        {/* Received Qty — editable in edit mode */}
-                        <td className="p-2 text-right text-slate-900 text-xs">
-                          {isViewEditMode ? (
-                            <div className="flex flex-col items-end gap-1">
-                              <input
-                                type="number"
-                                step="0.001"
-                                min="0"
-                                value={item.received_quantity === 0 ? 0 : (item.received_quantity || '')}
-                                onChange={e => handleViewItemChange(idx, 'received_quantity', e.target.value)}
-                                className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-right focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
-                              />
-                              <select
-                                value={item.unit || 'NOS'}
-                                onChange={e => handleViewItemChange(idx, 'unit', e.target.value)}
-                                className="w-24 px-1 py-1 border border-blue-200 rounded text-xs focus:ring-1 focus:ring-blue-300 outline-none bg-white"
-                              >
-                                {['NOS','KG','MTR','SET','LTR','SQM','GM','TON'].map(u => (
-                                  <option key={u} value={u}>{u}</option>
-                                ))}
-                              </select>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-end">
-                              <span>{parseFloat(item.received_quantity || 0).toFixed(3)}</span>
-                              <span className="text-xs text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1434,472 +2045,6 @@ const POReceipts = () => {
             </div>
           </div>
         )}
-      </Modal>
-
-      {/* Modal logic remains same but with updated styling if needed */}
-      <Modal
-        isOpen={showCreateModal}
-        onClose={() => navigate(`${deptPrefix}/po-receipts`)}
-        title="Create GRN Request"
-        size="6xl"
-      >
-        <form onSubmit={handleCreateReceipt} className="relative">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-2">
-            {/* Sidebar: Receipt Context */}
-            <div className="lg:col-span-1 space-y-2 border-r border-slate-100 pr-6">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 bg-blue-600 rounded  flex items-center justify-center text-white shadow-lg shadow-blue-100">
-                    <AlertCircle className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs  text-slate-800  ">Receipt Context</h4>
-                    <p className="text-[8px] text-slate-400   er">Link source and set date</p>
-                  </div>
-                </div>
-
-                <FormControl label="GRN Number">
-                  <input
-                    type="text"
-                    value={`GRN-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(receipts.length + 1).padStart(4, '0')}`}
-                    readOnly
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-900 outline-none"
-                  />
-                </FormControl>
-
-                <FormControl label="Select Drawing *">
-                  <SearchableSelect
-                    options={purchaseOrders.filter(po => po.drawing_no).map(po => ({
-                      label: `${po.drawing_no} - ${po.finished_good || 'No description'}`,
-                      value: String(po.id)
-                    }))}
-                    value={formData.poId || ''}
-                    onChange={(e) => handlePoChange(e.target.value)}
-                    placeholder="Search & Select Drawing No..."
-                    allowCustom={false}
-                  />
-                </FormControl>
-
-                <FormControl label="Receipt Date *">
-                  <input
-                    type="date"
-                    value={formData.receiptDate}
-                    onChange={(e) => setFormData({ ...formData, receiptDate: e.target.value })}
-                    className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
-                    required
-                  />
-                </FormControl>
-              </div>
-
-              <div className="pt-6 border-t border-slate-100">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-5 h-5 bg-slate-100 rounded flex items-center justify-center text-slate-500">
-                    <ClipboardCheck className="w-4 h-4 text-slate-500" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-semibold text-slate-800">Drawing & PO Info</h4>
-                    <p className="text-[8px] text-slate-400">Auto-fetched drawing context</p>
-                  </div>
-                </div>
-
-                <div className="p-2.5 bg-slate-50 rounded border border-slate-100 space-y-3">
-                  {formData.poId ? (() => {
-                    const poDetails = purchaseOrders.find(po => String(po.id) === String(formData.poId));
-                    const orderedQty = formData.items.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0);
-                    const receivedQty = formData.items.reduce((sum, item) => sum + parseFloat(item.received_qty || 0), 0);
-                    const pendingQty = Math.max(0, orderedQty - receivedQty);
-
-                    return (
-                      <div className="space-y-2 text-xs animate-in fade-in duration-300">
-                        <div>
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Drawing No.</span>
-                          <span className="text-xs font-bold text-slate-800">{poDetails?.drawing_no || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Finished Good</span>
-                          <span className="text-xs font-medium text-slate-700 block whitespace-normal leading-normal">{poDetails?.finished_good || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">PO Number</span>
-                          <span className="text-xs font-semibold text-slate-700">{poDetails?.po_number || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Supplier</span>
-                          <span className="text-xs font-bold text-slate-850">{formData.vendorName || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Project No.</span>
-                          <span className="text-xs font-semibold text-slate-700">{formData.project_name || '—'}</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200">
-                          <div>
-                            <span className="text-[9px] text-slate-400 font-semibold uppercase block">Ordered</span>
-                            <span className="text-[11px] font-semibold text-slate-700">{orderedQty}</span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] text-slate-400 font-semibold uppercase block">Received</span>
-                            <span className="text-[11px] font-semibold text-emerald-600">{receivedQty}</span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] text-slate-400 font-semibold uppercase block">Pending</span>
-                            <span className="text-[11px] font-semibold text-rose-600">{pendingQty}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })() : (
-                    <div className="text-center py-4">
-                      <p className="text-xs text-slate-400 italic">No Drawing Selected</p>
-                      <p className="text-[9px] text-slate-400 mt-1">Select a drawing above to fetch details</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Host Billing Entity Details */}
-              <div className="pt-6 border-t border-slate-100 space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 bg-rose-50 rounded flex items-center justify-center text-rose-600 animate-pulse">
-                    <Building2 className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-semibold text-slate-800">Host Billing Entity Details</h4>
-                    <p className="text-[8px] text-slate-400">Issuing profile for this request</p>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 rounded border border-slate-100 p-2.5 space-y-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-400 font-medium ml-1">Select Issuing Billing Profile *</label>
-                    <select
-                      value={formData.host_company_id || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, host_company_id: e.target.value }))}
-                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all cursor-pointer font-medium text-slate-700"
-                      disabled={isHostCompanyLocked}
-                    >
-                      <option value="">Select billing profile...</option>
-                      {hostCompanies.map(h => (
-                        <option key={h.id} value={h.id}>
-                          {h.company_name} {h.status === 'ACTIVE' ? '(ACTIVE)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                    {isHostCompanyLocked && (
-                      <p className="text-[8px] text-indigo-500 italic mt-0.5 ml-1">Autofetched and locked from linked Purchase Order</p>
-                    )}
-                  </div>
-
-                  {selectedHostCompany && (
-                    <div className="pt-2 border-t border-slate-200/60 flex flex-col items-center text-center animate-in fade-in duration-300">
-                      {selectedHostCompany.company_logo ? (
-                        <img
-                          src={getFileUrl(selectedHostCompany.company_logo)}
-                          alt="Logo"
-                          className="h-10 max-w-full object-contain mb-1.5 bg-white border border-slate-100 p-0.5 rounded shadow-sm"
-                        />
-                      ) : (
-                        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs mb-1">
-                          {selectedHostCompany.company_name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <span className="text-[10px] font-bold text-slate-800 truncate w-full">{selectedHostCompany.company_name}</span>
-                      <span className={`text-[8px] mt-1 px-2 py-0.5 rounded-full font-semibold border ${selectedHostCompany.status === 'ACTIVE'
-                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                        : 'bg-slate-100 text-slate-500 border-slate-200'
-                        }`}>
-                        {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Main Content: Receipt Items */}
-            <div className="lg:col-span-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
-                    <ClipboardCheck className="w-3 h-3" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm  text-slate-800  ">Receipt Items</h3>
-                    <p className="text-xs text-slate-400   ">Verify received quantities against PO</p>
-                  </div>
-                </div>
-                {/* <button
-                  type="button"
-                  onClick={handleAddLineItem}
-                  className="flex items-center gap-2  p-2  bg-white border border-blue-100 text-blue-600 rounded text-xs   hover:bg-blue-50 transition-all  active:scale-95"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Line Item
-                </button> */}
-              </div>
-
-              <div className="bg-white border border-slate-100 rounded overflow-visible">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50/80">
-                    <tr className="text-xs text-slate-500 border-b border-slate-200">
-                      <th className="p-2 pl-4">Drawing No</th>
-                      <th className="p-2">Item ID</th>
-                      <th className="p-2">Material Name & Dimensions</th>
-                      <th className="p-2 text-center w-24">Ordered Qty</th>
-                      <th className="p-2 text-center w-24">Receiving Qty</th>
-                      <th className="p-2 text-center w-28">Rate</th>
-                      <th className="p-2 text-right pr-4 w-32">Amount</th>
-                      <th className="p-2 text-center w-12"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {formData.items.map((item, idx) => (
-                      <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
-                        <td className="p-2 pl-4 text-xs font-bold text-slate-900">
-                          <input
-                            type="text"
-                            value={item.drawing_no || ''}
-                            placeholder="Drawing No"
-                            onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
-                            className="w-28 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <div className="flex flex-col min-w-[200px]">
-                            <SearchableSelect
-                              options={stockItems}
-                              value={item.item_code}
-                              onChange={(e) => handleItemChange(idx, 'item_code', e.target.value)}
-                              placeholder="Select Item ID"
-                              labelField="item_code"
-                              valueField="item_code"
-                              subLabelField="material_name"
-                              allowCustom={true}
-                            />
-                            {item.description && (
-                              <span className="text-[10px] text-slate-400 mt-1 leading-normal max-w-[200px] break-words">
-                                {item.description}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <div className="flex flex-col gap-1.5 min-w-[250px]">
-                            <SearchableSelect
-                              options={stockItems}
-                              value={item.material_name}
-                              onChange={(e) => {
-                                handleItemChange(idx, 'material_name', e.target.value);
-                                const selectedItem = stockItems.find(it => it.material_name === e.target.value);
-                                if (selectedItem) {
-                                  handleItemChange(idx, 'item_code', selectedItem.item_code);
-                                  if (selectedItem.item_description) {
-                                    handleItemChange(idx, 'description', selectedItem.item_description);
-                                  }
-                                }
-                              }}
-                              placeholder="Select Material Name"
-                              labelField="material_name"
-                              valueField="material_name"
-                              subLabelField="item_code"
-                              allowCustom={true}
-                            />
-                            {formatDimensions(item) && (
-                              <div className="mt-1 opacity-70">
-                                <span className="text-xs text-slate-400">{formatDimensions(item)}</span>
-                              </div>
-                            )}
-                            <div className="mt-1 flex items-center gap-1.5">
-                              <span className="text-[9px] font-semibold text-slate-400 uppercase">Store:</span>
-                              <select
-                                value={item.warehouse}
-                                onChange={(e) => handleItemChange(idx, 'warehouse', e.target.value)}
-                                className="bg-transparent text-xs text-slate-600 outline-none border-b border-slate-200 cursor-pointer font-medium pb-0.5"
-                              >
-                                {warehouses.length > 0 ? (
-                                  warehouses.map(w => (
-                                    <option key={w.id} value={w.warehouse_code}>{w.warehouse_name || w.warehouse_code}</option>
-                                  ))
-                                ) : (
-                                  <option value="main">Main Warehouse</option>
-                                )}
-                              </select>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-2 text-center text-xs">
-                          <div className="flex flex-col items-center">
-                            {item.is_custom ? (
-                              <input
-                                type="number"
-                                value={item.quantity === 0 ? 0 : (item.quantity || '')}
-                                onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                                className="w-16 p-1 bg-white border border-slate-200 rounded text-center text-xs text-slate-800 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all mb-1"
-                              />
-                            ) : (
-                              <span className="text-slate-800 font-semibold">{Number(item.quantity || 0).toFixed(0)}</span>
-                            )}
-                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">NOS</span>
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <div className="flex flex-col items-center gap-1">
-                            <input
-                              type="number"
-                              value={item.received_qty}
-                              onChange={(e) => handleItemChange(idx, 'received_qty', e.target.value)}
-                              className="w-20 p-1.5 bg-white border border-slate-200 rounded text-center text-xs text-blue-600 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                            />
-                            {item.is_custom ? (
-                              <select
-                                value={item.unit || 'NOS'}
-                                onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                                className="bg-transparent text-[10px] text-slate-500 outline-none border-b border-slate-200 cursor-pointer font-medium"
-                              >
-                                <option value="NOS">NOS</option>
-                                <option value="KG">KG</option>
-                                <option value="MTR">MTR</option>
-                                <option value="SET">SET</option>
-                              </select>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <div className="flex justify-center">
-                            <input
-                              type="number"
-                              value={item.rate}
-                              onChange={(e) => handleItemChange(idx, 'rate', e.target.value)}
-                              className="w-20 p-1.5 bg-white border border-slate-200 rounded text-center text-xs text-emerald-600 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                            />
-                          </div>
-                        </td>
-                        <td className="p-2 text-right pr-4">
-                          <div className="flex flex-col items-end">
-                            <span className="text-slate-900 text-xs font-bold">{formatCurrency(item.amount || 0)}</span>
-                            <span className="text-[9px] text-slate-400 font-normal">Incl. 18% GST</span>
-                          </div>
-                        </td>
-                        <td className="p-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(idx)}
-                            className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-all group-hover:opacity-100"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {formData.items.length === 0 && (
-                  <div className="p-12 text-center">
-                    <div className="w-16 h-16 bg-slate-50 text-slate-200 rounded  flex items-center justify-center mx-auto mb-4">
-                      <Package className="w-8 h-8" />
-                    </div>
-                    <p className="text-xs  text-slate-400  ">No items linked</p>
-                    <p className="text-xs text-slate-300 mt-1">Select a PO or add manual items</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Attachments & Documents Upload Section */}
-              <div className="space-y-2 pt-4 border-t border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
-                    <Upload className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-slate-800">Attachments & Documents <span className="text-red-500">*</span></h3>
-                </div>
-
-                <div className="border-2 border-dashed border-slate-200 rounded p-4 text-center hover:border-indigo-300 transition-all cursor-pointer bg-slate-50/50 group relative">
-                  <input
-                    type="file"
-                    multiple
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files || []);
-                      setAttachments(prev => [...prev, ...files]);
-                    }}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    accept=".pdf,.png,.jpg,.jpeg"
-                  />
-                  <div className="flex flex-col items-center justify-center gap-1.5">
-                    <div className="p-2 bg-indigo-50 rounded text-indigo-600 group-hover:bg-indigo-100 transition-all">
-                      <Upload className="w-5 h-5" />
-                    </div>
-                    <p className="text-xs font-semibold text-slate-700">Click or drag files here to upload GRN / Challan Documents</p>
-                    <p className="text-[10px] text-slate-400">PDF, PNG, JPG, JPEG (Multiple files allowed)</p>
-                  </div>
-                </div>
-
-                {attachments.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                    {attachments.map((file, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2.5 bg-indigo-50/20 border border-indigo-100/60 rounded hover:bg-indigo-50/40 transition-all animate-in fade-in duration-200">
-                        <div className="flex items-center gap-2 overflow-hidden mr-2">
-                          <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
-                          <div className="flex flex-col overflow-hidden">
-                            <span className="text-xs text-indigo-950 truncate font-semibold" title={file.name}>{file.name}</span>
-                            <span className="text-[9px] text-indigo-600 font-medium">{(file.size / 1024).toFixed(1)} KB</span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAttachments(prev => prev.filter((_, i) => i !== idx));
-                          }}
-                          className="p-1 bg-white border border-indigo-100/40 rounded text-indigo-400 hover:text-rose-600 hover:border-rose-100 transition-all hover:bg-rose-50 active:scale-95 shrink-0"
-                          title="Remove Document"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="border-t border-slate-200 p-2 flex items-center justify-between bg-slate-50 rounded-b-[24px]">
-            <div className="flex items-center gap-12">
-              <div>
-                <p className="text-xs text-slate-500   ">Total Quantity</p>
-                <p className="text-xl  text-slate-900">{formData.receivedQuantity || 0} <span className="text-xs text-slate-400  ml-1">Units</span></p>
-              </div>
-              <div className="h-10 w-[1px] bg-slate-200"></div>
-              <div>
-                <p className="text-xs text-emerald-600   ">Total Valuation</p>
-                <p className="text-xl  text-emerald-600">{formatCurrency(formData.totalValuation || 0)}</p>
-              </div>
-              <div className="h-10 w-[1px] bg-slate-200"></div>
-              <div>
-                <p className="text-xs text-indigo-600   ">Grand Total (18% GST)</p>
-                <p className="text-xl  text-indigo-600">{formatCurrency((formData.totalValuation || 0) * 1.18)}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => navigate(`${deptPrefix}/po-receipts`)}
-                className="p-2 bg-white border border-slate-200 text-slate-600 rounded  text-sm  hover:bg-slate-50 transition-all active:scale-95"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={formData.items.length === 0}
-                className={`flex items-center gap-2  px-8 py-2.5 bg-blue-600 text-white rounded  text-sm  transition-all shadow-lg shadow-blue-200 active:scale-95 ${formData.items.length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-blue-700'}`}
-              >
-                Create GRN Request
-              </button>
-            </div>
-          </div>
-        </form>
       </Modal>
 
       <Modal isOpen={showEditModal} onClose={() => navigate(`${deptPrefix}/po-receipts`)} title="Edit PO Receipt" size="xl">

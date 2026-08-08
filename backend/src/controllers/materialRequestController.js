@@ -134,7 +134,7 @@ const calculateItemStockAndAvailability = async (connection, item, mrStatus = ''
   // 1. Check by candidate item_codes in stock_balance
   for (const code of candidateCodes) {
     const [byCode] = await connection.query(`
-      SELECT warehouse as warehouse_name, current_balance as current_stock
+      SELECT warehouse as warehouse_name, current_balance as current_stock, COALESCE(current_weight, 0) as current_weight
       FROM stock_balance
       WHERE item_code = ? AND current_balance > 0
     `, [code]);
@@ -195,7 +195,7 @@ const calculateItemStockAndAvailability = async (connection, item, mrStatus = ''
     }
 
     const [byDim] = await connection.query(`
-      SELECT warehouse as warehouse_name, current_balance as current_stock
+      SELECT warehouse as warehouse_name, current_balance as current_stock, COALESCE(current_weight, 0) as current_weight
       FROM stock_balance
       WHERE (LOWER(TRIM(material_name)) = LOWER(TRIM(?)) OR LOWER(TRIM(material_name)) = LOWER(TRIM(?)))
         AND current_balance > 0
@@ -211,30 +211,55 @@ const calculateItemStockAndAvailability = async (connection, item, mrStatus = ''
   }
 
   const totalStock = Math.round(stockRows.reduce((sum, row) => sum + parseFloat(row.current_stock || 0), 0) * 1000) / 1000;
+  const totalWeight = Math.round(stockRows.reduce((sum, row) => sum + parseFloat(row.current_weight || 0), 0) * 1000) / 1000;
 
-  const requiredQty = Math.round(parseFloat(item.quantity || item.design_qty || 0) * 1000) / 1000;
-  const releasedQty = Math.round(parseFloat(item.allocated_quantity || item.issued_qty || 0) * 1000) / 1000;
+  const isWeightUom = (uom) => {
+    const u = (uom || '').toLowerCase().trim();
+    return u === 'kg' || u === 'kgs' || u === 'kilogram';
+  };
+
+  let requiredQty, requiredWeight, releasedQty, releasedWeight;
+
+  if (isWeightUom(item.uom)) {
+    requiredQty = Math.round(parseFloat(item.design_qty || 0) * 1000) / 1000;
+    requiredWeight = Math.round(parseFloat(item.quantity || 0) * 1000) / 1000;
+    releasedQty = Math.round(parseFloat(item.allocated_quantity || 0) * 1000) / 1000;
+    releasedWeight = Math.round(parseFloat(item.allocated_weight || 0) * 1000) / 1000;
+  } else {
+    requiredQty = Math.round(parseFloat(item.quantity || item.design_qty || 0) * 1000) / 1000;
+    requiredWeight = Math.round((parseFloat(item.required_weight || 0) || (requiredQty * parseFloat(item.weight_per_unit || 0))) * 1000) / 1000;
+    releasedQty = Math.round(parseFloat(item.allocated_quantity || 0) * 1000) / 1000;
+    releasedWeight = Math.round(parseFloat(item.allocated_weight || 0) * 1000) / 1000;
+  }
+
   const remainingQty = Math.max(0, Math.round((requiredQty - releasedQty) * 1000) / 1000);
+  const remainingWeight = Math.max(0, Math.round((requiredWeight - releasedWeight) * 1000) / 1000);
 
   const statusUpper = (mrStatus || '').toUpperCase().trim().replace(/ /g, '_');
   let targetQty = requiredQty;
-  if (statusUpper === 'PARTIALLY_RELEASED' || statusUpper === 'PARTIAL_RELEASED' || statusUpper === 'PARTIAL' || releasedQty > 0) {
+  let targetWeight = requiredWeight;
+  if (statusUpper === 'PARTIALLY_RELEASED' || statusUpper === 'PARTIAL_RELEASED' || statusUpper === 'PARTIAL' || releasedQty > 0 || releasedWeight > 0) {
     targetQty = remainingQty;
+    targetWeight = remainingWeight;
   }
 
   let isAvailable = false;
   if (statusUpper === 'FULFILLED' || statusUpper === 'COMPLETED') {
-    isAvailable = totalStock > 0;
+    isAvailable = totalStock > 0 || totalWeight > 0;
   } else {
-    isAvailable = (totalStock + 0.001) >= targetQty;
+    isAvailable = (totalStock + 0.001) >= targetQty && (totalWeight + 0.001) >= targetWeight;
   }
 
   return {
     resolvedItemCode,
     totalStock,
+    totalWeight,
     requiredQty,
+    requiredWeight,
     releasedQty,
+    releasedWeight,
     remainingQty,
+    remainingWeight,
     targetQty,
     available: isAvailable,
     stocks: stockRows
@@ -325,7 +350,7 @@ const calculateItemStockAndAvailabilityInMemory = (sbRows, item, mrStatus = '') 
   for (const code of candidateCodes) {
     const matched = sbRows.filter(sb => sb.item_code === code && parseFloat(sb.current_balance || 0) > 0);
     if (matched.length > 0) {
-      stockRows = matched.map(sb => ({ warehouse_name: sb.warehouse, current_stock: sb.current_balance }));
+      stockRows = matched.map(sb => ({ warehouse_name: sb.warehouse, current_stock: sb.current_balance, current_weight: sb.current_weight || 0 }));
       break;
     }
   }
@@ -370,35 +395,60 @@ const calculateItemStockAndAvailabilityInMemory = (sbRows, item, mrStatus = '') 
     });
 
     if (matched.length > 0) {
-      stockRows = matched.map(sb => ({ warehouse_name: sb.warehouse, current_stock: sb.current_balance }));
+      stockRows = matched.map(sb => ({ warehouse_name: sb.warehouse, current_stock: sb.current_balance, current_weight: sb.current_weight || 0 }));
     }
   }
 
   const totalStock = Math.round(stockRows.reduce((sum, row) => sum + parseFloat(row.current_stock || 0), 0) * 1000) / 1000;
+  const totalWeight = Math.round(stockRows.reduce((sum, row) => sum + parseFloat(row.current_weight || 0), 0) * 1000) / 1000;
 
-  const requiredQty = Math.round(parseFloat(item.quantity || item.design_qty || 0) * 1000) / 1000;
-  const releasedQty = Math.round(parseFloat(item.allocated_quantity || item.issued_qty || 0) * 1000) / 1000;
+  const isWeightUom = (uom) => {
+    const u = (uom || '').toLowerCase().trim();
+    return u === 'kg' || u === 'kgs' || u === 'kilogram';
+  };
+
+  let requiredQty, requiredWeight, releasedQty, releasedWeight;
+
+  if (isWeightUom(item.uom)) {
+    requiredQty = Math.round(parseFloat(item.design_qty || 0) * 1000) / 1000;
+    requiredWeight = Math.round(parseFloat(item.quantity || 0) * 1000) / 1000;
+    releasedQty = Math.round(parseFloat(item.allocated_quantity || 0) * 1000) / 1000;
+    releasedWeight = Math.round(parseFloat(item.allocated_weight || 0) * 1000) / 1000;
+  } else {
+    requiredQty = Math.round(parseFloat(item.quantity || item.design_qty || 0) * 1000) / 1000;
+    requiredWeight = Math.round((parseFloat(item.required_weight || 0) || (requiredQty * parseFloat(item.weight_per_unit || 0))) * 1000) / 1000;
+    releasedQty = Math.round(parseFloat(item.allocated_quantity || 0) * 1000) / 1000;
+    releasedWeight = Math.round(parseFloat(item.allocated_weight || 0) * 1000) / 1000;
+  }
+
   const remainingQty = Math.max(0, Math.round((requiredQty - releasedQty) * 1000) / 1000);
+  const remainingWeight = Math.max(0, Math.round((requiredWeight - releasedWeight) * 1000) / 1000);
 
   const statusUpper = (mrStatus || '').toUpperCase().trim().replace(/ /g, '_');
   let targetQty = requiredQty;
-  if (statusUpper === 'PARTIALLY_RELEASED' || statusUpper === 'PARTIAL_RELEASED' || statusUpper === 'PARTIAL' || releasedQty > 0) {
+  let targetWeight = requiredWeight;
+  if (statusUpper === 'PARTIALLY_RELEASED' || statusUpper === 'PARTIAL_RELEASED' || statusUpper === 'PARTIAL' || releasedQty > 0 || releasedWeight > 0) {
     targetQty = remainingQty;
+    targetWeight = remainingWeight;
   }
 
   let isAvailable = false;
   if (statusUpper === 'FULFILLED' || statusUpper === 'COMPLETED') {
-    isAvailable = totalStock > 0;
+    isAvailable = totalStock > 0 || totalWeight > 0;
   } else {
-    isAvailable = (totalStock + 0.001) >= targetQty;
+    isAvailable = (totalStock + 0.001) >= targetQty && (totalWeight + 0.001) >= targetWeight;
   }
 
   return {
     resolvedItemCode,
     totalStock,
+    totalWeight,
     requiredQty,
+    requiredWeight,
     releasedQty,
+    releasedWeight,
     remainingQty,
+    remainingWeight,
     targetQty,
     available: isAvailable,
     stocks: stockRows
@@ -490,7 +540,7 @@ const materialRequestController = {
 
         // Batch query stock balances
         const [sbRows] = await pool.query(`
-          SELECT sb.item_code, sb.material_name, sb.length, sb.width, sb.thickness, sb.diameter, sb.outer_diameter, sb.current_balance, sb.warehouse, s.name as shape_name
+          SELECT sb.item_code, sb.material_name, sb.length, sb.width, sb.thickness, sb.diameter, sb.outer_diameter, sb.current_balance, COALESCE(sb.current_weight, 0) as current_weight, sb.warehouse, s.name as shape_name
           FROM stock_balance sb
           LEFT JOIN shapes s ON sb.shape_id = s.id
           WHERE sb.current_balance > 0
@@ -598,7 +648,7 @@ const materialRequestController = {
       const request = requests[0];
 
       const [items] = await pool.query(`
-        SELECT mri.*, 
+        SELECT mri.id, mri.mr_id, mri.item_code, mri.planned_qty, mri.unit_rate, mri.warehouse, mri.item_source, mri.remarks,
                COALESCE(mri.shape_type, shape_lookup.shape_name) as shape_type,
                COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
                COALESCE(mri.uom, sb.unit) as uom,
@@ -610,6 +660,14 @@ const materialRequestController = {
                COALESCE(NULLIF(mri.outer_diameter, 0), sb.outer_diameter, 0) as outer_diameter,
                COALESCE(NULLIF(mri.density, 0), sb.density, 0) as density,
                COALESCE(NULLIF(mri.weight_per_unit, 0), sb.weight_per_unit, 0) as weight_per_unit,
+               mri.quantity,
+               mri.allocated_quantity,
+               CASE 
+                 WHEN LOWER(TRIM(COALESCE(mri.uom, sb.unit, ''))) IN ('kg', 'kgs', 'kilogram') THEN mri.quantity
+                 ELSE COALESCE(NULLIF(mri.required_weight, 0), mri.quantity * COALESCE(NULLIF(mri.weight_per_unit, 0), sb.weight_per_unit, 0), 0)
+               END as required_weight,
+               COALESCE(mri.allocated_weight, 0) as allocated_weight,
+               COALESCE(mri.design_qty, 1) as design_qty,
                COALESCE(
                  (
                    SELECT ppi.uom 
@@ -619,7 +677,7 @@ const materialRequestController = {
                  ),
                  'Nos'
                ) as fg_uom
-        FROM material_request_items mri
+         FROM material_request_items mri
         JOIN material_requests mr ON mri.mr_id = mr.id
         LEFT JOIN (
           SELECT item_code, 
@@ -665,6 +723,13 @@ const materialRequestController = {
         item.resolved_item_code = availInfo.resolvedItemCode;
         item.stocks = availInfo.stocks;
         item.total_stock = availInfo.totalStock;
+        item.total_weight = availInfo.totalWeight;
+        item.design_qty = availInfo.requiredQty;
+        item.required_weight = availInfo.requiredWeight;
+        item.allocated_quantity = availInfo.releasedQty;
+        item.allocated_weight = availInfo.releasedWeight;
+        item.remaining_qty = availInfo.remainingQty;
+        item.remaining_weight = availInfo.remainingWeight;
 
         const suggestedWh = availInfo.stocks.length > 0
           ? availInfo.stocks.reduce((prev, current) => (parseFloat(prev.current_stock) > parseFloat(current.current_stock)) ? prev : current)
@@ -752,14 +817,30 @@ const materialRequestController = {
             if (!resolvedItemCode && (item.uom || '').toLowerCase().trim().includes('kg')) {
               throw new Error(`No matching stock record found in inventory for material '${item.item_name || item.item_code}' with requested dimensions.`);
             }
-            const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
+            const isWeightUom = (uom) => {
+              const u = (uom || '').toLowerCase().trim();
+              return u === 'kg' || u === 'kgs' || u === 'kilogram';
+            };
+
+            let requiredQty, requiredWeight;
+            if (isWeightUom(item.uom)) {
+              requiredQty = parseFloat(item.design_qty || 0);
+              requiredWeight = parseFloat(item.quantity || 0);
+            } else {
+              requiredQty = parseFloat(item.quantity || item.design_qty || 0);
+              requiredWeight = parseFloat(item.required_weight || 0) || (requiredQty * parseFloat(item.weight_per_unit || 0));
+            }
+
             const releasedQty = parseFloat(item.allocated_quantity || 0);
             const remainingQty = Math.max(0, requiredQty - releasedQty);
+
+            const releasedWeight = parseFloat(item.allocated_weight || 0);
+            const remainingWeight = Math.max(0, requiredWeight - releasedWeight);
 
             if (remainingQty > 0) {
               // Find warehouses with positive stock balance for this item
               let [stockRows] = await connection.query(`
-                SELECT item_code, warehouse, current_balance 
+                SELECT item_code, warehouse, current_balance, COALESCE(current_weight, 0) as current_weight 
                 FROM stock_balance 
                 WHERE item_code = ? AND current_balance > 0
                 ORDER BY current_balance DESC
@@ -767,7 +848,7 @@ const materialRequestController = {
 
               if (stockRows.length === 0 && item.item_code && item.item_code !== resolvedItemCode) {
                 [stockRows] = await connection.query(`
-                  SELECT item_code, warehouse, current_balance 
+                  SELECT item_code, warehouse, current_balance, COALESCE(current_weight, 0) as current_weight
                   FROM stock_balance 
                   WHERE item_code = ? AND current_balance > 0
                   ORDER BY current_balance DESC
@@ -775,14 +856,17 @@ const materialRequestController = {
               }
 
               let amountToDeduct = remainingQty;
+              let weightToDeduct = remainingWeight;
 
               if (stockRows.length > 0) {
                 for (const stockRow of stockRows) {
                   if (amountToDeduct <= 0) break;
                   const availableInWh = parseFloat(stockRow.current_balance || 0);
+                  const availableWeightInWh = parseFloat(stockRow.current_weight || 0);
                   if (availableInWh <= 0) continue;
 
                   const issueQty = Math.min(amountToDeduct, availableInWh);
+                  const issueWeight = Math.min(weightToDeduct, availableWeightInWh);
 
                   await stockService.addStockLedgerEntry(
                     stockRow.item_code,
@@ -795,6 +879,7 @@ const materialRequestController = {
                       remarks: `Material released for MR: ${mr.mr_number}`,
                       userId: req.user?.id || 1,
                       warehouse: stockRow.warehouse,
+                      weight: issueWeight,
                       materialName: item.item_name,
                       materialType: item.item_type,
                       unit: item.uom,
@@ -811,6 +896,7 @@ const materialRequestController = {
                   );
 
                   amountToDeduct -= issueQty;
+                  weightToDeduct -= issueWeight;
                 }
               } else {
                 // If no positive stock rows found, fall back to resolved item code and default warehouse
@@ -825,6 +911,7 @@ const materialRequestController = {
                     remarks: `Material released for MR: ${mr.mr_number}`,
                     userId: req.user?.id || 1,
                     warehouse: mr.source_warehouse || 'Main Warehouse',
+                    weight: remainingWeight,
                     materialName: item.item_name,
                     materialType: item.item_type,
                     unit: item.uom,
@@ -842,10 +929,10 @@ const materialRequestController = {
               }
             }
 
-            // Always update allocated_quantity to requiredQty on completion
+            // Always update allocated_quantity and allocated_weight on completion
             await connection.execute(
-              `UPDATE material_request_items SET allocated_quantity = ? WHERE id = ?`,
-              [requiredQty, item.id]
+              `UPDATE material_request_items SET allocated_quantity = ?, allocated_weight = ? WHERE id = ?`,
+              [requiredQty, requiredWeight, item.id]
             );
           }
 
@@ -903,16 +990,32 @@ const materialRequestController = {
 
           // Get total stock available across all warehouses for this item
           const [stockRows] = await connection.query(`
-            SELECT warehouse, current_balance 
+            SELECT warehouse, current_balance, COALESCE(current_weight, 0) as current_weight
             FROM stock_balance 
             WHERE item_code = ? AND current_balance > 0
             ORDER BY current_balance DESC
           `, [resolvedItemCode]);
 
           const totalStock = stockRows.reduce((sum, row) => sum + parseFloat(row.current_balance), 0);
-          const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
+          const isWeightUom = (uom) => {
+            const u = (uom || '').toLowerCase().trim();
+            return u === 'kg' || u === 'kgs' || u === 'kilogram';
+          };
+
+          let requiredQty, requiredWeight;
+          if (isWeightUom(item.uom)) {
+            requiredQty = parseFloat(item.design_qty || 0);
+            requiredWeight = parseFloat(item.quantity || 0);
+          } else {
+            requiredQty = parseFloat(item.quantity || item.design_qty || 0);
+            requiredWeight = parseFloat(item.required_weight || 0) || (requiredQty * parseFloat(item.weight_per_unit || 0));
+          }
+
           const allocatedQty = parseFloat(item.allocated_quantity || 0);
           const remainingQty = Math.max(0, requiredQty - allocatedQty);
+
+          const allocatedWeight = parseFloat(item.allocated_weight || 0);
+          const remainingWeight = Math.max(0, requiredWeight - allocatedWeight);
 
           if (remainingQty <= 0 || totalStock <= 0) {
             // Skip this material if no remaining quantity is needed or no stock is available
@@ -920,13 +1023,16 @@ const materialRequestController = {
           }
 
           let amountToDeduct = remainingQty;
+          let weightToDeduct = remainingWeight;
 
           for (const stockRow of stockRows) {
             if (amountToDeduct <= 0) break;
             const availableInWarehouse = parseFloat(stockRow.current_balance || 0);
+            const availableWeightInWarehouse = parseFloat(stockRow.current_weight || 0);
             if (availableInWarehouse <= 0) continue;
 
             const issueQty = Math.min(amountToDeduct, availableInWarehouse);
+            const issueWeight = Math.min(weightToDeduct, availableWeightInWarehouse);
 
             if (issueQty > 0) {
               // If we have a work_order and issueId, insert into material_issue_items
@@ -950,6 +1056,7 @@ const materialRequestController = {
                   remarks: `Partial release for MR: ${mr.mr_number}`,
                   userId: req.user?.id || 1,
                   warehouse: stockRow.warehouse,
+                  weight: issueWeight,
                   materialName: item.item_name,
                   materialType: item.item_type,
                   unit: item.uom,
@@ -965,26 +1072,49 @@ const materialRequestController = {
                 connection
               );
 
-              // Update allocated_quantity in material_request_items
+              // Update allocated_quantity and allocated_weight in material_request_items
               await connection.execute(
-                `UPDATE material_request_items SET allocated_quantity = COALESCE(allocated_quantity, 0) + ? WHERE id = ?`,
-                [issueQty, item.id]
+                `UPDATE material_request_items SET 
+                  allocated_quantity = COALESCE(allocated_quantity, 0) + ?,
+                  allocated_weight = COALESCE(allocated_weight, 0) + ?
+                 WHERE id = ?`,
+                [issueQty, issueWeight, item.id]
               );
 
               amountToDeduct -= issueQty;
+              weightToDeduct -= issueWeight;
             }
           }
         }
 
         // Check if all items are now fully released
-        const [updatedItems] = await connection.query(
-          'SELECT id, quantity, allocated_quantity FROM material_request_items WHERE mr_id = ?',
-          [id]
-        );
+        const [updatedItems] = await connection.query(`
+          SELECT mri.id, mri.uom, mri.quantity, mri.allocated_quantity, mri.allocated_weight,
+                 COALESCE(mri.design_qty, 1) as design_qty,
+                 COALESCE(mri.weight_per_unit, sb.weight_per_unit, 0) as weight_per_unit,
+                 mri.required_weight
+          FROM material_request_items mri
+          LEFT JOIN (
+            SELECT item_code, MAX(weight_per_unit) as weight_per_unit FROM stock_balance GROUP BY item_code
+          ) sb ON mri.item_code = sb.item_code
+          WHERE mri.mr_id = ?
+        `, [id]);
         const allFullyReleased = updatedItems.every(item => {
-          const req = parseFloat(item.quantity || 0);
+          const isWeightUom = (uom) => {
+            const u = (uom || '').toLowerCase().trim();
+            return u === 'kg' || u === 'kgs' || u === 'kilogram';
+          };
+          let req, reqW;
+          if (isWeightUom(item.uom)) {
+            req = parseFloat(item.design_qty || 0);
+            reqW = parseFloat(item.quantity || 0);
+          } else {
+            req = parseFloat(item.quantity || item.design_qty || 0);
+            reqW = parseFloat(item.required_weight || 0) || (req * parseFloat(item.weight_per_unit || 0));
+          }
           const alloc = parseFloat(item.allocated_quantity || 0);
-          return alloc >= req;
+          const allocW = parseFloat(item.allocated_weight || 0);
+          return alloc >= (req - 0.001) && allocW >= (reqW - 0.001);
         });
 
         if (allFullyReleased) {

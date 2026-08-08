@@ -386,7 +386,7 @@ const StockBalance = () => {
       render: (val) => <span className="text-slate-500 text-xs">{val || '—'}</span>
     },
     {
-      label: 'Current Balance',
+      label: 'Qty (NOS)',
       key: 'current_balance',
       sortable: true,
       className: 'text-right',
@@ -395,18 +395,30 @@ const StockBalance = () => {
         return (
           <div className="flex items-center justify-end gap-2">
             <span className={`inline-block w-1.5 h-1.5 rounded  ${statusColor.indicator}`}></span>
-            <span className={`   text-sm ${statusColor.text}`}>
-              {parseFloat(val || 0).toFixed(3)}
+            <span className={`text-sm font-semibold ${statusColor.text}`}>
+              {parseFloat(val || 0).toFixed(0)}
             </span>
+            <span className="text-[10px] text-slate-400">NOS</span>
           </div>
         );
       }
     },
     {
-      label: 'Unit',
-      key: 'unit',
+      label: 'Weight (KG)',
+      key: 'current_weight',
       sortable: true,
-      render: (val) => <span className="text-slate-500 text-xs ">{val || 'NOS'}</span>
+      className: 'text-right',
+      render: (val) => {
+        const wt = parseFloat(val || 0);
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <span className={`text-sm font-semibold ${wt > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
+              {wt.toFixed(3)}
+            </span>
+            <span className="text-[10px] text-slate-400">KG</span>
+          </div>
+        );
+      }
     },
     {
       label: 'Last Updated',
