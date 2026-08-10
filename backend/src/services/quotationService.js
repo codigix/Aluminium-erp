@@ -527,7 +527,7 @@ const getQuotationById = async (quotationId) => {
               LIMIT 1
             ) AS drawing_name,
             COALESCE(
-              NULLIF(qi.length, 0),
+              qi.length,
               (
                 SELECT ppm.length 
                 FROM production_plan_materials ppm
@@ -549,7 +549,7 @@ const getQuotationById = async (quotationId) => {
               0
             ) as length,
             COALESCE(
-              NULLIF(qi.width, 0),
+              qi.width,
               (
                 SELECT ppm.width 
                 FROM production_plan_materials ppm
@@ -571,7 +571,7 @@ const getQuotationById = async (quotationId) => {
               0
             ) as width,
             COALESCE(
-              NULLIF(qi.thickness, 0),
+              qi.thickness,
               (
                 SELECT ppm.thickness 
                 FROM production_plan_materials ppm
@@ -593,7 +593,7 @@ const getQuotationById = async (quotationId) => {
               0
             ) as thickness,
             COALESCE(
-              NULLIF(qi.diameter, 0),
+              qi.diameter,
               (
                 SELECT ppm.diameter 
                 FROM production_plan_materials ppm
@@ -615,7 +615,7 @@ const getQuotationById = async (quotationId) => {
               0
             ) as diameter,
             COALESCE(
-              NULLIF(qi.outer_diameter, 0),
+              qi.outer_diameter,
               (
                 SELECT ppm.outer_diameter 
                 FROM production_plan_materials ppm
