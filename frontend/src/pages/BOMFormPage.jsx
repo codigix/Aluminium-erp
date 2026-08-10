@@ -3507,7 +3507,7 @@ const BOMFormPage = () => {
                                       </div>
                                     </>
                                   )}
-                                  {(selectedShape.toLowerCase() === 'round' || (selectedShape.toLowerCase().includes('round') || selectedShape.toLowerCase().includes('rod') || selectedShape.toLowerCase().includes('bar')) && !selectedShape.toLowerCase().includes('hex') && !selectedShape.toLowerCase().includes('threaded') && !selectedShape.toLowerCase().includes('thread')) && (
+                                  {(selectedShape.toLowerCase() === 'round' || (selectedShape.toLowerCase().includes('round') || selectedShape.toLowerCase().includes('rod') || selectedShape.toLowerCase().includes('bar')) && !selectedShape.toLowerCase().includes('hex') && !selectedShape.toLowerCase().includes('threaded') && !selectedShape.toLowerCase().includes('thread') && !selectedShape.toLowerCase().includes('square')) && (
                                     <>
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Diameter (mm) *</label>
@@ -3557,10 +3557,12 @@ const BOMFormPage = () => {
                                         <label className="text-xs text-slate-400 font-medium">Outside Side (A) (mm) *</label>
                                         <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.width || ''} onChange={(e) => setMaterialForm(prev => ({ ...prev, width: e.target.value }))} required />
                                       </div>
-                                      <div className="space-y-1">
-                                        <label className="text-xs text-slate-400 font-medium">Wall Thickness (T) (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.thickness || ''} onChange={(e) => setMaterialForm(prev => ({ ...prev, thickness: e.target.value }))} required />
-                                      </div>
+                                      {!(selectedShape.toLowerCase().includes('square bar') || (selectedShape.toLowerCase().includes('square') && selectedShape.toLowerCase().includes('bar'))) && (
+                                        <div className="space-y-1">
+                                          <label className="text-xs text-slate-400 font-medium">Wall Thickness (T) (mm) *</label>
+                                          <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.thickness || ''} onChange={(e) => setMaterialForm(prev => ({ ...prev, thickness: e.target.value }))} required />
+                                        </div>
+                                      )}
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Length (L) (mm) *</label>
                                         <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm(prev => ({ ...prev, length: e.target.value }))} required />

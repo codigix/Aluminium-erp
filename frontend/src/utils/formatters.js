@@ -276,7 +276,11 @@ export const calculateWeight = ({
 
   let calculatedWeight = 0;
 
-  if (shapeStr.includes('threaded rod') || shapeStr.includes('thread rod') || shapeStr.includes('threaded')) {
+  if (shapeStr === 'flat' || shapeStr.includes('flat')) {
+    calculatedWeight = (w * t * l * dDensity) / 1000000;
+  } else if (shapeStr === 'square bar' || shapeStr.includes('square bar') || (shapeStr.includes('square') && shapeStr.includes('bar'))) {
+    calculatedWeight = (w * w * l * dDensity) / 1000000;
+  } else if (shapeStr.includes('threaded rod') || shapeStr.includes('thread rod') || shapeStr.includes('threaded')) {
     const dVal = dia > 0 ? dia : od;
     if (dVal > 0 && p > 0 && p < dVal && l > 0) {
       const tensileArea = 0.7854 * Math.pow(dVal - (0.9382 * p), 2);
