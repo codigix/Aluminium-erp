@@ -232,27 +232,30 @@ const calculateItemStockAndAvailability = async (connection, item, mrStatus = ''
     releasedWeight = Math.round(parseFloat(item.allocated_weight || 0) * 1000) / 1000;
   }
 
+  // Weight/Unit = Required Weight ÷ Design Qty
+  const weightPerUnit = requiredQty > 0 ? (requiredWeight / requiredQty) : 0;
+
+  // Available Qty = FLOOR(Available Weight ÷ Weight/Unit)
+  const computedAvailableQty = weightPerUnit > 0 ? Math.floor(totalWeight / weightPerUnit) : 0;
+  const finalTotalStock = computedAvailableQty;
+
   const remainingQty = Math.max(0, Math.round((requiredQty - releasedQty) * 1000) / 1000);
   const remainingWeight = Math.max(0, Math.round((requiredWeight - releasedWeight) * 1000) / 1000);
 
   const statusUpper = (mrStatus || '').toUpperCase().trim().replace(/ /g, '_');
-  let targetQty = requiredQty;
-  let targetWeight = requiredWeight;
-  if (statusUpper === 'PARTIALLY_RELEASED' || statusUpper === 'PARTIAL_RELEASED' || statusUpper === 'PARTIAL' || releasedQty > 0 || releasedWeight > 0) {
-    targetQty = remainingQty;
-    targetWeight = remainingWeight;
-  }
+  let targetQty = remainingQty;
+  let targetWeight = remainingWeight;
 
   let isAvailable = false;
   if (statusUpper === 'FULFILLED' || statusUpper === 'COMPLETED') {
-    isAvailable = totalStock > 0 || totalWeight > 0;
+    isAvailable = finalTotalStock > 0 || totalWeight > 0;
   } else {
-    isAvailable = (totalStock + 0.001) >= targetQty && (totalWeight + 0.001) >= targetWeight;
+    isAvailable = (finalTotalStock + 0.001) >= targetQty && (totalWeight + 0.001) >= targetWeight;
   }
 
   return {
     resolvedItemCode,
-    totalStock,
+    totalStock: finalTotalStock,
     totalWeight,
     requiredQty,
     requiredWeight,
@@ -856,22 +859,27 @@ const materialRequestController = {
               }
 
               let amountToDeduct = remainingQty;
-              let weightToDeduct = remainingWeight;
+              const weightPerUnit = requiredQty > 0 ? (requiredWeight / requiredQty) : 0;
 
               if (stockRows.length > 0) {
                 for (const stockRow of stockRows) {
                   if (amountToDeduct <= 0) break;
-                  const availableInWh = parseFloat(stockRow.current_balance || 0);
                   const availableWeightInWh = parseFloat(stockRow.current_weight || 0);
+                  const availableInWh = weightPerUnit > 0 ? Math.floor(availableWeightInWh / weightPerUnit) : 0;
                   if (availableInWh <= 0) continue;
 
                   const issueQty = Math.min(amountToDeduct, availableInWh);
-                  const issueWeight = Math.min(weightToDeduct, availableWeightInWh);
+                  const issueWeight = issueQty * weightPerUnit;
+
+                  const actualBalance = parseFloat(stockRow.current_balance || 0);
+                  const actualWeight = parseFloat(stockRow.current_weight || 0);
+                  const weightPerPieceInStock = actualBalance > 0 ? (actualWeight / actualBalance) : weightPerUnit;
+                  const issueQtyForStock = weightPerPieceInStock > 0 ? (issueWeight / weightPerPieceInStock) : issueQty;
 
                   await stockService.addStockLedgerEntry(
                     stockRow.item_code,
                     'OUT',
-                    issueQty,
+                    issueQtyForStock,
                     'Material Request',
                     mr.id,
                     mr.mr_number,
@@ -896,7 +904,6 @@ const materialRequestController = {
                   );
 
                   amountToDeduct -= issueQty;
-                  weightToDeduct -= issueWeight;
                 }
               } else {
                 // If no positive stock rows found, fall back to resolved item code and default warehouse
@@ -1023,18 +1030,23 @@ const materialRequestController = {
           }
 
           let amountToDeduct = remainingQty;
-          let weightToDeduct = remainingWeight;
+          const weightPerUnit = requiredQty > 0 ? (requiredWeight / requiredQty) : 0;
 
           for (const stockRow of stockRows) {
             if (amountToDeduct <= 0) break;
-            const availableInWarehouse = parseFloat(stockRow.current_balance || 0);
             const availableWeightInWarehouse = parseFloat(stockRow.current_weight || 0);
+            const availableInWarehouse = weightPerUnit > 0 ? Math.floor(availableWeightInWarehouse / weightPerUnit) : 0;
             if (availableInWarehouse <= 0) continue;
 
             const issueQty = Math.min(amountToDeduct, availableInWarehouse);
-            const issueWeight = Math.min(weightToDeduct, availableWeightInWarehouse);
+            const issueWeight = issueQty * weightPerUnit;
 
             if (issueQty > 0) {
+              const actualBalance = parseFloat(stockRow.current_balance || 0);
+              const actualWeight = parseFloat(stockRow.current_weight || 0);
+              const weightPerPieceInStock = actualBalance > 0 ? (actualWeight / actualBalance) : weightPerUnit;
+              const issueQtyForStock = weightPerPieceInStock > 0 ? (issueWeight / weightPerPieceInStock) : issueQty;
+
               // If we have a work_order and issueId, insert into material_issue_items
               if (issueId) {
                 await connection.execute(
@@ -1048,7 +1060,7 @@ const materialRequestController = {
               await stockService.addStockLedgerEntry(
                 resolvedItemCode,
                 'OUT',
-                issueQty,
+                issueQtyForStock,
                 issueId ? 'MATERIAL_ISSUE' : 'Material Request',
                 issueId || mr.id,
                 issueId ? issueNumber : mr.mr_number,
@@ -1082,7 +1094,6 @@ const materialRequestController = {
               );
 
               amountToDeduct -= issueQty;
-              weightToDeduct -= issueWeight;
             }
           }
         }
