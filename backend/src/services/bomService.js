@@ -26,8 +26,8 @@ const getLatestMasterItemId = async (itemCode, drawingNo, drawingId) => {
     if (rows.length > 0) return rows[0].id;
   }
 
-  // Try matching by itemCode (lowest priority)
-  if (itemCode) {
+  // Try matching by itemCode (lowest priority) - ONLY if no drawing context is provided
+  if (itemCode && !drawingId && (!drawingNo || drawingNo === '—' || drawingNo === 'N/A' || drawingNo === 'NA')) {
     const [rows] = await pool.query(
       `SELECT id FROM sales_order_items 
        WHERE item_code = ? 
@@ -353,7 +353,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
         );
         if (r.length > 0) fallbackId = r[0].id;
       }
-      if (!fallbackId && itemCode) {
+      if (!fallbackId && itemCode && !drawingId && (!drawingNo || drawingNo === '—' || drawingNo === 'N/A' || drawingNo === 'NA')) {
         const [r] = await pool.query(
           `SELECT id FROM sales_order_items 
            WHERE item_code = ? 
@@ -386,7 +386,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
           );
           if (r.length > 0) fallbackId = r[0].id;
         }
-        if (!fallbackId && itemCode) {
+        if (!fallbackId && itemCode && !drawingId && (!drawingNo || drawingNo === '—' || drawingNo === 'N/A' || drawingNo === 'NA')) {
           const [r] = await pool.query(
             `SELECT id FROM sales_order_items 
              WHERE item_code = ? 
@@ -428,7 +428,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
       if (drawingId) {
         const [r] = await pool.query(
           `SELECT id FROM bom 
-           WHERE (drawing_id = ? OR drawing_id = (SELECT id FROM customer_drawings WHERE public_id = ?)) 
+           WHERE drawing_no = (SELECT drawing_no FROM customer_drawings WHERE id = ? OR public_id = ?) 
            ORDER BY id DESC LIMIT 1`,
           [drawingId, drawingId]
         );
@@ -443,7 +443,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
         );
         if (r.length > 0) targetBomId = r[0].id;
       }
-      if (!targetBomId && itemCode) {
+      if (!targetBomId && itemCode && !drawingId && (!drawingNo || drawingNo === '—' || drawingNo === 'N/A' || drawingNo === 'NA')) {
         const [r] = await pool.query(
           `SELECT id FROM bom 
            WHERE item_code = ? 
