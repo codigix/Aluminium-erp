@@ -268,13 +268,25 @@ const POReceipts = () => {
 
     if (field === 'received_qty' || field === 'current_receiving_qty' || field === 'current_receiving_weight' || field === 'rate' || field === 'unit_rate') {
       const item = newItems[index];
+
+      // Auto-calculate receiving weight from receiving quantity
+      if (field === 'current_receiving_qty' || field === 'received_qty') {
+        const ordQty = parseFloat(item.ordered_qty || item.design_qty || 0);
+        const ordWeight = parseFloat(item.ordered_weight || item.quantity || 0);
+        const weightPerUnit = ordQty > 0 ? (ordWeight / ordQty) : 0;
+        const receivingQtyVal = parseFloat(value) || 0;
+        const newWeight = parseFloat((receivingQtyVal * weightPerUnit).toFixed(3));
+        item.current_receiving_weight = newWeight;
+        item.received_weight = newWeight;
+      }
+
       const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
       const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
                       lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
                       lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
 
       const currQty = parseFloat(item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty) || 0;
-      const currWeight = parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : item.received_qty) || 0;
+      const currWeight = parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : item.received_weight) || 0;
       const effectiveQty = isLaser ? currQty : currWeight;
       const rate = parseFloat(item.rate !== undefined && item.rate !== '' ? item.rate : (item.unit_rate || 0)) || 0;
 
@@ -617,7 +629,13 @@ const POReceipts = () => {
       formDataPayload.append('receiptDate', formData.receiptDate);
       formDataPayload.append('receivedQuantity', formData.receivedQuantity);
       formDataPayload.append('notes', formData.notes || '');
-      formDataPayload.append('items', JSON.stringify(formData.items));
+      
+      const activeItems = (formData.items || []).filter(item => {
+        const currQty = parseFloat(item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty) || 0;
+        const currWeight = parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : item.received_weight) || 0;
+        return currQty > 0 || currWeight > 0;
+      });
+      formDataPayload.append('items', JSON.stringify(activeItems));
       if (formData.host_company_id) {
         formDataPayload.append('host_company_id', formData.host_company_id);
       }
@@ -1220,8 +1238,9 @@ const POReceipts = () => {
                       const ordWeight = parseFloat(item.ordered_weight || item.quantity || 0);
                       const prevQty = parseFloat(item.prev_received_qty || 0);
                       const prevWeight = parseFloat(item.prev_received_weight || 0);
+                      const isFullyReceived = ordQty - prevQty <= 0;
                       const currQty = parseFloat(item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty) || 0;
-                      const currWeight = parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : item.received_qty) || 0;
+                      const currWeight = parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : (item.received_weight || 0)) || 0;
 
                       const pendingQty = Math.max(0, ordQty - (prevQty + currQty));
                       const pendingWeight = parseFloat(Math.max(0, ordWeight - (prevWeight + currWeight)).toFixed(3));
@@ -1305,12 +1324,20 @@ const POReceipts = () => {
                             <input
                               type="number"
                               value={item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty}
+                              disabled={isFullyReceived}
                               onChange={(e) => {
                                 const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
-                                handleItemChange(idx, 'current_receiving_qty', val);
-                                handleItemChange(idx, 'received_qty', val);
+                                const maxAllowed = Math.max(0, ordQty - prevQty);
+                                const cappedVal = val === '' ? '' : Math.min(val, maxAllowed);
+                                handleItemChange(idx, 'current_receiving_qty', cappedVal);
+                                handleItemChange(idx, 'received_qty', cappedVal);
                               }}
-                              className="w-16 p-1.5 bg-white border border-blue-200 rounded-lg text-center text-xs text-blue-600 font-semibold focus:ring-2 focus:ring-blue-500/20 outline-none"
+                              max={Math.max(0, ordQty - prevQty)}
+                              className={`w-16 p-1.5 border rounded-lg text-center text-xs font-semibold focus:ring-2 outline-none ${
+                                isFullyReceived 
+                                  ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' 
+                                  : 'bg-white border-blue-200 text-blue-600 focus:ring-blue-500/20'
+                              }`}
                               placeholder="0"
                             />
                           </td>
@@ -1319,11 +1346,8 @@ const POReceipts = () => {
                               type="number"
                               step="0.001"
                               value={item.current_receiving_weight !== undefined && item.current_receiving_weight !== null ? item.current_receiving_weight : (item.received_weight !== undefined ? item.received_weight : '')}
-                              onChange={(e) => {
-                                const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
-                                handleItemChange(idx, 'current_receiving_weight', val);
-                              }}
-                              className="w-20 p-1.5 bg-white border border-indigo-300 rounded-lg text-center text-xs text-indigo-700 font-semibold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                              readOnly
+                              className="w-20 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs text-slate-500 font-semibold outline-none cursor-not-allowed"
                               placeholder="0.000"
                             />
                           </td>
@@ -1361,13 +1385,19 @@ const POReceipts = () => {
                             </div>
                           </td>
                           <td className="p-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(idx)}
-                              className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
+                            {isFullyReceived ? (
+                              <span className="text-[10px] text-emerald-600 font-semibold px-2 py-0.5 bg-emerald-50 rounded">
+                                Locked
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(idx)}
+                                className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );

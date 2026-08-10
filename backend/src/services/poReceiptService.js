@@ -336,6 +336,28 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
         const currWeight = parseFloat(rawWeight !== undefined && rawWeight !== '' ? rawWeight : currQty) || 0;
         const poItemId = item.id != null ? item.id : null;
 
+        if (poItemId) {
+           const [poItemRows] = await connection.query(
+             'SELECT design_qty, planned_qty FROM purchase_order_items WHERE id = ?',
+             [poItemId]
+           );
+           if (poItemRows.length > 0) {
+             const orderedQty = parseFloat(poItemRows[0].design_qty || poItemRows[0].planned_qty || 0);
+             const [receivedRows] = await connection.query(
+               `SELECT COALESCE(SUM(COALESCE(gi.receiving_qty, gi.received_qty, gi.accepted_qty, 0)), 0) as total_received
+                FROM grn_items gi
+                JOIN grns g ON gi.grn_id = g.id
+                WHERE gi.po_item_id = ?`,
+               [poItemId]
+             );
+             const totalReceived = parseFloat(receivedRows[0].total_received || 0);
+             const pendingQty = Math.max(0, orderedQty - totalReceived);
+             if (currQty > pendingQty + 0.001) {
+               throw new Error(`Cannot receive ${currQty} for item code '${item.item_code || ''}'. Maximum pending quantity allowed is ${pendingQty}.`);
+             }
+           }
+         }
+
         await connection.execute(
           `INSERT INTO po_receipt_items (
             receipt_id, po_item_id, received_quantity, po_qty,
