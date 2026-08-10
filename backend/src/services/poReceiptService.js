@@ -210,6 +210,18 @@ const getPOReceiptById = async (receiptId) => {
     `SELECT pri.*,
             pri.id as id,
             pri.po_item_id as po_item_id,
+            COALESCE((
+              SELECT SUM(COALESCE(gi2.receiving_qty, gi2.received_qty, gi2.accepted_qty, 0))
+              FROM grn_items gi2
+              JOIN grns g2 ON gi2.grn_id = g2.id
+              WHERE gi2.po_item_id = pri.po_item_id AND g2.po_receipt_id <= pri.receipt_id
+            ), 0) as cumulative_received_qty,
+            COALESCE((
+              SELECT SUM(COALESCE(gi2.receiving_weight, gi2.received_weight, gi2.received_qty, 0))
+              FROM grn_items gi2
+              JOIN grns g2 ON gi2.grn_id = g2.id
+              WHERE gi2.po_item_id = pri.po_item_id AND g2.po_receipt_id <= pri.receipt_id
+            ), 0) as cumulative_received_weight,
             COALESCE(gi.receiving_qty, (CASE WHEN (COALESCE(poi.quantity, pri.received_quantity, 0) > 0 AND ABS(COALESCE(pri.received_weight, pri.received_quantity, 0) - COALESCE(poi.quantity, pri.received_quantity, 0)) < 0.001) THEN COALESCE(poi.design_qty, 1) ELSE COALESCE(poi.design_qty, 1) END)) as received_qty,
             COALESCE(gi.receiving_weight, gi.received_qty, pri.received_weight, pri.received_quantity, 0) as received_weight,
             COALESCE(poi.item_code, pri.item_code) as item_code,

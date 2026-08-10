@@ -1847,8 +1847,11 @@ const POReceipts = () => {
                         ? rawRecQty
                         : (dQty > 0 ? dQty : (recWt > 0 ? recWt : 0));
 
-                      const pQty = Math.max(0, dQty - recQty);
-                      const pWt = parseFloat(Math.max(0, reqWt - recWt).toFixed(3));
+                      const cumQty = parseFloat(item.cumulative_received_qty !== undefined ? item.cumulative_received_qty : recQty) || recQty;
+                      const cumWt = parseFloat(item.cumulative_received_weight !== undefined ? item.cumulative_received_weight : recWt) || recWt;
+
+                      const pQty = Math.max(0, dQty - cumQty);
+                      const pWt = parseFloat(Math.max(0, reqWt - cumWt).toFixed(3));
                       const unitStr = (item.unit || 'KG').toUpperCase();
 
                       return (
