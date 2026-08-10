@@ -895,7 +895,7 @@ const CustomerPO = ({
             sub_assemblies: (() => {
               const seen = new Set();
               return (item.sub_assemblies || []).filter(sa => {
-                const code = String(sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || sa.description || '').trim().toLowerCase();
+                const code = String(sa.component_code || sa.item_code || (sa.description && sa.description.toUpperCase() !== 'SUB-ASSEMBLY' && sa.description.toUpperCase() !== 'SUB_ASSEMBLY' ? sa.description : '') || sa.drawing_no || sa.drawingNo || sa.description || '').trim().toLowerCase();
                 if (seen.has(code)) return false;
                 seen.add(code);
                 return true;
@@ -1268,7 +1268,7 @@ const CustomerPO = ({
             sub_assemblies: (() => {
               const seen = new Set();
               return (item.sub_assemblies || []).filter(sa => {
-                const code = String(sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || sa.description || '').trim().toLowerCase();
+                const code = String(sa.component_code || sa.item_code || (sa.description && sa.description.toUpperCase() !== 'SUB-ASSEMBLY' && sa.description.toUpperCase() !== 'SUB_ASSEMBLY' ? sa.description : '') || sa.drawing_no || sa.drawingNo || sa.description || '').trim().toLowerCase();
                 if (seen.has(code)) return false;
                 seen.add(code);
                 return true;
