@@ -103,7 +103,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     const fetchMasterData = async () => {
       try {
         const token = localStorage.getItem('authToken');
-        
+
         // 1. Shapes
         const shapesRes = await fetch(`${API_BASE}/shapes`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -927,7 +927,16 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             );
 
             const designQty = designItem ? parseFloat(designItem.qty || 0) : parseFloat(itemInReady.total_qty || itemInReady.quantity || 1);
-            const salesOrderItemId = itemInReady.id || itemInReady.sales_order_item_id || itemInReady.order_item_id;
+            
+            // Map to readyItems to resolve correct sales_order_item_id (soi.id) if possible
+            const matchingReadyItem = (readyItems || []).find(r => 
+              r && 
+              String(r.item_code).trim() === String(itemInReady.item_code).trim() &&
+              String(r.drawing_no || '').trim() === String(itemInReady.drawing_no || '').trim() &&
+              String(r.sales_order_id || r.order_id) === String(itemInReady.sales_order_id || itemInReady.order_id)
+            );
+            const resolvedItem = matchingReadyItem || itemInReady;
+            const salesOrderItemId = resolvedItem.id || resolvedItem.sales_order_item_id || resolvedItem.order_item_id;
             const orderNo = itemInReady.order_no || data.order_no;
             const projectName = itemInReady.project_name || data.project_name;
 
@@ -1049,8 +1058,16 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
       const designQty = designItem ? parseFloat(designItem.qty || 0) : parseFloat(itemInReady.total_qty || itemInReady.quantity || 1);
 
+      // Map to readyItems to resolve correct sales_order_item_id (soi.id) if possible
+      const matchingReadyItem = (readyItems || []).find(r => 
+        r && 
+        String(r.item_code).trim() === String(itemInReady.item_code).trim() &&
+        String(r.drawing_no || '').trim() === String(itemInReady.drawing_no || '').trim() &&
+        String(r.sales_order_id || r.order_id) === String(itemInReady.sales_order_id || itemInReady.order_id)
+      );
+      const resolvedItem = matchingReadyItem || itemInReady;
       // Clear existing items and only add this one
-      const salesOrderItemId = itemInReady.id || itemInReady.sales_order_item_id || itemInReady.order_item_id;
+      const salesOrderItemId = resolvedItem.id || resolvedItem.sales_order_item_id || resolvedItem.order_item_id;
       const orderNo = itemInReady.order_no || selectedOrderDetails?.order_no;
       const projectName = itemInReady.project_name || selectedOrderDetails?.project_name;
 
@@ -1204,8 +1221,15 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         // Look up the effective qty of that source item from our pre-built map.
         // e.g. SUPPORT ARM materials → source_assembly = 'PART-SUPPORTARM-0001' → effectiveQty = 15
         const sourceItemCode = mat.source_assembly || item.itemCode;
-        const designQtyForMaterial = itemEffectiveQtyMap.get(sourceItemCode)
-          || itemPlannedQty;
+        let designQtyForMaterial = itemEffectiveQtyMap.get(sourceItemCode);
+        if (designQtyForMaterial === undefined) {
+          if (mat.source_assembly && mat.is_kg_material && mat.total_wt > 0) {
+            // material comes from a sub-part; derive piece count from required_qty / weight_per_piece
+            designQtyForMaterial = Math.round((parseFloat(mat.required_qty || 0) / mat.total_wt) * itemPlannedQty);
+          } else {
+            designQtyForMaterial = itemPlannedQty;
+          }
+        }
 
         // Use a key that represents the material identity - de-duplicate by name, unit, and dimensions
         const len = Number(mat.length || (mat.dimensions && mat.dimensions.length)) || 0;
@@ -2985,7 +3009,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         if (item) {
                           setNewItemQty(1);
                           setNewItemUnit(item.unit || item.uom || 'Nos');
-                          
+
                           // Group mapping
                           const ig = (item.material_type || item.item_group || "").toLowerCase().replace(/_/g, ' ').trim();
                           const matchingGroup = itemGroups.find(g => {
@@ -2995,13 +3019,13 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           setNewItemItemGroup(matchingGroup ? matchingGroup.name : item.material_type || item.item_group || '');
 
                           setNewItemWeight(parseFloat(item.weight_per_unit || 0));
-                          
+
                           // Material Type
                           const materialObj = materials.find(m => String(m.id) === String(item.material_id));
                           setNewItemMaterialId(item.material_id || '');
                           setNewItemMaterialType(materialObj ? materialObj.name : item.material_grade || '');
                           setNewItemDensity(materialObj ? parseFloat(materialObj.density) : parseFloat(item.density || 0));
-                          
+
                           // Shape Type
                           const shapeObj = shapes.find(s => String(s.id) === String(item.shape_id));
                           setNewItemShapeId(item.shape_id || '');
@@ -3422,11 +3446,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           if (item.item_code !== itemCode) return false;
                           if (isKg) {
                             return String(item.length || '') === String(newItemLength || '') &&
-                                   String(item.width || '') === String(newItemWidth || '') &&
-                                   String(item.thickness || '') === String(newItemThickness || '') &&
-                                   String(item.diameter || '') === String(newItemDiameter || '') &&
-                                   String(item.outer_diameter || '') === String(newItemOuterDiameter || '') &&
-                                   String(item.thread_pitch || item.threadPitch || '') === String(newItemThreadPitch || '');
+                              String(item.width || '') === String(newItemWidth || '') &&
+                              String(item.thickness || '') === String(newItemThickness || '') &&
+                              String(item.diameter || '') === String(newItemDiameter || '') &&
+                              String(item.outer_diameter || '') === String(newItemOuterDiameter || '') &&
+                              String(item.thread_pitch || item.threadPitch || '') === String(newItemThreadPitch || '');
                           }
                           return true;
                         });
