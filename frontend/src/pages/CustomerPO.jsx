@@ -1626,6 +1626,7 @@ const CustomerPO = ({
   };
 
   const handleOpenEmailModal = (row) => {
+    const targetId = row.customer_po_id || row.id;
     const company = companies.find(c => String(c.id) === String(row.company_id));
     const clientName = row.company_name || company?.company_name || 'Client';
 
@@ -1634,7 +1635,7 @@ const CustomerPO = ({
     const recipientEmail = row.company_email || primaryContact?.email || company?.email || '';
 
     setEmailPoData({
-      id: row.id,
+      id: targetId,
       to: recipientEmail,
       subject: `Purchase Order: ${row.po_number}`,
       message: `Dear ${clientName},\n\nPlease find attached our Purchase Order ${row.po_number}.\n\nRegards,\nSPTECHPIONEER Procurement Team`,
@@ -1707,21 +1708,21 @@ const CustomerPO = ({
         <div className="flex items-center justify-end gap-2">
 
           <button
-            onClick={() => openPoInMode('VIEW', row.id)}
+            onClick={() => openPoInMode('VIEW', row.customer_po_id || row.id)}
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
             title="View Details"
           >
             <Eye className="w-4 h-4" />
           </button>
           <button
-            onClick={() => handleDownloadPdf(row.id, row.po_number)}
+            onClick={() => handleDownloadPdf(row.customer_po_id || row.id, row.po_number)}
             className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all border border-transparent hover:border-emerald-100"
             title="Download/View PDF"
           >
             <Download className="w-4 h-4" />
           </button>
           <button
-            onClick={() => openPoInMode('EDIT', row.id)}
+            onClick={() => openPoInMode('EDIT', row.customer_po_id || row.id)}
             className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
             title="Edit PO"
           >
@@ -1764,7 +1765,7 @@ const CustomerPO = ({
               setPoFormLoading(true);
               setShowPoForm(true);
               try {
-                const data = await apiRequest(`/customer-pos/${row.id}`);
+                const data = await apiRequest(`/customer-pos/${row.customer_po_id || row.id}`);
                 const today = new Date();
                 const day = String(today.getDate()).padStart(2, '0');
                 const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -1832,7 +1833,7 @@ const CustomerPO = ({
           </button>
 
           <button
-            onClick={() => handleDeletePo(row.id)}
+            onClick={() => handleDeletePo(row.customer_po_id || row.id)}
             className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all border border-transparent hover:border-rose-100"
             title="Delete PO"
           >

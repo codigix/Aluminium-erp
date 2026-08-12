@@ -13,6 +13,16 @@ router.get('/', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW']), async (r
   }
 });
 
+router.get('/groups', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW', 'PROD_VIEW']), async (req, res) => {
+  try {
+    const itemGroupService = require('../services/itemGroupService');
+    const groups = await itemGroupService.getAll();
+    res.json(groups);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.get('/items/next-code', authenticate, authorize(['STOCK_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const { itemName, itemGroup } = req.query;

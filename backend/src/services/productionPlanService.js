@@ -4,30 +4,23 @@ const bomService = require('./bomService');
 const listProductionPlans = async () => {
   const [rows] = await pool.query(
     `SELECT pp.*, u.username as creator_name, 
-            COALESCE(o.order_no, o_direct.order_no) as order_no, 
-            COALESCE(so.project_name, c_direct.company_name) as project_name,
-            COALESCE(c.company_name, c_direct.company_name) as company_name,
-            so.project_name as so_project_name,
-            o.project_name as o_project_name,
-            o_direct.project_name as o_direct_project_name,
+            COALESCE(o.order_no, so.so_number, 'Direct Order') as order_no, 
+            COALESCE(o.project_name, so.project_name, '—') as project_name,
+            COALESCE(c_ord.company_name, c_so.company_name, '—') as company_name,
+            COALESCE(o.project_name, so.project_name, '—') as so_project_name,
+            COALESCE(o.project_name, so.project_name, '—') as o_project_name,
+            COALESCE(o.project_name, so.project_name, '—') as o_direct_project_name,
             COALESCE(
               cd_bom.drawing_no,
-              soi.drawing_no,
               oi.drawing_no,
+              soi.drawing_no,
               CASE WHEN pp.bom_no NOT REGEXP '^[0-9]+$' THEN pp.bom_no ELSE NULL END
             ) as drawing_no,
-            COALESCE(ppi.item_code, 
-              CASE 
-                WHEN o_direct.id IS NOT NULL THEN oi.item_code 
-                ELSE COALESCE(soi.item_code, oi.item_code) 
-              END
-            ) as item_code, 
+            COALESCE(ppi.item_code, oi.item_code, soi.item_code) as item_code, 
             COALESCE(ppi.description,
               cd_bom.description,
-              CASE 
-                WHEN o_direct.id IS NOT NULL THEN oi.description 
-                ELSE COALESCE(soi.description, oi.description) 
-              END
+              oi.description,
+              soi.description
             ) as item_description,
             (SELECT COUNT(*) FROM work_orders WHERE plan_id = pp.id) as wo_count,
             (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id) as total_ops,
@@ -41,22 +34,12 @@ const listProductionPlans = async () => {
        FROM production_plan_items 
        WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
      ) ppi ON pp.id = ppi.plan_id
-     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
-     LEFT JOIN sales_orders so ON (
-       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
-       (soi.id IS NULL AND pp.sales_order_id = so.id)
-     )
-     LEFT JOIN companies c ON so.company_id = c.id
-     LEFT JOIN (
-       SELECT quotation_id, order_no, source_type, project_name FROM orders 
-       WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
-     ) o ON (
-       (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
-       (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
-     )
-     LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND (soi.id IS NULL OR soi.sales_order_id != pp.sales_order_id)
-     LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
+     LEFT JOIN orders o ON pp.sales_order_id = o.id
+     LEFT JOIN companies c_ord ON o.client_id = c_ord.id
+     LEFT JOIN sales_orders so ON pp.sales_order_id = so.id
+     LEFT JOIN companies c_so ON so.company_id = c_so.id
      LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id AND ppi.sales_order_id = soi.sales_order_id
      LEFT JOIN customer_drawings cd_bom ON (
        (pp.bom_no REGEXP '^[0-9]+$' AND cd_bom.id = CAST(pp.bom_no AS UNSIGNED)) OR
        (cd_bom.drawing_no = pp.bom_no)
@@ -90,8 +73,8 @@ const listProductionPlans = async () => {
 const getProductionPlanById = async (id) => {
   const [plans] = await pool.query(
     `SELECT pp.*, u.username as creator_name,
-            COALESCE(o_direct.order_no) as order_no,
-            COALESCE(c.company_name, c_direct.company_name) as company_name,
+            COALESCE(o.order_no, so.so_number, 'Direct Order') as order_no,
+            COALESCE(c_ord.company_name, c_so.company_name, '—') as company_name,
             COALESCE(ppi_first.item_code) as item_code,
             COALESCE(ppi_first.description) as item_description,
             (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status,
@@ -103,14 +86,10 @@ const getProductionPlanById = async (id) => {
        FROM production_plan_items 
        WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
      ) ppi_first ON pp.id = ppi_first.plan_id
-     LEFT JOIN sales_order_items soi ON ppi_first.sales_order_item_id = soi.id
-     LEFT JOIN sales_orders so ON (
-       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
-       (soi.id IS NULL AND pp.sales_order_id = so.id)
-     )
-     LEFT JOIN companies c ON so.company_id = c.id
-     LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND o_direct.source_type = 'DIRECT' AND (soi.id IS NULL OR soi.sales_order_id != pp.sales_order_id)
-     LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
+     LEFT JOIN orders o ON pp.sales_order_id = o.id
+     LEFT JOIN companies c_ord ON o.client_id = c_ord.id
+     LEFT JOIN sales_orders so ON pp.sales_order_id = so.id
+     LEFT JOIN companies c_so ON so.company_id = c_so.id
      WHERE pp.id = ?`,
     [id]
   );
@@ -121,44 +100,19 @@ const getProductionPlanById = async (id) => {
 
   const [items] = await pool.query(
     `SELECT ppi.*, 
-            COALESCE(so.project_name, c_direct.company_name) as project_name, 
-            COALESCE(ppi.item_code, 
-              CASE 
-                WHEN o_direct.id IS NOT NULL THEN oi.item_code 
-                ELSE COALESCE(soi.item_code, oi.item_code) 
-              END
-            ) as item_code, 
-            COALESCE(ppi.description, 
-              CASE 
-                WHEN o_direct.id IS NOT NULL THEN oi.description 
-                ELSE COALESCE(soi.description, oi.description) 
-              END
-            ) as description, 
-            CASE 
-              WHEN o_direct.id IS NOT NULL THEN oi.drawing_no 
-              ELSE COALESCE(soi.drawing_no, oi.drawing_no) 
-            END as drawing_no, 
-            w.workstation_name,
-            COALESCE(ppi.design_qty, soi.quantity, oi.quantity) as design_qty, 
+            COALESCE(o.project_name, so.project_name, '—') as project_name, 
+            COALESCE(ppi.item_code, oi.item_code, soi.item_code) as item_code, 
+            COALESCE(ppi.description, oi.description, soi.description) as description, 
+            COALESCE(oi.drawing_no, soi.drawing_no) as drawing_no, 
+            COALESCE(ppi.design_qty, oi.quantity, soi.quantity) as design_qty, 
             COALESCE(ppi.uom, soi.unit, 'Nos') as uom,
-            COALESCE(o.order_no, o_direct.order_no) as order_no
+            COALESCE(o.order_no, so.so_number, 'Direct Order') as order_no
      FROM production_plan_items ppi
-     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
-     LEFT JOIN sales_orders so ON (
-       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
-       (soi.id IS NULL AND ppi.sales_order_id = so.id)
-     )
-     LEFT JOIN orders o_direct ON ppi.sales_order_id = o_direct.id AND o_direct.source_type = 'DIRECT' AND (soi.id IS NULL OR soi.sales_order_id != ppi.sales_order_id)
-     LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id AND ppi.item_code = oi.item_code
+     LEFT JOIN orders o ON ppi.sales_order_id = o.id
+     LEFT JOIN sales_orders so ON ppi.sales_order_id = so.id
+     LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id AND ppi.sales_order_id = soi.sales_order_id
      LEFT JOIN workstations w ON ppi.workstation_id = w.id
-     LEFT JOIN (
-       SELECT quotation_id, order_no, source_type FROM orders 
-       WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
-     ) o ON (
-       (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
-       (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
-     )
-     LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      WHERE ppi.plan_id = ?`,
     [id]
   );
