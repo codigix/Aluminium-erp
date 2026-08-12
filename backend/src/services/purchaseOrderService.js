@@ -1983,12 +1983,8 @@ const generatePurchaseOrderPDF = async (poId) => {
   .po-details-table td {
     border-bottom: 0.5px solid #000;
     border-right: 0.5px solid #000;
-    padding: 2.5px 4px;
+    padding: 3px 4px;
     vertical-align: middle;
-  }
-
-  .po-details-table tr:last-child td {
-    border-bottom: none;
   }
 
   .po-details-table td:last-child {
@@ -2050,7 +2046,7 @@ const generatePurchaseOrderPDF = async (poId) => {
   .items-table th {
     border: 0.5px solid #000;
     padding: 5px 4px;
-    font-size: 7px;
+    font-size: 10px;
     vertical-align: middle;
     background: #f2f2f2;
     font-weight: bold;
@@ -2062,13 +2058,14 @@ const generatePurchaseOrderPDF = async (poId) => {
     border: none;
     border-bottom: 0.5px solid #000;
     padding: 5px 4px;
-    font-size: 7px;
+    font-size: 10px;
     vertical-align: middle;
     text-align: center;
   }
 
   .items-table tr.sub-assembly-row td {
     border-bottom: none;
+    font-size: 10px;
   }
 
   .items-table tr.parent-with-subs td {
@@ -2288,10 +2285,10 @@ const generatePurchaseOrderPDF = async (poId) => {
     <thead>
       <tr>
         <th style="width: 2%;">SL No.</th>
-        <th style="width: 8%; text-align: center; line-height: 1.3;">Drawing No</th>
-        <th style="width: 20%; text-align: center; line-height: 1.3;">GRADE</th>
-        <th style="width: 31%; text-align: center; line-height: 1.3;">Size</th>
-        <th style="width: 3%; text-align: center;">HSN Code</th>
+        <th style="width: 7%; text-align: center; line-height: 1.3;">Drawing No</th>
+        <th style="width: 12%; text-align: center; line-height: 1.3;">GRADE</th>
+        <th style="width: 40%; text-align: center; line-height: 1.3;">Size</th>
+        <th style="width: 4%; text-align: center;">HSN Code</th>
         <th style="width: 4%; text-align: center;">Rate</th>
         <th style="width: 3%; text-align: center; line-height: 1.2;">Qty</th>
         <th style="width: 4%; text-align: center; line-height: 1.2;">Weight</th>
@@ -2300,7 +2297,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         <th style="width: 4%; text-align: center;">CGST Amt</th>
         <th style="width: 2%; text-align: center; line-height: 1.2;">SGST<br/>%</th>
         <th style="width: 4%; text-align: center;">SGST Amt</th>
-        <th style="width: 8%; text-align: center;">Total Amount</th>
+        <th style="width: 7%; text-align: center;">Total Amount</th>
       </tr>
     </thead>
     <tbody>
@@ -2308,11 +2305,11 @@ const generatePurchaseOrderPDF = async (poId) => {
       <tr {{#has_sub_assemblies}}class="parent-with-subs"{{/has_sub_assemblies}}>
         <td style="text-align: center;">{{sl_no}}</td>
         <td style="text-align: center; font-weight: bold; color: #000;">{{drawing_no}}</td>
-        <td style="text-align: center; line-height: 1.35;">
-          {{item_no}}<br/>
-          <strong>{{material_name}}</strong>
+        <td style="text-align: center; line-height: 1.25;">
+          <span style="font-size: 8px; color: #444; display: block; word-break: break-all;">{{item_no}}</span>
+          <strong style="font-size: 10px; color: #000;">{{material_name}}</strong>
         </td>
-        <td style="text-align: center; vertical-align: middle; font-family: monospace; font-weight: bold; color: #000;">{{size}}</td>
+        <td style="text-align: center; vertical-align: middle; font-weight: bold; color: #000; font-size: 11px; white-space: nowrap;">{{size}}</td>
         <td style="text-align: center;">{{hsn_code}}</td>
         <td style="text-align: center;">{{unit_rate}}</td>
         <td style="text-align: center;">{{design_qty}}</td>
@@ -2325,7 +2322,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td style="text-align: center; font-weight: bold; color: #000;">{{total_amount}}</td>
       </tr>
       {{#sub_assemblies}}
-      <tr class="sub-assembly-row {{#is_last}}last-sub-assembly{{/is_last}}" style="background: #fafafa; font-size: 6.5px;">
+      <tr class="sub-assembly-row {{#is_last}}last-sub-assembly{{/is_last}}" style="background: #fafafa; font-size: 10px;">
         <td></td>
         <td></td>
         <td style="text-align: left; padding-left: 15px;">{{description}} ({{drawingNo}})</td>

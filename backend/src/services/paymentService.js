@@ -869,13 +869,32 @@ const generateVendorInvoicePDF = async (id, type) => {
       dimensions: formatDimensions(item)
     }));
   } else {
+    let targetPoId = id;
+    if (type === 'GRN' || type === 'PO_RECEIPT') {
+      const [prRows] = await pool.query(
+        `SELECT pr.po_id FROM po_receipts pr WHERE pr.id = ?`,
+        [id]
+      );
+      if (prRows.length > 0 && prRows[0].po_id) {
+        targetPoId = prRows[0].po_id;
+      } else {
+        const [gRows] = await pool.query(
+          `SELECT po.id as po_id FROM grns g JOIN purchase_orders po ON g.po_number = po.po_number WHERE g.id = ?`,
+          [id]
+        );
+        if (gRows.length > 0 && gRows[0].po_id) {
+          targetPoId = gRows[0].po_id;
+        }
+      }
+    }
+
     const [poRows] = await pool.query(
       `SELECT po.*, v.vendor_code, v.vendor_name, v.gstin as vendor_gstin, v.location as vendor_address,
               v.email as vendor_email, v.phone as vendor_phone
        FROM purchase_orders po
        LEFT JOIN vendors v ON po.vendor_id = v.id
        WHERE po.id = ?`,
-      [id]
+      [targetPoId]
     );
 
     if (poRows.length === 0) throw new Error('Purchase Order not found');
@@ -887,7 +906,7 @@ const generateVendorInvoicePDF = async (id, type) => {
        JOIN po_receipts pr ON g.po_receipt_id = pr.id
        WHERE pr.po_id = ?
        ORDER BY g.id DESC LIMIT 1`,
-      [id]
+      [targetPoId]
     );
     const grn = grnRows.length > 0 ? grnRows[0] : null;
 
@@ -907,7 +926,7 @@ const generateVendorInvoicePDF = async (id, type) => {
               ) as hsn_code
        FROM purchase_order_items poi
        WHERE poi.purchase_order_id = ?`,
-      [id]
+      [targetPoId]
     );
 
     subtotal = itemRows.reduce((sum, item) => sum + (item.quantity * item.unit_rate), 0);
@@ -939,8 +958,25 @@ const generateVendorInvoicePDF = async (id, type) => {
           weightVal = (Math.PI * Math.pow(dia, 2) / 4 * len * density) / 1000000;
         }
       }
-      const weightFormatted = weightVal > 0 ? `${weightVal.toFixed(3)} Kg` : '—';
-      const qtyFormatted = `${parseFloat(item.quantity || 0).toFixed(3)} ${item.unit || 'Nos'}`;
+      const unitRaw = (item.unit || 'Nos').trim().toLowerCase();
+      const isKgItem = unitRaw === 'kg' || unitRaw === 'kgs';
+
+      let qtyFormatted;
+      let weightFormatted;
+
+      if (isKgItem) {
+        // KG / raw-material: quantity = total weight in Kg, design_qty/planned_qty = piece count
+        const pieceCount = parseFloat(item.design_qty || item.planned_qty || 1);
+        qtyFormatted = pieceCount % 1 === 0 ? String(Math.round(pieceCount)) : pieceCount.toFixed(3);
+        // Weight: use weightVal if calculated, otherwise use quantity (which IS the weight for Kg items)
+        const totalWeightKg = weightVal > 0 ? weightVal : parseFloat(item.quantity || 0);
+        weightFormatted = totalWeightKg > 0 ? `${totalWeightKg.toFixed(3)} Kg` : '—';
+      } else {
+        // Bought-Out / NOS: quantity = piece count, no weight
+        const qty = parseFloat(item.quantity || 0);
+        qtyFormatted = qty % 1 === 0 ? String(Math.round(qty)) : qty.toFixed(3);
+        weightFormatted = '—';
+      }
 
       // Engineering standard size formatting (matches frontend formatters.js)
       const len = parseFloat(item.length || item.dimensions?.length || 0);

@@ -8,7 +8,7 @@ router.get('/', authorize(['PAYMENT_VIEW']), paymentController.getPayments);
 router.get('/pending', authorize(['PAYMENT_VIEW']), paymentController.getPendingPayments);
 router.get('/:paymentId', authorize(['PAYMENT_VIEW']), paymentController.getPaymentById);
 router.get('/:paymentId/pdf', authorize(['PAYMENT_VIEW']), paymentController.getPaymentVoucherPDF);
-router.get('/vendor-invoice/:id/pdf', authorize(['PAYMENT_VIEW']), paymentController.getVendorInvoicePDF);
+router.get('/vendor-invoice/:id/pdf', authorize(['PAYMENT_VIEW', 'PURCHASE_ORDER_VIEW']), paymentController.getVendorInvoicePDF);
 router.post('/vendor-invoice/:id/send-email', authorize(['PAYMENT_PROCESS']), paymentController.sendVendorInvoiceEmail);
 router.post('/:paymentId/send-email', authorize(['PAYMENT_PROCESS']), paymentController.sendPaymentVoucherEmail);
 router.patch('/:paymentId/status', authorize(['PAYMENT_EDIT']), paymentController.updatePaymentStatus);

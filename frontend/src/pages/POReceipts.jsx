@@ -26,7 +26,8 @@ import {
   History,
   AlertCircle,
   Building2,
-  Upload
+  Upload,
+  Send
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -796,6 +797,65 @@ const POReceipts = () => {
     window.open(`${API_BASE}/${pdfPath.replace(/\\/g, '/')}`, '_blank');
   };
 
+  const handleDownloadGRNInvoice = async (receipt) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/payments/vendor-invoice/${receipt.id}/pdf?type=GRN`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to generate Vendor Invoice PDF');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Vendor_Invoice_GRN-${String(receipt.id).padStart(4, '0')}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading invoice:', err);
+      errorToast('Failed to download invoice');
+    }
+  };
+
+  const handleSendToAccountsGRN = async (receipt) => {
+    const grnLabel = `GRN-${String(receipt.id).padStart(4, '0')}`;
+    const result = await Swal.fire({
+      title: 'Send to Accounts?',
+      html: `
+        <div class="text-sm text-slate-600 space-y-3">
+          <p>Are you sure you want to forward Goods Receipt <strong>${grnLabel}</strong> to Accounts?</p>
+          <p class="text-xs text-slate-500">This will automatically create a Vendor Invoice.</p>
+          <hr class="my-3 border-slate-200" />
+          <div class="p-2.5 bg-slate-50 border border-slate-200 rounded flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">📄 Preview Invoice</span>
+            <button id="swal-download-invoice-btn" type="button" class="px-2.5 py-1 text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded transition-all">
+              Download Invoice
+            </button>
+          </div>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Send',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#4f46e5',
+      didOpen: () => {
+        const dlBtn = document.getElementById('swal-download-invoice-btn');
+        if (dlBtn) {
+          dlBtn.addEventListener('click', () => {
+            handleDownloadGRNInvoice(receipt);
+          });
+        }
+      }
+    });
+
+    if (result.isConfirmed) {
+      successToast(`Goods Receipt ${grnLabel} has been forwarded to Accounts successfully.`);
+    }
+  };
+
   const columns = [
     {
       key: 'id',
@@ -924,6 +984,13 @@ const POReceipts = () => {
             title="Print GRN"
           >
             <Printer className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleSendToAccountsGRN(row)}
+            className="p-2 text-indigo-500 hover:bg-indigo-50 rounded transition-all border border-indigo-50 active:scale-90"
+            title="Send to Accounts"
+          >
+            <Send className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleDeleteReceipt(row.id)}
@@ -2065,6 +2132,13 @@ const POReceipts = () => {
                 >
                   <Printer className="w-4 h-4" />
                   PRINT GRN
+                </button>
+                <button
+                  onClick={() => handleDownloadGRNInvoice(selectedReceiptForView)}
+                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
+                >
+                  <Download className="w-4 h-4" />
+                  DOWNLOAD INVOICE
                 </button>
                 {!isViewEditMode ? (
                   <button
