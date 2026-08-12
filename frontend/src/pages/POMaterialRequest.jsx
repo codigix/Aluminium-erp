@@ -248,25 +248,32 @@ const POMaterialRequest = () => {
         const type = (item.material_type || '').toUpperCase();
         const isNotFG = type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
         
-        // Calculate remaining qty to release
-        const remainingQty = Math.max(0, parseFloat(item.quantity || 0) - parseFloat(item.allocated_quantity || 0));
-        const stockQty = parseFloat(item.total_stock || 0);
-        const shortage = Math.max(0, remainingQty - stockQty);
+        const remainingQty = item.remaining_qty !== undefined 
+          ? parseFloat(item.remaining_qty || 0)
+          : Math.max(0, parseFloat(item.quantity || 0) - parseFloat(item.allocated_quantity || 0));
         
-        // ONLY request items that have a shortage and are not Finished Goods
-        return isNotFG && shortage > 0;
+        return isNotFG && remainingQty > 0;
       }).map(item => {
-        const remainingQty = Math.max(0, parseFloat(item.quantity || 0) - parseFloat(item.allocated_quantity || 0));
-        const stockQty = parseFloat(item.total_stock || 0);
-        const shortage = Math.max(0, remainingQty - stockQty);
+        const remainingQty = item.remaining_qty !== undefined 
+          ? parseFloat(item.remaining_qty || 0)
+          : Math.max(0, parseFloat(item.quantity || 0) - parseFloat(item.allocated_quantity || 0));
+        
+        const remainingWeight = item.remaining_weight !== undefined
+          ? parseFloat(item.remaining_weight || 0)
+          : Math.max(0, parseFloat(item.required_weight || 0) - parseFloat(item.allocated_weight || 0));
+        
+        const isKg = (item.uom || '').toLowerCase() === 'kg' || (item.uom || '').toLowerCase() === 'kgs' || (item.uom || '').toLowerCase() === 'kilogram';
         
         return {
           ...item,
           material_name: item.name || item.material_name,
-          // Use the actual shortage quantity for the RFQ
-          quantity: shortage,
-          planned_qty: parseFloat(item.design_qty) || 0,
-          uom: item.uom || 'pcs',
+          quantity: isKg ? remainingWeight : remainingQty,
+          required_weight: remainingWeight,
+          remaining_qty: remainingQty,
+          remaining_weight: remainingWeight,
+          planned_qty: remainingQty,
+          design_qty: remainingQty,
+          uom: item.uom || 'Nos',
           length: item.length || 0,
           width: item.width || 0,
           thickness: item.thickness || 0,
@@ -278,7 +285,7 @@ const POMaterialRequest = () => {
       });
 
       if (itemsToRequest.length === 0) {
-        errorToast('No out-of-stock items found to generate RFQ');
+        errorToast('No items with remaining quantity found to generate RFQ');
         return;
       }
 
@@ -1618,7 +1625,7 @@ const POMaterialRequest = () => {
                                     {Number(it.planned_qty || 0) > 0 && (
                                       <div className="flex flex-col items-end mt-1.5 pt-1.5 border-t border-slate-50 w-full">
                                         <span className="text-xs  font-semibold text-slate-700">
-                                          {Number(it.planned_qty).toFixed(3)} {it.uom}
+                                          {Number(it.planned_qty).toFixed(0)} Nos
                                         </span>
                                         <span className="text-[8px] text-slate-400 uppercase er">Design Qty</span>
                                       </div>
