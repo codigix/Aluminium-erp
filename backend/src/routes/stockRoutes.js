@@ -101,6 +101,43 @@ router.post('/ledger/entry', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MA
       return res.status(400).json({ message: 'itemCode, transactionType, and quantity are required' });
     }
 
+    // Resolve weight and dimensions from stock_balance to ensure manual entries update weight
+    const [balanceRows] = await pool.query(
+      `SELECT unit, weight_per_unit, length, width, thickness, diameter, outer_diameter, density, shape_id, shape_type, material_name, material_type 
+       FROM stock_balance WHERE item_code = ? LIMIT 1`,
+      [itemCode]
+    );
+
+    let weight = 0;
+    let extraOptions = {};
+    if (balanceRows.length > 0) {
+      const b = balanceRows[0];
+      const weightPerUnit = parseFloat(b.weight_per_unit || 0);
+      const isKg = (b.unit || '').toLowerCase() === 'kg' || (b.unit || '').toLowerCase() === 'kgs' || (b.unit || '').toLowerCase() === 'kilogram';
+      
+      if (weightPerUnit > 0) {
+        weight = weightPerUnit * Math.abs(parseFloat(quantity || 0));
+      } else if (isKg) {
+        weight = Math.abs(parseFloat(quantity || 0));
+      }
+      
+      extraOptions = {
+        weight: weight,
+        unit: b.unit,
+        length: b.length,
+        width: b.width,
+        thickness: b.thickness,
+        diameter: b.diameter,
+        outer_diameter: b.outer_diameter,
+        density: b.density,
+        weight_per_unit: b.weight_per_unit,
+        shape_id: b.shape_id,
+        shape_type: b.shape_type,
+        materialName: b.material_name,
+        materialType: b.material_type
+      };
+    }
+
     await stockService.addStockLedgerEntry(
       itemCode,
       transactionType,
@@ -109,7 +146,8 @@ router.post('/ledger/entry', authenticate, authorize(['STOCK_MANAGE', 'DESIGN_MA
       refDocId,
       refDocNumber,
       remarks,
-      userId
+      userId,
+      extraOptions
     );
 
     const ledger = await stockService.getStockLedger(itemCode);

@@ -178,6 +178,12 @@ router.post('/:qcId/stock-entry', authenticate, authorize(['QC_EDIT']), async (r
               COALESCE(qci.item_code, poi.item_code) as resolved_item_code,
               COALESCE(poi.material_name, gi.uom) as material_name,
               poi.material_type,
+              gi.uom as uom,
+              poi.unit_rate as valuation_rate,
+              NULL as shape_id,
+              poi.shape_type as shape_type,
+              COALESCE(gi.density, poi.density, 0) as density,
+              COALESCE(gi.weight_per_unit, poi.weight_per_unit, 0) as weight_per_unit,
               COALESCE(NULLIF(gi.length,0), NULLIF(poi.length,0), 0) as length,
               COALESCE(NULLIF(gi.width,0), NULLIF(poi.width,0), 0) as width,
               COALESCE(NULLIF(gi.thickness,0), NULLIF(poi.thickness,0), 0) as thickness,
@@ -196,7 +202,11 @@ router.post('/:qcId/stock-entry', authenticate, authorize(['QC_EDIT']), async (r
       return res.json({ success: false, message: 'No GRN items found' });
     }
 
+    console.log(`[QC Stock-Entry] Found ${grnItems.length} items to process for GRN ID: ${qc.grn_id}`);
+
     let totalPosted = 0;
+    const itemsToInsert = [];
+
     for (const item of grnItems) {
       const qty = parseFloat(item.qty) || 0;
       if (qty <= 0) continue;
@@ -217,7 +227,19 @@ router.post('/:qcId/stock-entry', authenticate, authorize(['QC_EDIT']), async (r
         );
         itemCode = sbRows.length ? sbRows[0].item_code : null;
       }
-      if (!itemCode) continue;
+      if (!itemCode) {
+        console.warn(`[QC Stock-Entry] Skipping item without resolved item code: Material = ${item.material_name}`);
+        continue;
+      }
+
+      const weightPerUnit = parseFloat(item.weight_per_unit || 0);
+      const isKg = (item.uom || '').toLowerCase() === 'kg' || (item.uom || '').toLowerCase() === 'kgs' || (item.uom || '').toLowerCase() === 'kilogram';
+      let passWeight = 0;
+      if (weightPerUnit > 0) {
+        passWeight = weightPerUnit * qty;
+      } else if (isKg) {
+        passWeight = qty;
+      }
 
       // Use the same createQCStockLedgerEntry that Final QC uses
       await stockService.createQCStockLedgerEntry(
@@ -226,8 +248,29 @@ router.post('/:qcId/stock-entry', authenticate, authorize(['QC_EDIT']), async (r
         item.grn_item_id,
         itemCode,
         qty,
-        connection
+        connection,
+        passWeight
       );
+
+      itemsToInsert.push({
+        grn_item_id: item.grn_item_id,
+        item_code: itemCode,
+        material_name: item.material_name,
+        material_type: item.material_type || 'RAW_MATERIAL',
+        quantity: qty,
+        uom: item.uom || 'Nos',
+        valuation_rate: parseFloat(item.valuation_rate) || 0,
+        length: item.length || null,
+        width: item.width || null,
+        thickness: item.thickness || null,
+        diameter: item.diameter || null,
+        outer_diameter: item.outer_diameter || null,
+        density: item.density || null,
+        weight_per_unit: item.weight_per_unit || null,
+        shape_id: item.shape_id || null,
+        shape_type: item.shape_type || null
+      });
+
       totalPosted++;
     }
 
@@ -243,12 +286,58 @@ router.post('/:qcId/stock-entry', authenticate, authorize(['QC_EDIT']), async (r
       'SELECT id FROM stock_entries WHERE grn_id = ? LIMIT 1',
       [qc.grn_id]
     );
+
+    let stockEntryId;
     if (!existingEntry.length) {
-      await connection.execute(
-        `INSERT INTO stock_entries (entry_no, entry_type, purpose, grn_id, entry_date, remarks, created_by, status)
-         VALUES (?, 'Material Receipt', 'Partial QC Stock Release', ?, CURDATE(), 'Auto-created from Partially QC', ?, 'submitted')`,
-        [entryNo, qc.grn_id, req.user.id]
+      // Resolve toWarehouseId
+      const [whRows] = await connection.query("SELECT id FROM warehouses WHERE warehouse_code = 'RM-HOLD' LIMIT 1");
+      const toWarehouseId = whRows.length ? whRows[0].id : null;
+
+      const [insertResult] = await connection.execute(
+        `INSERT INTO stock_entries (entry_no, entry_type, purpose, grn_id, entry_date, remarks, created_by, status, to_warehouse_id)
+         VALUES (?, 'Material Receipt', 'Partial QC Stock Release', ?, CURDATE(), 'Auto-created from Partially QC', ?, 'submitted', ?)`,
+        [entryNo, qc.grn_id, req.user.id, toWarehouseId]
       );
+      stockEntryId = insertResult.insertId;
+
+      if (itemsToInsert.length === 0) {
+        throw new Error('No valid stock entry items found to insert into stock_entry_items.');
+      }
+
+      for (const entryItem of itemsToInsert) {
+        const amount = entryItem.quantity * entryItem.valuation_rate;
+        console.log(`[QC Stock-Entry] Inserting Stock Entry Item: StockEntryID = ${stockEntryId}, GRNItemID = ${entryItem.grn_item_id}, ItemCode = ${entryItem.item_code}, Qty = ${entryItem.quantity}, UOM = ${entryItem.uom}, Warehouse = RM-HOLD`);
+        
+        await connection.execute(
+          `INSERT INTO stock_entry_items 
+           (stock_entry_id, item_code, material_name, material_type, quantity, uom, valuation_rate, amount,
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_id, shape_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            stockEntryId,
+            entryItem.item_code,
+            entryItem.material_name,
+            entryItem.material_type,
+            entryItem.quantity,
+            entryItem.uom,
+            entryItem.valuation_rate,
+            amount,
+            entryItem.length,
+            entryItem.width,
+            entryItem.thickness,
+            entryItem.diameter,
+            entryItem.outer_diameter,
+            entryItem.density,
+            entryItem.weight_per_unit,
+            entryItem.shape_id,
+            entryItem.shape_type
+          ]
+        );
+      }
+      console.log(`[QC Stock-Entry] Successfully auto-created Stock Entry ${entryNo} with ${itemsToInsert.length} items.`);
+    } else {
+      stockEntryId = existingEntry[0].id;
+      console.log(`[QC Stock-Entry] Stock Entry already exists for GRN ${qc.grn_id} (ID: ${stockEntryId}).`);
     }
 
     await connection.commit();

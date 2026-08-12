@@ -408,7 +408,9 @@ const StockBalance = () => {
       key: 'current_weight',
       sortable: true,
       className: 'text-right',
-      render: (val) => {
+      render: (val, row) => {
+        const isBoughtOut = (row.material_type || '').toUpperCase().trim().includes('BOUGHT') || (row.item_code && String(row.item_code).toUpperCase().startsWith('BO-'));
+        if (isBoughtOut) return <div className="text-right text-slate-400 font-medium text-xs">—</div>;
         const wt = parseFloat(val || 0);
         return (
           <div className="flex items-center justify-end gap-1">

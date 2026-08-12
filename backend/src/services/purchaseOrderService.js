@@ -673,14 +673,22 @@ const getPurchaseOrders = async (filters = {}) => {
         (
           SELECT c.company_name 
           FROM companies c 
-          JOIN sales_orders so ON c.id = so.company_id 
-          WHERE so.id = po.sales_order_id
+          JOIN orders o ON c.id = o.client_id 
+          WHERE o.id = po.sales_order_id
+        ),
+        (
+          SELECT c3.company_name 
+          FROM material_requests mr_inner
+          JOIN production_plans pp ON mr_inner.plan_id = pp.id
+          JOIN orders o ON pp.sales_order_id = o.id
+          JOIN companies c3 ON o.client_id = c3.id
+          WHERE mr_inner.id = po.mr_id LIMIT 1
         ),
         (
           SELECT c.company_name 
           FROM companies c 
-          JOIN orders o ON c.id = o.client_id 
-          WHERE o.id = po.sales_order_id AND o.source_type = 'DIRECT'
+          JOIN sales_orders so ON c.id = so.company_id 
+          WHERE so.id = po.sales_order_id
         ),
         (
           SELECT c2.company_name 
@@ -696,14 +704,6 @@ const getPurchaseOrders = async (filters = {}) => {
             (soi.id IS NULL AND pp.sales_order_id = so.id)
           )
           LEFT JOIN companies c2 ON so.company_id = c2.id
-          WHERE mr_inner.id = po.mr_id LIMIT 1
-        ),
-        (
-          SELECT c3.company_name 
-          FROM material_requests mr_inner
-          JOIN production_plans pp ON mr_inner.plan_id = pp.id
-          JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
-          JOIN companies c3 ON o.client_id = c3.id
           WHERE mr_inner.id = po.mr_id LIMIT 1
         ),
         'Internal'
@@ -1151,8 +1151,21 @@ const getPurchaseOrderById = async (poId) => {
         'Stock/Internal'
       ) as project_name,
       COALESCE(
-        (SELECT c.company_name FROM companies c WHERE c.id = so.company_id),
+        (SELECT cp.po_number FROM material_requests mr_inner JOIN production_plans pp ON mr_inner.plan_id = pp.id JOIN orders o ON pp.sales_order_id = o.id JOIN customer_pos cp ON o.quotation_id = cp.id WHERE mr_inner.id = po.mr_id LIMIT 1),
+        (SELECT cp.po_number FROM material_requests mr_inner JOIN production_plans pp ON mr_inner.plan_id = pp.id JOIN sales_orders so2 ON pp.sales_order_id = so2.id JOIN customer_pos cp ON so2.customer_po_id = cp.id WHERE mr_inner.id = po.mr_id LIMIT 1),
+        (SELECT cp2.po_number FROM sales_orders so2 JOIN customer_pos cp2 ON so2.customer_po_id = cp2.id WHERE so2.id = po.sales_order_id LIMIT 1),
+        (SELECT cp3.po_number FROM orders o3 JOIN customer_pos cp3 ON o3.quotation_id = cp3.id WHERE o3.id = po.sales_order_id LIMIT 1),
+        '—'
+      ) as customer_po_no,
+      COALESCE(
         (SELECT c.company_name FROM companies c WHERE c.id = o_dir.client_id),
+        (SELECT c3.company_name 
+         FROM material_requests mr_inner
+         JOIN production_plans pp ON mr_inner.plan_id = pp.id
+         JOIN orders o ON pp.sales_order_id = o.id
+         JOIN companies c3 ON o.client_id = c3.id
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        (SELECT c.company_name FROM companies c WHERE c.id = so.company_id),
         (SELECT c2.company_name 
          FROM material_requests mr_inner
          JOIN production_plans pp ON mr_inner.plan_id = pp.id
@@ -1166,12 +1179,6 @@ const getPurchaseOrderById = async (poId) => {
            (soi.id IS NULL AND pp.sales_order_id = so2.id)
          )
          LEFT JOIN companies c2 ON so2.company_id = c2.id
-         WHERE mr_inner.id = po.mr_id LIMIT 1),
-        (SELECT c3.company_name 
-         FROM material_requests mr_inner
-         JOIN production_plans pp ON mr_inner.plan_id = pp.id
-         JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
-         JOIN companies c3 ON o.client_id = c3.id
          WHERE mr_inner.id = po.mr_id LIMIT 1),
         'Internal'
       ) as company_name
@@ -2206,34 +2213,14 @@ const generatePurchaseOrderPDF = async (poId) => {
             <td>{{po_date}}</td>
           </tr>
           <tr>
-            <td style="font-weight: bold;">Customer Code</td>
+            <td style="font-weight: bold;">Customer PO No.</td>
             <td>:</td>
-            <td>{{customer_code}}</td>
+            <td>{{customer_po_no}}</td>
           </tr>
           <tr>
-            <td style="font-weight: bold;">Plant</td>
+            <td style="font-weight: bold;">Company Name</td>
             <td>:</td>
-            <td>{{plant}}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold;">Version No.</td>
-            <td>:</td>
-            <td>{{version_no}}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold;">Version Date</td>
-            <td>:</td>
-            <td>{{po_date}}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold;">Your Reference No.</td>
-            <td>:</td>
-            <td style="word-break: break-all;">{{project_ref}}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold;">Order Type</td>
-            <td>:</td>
-            <td>{{order_type}}</td>
+            <td>{{company_name}}</td>
           </tr>
         </table>
       </td>
@@ -2249,7 +2236,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         <div class="address-text">{{{vendor_address_html}}}</div>
         <table class="details-subtable" style="margin-top: 6px;">
           <tr>
-            <td style="width: 32%; font-weight: bold;">Telephone</td>
+            <td style="width: 32%; font-weight: bold;">Contact No</td>
             <td style="width: 5%;">:</td>
             <td>{{phone}}</td>
           </tr>
@@ -2287,7 +2274,7 @@ const generatePurchaseOrderPDF = async (poId) => {
             <td>{{created_by_name}}</td>
           </tr>
           <tr>
-            <td style="font-weight: bold;">Telephone</td>
+            <td style="font-weight: bold;">Contact No</td>
             <td>:</td>
             <td>{{created_by_mobile}}</td>
           </tr>
@@ -2329,7 +2316,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td style="text-align: center;">{{hsn_code}}</td>
         <td style="text-align: center;">{{unit_rate}}</td>
         <td style="text-align: center;">{{design_qty}}</td>
-        <td style="text-align: center;">{{required_qty}} {{unit}}</td>
+        <td style="text-align: center;">{{#is_bought_out}}—{{/is_bought_out}}{{^is_bought_out}}{{required_qty}} {{unit}}{{/is_bought_out}}</td>
         <td style="text-align: center;">{{amount}}</td>
         <td style="text-align: center;">{{cgst_rate}}%</td>
         <td style="text-align: center;">{{cgst_amount}}</td>
@@ -2552,6 +2539,7 @@ const generatePurchaseOrderPDF = async (poId) => {
   const viewData = {
     ...po,
     po_date: formatDate(po.created_at),
+    customer_po_no: po.customer_po_no || "—",
     customer_code: vendor?.vendor_code || ('VEND-' + String(po.vendor_id).padStart(6, '0')),
     created_at: formatDate(po.created_at),
     expected_delivery_date: formatDate(po.expected_delivery_date),
@@ -2601,10 +2589,12 @@ const generatePurchaseOrderPDF = async (poId) => {
     hostAccountNumber: activeCompany?.account_number || '123456789999',
     hostIFSCCode: activeCompany?.ifsc_code ? activeCompany.ifsc_code.toUpperCase() : 'HDFC0001234',
     hostBranchName: activeCompany?.branch_name || 'Bhosari, Pune - 411026, Maharashtra',
-    hostState: activeCompany?.state || 'Maharashtra',
     items: await Promise.all((po.items || []).map(async (i, idx) => {
-      const designQty = parseFloat(i.planned_qty || i.design_qty || 0);
-      const requiredQty = parseFloat(i.quantity || 0);
+      const matType = (i.material_type || i.item_type || '').toUpperCase().trim();
+      const isBoughtOutItem = matType.includes('BOUGHT') || (i.item_code && String(i.item_code).toUpperCase().startsWith('BO-'));
+
+      const designQty = parseFloat(i.planned_qty || i.design_qty || (isBoughtOutItem ? i.quantity : 0) || 0);
+      const requiredQty = isBoughtOutItem ? 0 : parseFloat(i.quantity || i.required_weight || 0);
 
       let resolvedDrawingNo = await getItemParentDrawingNumber(pool, i);
       if (resolvedDrawingNo) {
@@ -2672,11 +2662,12 @@ const generatePurchaseOrderPDF = async (poId) => {
       else if (ms === 'unequal angle') { pfx = 'UA';   dp = [nf(wid), nf(od), nf(thk), nf(len)]; }
       else { dp = [nf(wid), nf(od), nf(thk), nf(dia), nf(len)]; }
 
-      const sizeStr = dp.filter(Boolean).length > 0 ? `${pfx} ${dp.filter(Boolean).join(' × ')} mm`.trim() : '—';
+      const sizeStr = isBoughtOutItem ? '—' : (dp.filter(Boolean).length > 0 ? `${pfx} ${dp.filter(Boolean).join(' × ')} mm`.trim() : '—');
 
       return {
         ...i,
         sl_no: idx + 1,
+        is_bought_out: isBoughtOutItem,
         item_code: i.item_code || '—',
         item_no: i.item_code || '—',
         drawing_no: resolvedDrawingNo || '—',
@@ -2687,10 +2678,10 @@ const generatePurchaseOrderPDF = async (poId) => {
         hsn_code: '73089090', // realistic fallback
         expected_delivery_date: formatDate(po.expected_delivery_date),
         pur_req_no: po.mr_number || '—',
-        design_qty: designQty.toFixed(3),
-        required_qty: requiredQty.toFixed(3),
-        quantity: requiredQty.toFixed(3),
-        unit: (i.unit || 'NOS').toUpperCase(),
+        design_qty: designQty.toFixed(0),
+        required_qty: isBoughtOutItem ? '—' : requiredQty.toFixed(3),
+        quantity: isBoughtOutItem ? '—' : requiredQty.toFixed(3),
+        unit: isBoughtOutItem ? '' : (i.unit || 'KG').toUpperCase(),
         unit_rate: parseFloat(i.unit_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         discount: (() => {

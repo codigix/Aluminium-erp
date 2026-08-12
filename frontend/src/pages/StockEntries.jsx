@@ -178,6 +178,8 @@ const StockEntries = () => {
         items: (detail.items || []).map(item => {
           // Look up density from material type name using freshly-fetched materials
           const mat = localMaterials.find(m => m.name === item.material_type);
+          const sbItem = (stockBalances || []).find(s => s.item_code === item.item_code);
+          const wPerUnit = parseFloat(item.weight_per_unit || item.weightPerUnit || sbItem?.weight_per_unit || sbItem?.current_weight || 0);
           return {
             id: item.id,
             itemCode: item.item_code,
@@ -196,7 +198,8 @@ const StockEntries = () => {
             thickness: item.thickness ? String(item.thickness) : '',
             diameter: item.diameter ? String(item.diameter) : '',
             outerDiameter: item.outer_diameter ? String(item.outer_diameter) : '',
-            weightPerUnit: parseFloat(item.weight_per_unit || 0)
+            weightPerUnit: wPerUnit,
+            received_weight: item.received_weight || item.weight_per_unit || sbItem?.current_weight
           };
         })
       });
@@ -1217,10 +1220,22 @@ const StockEntries = () => {
                             <td className="p-2  text-slate-500">{item.uom}</td>
                             <td className="p-2  text-slate-500">{item.batchNo || '—'}</td>
                             <td className="p-2  text-right text-slate-500">
-                              {item.weightPerUnit > 0
-                                ? <span className="font-mono text-indigo-600">{(parseFloat(item.weightPerUnit) * parseFloat(item.quantity || 0)).toFixed(4)}</span>
-                                : '—'
-                              }
+                                {(() => {
+                                  const matType = (item.materialType || item.material_type || '').toUpperCase().trim();
+                                  const itemCode = String(item.itemCode || item.item_code || '').toUpperCase();
+                                  const isBoughtOut = matType.includes('BOUGHT') || itemCode.startsWith('BO-');
+                                  if (isBoughtOut) return '—';
+                                  const qty = parseFloat(item.quantity || 0);
+                                  const sbItem = (stockBalances || []).find(s => s.item_code === (item.itemCode || item.item_code));
+                                  const unitWt = parseFloat(item.weightPerUnit || item.weight_per_unit || item.weight || item.received_weight || sbItem?.weight_per_unit || sbItem?.current_weight || 0);
+                                  let totalWt = 0;
+                                  if (unitWt > 0) {
+                                    totalWt = (unitWt > 1 && (qty === 1 || qty === 0)) ? unitWt : (unitWt * qty);
+                                  } else if (item.uom === 'Kg' || item.uom === 'Kgs' || item.uom === 'KG') {
+                                    totalWt = qty > 1 ? qty : (parseFloat(sbItem?.current_weight || sbItem?.weight_per_unit || 0) || qty);
+                                  }
+                                  return totalWt > 0 ? <span className="font-mono text-indigo-600 font-bold">{totalWt.toFixed(3)}</span> : '—';
+                                })()}
                             </td>
                             <td className="p-2  text-right">₹{item.valuationRate}</td>
                             <td className="p-2  text-right  text-slate-700">₹{(item.quantity * item.valuationRate).toFixed(2)}</td>

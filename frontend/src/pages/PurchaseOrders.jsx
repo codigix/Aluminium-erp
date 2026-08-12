@@ -2457,16 +2457,36 @@ const PurchaseOrders = () => {
                             </div>
                           </td>
                           <td className="px-4 p-2 text-center">
-                            <div className="relative group max-w-[140px] mx-auto flex flex-col items-center gap-1">
-                              <input
-                                type="number"
-                                step="0.001"
-                                value={item.quantity === 0 || item.quantity === '0' ? '0' : (item.quantity || '')}
-                                onChange={(e) => handleEditItemChange(idx, 'quantity', e.target.value)}
-                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-center"
-                              />
-                              <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || item.uom || 'NOS'}</span>
-                            </div>
+                            {(() => {
+                              const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                              if (isBoughtOut) {
+                                return (
+                                  <div className="relative group max-w-[140px] mx-auto flex flex-col items-center gap-1">
+                                    <input
+                                      type="text"
+                                      value=""
+                                      placeholder="—"
+                                      disabled={true}
+                                      readOnly={true}
+                                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-400 text-center cursor-not-allowed"
+                                    />
+                                    <span className="text-[10px] text-slate-400 uppercase tracking-wider">NOS</span>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="relative group max-w-[140px] mx-auto flex flex-col items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="0.001"
+                                    value={item.quantity === 0 || item.quantity === '0' ? '0' : (item.quantity || '')}
+                                    onChange={(e) => handleEditItemChange(idx, 'quantity', e.target.value)}
+                                    className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-center"
+                                  />
+                                  <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || item.uom || 'NOS'}</span>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="px-4 p-2">
                             <div className="relative group max-w-[150px] mx-auto">

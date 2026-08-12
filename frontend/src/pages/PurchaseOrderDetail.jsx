@@ -428,16 +428,21 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {filteredItems.map((item, idx) => {
-                      const designQty = parseFloat(item.planned_qty || item.design_qty || 0);
-                      const reqWeight = parseFloat(item.quantity || item.required_weight || 0);
+                      const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                      const designQty = parseFloat(item.planned_qty || item.design_qty || (isBoughtOut ? item.quantity : 0) || 0);
+                      const reqWeight = isBoughtOut ? 0 : parseFloat(item.quantity || item.required_weight || 0);
                       const recQty = parseFloat(item.received_qty || item.accepted_quantity || 0);
-                      const recWeight = parseFloat(item.received_weight || item.accepted_quantity || 0);
+                      const recWeight = isBoughtOut ? 0 : parseFloat(item.received_weight || 0);
 
                       const pendingQty = Math.max(0, designQty - recQty);
-                      const pendingWeight = Math.max(0, reqWeight - recWeight);
+                      const pendingWeight = isBoughtOut ? 0 : Math.max(0, reqWeight - recWeight);
 
-                      const isFulfilled = (reqWeight > 0 && recWeight >= reqWeight) || (designQty > 0 && recQty >= designQty);
-                      const isPartial = (recQty > 0 || recWeight > 0) && !isFulfilled;
+                      const isFulfilled = isBoughtOut
+                        ? (designQty > 0 && recQty >= designQty)
+                        : ((reqWeight > 0 && recWeight >= reqWeight) || (designQty > 0 && recQty >= designQty));
+                      const isPartial = isBoughtOut
+                        ? (recQty > 0 && recQty < designQty)
+                        : ((recQty > 0 || recWeight > 0) && !isFulfilled);
 
                       const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no || '');
                       const cleanDwgNo = isDwgCodePattern ? '—' : (item.drawing_no || '—');
@@ -460,24 +465,42 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                             <span className="text-[10px] text-slate-400 ml-1">Nos</span>
                           </td>
                           <td className="p-2 text-center">
-                            <span className="font-semibold text-indigo-600">{reqWeight.toFixed(3)}</span>
-                            <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : (
+                              <>
+                                <span className="font-semibold text-indigo-600">{reqWeight.toFixed(3)}</span>
+                                <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                              </>
+                            )}
                           </td>
                           <td className="p-2 text-center">
                             <span className="font-semibold text-emerald-600">{recQty.toFixed(0)}</span>
                             <span className="text-[10px] text-slate-400 ml-1">Nos</span>
                           </td>
                           <td className="p-2 text-center">
-                            <span className="font-semibold text-emerald-600">{recWeight.toFixed(3)}</span>
-                            <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : (
+                              <>
+                                <span className="font-semibold text-emerald-600">{recWeight.toFixed(3)}</span>
+                                <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                              </>
+                            )}
                           </td>
                           <td className="p-2 text-center">
                             <span className={`font-semibold ${pendingQty > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{pendingQty.toFixed(0)}</span>
                             <span className="text-[10px] text-slate-400 ml-1">Nos</span>
                           </td>
                           <td className="p-2 text-center">
-                            <span className={`font-semibold ${pendingWeight > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{pendingWeight.toFixed(3)}</span>
-                            <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : (
+                              <>
+                                <span className={`font-semibold ${pendingWeight > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{pendingWeight.toFixed(3)}</span>
+                                <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                              </>
+                            )}
                           </td>
                           <td className="p-2 text-center text-slate-700">
                             {formatCurrency(item.unit_rate, po.currency)}
@@ -491,7 +514,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                               const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
                                               lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
                                               lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
-                              const effectiveQty = isLaser ? designQty : reqWeight;
+                              const effectiveQty = (isLaser || isBoughtOut) ? designQty : reqWeight;
                               return formatCurrency(effectiveQty * (parseFloat(item.unit_rate) || 0), po.currency);
                             })()}
                           </td>

@@ -553,6 +553,15 @@ const processStockMovement = async (entryId, connection, userId) => {
 
   for (const item of items) {
     console.log(`[StockMovement] Item: ${item.item_code}, Qty: ${item.quantity}, Type: ${entry.entry_type}`);
+    const weightPerUnit = parseFloat(item.weight_per_unit || 0);
+    const isKg = (item.uom || '').toLowerCase() === 'kg' || (item.uom || '').toLowerCase() === 'kgs' || (item.uom || '').toLowerCase() === 'kilogram';
+    let totalWeight = 0;
+    if (weightPerUnit > 0) {
+      totalWeight = weightPerUnit * Math.abs(parseFloat(item.quantity || 0));
+    } else if (isKg) {
+      totalWeight = Math.abs(parseFloat(item.quantity || 0));
+    }
+
     const ledgerOptions = {
       connection,
       warehouse: toWarehouseName || fromWarehouseName,
@@ -560,6 +569,7 @@ const processStockMovement = async (entryId, connection, userId) => {
       materialName: item.material_name,
       materialType: item.material_type,
       unit: item.uom,
+      weight: totalWeight,
       // Dimension fields for dimension-wise stock balance tracking
       shape_id: item.shape_id || null,
       shape_type: item.shape_type || null,
@@ -718,7 +728,7 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
       gi.diameter,
       gi.outer_diameter,
       gi.density,
-      gi.weight_per_unit,
+      COALESCE(gi.weight_per_unit, gi.received_weight, poi.required_weight, 0) as weight_per_unit,
       COALESCE(gi.shape_type, poi.shape_type) as shape_type
     FROM grn_items gi
     LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id

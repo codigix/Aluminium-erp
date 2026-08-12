@@ -375,17 +375,21 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
     conditions.push("UPPER(sb.material_type) NOT IN ('FG', 'FINISHED GOOD', 'FINISHED GOODS', 'FINISHED_GOODS', 'SUB_ASSEMBLY', 'SUB ASSEMBLY', 'SA', 'ASSEMBLY', 'PART')");
 
     conditions.push(`
-      NOT (
-        (COALESCE(sb.length, 0) = 0) AND 
-        (COALESCE(sb.width, 0) = 0) AND 
-        (COALESCE(sb.thickness, 0) = 0) AND 
-        (COALESCE(sb.diameter, 0) = 0) AND 
-        (COALESCE(sb.outer_diameter, 0) = 0) AND
-        EXISTS (
-          SELECT 1 FROM stock_balance sb2 
-          WHERE LOWER(TRIM(sb2.material_name)) = LOWER(TRIM(sb.material_name))
-            AND (LOWER(TRIM(sb2.unit)) = 'kg' OR LOWER(TRIM(sb2.unit)) = 'kgs')
-            AND (COALESCE(sb2.length, 0) > 0 OR COALESCE(sb2.width, 0) > 0 OR COALESCE(sb2.thickness, 0) > 0 OR COALESCE(sb2.diameter, 0) > 0 OR COALESCE(sb2.outer_diameter, 0) > 0)
+      (
+        UPPER(TRIM(sb.material_type)) IN ('BOUGHT_OUT', 'BOUGHT OUT', 'BOUGHT-OUT', 'BO') OR 
+        sb.item_code LIKE 'BO-%' OR 
+        NOT (
+          (COALESCE(sb.length, 0) = 0) AND 
+          (COALESCE(sb.width, 0) = 0) AND 
+          (COALESCE(sb.thickness, 0) = 0) AND 
+          (COALESCE(sb.diameter, 0) = 0) AND 
+          (COALESCE(sb.outer_diameter, 0) = 0) AND
+          EXISTS (
+            SELECT 1 FROM stock_balance sb2 
+            WHERE LOWER(TRIM(sb2.material_name)) = LOWER(TRIM(sb.material_name))
+              AND (LOWER(TRIM(sb2.unit)) = 'kg' OR LOWER(TRIM(sb2.unit)) = 'kgs')
+              AND (COALESCE(sb2.length, 0) > 0 OR COALESCE(sb2.width, 0) > 0 OR COALESCE(sb2.thickness, 0) > 0 OR COALESCE(sb2.diameter, 0) > 0 OR COALESCE(sb2.outer_diameter, 0) > 0)
+          )
         )
       )
     `);
@@ -606,6 +610,10 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
     let matName = options.materialName || existingBalance?.material_name || null;
     let matType = options.materialType || existingBalance?.material_type || null;
+
+    if (!matType && itemCode && String(itemCode).toUpperCase().startsWith('BO-')) {
+      matType = 'BOUGHT_OUT';
+    }
 
     // Normalize materialType to UPPER_CASE_WITH_UNDERSCORE
     if (matType) {

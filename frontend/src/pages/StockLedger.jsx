@@ -192,6 +192,8 @@ const StockLedger = () => {
       sortable: false,
       className: 'text-right',
       render: (val, row) => {
+        const isBoughtOut = (row.material_type || '').toUpperCase().trim().includes('BOUGHT') || (row.item_code && String(row.item_code).toUpperCase().startsWith('BO-'));
+        if (isBoughtOut) return <span className="text-slate-300 text-xs">—</span>;
         const wt = row.transaction_type === 'IN'
           ? parseFloat(row.weight_in || 0)
           : parseFloat(row.weight_out || 0);
@@ -219,7 +221,9 @@ const StockLedger = () => {
       label: 'Bal. Weight',
       sortable: false,
       className: 'text-right',
-      render: (val) => {
+      render: (val, row) => {
+        const isBoughtOut = (row.material_type || '').toUpperCase().trim().includes('BOUGHT') || (row.item_code && String(row.item_code).toUpperCase().startsWith('BO-'));
+        if (isBoughtOut) return <span className="text-slate-300 text-xs">—</span>;
         const wt = parseFloat(val || 0);
         return (
           <span className="text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 text-xs font-semibold">

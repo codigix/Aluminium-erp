@@ -2806,30 +2806,52 @@ const Quotations = () => {
                               </div>
                               <div className="col-span-1 flex flex-col items-center">
                                 <div className="text-xs text-slate-400 mb-0.5">
-                                  {item.planned_qty !== null && item.planned_qty !== undefined
+                                  {item.planned_qty !== null && item.planned_qty !== undefined && item.planned_qty !== ''
                                     ? (['NOS', 'PCS', 'SETS', 'NO', 'PC'].includes((item.uom || '').toUpperCase())
                                         ? Number(item.planned_qty).toFixed(0)
                                         : Number(item.planned_qty).toFixed(3))
-                                    : '-'}
-                                  {item.planned_qty !== null && item.planned_qty !== undefined && ' Nos'}
+                                    : (item.design_qty ? Number(item.design_qty).toFixed(0) : '-')}
+                                  {' Nos'}
                                 </div>
                                 <div className="text-xs text-slate-600">
                                   Design Qty
                                 </div>
                               </div>
-                              <div className="col-span-2 flex gap-1">
-                                <input
-                                  type="number"
-                                  placeholder="Required"
-                                  value={item.design_qty === 0 ? 0 : (item.design_qty || '')}
-                                  readOnly={!!formData.rfq_id}
-                                  onChange={(e) => handleItemChange(idx, 'design_qty', e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
-                                  className={`w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
-                                />
-                                <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-500 flex items-center justify-center min-w-[40px]">
-                                  {item.uom || 'Kg'}
-                                </div>
-                              </div>
+                              {(() => {
+                                const isItemBoughtOut = (item.material_type || '').toUpperCase().trim().includes('BOUGHT') || (item.drawing_no && String(item.drawing_no).toUpperCase().startsWith('BO-')) || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                                if (isItemBoughtOut) {
+                                  return (
+                                    <div className="col-span-2 flex gap-1">
+                                      <input
+                                        type="text"
+                                        value=""
+                                        placeholder="—"
+                                        disabled={true}
+                                        readOnly={true}
+                                        className="w-full p-2 border border-slate-200 rounded text-xs text-center bg-slate-50 text-slate-400 cursor-not-allowed"
+                                      />
+                                      <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-400 flex items-center justify-center min-w-[40px]">
+                                        Nos
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div className="col-span-2 flex gap-1">
+                                    <input
+                                      type="number"
+                                      placeholder="Required"
+                                      value={item.design_qty === 0 ? 0 : (item.design_qty || '')}
+                                      readOnly={!!formData.rfq_id}
+                                      onChange={(e) => handleItemChange(idx, 'design_qty', e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
+                                      className={`w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                                    />
+                                    <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-500 flex items-center justify-center min-w-[40px]">
+                                      {item.uom || 'Kg'}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })}
@@ -3153,18 +3175,40 @@ const Quotations = () => {
                                     </div>
                                   </td>
                                   <td className="p-2">
-                                    <div className="flex flex-col items-center gap-1">
-                                      <input
-                                        type="number"
-                                        value={item.required_weight !== undefined && item.required_weight !== null && item.required_weight !== '' ? item.required_weight : (item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? item.quantity : (item.design_qty || ''))}
-                                        onChange={(e) => handleRecordItemChange(idx, 'required_weight', e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
-                                        className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-center  text-indigo-600"
-                                        placeholder="0.000"
-                                      />
-                                      <div className="text-[9px] text-slate-400 ">
-                                        {item.uom || 'Kg'}
-                                      </div>
-                                    </div>
+                                    {(() => {
+                                      const isItemBoughtOut = (item.material_type || '').toUpperCase().trim().includes('BOUGHT') || (item.drawing_no && String(item.drawing_no).toUpperCase().startsWith('BO-')) || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                                      if (isItemBoughtOut) {
+                                        return (
+                                          <div className="flex flex-col items-center gap-1">
+                                            <input
+                                              type="text"
+                                              value=""
+                                              placeholder="—"
+                                              disabled={true}
+                                              readOnly={true}
+                                              className="w-full px-2 py-1 border border-slate-200 rounded text-center text-xs bg-slate-50 text-slate-400 cursor-not-allowed"
+                                            />
+                                            <div className="text-[9px] text-slate-400">
+                                              Nos
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                      return (
+                                        <div className="flex flex-col items-center gap-1">
+                                          <input
+                                            type="number"
+                                            value={item.required_weight !== undefined && item.required_weight !== null && item.required_weight !== '' ? item.required_weight : (item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? item.quantity : (item.design_qty || ''))}
+                                            onChange={(e) => handleRecordItemChange(idx, 'required_weight', e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
+                                            className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-center  text-indigo-600"
+                                            placeholder="0.000"
+                                          />
+                                          <div className="text-[9px] text-slate-400 ">
+                                            {item.uom || 'Kg'}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                   </td>
                                   <td className="p-2">
                                     <input
@@ -3822,24 +3866,46 @@ const Quotations = () => {
                                 Nos
                               </div>
                             </div>
-                            <div className="col-span-1 flex flex-col items-center">
-                              <input
-                                type="number"
-                                placeholder="Qty"
-                                value={item.required_weight !== undefined && item.required_weight !== null && item.required_weight !== '' ? item.required_weight : (item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? item.quantity : (item.design_qty || ''))}
-                                onChange={(e) => {
-                                  const newItems = [...editFormData.items];
-                                  const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
-                                  newItems[idx].required_weight = val;
-                                  newItems[idx].quantity = val;
-                                  setEditFormData({ ...editFormData, items: newItems });
-                                }}
-                                className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                              <div className="text-[9px] text-slate-400 mt-0.5">
-                                {item.uom || 'Kg'}
-                              </div>
-                            </div>
+                            {(() => {
+                              const isItemBoughtOut = (item.material_type || '').toUpperCase().trim().includes('BOUGHT') || (item.drawing_no && String(item.drawing_no).toUpperCase().startsWith('BO-')) || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                              if (isItemBoughtOut) {
+                                return (
+                                  <div className="col-span-1 flex flex-col items-center">
+                                    <input
+                                      type="text"
+                                      value=""
+                                      placeholder="—"
+                                      disabled={true}
+                                      readOnly={true}
+                                      className="w-full p-2 border border-slate-200 rounded text-xs text-center bg-slate-50 text-slate-400 cursor-not-allowed"
+                                    />
+                                    <div className="text-[9px] text-slate-400 mt-0.5">
+                                      Nos
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="col-span-1 flex flex-col items-center">
+                                  <input
+                                    type="number"
+                                    placeholder="Qty"
+                                    value={item.required_weight !== undefined && item.required_weight !== null && item.required_weight !== '' ? item.required_weight : (item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? item.quantity : (item.design_qty || ''))}
+                                    onChange={(e) => {
+                                      const newItems = [...editFormData.items];
+                                      const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
+                                      newItems[idx].required_weight = val;
+                                      newItems[idx].quantity = val;
+                                      setEditFormData({ ...editFormData, items: newItems });
+                                    }}
+                                    className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  />
+                                  <div className="text-[9px] text-slate-400 mt-0.5">
+                                    {item.uom || 'Kg'}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                             <input
                               type="number"
                               placeholder="Rate"

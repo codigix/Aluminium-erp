@@ -285,9 +285,8 @@ const POReceipts = () => {
                       lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
                       lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
 
-      const currQty = parseFloat(item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty) || 0;
-      const currWeight = parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : item.received_weight) || 0;
-      const effectiveQty = isLaser ? currQty : currWeight;
+      const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+      const effectiveQty = (isLaser || isBoughtOut) ? currQty : currWeight;
       const rate = parseFloat(item.rate !== undefined && item.rate !== '' ? item.rate : (item.unit_rate || 0)) || 0;
 
       newItems[index].rate = rate;
@@ -531,11 +530,8 @@ const POReceipts = () => {
               const defaultCurrentWeight = parseFloat(Math.max(0, reqWeight - prevRecWeight).toFixed(3));
 
               const rate = parseFloat(item.unit_rate || item.rate || 0);
-              const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
-              const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
-                              lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
-                              lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
-              const effectiveQty = isLaser ? defaultCurrentQty : defaultCurrentWeight;
+              const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+              const effectiveQty = (isLaser || isBoughtOut) ? defaultCurrentQty : defaultCurrentWeight;
 
               return {
                 ...item,
@@ -1234,16 +1230,17 @@ const POReceipts = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {formData.items.map((item, idx) => {
-                      const ordQty = parseFloat(item.ordered_qty || item.design_qty || 0);
-                      const ordWeight = parseFloat(item.ordered_weight || item.quantity || 0);
+                      const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                      const ordQty = parseFloat(item.ordered_qty || item.design_qty || (isBoughtOut ? item.quantity : 0) || 0);
+                      const ordWeight = isBoughtOut ? 0 : parseFloat(item.ordered_weight || item.quantity || 0);
                       const prevQty = parseFloat(item.prev_received_qty || 0);
-                      const prevWeight = parseFloat(item.prev_received_weight || 0);
+                      const prevWeight = isBoughtOut ? 0 : parseFloat(item.prev_received_weight || 0);
                       const isFullyReceived = ordQty - prevQty <= 0;
                       const currQty = parseFloat(item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty) || 0;
-                      const currWeight = parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : (item.received_weight || 0)) || 0;
+                      const currWeight = isBoughtOut ? 0 : (parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : (item.received_weight || 0)) || 0);
 
                       const pendingQty = Math.max(0, ordQty - (prevQty + currQty));
-                      const pendingWeight = parseFloat(Math.max(0, ordWeight - (prevWeight + currWeight)).toFixed(3));
+                      const pendingWeight = isBoughtOut ? 0 : parseFloat(Math.max(0, ordWeight - (prevWeight + currWeight)).toFixed(3));
 
                       return (
                         <tr key={idx} className="group hover:bg-slate-50/50 transition-all text-xs">
@@ -1311,13 +1308,19 @@ const POReceipts = () => {
                             <span className="text-[10px] text-slate-400 ml-1">Nos</span>
                           </td>
                           <td className="p-3 text-center">
-                            <span className="font-semibold text-indigo-600">{ordWeight.toFixed(3)}</span>
-                            <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : (
+                              <>
+                                <span className="font-semibold text-indigo-600">{ordWeight.toFixed(3)}</span>
+                                <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                              </>
+                            )}
                           </td>
                           <td className="p-3 text-center">
                             <div className="flex flex-col items-center text-[11px]">
                               <span className="font-medium text-slate-700">{prevQty.toFixed(0)} Nos</span>
-                              <span className="text-[10px] text-slate-400">{prevWeight.toFixed(3)} Kg</span>
+                              <span className="text-[10px] text-slate-400">{isBoughtOut ? '—' : `${prevWeight.toFixed(3)} Kg`}</span>
                             </div>
                           </td>
                           <td className="p-3 text-center">
@@ -1342,20 +1345,35 @@ const POReceipts = () => {
                             />
                           </td>
                           <td className="p-3 text-center">
-                            <input
-                              type="number"
-                              step="0.001"
-                              value={item.current_receiving_weight !== undefined && item.current_receiving_weight !== null ? item.current_receiving_weight : (item.received_weight !== undefined ? item.received_weight : '')}
-                              readOnly
-                              className="w-20 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs text-slate-500 font-semibold outline-none cursor-not-allowed"
-                              placeholder="0.000"
-                            />
+                            {isBoughtOut ? (
+                              <input
+                                type="text"
+                                value=""
+                                placeholder="—"
+                                disabled={true}
+                                readOnly={true}
+                                className="w-20 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs text-slate-400 font-medium outline-none cursor-not-allowed"
+                              />
+                            ) : (
+                              <input
+                                type="number"
+                                step="0.001"
+                                value={item.current_receiving_weight !== undefined && item.current_receiving_weight !== null ? item.current_receiving_weight : (item.received_weight !== undefined ? item.received_weight : '')}
+                                readOnly
+                                className="w-20 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs text-slate-500 font-semibold outline-none cursor-not-allowed"
+                                placeholder="0.000"
+                              />
+                            )}
                           </td>
                           <td className="p-3 text-center font-semibold text-amber-600">
                             {pendingQty.toFixed(0)} <span className="text-[9px] text-slate-400 font-normal">Nos</span>
                           </td>
                           <td className="p-3 text-center font-semibold text-amber-600">
-                            {pendingWeight.toFixed(3)} <span className="text-[9px] text-slate-400 font-normal">Kg</span>
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : (
+                              <>{pendingWeight.toFixed(3)} <span className="text-[9px] text-slate-400 font-normal">Kg</span></>
+                            )}
                           </td>
                           <td className="p-3 text-center">
                             <input
@@ -1373,14 +1391,14 @@ const POReceipts = () => {
                             <div className="flex flex-col items-end">
                               <span className="text-slate-900 text-xs font-bold">
                                 {(() => {
-                                  const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
-                                  const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
-                                                  lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
-                                                  lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
-                                  const effectiveQty = isLaser ? currQty : currWeight;
-                                  const rate = parseFloat(item.rate || item.unit_rate) || 0;
-                                  return formatCurrency(effectiveQty * rate);
-                                })()}
+                                    const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
+                                    const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
+                                                    lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+                                                    lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
+                                    const effectiveQty = (isLaser || isBoughtOut) ? currQty : currWeight;
+                                    const rate = parseFloat(item.rate || item.unit_rate) || 0;
+                                    return formatCurrency(effectiveQty * rate);
+                                  })()}
                               </span>
                             </div>
                           </td>
@@ -1836,23 +1854,22 @@ const POReceipts = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {(isViewEditMode ? viewEditItems : (selectedReceiptForView.items || [])).map((item, idx) => {
-                      const dQty = parseFloat(item.planned_qty || item.design_qty || 0);
-                      const reqWt = parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0);
+                      const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                      const dQty = parseFloat(item.planned_qty || item.design_qty || (isBoughtOut ? (item.quantity || item.received_quantity) : 0) || 0);
+                      const reqWt = isBoughtOut ? 0 : parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0);
                       
                       const rawRecQty = parseFloat(item.received_qty);
                       const rawRecWt = parseFloat(item.received_weight);
                       
-                      const recWt = (!isNaN(rawRecWt) && rawRecWt > 0) ? rawRecWt : parseFloat(item.received_quantity || 0);
-                      const recQty = (!isNaN(rawRecQty) && rawRecQty > 0 && Math.abs(rawRecQty - recWt) > 0.001)
-                        ? rawRecQty
-                        : (dQty > 0 ? dQty : (recWt > 0 ? recWt : 0));
+                      const recWt = isBoughtOut ? 0 : ((!isNaN(rawRecWt) && rawRecWt > 0) ? rawRecWt : parseFloat(item.received_quantity || 0));
+                      const recQty = (!isNaN(rawRecQty) && rawRecQty > 0) ? rawRecQty : dQty;
 
                       const cumQty = parseFloat(item.cumulative_received_qty !== undefined ? item.cumulative_received_qty : recQty) || recQty;
-                      const cumWt = parseFloat(item.cumulative_received_weight !== undefined ? item.cumulative_received_weight : recWt) || recWt;
+                      const cumWt = isBoughtOut ? 0 : (parseFloat(item.cumulative_received_weight !== undefined ? item.cumulative_received_weight : recWt) || recWt);
 
                       const pQty = Math.max(0, dQty - cumQty);
-                      const pWt = parseFloat(Math.max(0, reqWt - cumWt).toFixed(3));
-                      const unitStr = (item.unit || 'KG').toUpperCase();
+                      const pWt = isBoughtOut ? 0 : parseFloat(Math.max(0, reqWt - cumWt).toFixed(3));
+                      const unitStr = isBoughtOut ? 'NOS' : (item.unit || 'KG').toUpperCase();
 
                       return (
                         <tr key={idx} className={`group transition-colors ${isViewEditMode ? 'bg-blue-50/20 hover:bg-blue-50/40' : 'hover:bg-slate-50/50'}`}>
@@ -1909,7 +1926,9 @@ const POReceipts = () => {
 
                           {/* Required Weight */}
                           <td className="p-2 text-center text-slate-500 text-xs">
-                            {isViewEditMode ? (
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : isViewEditMode ? (
                               <div className="flex flex-col items-center gap-1">
                                 <input
                                   type="number"
@@ -1953,7 +1972,9 @@ const POReceipts = () => {
 
                           {/* Received Weight (KG) */}
                           <td className="p-2 text-center text-slate-900 text-xs">
-                            {isViewEditMode ? (
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : isViewEditMode ? (
                               <div className="flex flex-col items-center gap-1">
                                 <input
                                   type="number"
@@ -1983,10 +2004,14 @@ const POReceipts = () => {
 
                           {/* Pending Weight (KG) */}
                           <td className="p-2 text-center text-amber-600 font-semibold text-xs">
-                            <div className="flex flex-col items-center">
-                              <span>{pWt.toFixed(3)}</span>
-                              <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
-                            </div>
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span>{pWt.toFixed(3)}</span>
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );

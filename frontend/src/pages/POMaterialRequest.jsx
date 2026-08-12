@@ -649,7 +649,7 @@ const POMaterialRequest = () => {
               {row.finished_good || '—'}
             </span>
             <span className="text-[9px] text-slate-400 mt-1">
-              Project : {val || '—'}
+              Project : {row.company_name && row.company_name !== '—' ? row.company_name : (val || '—')}
             </span>
           </div>
         </div>
@@ -1185,8 +1185,8 @@ const POMaterialRequest = () => {
             <div className="bg-indigo-50/60 border border-indigo-100 rounded p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
                 <div>
-                  <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Project No.</span>
-                  <span className="text-xs font-semibold text-slate-700">{selectedRequest.project_name || '—'}</span>
+                  <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Customer / Project</span>
+                  <span className="text-xs font-semibold text-slate-700">{selectedRequest.company_name && selectedRequest.company_name !== '—' ? selectedRequest.company_name : (selectedRequest.project_name || '—')}</span>
                 </div>
                 <div className="h-8 w-px bg-slate-200 hidden md:block" />
                 <div>
@@ -1422,6 +1422,7 @@ const POMaterialRequest = () => {
                       const type = (item.material_type || '').toUpperCase();
                       return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
                     }).map((item, idx) => {
+                      const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
                       return (
                         <tr key={idx} className="hover:bg-slate-50/30 transition-colors group">
                           <td className="px-6 py-5">
@@ -1451,12 +1452,16 @@ const POMaterialRequest = () => {
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
-                            <div className="flex flex-col items-center">
-                              <span className="text-xs text-slate-800 font-medium font-semibold text-indigo-600">
-                                {Number(item.required_weight || 0).toFixed(3)}
-                              </span>
-                              <span className="text-xs  text-slate-400 ">KG</span>
-                            </div>
+                            {isBoughtOut ? (
+                              <span className="text-xs text-slate-400 font-medium">—</span>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span className="text-xs text-slate-800 font-medium font-semibold text-indigo-600">
+                                  {Number(item.required_weight || 0).toFixed(3)}
+                                </span>
+                                <span className="text-xs  text-slate-400 ">KG</span>
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex items-center justify-center gap-1.5">
@@ -1483,12 +1488,16 @@ const POMaterialRequest = () => {
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
-                            <div className="flex flex-col items-center">
-                              <span className="text-xs text-slate-800 font-medium">
-                                {Number(item.allocated_weight || 0).toFixed(3)}
-                              </span>
-                              <span className="text-xs  text-slate-400 ">KG</span>
-                            </div>
+                            {isBoughtOut ? (
+                              <span className="text-xs text-slate-400 font-medium">—</span>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span className="text-xs text-slate-800 font-medium">
+                                  {Number(item.allocated_weight || 0).toFixed(3)}
+                                </span>
+                                <span className="text-xs  text-slate-400 ">KG</span>
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
@@ -1499,12 +1508,16 @@ const POMaterialRequest = () => {
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
-                            <div className="flex flex-col items-center">
-                              <span className="text-xs text-slate-800 font-medium">
-                                {Number(item.remaining_weight || 0).toFixed(3)}
-                              </span>
-                              <span className="text-xs  text-slate-400 ">KG</span>
-                            </div>
+                            {isBoughtOut ? (
+                              <span className="text-xs text-slate-400 font-medium">—</span>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span className="text-xs text-slate-800 font-medium">
+                                  {Number(item.remaining_weight || 0).toFixed(3)}
+                                </span>
+                                <span className="text-xs  text-slate-400 ">KG</span>
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-5 text-right">
                             <div className="flex flex-col items-end gap-1.5">

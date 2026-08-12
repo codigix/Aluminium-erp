@@ -1161,27 +1161,37 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       label: 'Design Qty (NOS)',
       key: 'design_qty',
       className: 'text-center',
-      render: (val, item) => (
-        <span className="text-xs font-medium text-slate-500">
-          {parseFloat(item.planned_qty || val || 0).toFixed(0)} <span className="text-[10px] text-slate-400">NOS</span>
-        </span>
-      )
+      render: (val, item) => {
+        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+        const dQty = parseFloat(item.planned_qty || val || (isBoughtOut ? (item.quantity || item.received_qty) : 0) || 0);
+        return (
+          <span className="text-xs font-medium text-slate-500">
+            {dQty.toFixed(0)} <span className="text-[10px] text-slate-400">NOS</span>
+          </span>
+        );
+      }
     },
     {
       label: 'Required Weight (KG)',
       key: 'ordered_qty',
       className: 'text-center',
-      render: (val, item) => (
-        <span className="text-xs font-medium text-slate-600">
-          {parseFloat(item.required_weight || val || 0).toFixed(3)} <span className="text-[10px] text-slate-400">KG</span>
-        </span>
-      )
+      render: (val, item) => {
+        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+        if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
+        return (
+          <span className="text-xs font-medium text-slate-600">
+            {parseFloat(item.required_weight || val || 0).toFixed(3)} <span className="text-[10px] text-slate-400">KG</span>
+          </span>
+        );
+      }
     },
     {
       label: 'Invoice Weight (KG)',
       key: 'invoice_weight',
       className: 'text-center',
       render: (_, item) => {
+        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+        if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
         const invWt = parseFloat(item.invoice_weight || item.received_weight || 0);
         return (
           <span className="text-xs font-medium text-slate-700">
@@ -1211,6 +1221,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'received_weight',
       className: 'text-center',
       render: (_, item) => {
+        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+        if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
         const recWt = parseFloat(item.received_weight || 0);
         return (
           <div className="flex flex-col items-center">
@@ -1248,6 +1260,21 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'qc_inspection_weight',
       className: 'text-center',
       render: (val, item, idx) => {
+        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+        if (isBoughtOut) {
+          return (
+            <div className="flex flex-col items-center gap-1">
+              <input
+                type="text"
+                value=""
+                placeholder="—"
+                disabled={true}
+                readOnly={true}
+                className="w-24 p-2 bg-slate-50 border border-slate-200 rounded text-center text-xs text-slate-400 outline-none cursor-not-allowed"
+              />
+            </div>
+          );
+        }
         const recWt = parseFloat(item.received_weight || 0);
         const currentVal = val !== undefined && val !== null ? val : recWt;
         return (
@@ -1309,6 +1336,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'accepted_weight',
       className: 'text-center',
       render: (val, item) => {
+        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+        if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
         const recWt = parseFloat(item.received_weight || 0);
         const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
         const rejWt = parseFloat(item.rejected_weight || 0);
@@ -1328,6 +1357,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'rejected_weight',
       className: 'text-center',
       render: (val, item, idx) => {
+        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+        if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
         const rejWt = parseFloat(item.rejected_weight || 0);
         return (
           <div className="flex flex-col items-center gap-1">
@@ -1349,6 +1380,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'shortage',
       className: 'text-center text-rose-500',
       render: (_, item) => {
+        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+        if (isBoughtOut) return <span className="text-slate-300 text-xs">—</span>;
         const recWt = parseFloat(item.received_weight || 0);
         const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
         const shortage = Math.max(0, recWt - inspWt);
@@ -1364,6 +1397,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'overage',
       className: 'text-center text-blue-500',
       render: (_, item) => {
+        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+        if (isBoughtOut) return <span className="text-slate-300 text-xs">—</span>;
         const recWt = parseFloat(item.received_weight || 0);
         const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
         const overage = Math.max(0, inspWt - recWt);

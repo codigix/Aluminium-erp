@@ -291,31 +291,11 @@ const getQuotations = async (filters = {}) => {
              'General Procurement'
            ) as project_name,
            COALESCE(
-             c.company_name,
-             (
-               SELECT c2.company_name 
-               FROM production_plans pp
-               LEFT JOIN (
-                 SELECT plan_id, sales_order_item_id FROM production_plan_items
-                 WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
-               ) ppi ON pp.id = ppi.plan_id
-               LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
-               LEFT JOIN sales_orders so2 ON (
-                 (soi.id IS NOT NULL AND soi.sales_order_id = so2.id) OR
-                 (soi.id IS NULL AND pp.sales_order_id = so2.id)
-               )
-               LEFT JOIN companies c2 ON so2.company_id = c2.id
-               WHERE pp.id = mr.plan_id
-             ),
-             (
-               SELECT c3.company_name 
-               FROM production_plans pp
-               JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
-               JOIN companies c3 ON o.client_id = c3.id
-               WHERE pp.id = mr.plan_id
-             ),
-             'Internal'
-           ) as company_name,
+              c_ord.company_name,
+              c_so.company_name,
+              c.company_name,
+              'Internal'
+            ) as company_name,
            mr.mr_number, r.rfq_number
     FROM quotations q
     LEFT JOIN vendors v ON v.id = q.vendor_id
@@ -324,6 +304,10 @@ const getQuotations = async (filters = {}) => {
     LEFT JOIN material_requests mr ON mr.id = q.mr_id
     LEFT JOIN procurement_rfqs r ON r.id = q.rfq_id
     LEFT JOIN production_plans pp ON mr.plan_id = pp.id
+    LEFT JOIN orders o ON pp.sales_order_id = o.id
+    LEFT JOIN companies c_ord ON o.client_id = c_ord.id
+    LEFT JOIN sales_orders so_pp ON pp.sales_order_id = so_pp.id
+    LEFT JOIN companies c_so ON so_pp.company_id = c_so.id
     LEFT JOIN (
       SELECT plan_id, description FROM production_plan_items
       WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
@@ -454,8 +438,9 @@ const getQuotationById = async (quotationId) => {
               'General Procurement'
             ) as project_name, 
             COALESCE(
+              c_ord.company_name,
+              c_so.company_name,
               c.company_name,
-              (SELECT c2.company_name FROM companies c2 JOIN sales_orders so2 ON c2.id = so2.company_id JOIN production_plans pp ON so2.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
               'Internal'
             ) as company_name,
             r.rfq_number
@@ -465,6 +450,10 @@ const getQuotationById = async (quotationId) => {
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN procurement_rfqs r ON r.id = q.rfq_id
      LEFT JOIN production_plans pp ON mr.plan_id = pp.id
+     LEFT JOIN orders o ON pp.sales_order_id = o.id
+     LEFT JOIN companies c_ord ON o.client_id = c_ord.id
+     LEFT JOIN sales_orders so_pp ON pp.sales_order_id = so_pp.id
+     LEFT JOIN companies c_so ON so_pp.company_id = c_so.id
      LEFT JOIN (
        SELECT plan_id, description FROM production_plan_items
        WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
@@ -1788,6 +1777,13 @@ const generateQuotationPDF = async (quotationId) => {
         }
       }
 
+      const matType = (i.material_type || i.item_type || '').toUpperCase().trim();
+      const isBoughtOut = matType.includes('BOUGHT') || (i.drawing_no && String(i.drawing_no).toUpperCase().startsWith('BO-')) || (i.item_code && String(i.item_code).toUpperCase().startsWith('BO-'));
+
+      if (isBoughtOut) {
+        itemSize = '—';
+      }
+
       const plannedQtyVal = (i.planned_qty !== undefined && i.planned_qty !== null && i.planned_qty !== '')
         ? parseFloat(i.planned_qty)
         : null;
@@ -1800,7 +1796,7 @@ const generateQuotationPDF = async (quotationId) => {
       
       const uom = (i.uom || i.unit || 'Kg').trim();
       let required_weight_str = '—';
-      if (qty > 0) {
+      if (!isBoughtOut && qty > 0) {
         const formattedQty = (qty % 1 === 0) ? qty.toFixed(0) : qty.toFixed(3);
         required_weight_str = `${formattedQty} ${uom}`;
       }

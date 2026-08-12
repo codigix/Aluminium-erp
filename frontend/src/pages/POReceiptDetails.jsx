@@ -208,20 +208,19 @@ const POReceiptDetails = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {((receipt?.items && receipt.items.length > 0) ? receipt.items : poItems).map((item, idx) => {
-                        const dQty = parseFloat(item.planned_qty || item.design_qty || 0);
-                        const reqWt = parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0);
+                        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                        const dQty = parseFloat(item.planned_qty || item.design_qty || (isBoughtOut ? (item.quantity || item.received_quantity) : 0) || 0);
+                        const reqWt = isBoughtOut ? 0 : parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0);
                         
                         const rawRecQty = parseFloat(item.received_qty);
                         const rawRecWt = parseFloat(item.received_weight);
                         
-                        const recWt = (!isNaN(rawRecWt) && rawRecWt > 0) ? rawRecWt : parseFloat(item.received_quantity || 0);
-                        const recQty = (!isNaN(rawRecQty) && rawRecQty > 0 && Math.abs(rawRecQty - recWt) > 0.001)
-                          ? rawRecQty
-                          : (dQty > 0 ? dQty : (recWt > 0 ? recWt : 0));
+                        const recWt = isBoughtOut ? 0 : ((!isNaN(rawRecWt) && rawRecWt > 0) ? rawRecWt : parseFloat(item.received_quantity || 0));
+                        const recQty = (!isNaN(rawRecQty) && rawRecQty > 0) ? rawRecQty : dQty;
 
                         const pQty = Math.max(0, dQty - recQty);
-                        const pWt = parseFloat(Math.max(0, reqWt - recWt).toFixed(3));
-                        const unitStr = (item.unit || item.uom || 'KG').toUpperCase();
+                        const pWt = isBoughtOut ? 0 : parseFloat(Math.max(0, reqWt - recWt).toFixed(3));
+                        const unitStr = isBoughtOut ? 'NOS' : (item.unit || item.uom || 'KG').toUpperCase();
 
                         return (
                           <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
@@ -239,19 +238,31 @@ const POReceiptDetails = () => {
                               <span className="font-medium">{dQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
                             </td>
                             <td className="p-2.5 text-center text-slate-700">
-                              <span className="font-medium">{reqWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span>
+                              {isBoughtOut ? (
+                                <span className="font-medium text-slate-400">—</span>
+                              ) : (
+                                <><span className="font-medium">{reqWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span></>
+                              )}
                             </td>
                             <td className="p-2.5 text-center text-blue-600 font-bold">
                               <span>{recQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
                             </td>
                             <td className="p-2.5 text-center text-indigo-600 font-bold">
-                              <span>{recWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span>
+                              {isBoughtOut ? (
+                                <span className="font-medium text-slate-400">—</span>
+                              ) : (
+                                <><span className="font-medium">{recWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span></>
+                              )}
                             </td>
                             <td className="p-2.5 text-center text-amber-600 font-semibold">
                               <span>{pQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
                             </td>
                             <td className="p-2.5 text-center text-amber-600 font-semibold">
-                              <span>{pWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span>
+                              {isBoughtOut ? (
+                                <span className="font-medium text-slate-400">—</span>
+                              ) : (
+                                <><span className="font-medium">{pWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span></>
+                              )}
                             </td>
                           </tr>
                         );
