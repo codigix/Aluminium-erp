@@ -650,38 +650,56 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     }
   }
 
-  return rows.map(row => ({
-    ...row,
-    qty: row.quantity || row.qty,
-    quantity: row.quantity || row.qty,
-    available_stock: parseFloat(row.available_stock || 0),
-    weight_per_unit: (isHistorical && parseFloat(row.weight_per_unit) > 0) ? row.weight_per_unit : (row.weight_per_unit || row.latest_weight_per_unit),
-    length: (isHistorical && parseFloat(row.length) > 0) ? row.length : (row.length || row.latest_length || 0),
-    width: (isHistorical && parseFloat(row.width) > 0) ? row.width : (row.width || row.latest_width || 0),
-    thickness: (isHistorical && parseFloat(row.thickness) > 0) ? row.thickness : (row.thickness || row.latest_thickness || 0),
-    diameter: (isHistorical && parseFloat(row.diameter) > 0) ? row.diameter : (row.diameter || row.latest_diameter || 0),
-    outer_diameter: (isHistorical && parseFloat(row.outer_diameter) > 0) ? row.outer_diameter : (row.outer_diameter || row.latest_outer_diameter || 0),
-    rate: (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0)),
-    selling_rate: (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0)),
-    valuation_rate: (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || parseFloat(row.rate) || 0)),
-    pending_bom_cost: row.pending_bom_cost || null,
-    resolved_bom_cost: (parseFloat(row.rate) || 0).toFixed(2),
-    bom_cost: (() => {
-      const compCode = (row.item_code || row.component_code || row.componentCode || '').toUpperCase();
-      const g = (row.item_group || '').toUpperCase();
-      const d = (row.description || '').toUpperCase();
-      const isSA = compCode.startsWith('SA-') || compCode.startsWith('SFG-') || compCode.startsWith('PART-') ||
-        g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') ||
-        d.includes('ASSEMBLY') || d.includes('UNIT') ||
-        g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
+  return rows.map(row => {
+    const compCode = (row.item_code || row.component_code || row.componentCode || '').toUpperCase();
+    const g = (row.item_group || '').toUpperCase();
+    const d = (row.description || '').toUpperCase();
+    const isBO = compCode.startsWith('BO-') || compCode.startsWith('BO_') || compCode.startsWith('BO:') || 
+                 g.includes('BOUGHT') || g.includes('CONSUMABLE') ||
+                 compCode.startsWith('CONS-') || compCode.startsWith('CONS_');
 
-      if (isSA) return parseFloat(row.rate || 0);
+    const isSA = compCode.startsWith('SA-') || compCode.startsWith('SFG-') || compCode.startsWith('PART-') ||
+      g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') ||
+      d.includes('ASSEMBLY') || d.includes('UNIT') ||
+      g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
 
-      // For materials: weight * valuation_rate
-      const vRate = (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || 0));
-      return (parseFloat(row.weight_per_pc || row.weight_per_unit || 0) * vRate);
-    })()
-  }));
+    const resolvedRate = isBO 
+      ? (parseFloat(row.latest_valuation_rate) || parseFloat(row.rate) || 0)
+      : (row.is_cost_frozen ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0)));
+
+    const resolvedValuationRate = isBO 
+      ? (parseFloat(row.latest_valuation_rate) || parseFloat(row.rate) || 0)
+      : (row.is_cost_frozen ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || parseFloat(row.rate) || 0)));
+
+    const unitUom = isBO ? 'Nos' : (row.uom || row.unit || 'Nos');
+
+    return {
+      ...row,
+      qty: row.quantity || row.qty,
+      quantity: row.quantity || row.qty,
+      available_stock: parseFloat(row.available_stock || 0),
+      uom: unitUom,
+      unit: unitUom,
+      weight_per_unit: (isHistorical && parseFloat(row.weight_per_unit) > 0) ? row.weight_per_unit : (row.weight_per_unit || row.latest_weight_per_unit),
+      length: (isHistorical && parseFloat(row.length) > 0) ? row.length : (row.length || row.latest_length || 0),
+      width: (isHistorical && parseFloat(row.width) > 0) ? row.width : (row.width || row.latest_width || 0),
+      thickness: (isHistorical && parseFloat(row.thickness) > 0) ? row.thickness : (row.thickness || row.latest_thickness || 0),
+      diameter: (isHistorical && parseFloat(row.diameter) > 0) ? row.diameter : (row.diameter || row.latest_diameter || 0),
+      outer_diameter: (isHistorical && parseFloat(row.outer_diameter) > 0) ? row.outer_diameter : (row.outer_diameter || row.latest_outer_diameter || 0),
+      rate: resolvedRate,
+      selling_rate: resolvedRate,
+      valuation_rate: resolvedValuationRate,
+      pending_bom_cost: row.pending_bom_cost || null,
+      resolved_bom_cost: resolvedRate.toFixed(2),
+      bom_cost: (() => {
+        if (isSA) return parseFloat(row.rate || 0);
+        if (isBO) return resolvedValuationRate;
+        // For materials: weight * valuation_rate
+        const vRate = (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || 0));
+        return (parseFloat(row.weight_per_pc || row.weight_per_unit || 0) * vRate);
+      })()
+    };
+  });
 };
 
 const getItemOperations = async (itemId, itemCode = null, drawingNo = null, drawingId = null) => {

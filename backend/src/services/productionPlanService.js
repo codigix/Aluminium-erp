@@ -1275,9 +1275,22 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
   if (salesOrderId) {
     [allSoMaterials] = await pool.query(
-      `SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape 
+      `SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape,
+              i.item_code as actual_item_code
        FROM sales_order_item_materials m
        LEFT JOIN shapes s ON m.shape_id = s.id
+       LEFT JOIN (
+         SELECT material_name, MIN(item_code) as item_code,
+                MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
+                MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter
+         FROM stock_balance 
+         GROUP BY material_name, length, width, thickness, diameter, outer_diameter
+       ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name))
+         AND (ABS(COALESCE(i.length, 0) - COALESCE(m.length, 0)) < 0.0001)
+         AND (ABS(COALESCE(i.width, 0) - COALESCE(m.width, 0)) < 0.0001)
+         AND (ABS(COALESCE(i.thickness, 0) - COALESCE(m.thickness, 0)) < 0.0001)
+         AND (ABS(COALESCE(i.diameter, 0) - COALESCE(m.diameter, 0)) < 0.0001)
+         AND (ABS(COALESCE(i.outer_diameter, 0) - COALESCE(m.outer_diameter, 0)) < 0.0001)
        WHERE m.sales_order_item_id IN (SELECT id FROM sales_order_items WHERE sales_order_id = ?)`,
       [salesOrderId]
     );
@@ -1359,9 +1372,22 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         materials = allSoMaterials.filter(m => targetSoIds.includes(m.sales_order_item_id) && m.parent_id === parentId);
       } else {
         const [soM] = await pool.query(`
-          SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape 
+          SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape,
+                 i.item_code as actual_item_code
           FROM sales_order_item_materials m
           LEFT JOIN shapes s ON m.shape_id = s.id
+          LEFT JOIN (
+            SELECT material_name, MIN(item_code) as item_code,
+                   MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
+                   MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter
+            FROM stock_balance 
+            GROUP BY material_name, length, width, thickness, diameter, outer_diameter
+          ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name))
+            AND (ABS(COALESCE(i.length, 0) - COALESCE(m.length, 0)) < 0.0001)
+            AND (ABS(COALESCE(i.width, 0) - COALESCE(m.width, 0)) < 0.0001)
+            AND (ABS(COALESCE(i.thickness, 0) - COALESCE(m.thickness, 0)) < 0.0001)
+            AND (ABS(COALESCE(i.diameter, 0) - COALESCE(m.diameter, 0)) < 0.0001)
+            AND (ABS(COALESCE(i.outer_diameter, 0) - COALESCE(m.outer_diameter, 0)) < 0.0001)
           WHERE m.sales_order_item_id IN (?) AND m.parent_id <=> ?
         `, [targetSoIds, parentId]);
         materials = soM;
@@ -1474,9 +1500,22 @@ const getItemBOMDetails = async (salesOrderItemId) => {
           const gId = globalMatch[0].id;
           console.log(`[explodeBOM] Found GLOBAL fallback ID ${gId} for ${itemCode}`);
           const [gM] = await pool.query(`
-            SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape 
+            SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape,
+                   i.item_code as actual_item_code
             FROM sales_order_item_materials m
             LEFT JOIN shapes s ON m.shape_id = s.id
+            LEFT JOIN (
+              SELECT material_name, MIN(item_code) as item_code,
+                     MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
+                     MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter
+              FROM stock_balance 
+              GROUP BY material_name, length, width, thickness, diameter, outer_diameter
+            ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name))
+              AND (ABS(COALESCE(i.length, 0) - COALESCE(m.length, 0)) < 0.0001)
+              AND (ABS(COALESCE(i.width, 0) - COALESCE(m.width, 0)) < 0.0001)
+              AND (ABS(COALESCE(i.thickness, 0) - COALESCE(m.thickness, 0)) < 0.0001)
+              AND (ABS(COALESCE(i.diameter, 0) - COALESCE(m.diameter, 0)) < 0.0001)
+              AND (ABS(COALESCE(i.outer_diameter, 0) - COALESCE(m.outer_diameter, 0)) < 0.0001)
             WHERE m.sales_order_item_id = ? AND m.parent_id IS NULL
           `, [gId]);
           const [gC] = await pool.query(`
@@ -1548,7 +1587,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const baseQtyPerFG = isKgMaterial ? ((parseFloat(m.qty_per_pc) || 1) * total_wt) : (parseFloat(m.qty_per_pc) || 1);
 
       const matName = m.description || m.material_name || m.name || m.item || 'Unknown Material';
-      const matCode = m.material_code || m.item_code || m.itemCode || '';
+      const matCode = m.actual_item_code || m.material_code || m.item_code || m.itemCode || '';
       const len = Number(m.length) || 0;
       const wid = Number(m.width) || 0;
       const thk = Number(m.thickness) || 0;
@@ -1562,6 +1601,13 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       if (existing) {
         existing.required_qty += reqQty;
         existing.totalRequiredQty += reqQty;
+        
+        // Merge BOM reference
+        const newRef = m.bom_no || m.bom_ref || drawingNo;
+        if (newRef && existing.bom_ref && !existing.bom_ref.includes(newRef)) {
+          existing.bom_ref = `${existing.bom_ref}, ${newRef}`;
+        }
+        
         // Prioritize CORE category
         if (material_category === 'CORE') {
           existing.material_category = 'CORE';
@@ -1793,10 +1839,32 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         const baseQtyPerFG = parseFloat(comp.quantity || 0) || 1;
         const reqQty = baseQtyPerFG * qtyMultiplier;
 
+        // Rate lookup for Bought Out item if rate is 0
+        let boRate = parseFloat(comp.rate || comp.valuation_rate || comp.latest_valuation_rate) || 0;
+        if (boRate === 0 && matCode) {
+          const [sbRow] = await pool.query(
+            'SELECT valuation_rate FROM stock_balance WHERE item_code = ? LIMIT 1',
+            [matCode]
+          );
+          if (sbRow.length > 0) {
+            boRate = parseFloat(sbRow[0].valuation_rate) || 0;
+          }
+        }
+        
+        // Force UOM of all Bought-Out items to be Nos/NOS
+        const boUom = 'Nos';
+
         const existing = materialMap.get(mKey);
         if (existing) {
           existing.required_qty += reqQty;
           existing.totalRequiredQty += reqQty;
+          
+          // Merge BOM reference
+          const newRef = comp.bom_no || comp.bom_ref || compDrawing;
+          if (newRef && existing.bom_ref && !existing.bom_ref.includes(newRef)) {
+            existing.bom_ref = `${existing.bom_ref}, ${newRef}`;
+          }
+          
           if (material_category === 'CORE') {
             existing.material_category = 'CORE';
           }
@@ -1810,10 +1878,12 @@ const getItemBOMDetails = async (salesOrderItemId) => {
             required_qty: reqQty,
             totalRequiredQty: reqQty,
             source_assembly,
-            rate: comp.rate || 0,
+            rate: boRate,
             bom_ref: comp.bom_no || comp.bom_ref || compDrawing || 'BOM-REF',
             total_wt: 0,
-            is_kg_material: (comp.uom || '').toUpperCase() === 'KG'
+            uom: boUom,
+            unit: boUom,
+            is_kg_material: false
           });
         }
 
@@ -1826,7 +1896,11 @@ const getItemBOMDetails = async (salesOrderItemId) => {
           qty_per_pc: baseQtyPerFG,
           weight_per_unit: comp.weight_per_unit || 0,
           scrap_percent: comp.scrap_percent || 0,
-          item_group: comp.item_group || 'BOUGHT_OUT'
+          item_group: comp.item_group || 'BOUGHT_OUT',
+          uom: boUom,
+          unit: boUom,
+          rate: boRate,
+          is_kg_material: false
         });
       }
 
@@ -1877,7 +1951,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
         return {
           ...m,
-          item_code: m.material_code || m.item_code || m.itemCode || null,
+          item_code: m.actual_item_code || m.material_code || m.item_code || m.itemCode || null,
           material_name: m.material_name || m.name || null,
           qty_per_pc: m.qty_per_pc || 0,
           required_qty: baseQtyPerFG * qtyMultiplier,

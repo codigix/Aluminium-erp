@@ -1211,37 +1211,45 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         const matCat = mat.material_category || ((mat.depth <= 1) ? 'CORE' : 'EXPLODED');
 
         const weightMultiplier = mat.is_kg_material ? (parseFloat(mat.total_wt) || 1) : 1;
-        const baseQty = parseFloat(mat.qty_per_pc || mat.required_qty || 0) * weightMultiplier;
+        
+        let baseQty = 0;
+        if (mat.required_qty !== undefined && mat.required_qty !== null && mat.required_qty !== '') {
+          baseQty = parseFloat(mat.required_qty);
+        } else {
+          baseQty = parseFloat(mat.qty_per_pc || 0) * weightMultiplier;
+        }
+
         const itemPlannedQty = parseFloat(item.plannedQty || newPlan.targetQuantity || 1);
         const plannedQty = baseQty * itemPlannedQty;
 
-        // Determine which source item produced this material:
-        // - For materials from nested Parts (Assembly BOM explosion): mat.source_assembly = Part item code
-        // - For Assembly's own direct materials: mat.source_assembly = null → use Assembly's item code
-        // Look up the effective qty of that source item from our pre-built map.
-        // e.g. SUPPORT ARM materials → source_assembly = 'PART-SUPPORTARM-0001' → effectiveQty = 15
-        const sourceItemCode = mat.source_assembly || item.itemCode;
-        let designQtyForMaterial = itemEffectiveQtyMap.get(sourceItemCode);
-        if (designQtyForMaterial === undefined) {
-          if (mat.source_assembly && mat.is_kg_material && mat.total_wt > 0) {
-            // material comes from a sub-part; derive piece count from required_qty / weight_per_piece
-            designQtyForMaterial = Math.round((parseFloat(mat.required_qty || 0) / mat.total_wt) * itemPlannedQty);
-          } else {
-            designQtyForMaterial = itemPlannedQty;
-          }
-        }
+        // Calculate pieces required per top-level assembly item
+        const pcsPerTopAssembly = mat.is_kg_material
+          ? (mat.total_wt > 0 ? (baseQty / mat.total_wt) : parseFloat(mat.qty_per_pc || 0))
+          : baseQty;
 
-        // Use a key that represents the material identity - de-duplicate by name, unit, and dimensions
+        const designQtyForMaterial = Math.round(pcsPerTopAssembly * itemPlannedQty);
+
+        // Determine which source item produced this material:
+        const sourceItemCode = mat.source_assembly || item.itemCode;
+
+        // Use a key that represents the material identity - de-duplicate by code, name, type, shape, unit, and dimensions
         const len = Number(mat.length || (mat.dimensions && mat.dimensions.length)) || 0;
         const wid = Number(mat.width || (mat.dimensions && mat.dimensions.width)) || 0;
         const thk = Number(mat.thickness || (mat.dimensions && mat.dimensions.thickness)) || 0;
         const dia = Number(mat.diameter || (mat.dimensions && mat.dimensions.diameter)) || 0;
         const od = Number(mat.outer_diameter || (mat.dimensions && mat.dimensions.outer_diameter)) || 0;
-        const mKey = `${matName.toLowerCase().trim()}-${(mat.uom || mat.unit || '').toLowerCase().trim()}-${len}-${wid}-${thk}-${dia}-${od}`;
+
+        const itemCodeKey = (mat.item_code || mat.material_code || mat.itemCode || mat.item || '').toLowerCase().trim();
+        const matTypeKey = (mat.material_type || mat.materialType || '').toLowerCase().trim();
+        const shapeTypeKey = (mat.shape_type || mat.shape_name || mat.shape || '').toLowerCase().trim();
+
+        const mKey = `${itemCodeKey}_${matName.toLowerCase().trim()}_${matTypeKey}_${shapeTypeKey}_${(mat.uom || mat.unit || '').toLowerCase().trim()}-${len}-${wid}-${thk}-${dia}-${od}`;
 
         // If this is a material and we've already processed this identity from this SO Item,
         // we might be double-counting if the recursion hits it multiple times.
         const soItemMaterialKey = `${soItemId}-${mKey}`;
+
+        const bomRef = mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF';
 
         if (consolidatedMaterialsMap.has(mKey)) {
           const existing = consolidatedMaterialsMap.get(mKey);
@@ -1249,26 +1257,32 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           // Sum up quantities for the same material
           existing.totalPlannedQty += plannedQty;
           existing.required_qty = (parseFloat(existing.required_qty) || 0) + plannedQty;
-          // Take the largest design qty when same material is used in multiple items
-          if (designQtyForMaterial > existing.totalDesignQty) {
-            existing.totalDesignQty = designQtyForMaterial;
-          }
+          
+          // Sum the design qty instead of taking the largest
+          existing.totalDesignQty = (parseFloat(existing.totalDesignQty) || 0) + designQtyForMaterial;
 
           if (matCat === 'CORE') existing.material_category = 'CORE';
+
+          // Merge BOM reference
+          if (bomRef && existing.bom_no && !existing.bom_no.includes(bomRef)) {
+            existing.bom_no = `${existing.bom_no}, ${bomRef}`;
+          }
+          // Merge source assembly
+          if (sourceItemCode && existing.source_assembly && !existing.source_assembly.includes(sourceItemCode)) {
+            existing.source_assembly = `${existing.source_assembly}, ${sourceItemCode}`;
+          }
         } else {
           consolidatedMaterialsMap.set(mKey, {
             ...mat,
             item_code: itemCode,
             material_name: matName,
             material_category: matCat,
-            // Design Qty = effective qty of the source Part/item that consumes this material.
-            // For nested Part materials: mat.source_assembly → Part's effective qty (e.g. 15)
-            // For Assembly's own materials: item.itemCode → Assembly's qty (e.g. 5)
             totalDesignQty: designQtyForMaterial,
             totalPlannedQty: plannedQty,
             required_qty: plannedQty,
             bomQty: baseQty,
-            bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
+            bom_no: bomRef,
+            source_assembly: sourceItemCode,
             source_fg: item.description || item.itemCode
           });
         }
