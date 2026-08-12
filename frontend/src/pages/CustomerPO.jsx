@@ -2556,7 +2556,7 @@ const CustomerPO = ({
       {showPoForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={closePoForm} />
-          <div className="relative w-full max-w-7xl bg-white shadow-2xl rounded  flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in duration-300 border border-white/20">
+          <div className="relative w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] bg-white shadow-2xl rounded  flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300 border border-white/20">
             {/* Modal Header */}
             <div className="p-2  border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
               <div>
@@ -2952,23 +2952,23 @@ const CustomerPO = ({
                     )}
                   </div>
 
-                  <div className="overflow-x-auto rounded border-2 border-slate-100 bg-white min-h-[280px]">
+                  <div className="overflow-x-auto overflow-y-auto rounded border-2 border-slate-100 bg-white max-h-[45vh] min-h-[280px] custom-scrollbar relative">
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b-2 border-slate-100">
-                          <th className="p-2  text-xs  text-slate-400   text-left w-96">Drawing No *</th>
-                          <th className="p-2  text-xs  text-slate-400   text-left">Description *</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-20">HSN Code</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-28">Item Delivery</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-16">Qty *</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-22">Dispatch Progress</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-12">Unit</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-20">Rate *</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-10">CGST%</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-10">SGST%</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-10">IGST%</th>
-                          <th className="p-2  text-xs  text-slate-400   text-right pr-6 w-24">Total</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-10">Action</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-left w-96 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Drawing No *</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-left z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Description *</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-20 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">HSN Code</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-28 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Item Delivery</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-16 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Qty *</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-22 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Dispatch Progress</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-12 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Unit</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-20 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Rate *</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-10 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">CGST%</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-10 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">SGST%</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-10 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">IGST%</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-right pr-6 w-24 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Total</th>
+                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-10 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -2979,7 +2979,7 @@ const CustomerPO = ({
                           const rows = [];
                           rows.push(
                             <tr key={`item-${index}`} className="group hover:bg-indigo-50/30 transition-all">
-                              <td className="p-2">
+                              <td className="p-1">
                                 {formMode === 'VIEW' ? (
                                   <span className="text-xs font-mono font-bold text-slate-700 block px-1 max-w-[380px]" title={item.drawingNo}>
                                     {item.drawingNo?.toUpperCase() || '—'}
@@ -2995,11 +2995,11 @@ const CustomerPO = ({
                                     placeholder="Search Drawing No..."
                                     allowCustom={true}
                                     openUpwards={false}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
                                   />
                                 )}
                               </td>
-                              <td className="p-2">
+                              <td className="p-1">
                                 {formMode === 'VIEW' ? (
                                   <span className="text-xs font-semibold text-slate-700 block min-w-[140px] px-1 truncate max-w-[200px]" title={item.description}>
                                     {item.description || '—'}
@@ -3010,11 +3010,11 @@ const CustomerPO = ({
                                     value={item.description}
                                     onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                                     placeholder="Item description..."
-                                    className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
                                   />
                                 )}
                               </td>
-                              <td className="p-2 text-center align-middle">
+                              <td className="p-1 text-center align-middle">
                                 {formMode === 'VIEW' ? (
                                   <span className="text-xs text-slate-600 font-medium block text-center px-1">
                                     {item.hsnCode || '—'}
@@ -3025,11 +3025,11 @@ const CustomerPO = ({
                                     value={item.hsnCode || ''}
                                     onChange={(e) => handleItemChange(index, 'hsnCode', e.target.value)}
                                     placeholder="HSN..."
-                                    className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
                                   />
                                 )}
                               </td>
-                              <td className="p-2 text-center align-middle">
+                              <td className="p-1 text-center align-middle">
                                 {formMode === 'VIEW' ? (
                                   <span className="text-xs text-slate-600 font-medium block text-center px-1">
                                     {item.deliveryDate ? new Date(item.deliveryDate).toLocaleDateString('en-GB') : '—'}
@@ -3039,11 +3039,11 @@ const CustomerPO = ({
                                     type="date"
                                     value={item.deliveryDate || ''}
                                     onChange={(e) => handleItemChange(index, 'deliveryDate', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
                                   />
                                 )}
                               </td>
-                              <td className="p-2 text-center align-middle">
+                              <td className="p-1 text-center align-middle">
                                 {formMode === 'VIEW' ? (
                                   <span className="text-xs font-semibold text-slate-800 block text-center px-1">
                                     {item.quantity || 0}
@@ -3053,11 +3053,11 @@ const CustomerPO = ({
                                     type="number"
                                     value={item.quantity}
                                     onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-800"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-800"
                                   />
                                 )}
                               </td>
-                              <td className="p-2 text-center align-middle min-w-[88px]">
+                              <td className="p-1 text-center align-middle min-w-[88px]">
                                 {(() => {
                                   const ordered = parseFloat(item.quantity) || 0;
                                   const dispatched = parseFloat(item.dispatched_qty) || 0;
@@ -3083,7 +3083,7 @@ const CustomerPO = ({
                                   );
                                 })()}
                               </td>
-                              <td className="p-2 text-center align-middle">
+                              <td className="p-1 text-center align-middle">
                                 {formMode === 'VIEW' ? (
                                   <span className="text-xs text-slate-600 font-medium block text-center px-1">{item.unit || 'Nos'}</span>
                                 ) : (
@@ -3091,11 +3091,11 @@ const CustomerPO = ({
                                     type="text"
                                     value={item.unit}
                                     onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600 "
+                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600 "
                                   />
                                 )}
                               </td>
-                              <td className="p-2 text-center align-middle">
+                              <td className="p-1 text-center align-middle">
                                 {formMode === 'VIEW' ? (
                                   <span className="text-xs font-mono font-semibold text-slate-700 block text-center px-1">{formatCurrency(item.rate)}</span>
                                 ) : (
@@ -3103,12 +3103,12 @@ const CustomerPO = ({
                                     type="number"
                                     value={item.rate}
                                     onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
-                                    className="w-full bg-indigo-50 border border-indigo-100 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-indigo-600 placeholder:text-indigo-200"
+                                    className="w-full bg-indigo-50 border border-indigo-100 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-indigo-600 placeholder:text-indigo-200"
                                     placeholder="0.00"
                                   />
                                 )}
                               </td>
-                              <td className="p-2 text-center align-middle">
+                              <td className="p-1 text-center align-middle">
                                 {formMode === 'VIEW' ? (
                                   <span className="text-xs text-slate-500 block text-center px-1">{parseFloat(item.cgstPercent) || 0}%</span>
                                 ) : (
@@ -3116,11 +3116,11 @@ const CustomerPO = ({
                                     type="number"
                                     value={item.cgstPercent}
                                     onChange={(e) => handleItemChange(index, 'cgstPercent', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
                                   />
                                 )}
                               </td>
-                              <td className="p-2 text-center align-middle">
+                              <td className="p-1 text-center align-middle">
                                 {formMode === 'VIEW' ? (
                                   <span className="text-xs text-slate-500 block text-center px-1">{parseFloat(item.sgstPercent) || 0}%</span>
                                 ) : (
@@ -3128,11 +3128,11 @@ const CustomerPO = ({
                                     type="number"
                                     value={item.sgstPercent}
                                     onChange={(e) => handleItemChange(index, 'sgstPercent', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
                                   />
                                 )}
                               </td>
-                              <td className="p-2 text-center align-middle">
+                              <td className="p-1 text-center align-middle">
                                 {formMode === 'VIEW' ? (
                                   <span className="text-xs text-slate-500 block text-center px-1">{parseFloat(item.igstPercent) || 0}%</span>
                                 ) : (
@@ -3140,19 +3140,19 @@ const CustomerPO = ({
                                     type="number"
                                     value={item.igstPercent}
                                     onChange={(e) => handleItemChange(index, 'igstPercent', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
                                   />
                                 )}
                               </td>
-                              <td className="p-2 text-right pr-6">
+                              <td className="p-1 text-right pr-6">
                                 <span className="text-xs   text-slate-900">{formatCurrency(total)}</span>
                               </td>
-                              <td className="p-2 text-center">
+                              <td className="p-1 text-center">
                                 {formMode !== 'VIEW' && (
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveItem(index)}
-                                    className="p-2 bg-slate-50 border border-slate-200 rounded  text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 transition-all active:scale-90"
+                                    className="p-1 bg-slate-50 border border-slate-200 rounded  text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 transition-all active:scale-90"
                                     title="Remove Item"
                                   >
                                     <Trash2 className="w-4 h-4" />
@@ -3170,13 +3170,13 @@ const CustomerPO = ({
                               const saTotal = saQty * saRate;
                               rows.push(
                                 <tr key={`item-${index}-sa-${saIdx}`} className="bg-slate-50/40">
-                                  <td className="p-2 border-b border-slate-100">
+                                  <td className="py-1 px-1.5 border-b border-slate-100">
                                     <div className="flex items-center gap-2 pl-3">
                                       <GitBranch size={12} className="text-blue-400 rotate-180" />
                                       <span className="text-[9px] text-slate-500 font-mono ">{(sa.drawingNo || '').toUpperCase()}</span>
                                     </div>
                                   </td>
-                                  <td className="p-2 border-b border-slate-100">
+                                  <td className="py-1 px-1.5 border-b border-slate-100">
                                     <div className="flex flex-col pl-3">
                                       <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
                                       {(() => {
@@ -3196,27 +3196,27 @@ const CustomerPO = ({
                                       })()}
                                     </div>
                                   </td>
-                                  <td className="p-2 border-b border-slate-100 text-center text-[10px] text-slate-500 ">
+                                  <td className="py-1 px-1.5 border-b border-slate-100 text-center text-[10px] text-slate-500 ">
                                     {sa.hsnCode || '—'}
                                   </td>
-                                  <td className="p-2 border-b border-slate-100 text-center text-[10px] text-slate-500 ">
+                                  <td className="py-1 px-1.5 border-b border-slate-100 text-center text-[10px] text-slate-500 ">
                                     {sa.deliveryDate ? new Date(sa.deliveryDate).toLocaleDateString('en-GB') : '—'}
                                   </td>
-                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-600 ">
+                                  <td className="py-1 px-1.5 border-b border-slate-100 text-center text-[11px] text-slate-600 ">
                                     {saQty.toFixed(3)}
                                   </td>
-                                  <td className="p-2 border-b border-slate-100"></td>
-                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-400 ">
+                                  <td className="py-1 px-1.5 border-b border-slate-100"></td>
+                                  <td className="py-1 px-1.5 border-b border-slate-100 text-center text-[11px] text-slate-400 ">
                                     {sa.unit || 'Nos'}
                                   </td>
-                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-700 ">
+                                  <td className="py-1 px-1.5 border-b border-slate-100 text-center text-[11px] text-slate-700 ">
                                     {formatCurrency(saRate)}
                                   </td>
-                                  <td colSpan="3" className="p-2 border-b border-slate-100"></td>
-                                  <td className="p-2 border-b border-slate-100 text-right pr-6 text-[11px] text-slate-900 ">
+                                  <td colSpan="3" className="py-1 px-1.5 border-b border-slate-100"></td>
+                                  <td className="py-1 px-1.5 border-b border-slate-100 text-right pr-6 text-[11px] text-slate-900 ">
                                     {formatCurrency(saTotal)}
                                   </td>
-                                  <td className="p-2 border-b border-slate-100"></td>
+                                  <td className="py-1 px-1.5 border-b border-slate-100"></td>
                                 </tr>
                               );
                             });
