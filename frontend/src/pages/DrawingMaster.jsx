@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Card, Modal, FormControl, DataTable, StatusBadge } from '../components/ui.jsx';
+import { Card, Modal, FormControl, StatusBadge } from '../components/ui.jsx';
+import DataTable from '../components/DataTable.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { Eye, Edit2, Trash2, History, Search, RefreshCw, FileText, PencilLine, Plus, X, ChevronRight, ChevronDown, Check, ChevronUp } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -62,7 +63,7 @@ const DrawingMaster = () => {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState(null);
   const [companies, setCompanies] = useState([]);
-  const [selectedRows, setSelectedRows] = useState(new Set());
+  const [selectedRows, setSelectedRows] = useState([]);
   const [activeDrawingIdForFiles, setActiveDrawingIdForFiles] = useState(null);
 
   const handlePreview = (drawing) => {
@@ -238,7 +239,7 @@ const DrawingMaster = () => {
   };
 
   const handleApproveGroup = async () => {
-    const selectedIds = Array.from(selectedRows);
+    const selectedIds = selectedRows;
     if (selectedIds.length === 0) return;
 
     // Filter drawings to get only those that are pending and get their sales_order_item_id
@@ -292,7 +293,7 @@ const DrawingMaster = () => {
       }
 
       successToast(`${itemsToApprove.length} drawings approved successfully`);
-      setSelectedRows(new Set());
+      setSelectedRows([]);
       fetchDrawings(searchTerm);
     } catch (error) {
       errorToast(error.message);
@@ -302,7 +303,7 @@ const DrawingMaster = () => {
   };
 
   const handleRejectGroup = async () => {
-    const selectedIds = Array.from(selectedRows);
+    const selectedIds = selectedRows;
     if (selectedIds.length === 0) return;
 
     const itemsToReject = drawings
@@ -362,7 +363,7 @@ const DrawingMaster = () => {
       if (!response.ok) throw new Error('Failed to reject drawings');
 
       successToast(`${itemsToReject.length} drawings rejected successfully`);
-      setSelectedRows(new Set());
+      setSelectedRows([]);
       fetchDrawings(searchTerm);
     } catch (error) {
       errorToast(error.message);
@@ -780,7 +781,7 @@ const DrawingMaster = () => {
                 onKeyDown={(e) => e.key === 'Enter' && fetchDrawings(searchTerm)}
               />
             </div>
-            {selectedRows.size > 0 && drawings.some(d => selectedRows.has(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED') && (
+            {selectedRows.length > 0 && drawings.some(d => selectedRows.includes(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED') && (
               <div className="flex items-center gap-2 ml-2">
                 <button
                   onClick={handleApproveGroup}
@@ -788,7 +789,7 @@ const DrawingMaster = () => {
                   className="flex items-center gap-2 p-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none"
                 >
                   {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                  Approve Selective ({drawings.filter(d => selectedRows.has(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
+                  Approve Selective ({drawings.filter(d => selectedRows.includes(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
                 </button>
                 <button
                   onClick={handleRejectGroup}
@@ -796,7 +797,7 @@ const DrawingMaster = () => {
                   className="flex items-center gap-2 p-2 bg-rose-600 text-white rounded text-xs  hover:bg-rose-700 transition-all shadow-lg shadow-rose-50 disabled:opacity-50 border-none"
                 >
                   {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <X size={14} />}
-                  Reject Selective ({drawings.filter(d => selectedRows.has(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
+                  Reject Selective ({drawings.filter(d => selectedRows.includes(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
                 </button>
               </div>
             )}
@@ -807,10 +808,8 @@ const DrawingMaster = () => {
               data={drawings}
               loading={loading}
               pageSize={10}
-              rowId="drawing_master_id"
-              hideHeader={true}
-              hideExpander={true}
-              disableRowClickExpansion={true}
+              rowIdKey="drawing_master_id"
+              expandable={true}
               selectable={true}
               selectedRows={selectedRows}
               onSelectionChange={setSelectedRows}

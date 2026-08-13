@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
-import { Card, DataTable, Modal, SearchableSelect, MultiSelect, Button, Tabs } from '../components/ui.jsx';
+import { Card, Modal, SearchableSelect, MultiSelect, Button, Tabs } from '../components/ui.jsx';
+import DataTable from '../components/DataTable.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { getFileUrl } from '../utils/url';
 import {
@@ -1957,6 +1958,18 @@ const Quotations = () => {
   const columns = useMemo(() => {
     const baseCols = [
       {
+        key: 'company_name',
+        label: 'Client Name',
+        sortable: true,
+        render: (val, q) => <span className="font-bold text-slate-900 text-xs">{q.company_name || '—'}</span>
+      },
+      {
+        key: 'project_name',
+        label: 'Project Name',
+        sortable: true,
+        render: (val, q) => <span className="text-slate-600 text-xs font-medium italic">{q.project_name || 'General Project'}</span>
+      },
+      {
         key: 'quote_number',
         label: 'Quote No.',
         sortable: true,
@@ -2000,21 +2013,6 @@ const Quotations = () => {
             {q.finished_good && (
               <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
                 {q.finished_good}
-              </span>
-            )}
-          </div>
-        )
-      },
-      {
-        key: 'project_name',
-        label: 'Project / Customer',
-        sortable: true,
-        render: (val, q) => (
-          <div className="flex flex-col max-w-[200px]">
-            <span className="text-slate-900  truncate" title={val}>{val || '—'}</span>
-            {q.company_name && (
-              <span className="text-xs text-slate-500 truncate" title={q.company_name}>
-                {q.company_name}
               </span>
             )}
           </div>

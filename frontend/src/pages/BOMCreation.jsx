@@ -983,16 +983,16 @@ const BOMCreation = () => {
 
   const columns = [
     {
-      label: 'Project / Client',
+      label: 'Client Name',
+      key: 'client_name',
+      sortable: true,
+      render: (val, row) => <span className="text-xs font-bold text-slate-900">{row.client_name || val || '—'}</span>
+    },
+    {
+      label: 'Project Name',
       key: 'project_name',
       sortable: true,
-      className: ' text-slate-900',
-      render: (val, row) => (
-        <div className="flex flex-col">
-          <span className=" text-slate-900 font-semibold">{row.project_name || 'No Project'}</span>
-          <span className="text-xs  text-slate-500 font-normal">{row.client_name || val}</span>
-        </div>
-      )
+      render: (val, row) => <span className="text-xs text-slate-600 font-medium italic">{row.project_name || 'No Project'}</span>
     },
     {
       label: 'Total Drawings',
