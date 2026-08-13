@@ -131,13 +131,29 @@ const calculateItemStockAndAvailability = async (connection, item, mrStatus = ''
   let stockRows = [];
   const candidateCodes = Array.from(new Set([resolvedItemCode, item.item_code].filter(Boolean)));
 
-  // 1. Check by candidate item_codes in stock_balance
+  const lengthVal1 = parseFloat(item.length || 0);
+  const widthVal1 = parseFloat(item.width || 0);
+  const thicknessVal1 = parseFloat(item.thickness || 0);
+  const diameterVal1 = parseFloat(item.diameter || 0);
+  const outerDiameterVal1 = parseFloat(item.outer_diameter || item.outerDiameter || 0);
+  const hasDimensions1 = (lengthVal1 > 0 || widthVal1 > 0 || thicknessVal1 > 0 || diameterVal1 > 0 || outerDiameterVal1 > 0);
+
+  // 1. Check by candidate item_codes in stock_balance WITH dimension filter (non-zero dims only)
   for (const code of candidateCodes) {
-    const [byCode] = await connection.query(`
+    let dimQuery = `
       SELECT warehouse as warehouse_name, current_balance as current_stock, COALESCE(current_weight, 0) as current_weight
       FROM stock_balance
-      WHERE item_code = ? AND current_balance > 0
-    `, [code]);
+      WHERE item_code = ? AND current_balance > 0`;
+    const dimParams = [code];
+
+    // Only filter on non-zero dimensions (zero means "not applicable for this shape")
+    if (lengthVal1 > 0) { dimQuery += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; dimParams.push(lengthVal1); }
+    if (widthVal1 > 0) { dimQuery += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; dimParams.push(widthVal1); }
+    if (thicknessVal1 > 0) { dimQuery += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; dimParams.push(thicknessVal1); }
+    if (diameterVal1 > 0) { dimQuery += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; dimParams.push(diameterVal1); }
+    if (outerDiameterVal1 > 0) { dimQuery += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; dimParams.push(outerDiameterVal1); }
+
+    const [byCode] = await connection.query(dimQuery, dimParams);
     if (byCode.length > 0) {
       stockRows = byCode;
       break;
@@ -387,9 +403,25 @@ const calculateItemStockAndAvailabilityInMemory = (sbRows, item, mrStatus = '') 
   let stockRows = [];
   const candidateCodes = Array.from(new Set([resolvedItemCode, item.item_code].filter(Boolean)));
 
-  // 1. Check by candidate item_codes in stock_balance
+  const lengthValM = parseFloat(item.length || 0);
+  const widthValM = parseFloat(item.width || 0);
+  const thicknessValM = parseFloat(item.thickness || 0);
+  const diameterValM = parseFloat(item.diameter || 0);
+  const outerDiameterValM = parseFloat(item.outer_diameter || item.outerDiameter || 0);
+  const hasDimensionsM = (lengthValM > 0 || widthValM > 0 || thicknessValM > 0 || diameterValM > 0 || outerDiameterValM > 0);
+
+  // 1. Check by candidate item_codes in stock_balance WITH dimension filter (non-zero dims only)
   for (const code of candidateCodes) {
-    const matched = sbRows.filter(sb => sb.item_code === code && parseFloat(sb.current_balance || 0) > 0);
+    const matched = sbRows.filter(sb => {
+      if (sb.item_code !== code || !(parseFloat(sb.current_balance || 0) > 0)) return false;
+      // Only check non-zero dimensions (zero means "not applicable for this shape")
+      if (lengthValM > 0 && Math.abs(parseFloat(sb.length || 0) - lengthValM) >= 0.0001) return false;
+      if (widthValM > 0 && Math.abs(parseFloat(sb.width || 0) - widthValM) >= 0.0001) return false;
+      if (thicknessValM > 0 && Math.abs(parseFloat(sb.thickness || 0) - thicknessValM) >= 0.0001) return false;
+      if (diameterValM > 0 && Math.abs(parseFloat(sb.diameter || 0) - diameterValM) >= 0.0001) return false;
+      if (outerDiameterValM > 0 && Math.abs(parseFloat(sb.outer_diameter || 0) - outerDiameterValM) >= 0.0001) return false;
+      return true;
+    });
     if (matched.length > 0) {
       stockRows = matched.map(sb => ({ warehouse_name: sb.warehouse, current_stock: sb.current_balance, current_weight: sb.current_weight || 0 }));
       break;
@@ -949,21 +981,34 @@ const materialRequestController = {
             const remainingWeight = Math.max(0, requiredWeight - releasedWeight);
 
             if (remainingQty > 0) {
-              // Find warehouses with positive stock balance for this item
-              let [stockRows] = await connection.query(`
-                SELECT item_code, warehouse, current_balance, COALESCE(current_weight, 0) as current_weight 
-                FROM stock_balance 
-                WHERE item_code = ? AND current_balance > 0
-                ORDER BY current_balance DESC
-              `, [resolvedItemCode]);
+              // Build dimension filter for stock query
+              const _lenV = parseFloat(item.length || 0);
+              const _widV = parseFloat(item.width || 0);
+              const _thkV = parseFloat(item.thickness || 0);
+              const _diaV = parseFloat(item.diameter || 0);
+              const _odV  = parseFloat(item.outer_diameter || 0);
+              const _hasDim = _lenV > 0 || _widV > 0 || _thkV > 0 || _diaV > 0 || _odV > 0;
+
+              const _buildStockQuery = (code) => {
+                let q = `SELECT item_code, warehouse, current_balance, COALESCE(current_weight, 0) as current_weight FROM stock_balance WHERE item_code = ? AND current_balance > 0`;
+                const p = [code];
+                // Only filter on non-zero dimensions (zero means "not applicable for this shape")
+                if (_lenV > 0) { q += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; p.push(_lenV); }
+                if (_widV > 0) { q += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; p.push(_widV); }
+                if (_thkV > 0) { q += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; p.push(_thkV); }
+                if (_diaV > 0) { q += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; p.push(_diaV); }
+                if (_odV  > 0) { q += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; p.push(_odV); }
+                q += ' ORDER BY current_balance DESC';
+                return { q, p };
+              };
+
+              // Find warehouses with positive stock balance for this item+dimension
+              let { q: _sq, p: _sp } = _buildStockQuery(resolvedItemCode);
+              let [stockRows] = await connection.query(_sq, _sp);
 
               if (stockRows.length === 0 && item.item_code && item.item_code !== resolvedItemCode) {
-                [stockRows] = await connection.query(`
-                  SELECT item_code, warehouse, current_balance, COALESCE(current_weight, 0) as current_weight
-                  FROM stock_balance 
-                  WHERE item_code = ? AND current_balance > 0
-                  ORDER BY current_balance DESC
-                `, [item.item_code]);
+                let { q: _sq2, p: _sp2 } = _buildStockQuery(item.item_code);
+                [stockRows] = await connection.query(_sq2, _sp2);
               }
 
               let amountToDeduct = remainingQty;
@@ -1115,13 +1160,26 @@ const materialRequestController = {
             continue;
           }
 
-          // Get total stock available across all warehouses for this item
-          const [stockRows] = await connection.query(`
-            SELECT warehouse, current_balance, COALESCE(current_weight, 0) as current_weight
-            FROM stock_balance 
-            WHERE item_code = ? AND current_balance > 0
-            ORDER BY current_balance DESC
-          `, [resolvedItemCode]);
+          // Build dimension filter for stock query
+          const _lenV2 = parseFloat(item.length || 0);
+          const _widV2 = parseFloat(item.width || 0);
+          const _thkV2 = parseFloat(item.thickness || 0);
+          const _diaV2 = parseFloat(item.diameter || 0);
+          const _odV2  = parseFloat(item.outer_diameter || 0);
+          const _hasDim2 = _lenV2 > 0 || _widV2 > 0 || _thkV2 > 0 || _diaV2 > 0 || _odV2 > 0;
+
+          let _stockQ2 = `SELECT warehouse, current_balance, COALESCE(current_weight, 0) as current_weight FROM stock_balance WHERE item_code = ? AND current_balance > 0`;
+          const _stockP2 = [resolvedItemCode];
+          // Only filter on non-zero dimensions (zero means "not applicable for this shape")
+          if (_lenV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; _stockP2.push(_lenV2); }
+          if (_widV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; _stockP2.push(_widV2); }
+          if (_thkV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; _stockP2.push(_thkV2); }
+          if (_diaV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; _stockP2.push(_diaV2); }
+          if (_odV2  > 0) { _stockQ2 += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; _stockP2.push(_odV2); }
+          _stockQ2 += ' ORDER BY current_balance DESC';
+
+          // Get total stock available across all warehouses for this item+dimension
+          const [stockRows] = await connection.query(_stockQ2, _stockP2);
 
           const totalStock = stockRows.reduce((sum, row) => sum + parseFloat(row.current_balance), 0);
           const isWeightUom = (uom) => {
@@ -1241,12 +1299,17 @@ const materialRequestController = {
           WHERE mri.mr_id = ?
         `, [id]);
         const allFullyReleased = updatedItems.every(item => {
-          const isWeightUom = (uom) => {
+          const _isWeightUomFR = (uom) => {
             const u = (uom || '').toLowerCase().trim();
             return u === 'kg' || u === 'kgs' || u === 'kilogram';
           };
+          const _isNosUomFR = (uom) => {
+            const u = (uom || '').toLowerCase().trim();
+            return u === 'nos' || u === 'no' || u === 'pcs' || u === 'pieces' || u === 'piece' || u === 'unit' || u === 'units' || u === 'set' || u === 'sets';
+          };
+          const _uomFR = (item.uom || '').toLowerCase().trim();
           let req, reqW;
-          if (isWeightUom(item.uom)) {
+          if (_isWeightUomFR(_uomFR)) {
             req = parseFloat(item.design_qty || 0);
             reqW = parseFloat(item.quantity || 0);
           } else {
@@ -1255,6 +1318,10 @@ const materialRequestController = {
           }
           const alloc = parseFloat(item.allocated_quantity || 0);
           const allocW = parseFloat(item.allocated_weight || 0);
+          // For NOS/unit-based UOMs, only check qty — weight is optional and must not block release
+          if (_isNosUomFR(_uomFR) || (!_isWeightUomFR(_uomFR) && reqW === 0)) {
+            return alloc >= (req - 0.001);
+          }
           return alloc >= (req - 0.001) && allocW >= (reqW - 0.001);
         });
 

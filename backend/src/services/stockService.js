@@ -29,14 +29,13 @@ const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, con
     const diameter = parseFloat(dimensions.diameter || 0);
     const outerDiameter = parseFloat(dimensions.outer_diameter || dimensions.outerDiameter || 0);
 
-    query += `
-      AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
-      AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
-      AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
-      AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
-      AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
-    `;
-    params.push(length, width, thickness, diameter, outerDiameter);
+    // Only filter on dimensions that are actually specified (non-zero)
+    // A zero value means "not specified for this shape" — do not restrict by it
+    if (length > 0) { query += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; params.push(length); }
+    if (width > 0) { query += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; params.push(width); }
+    if (thickness > 0) { query += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; params.push(thickness); }
+    if (diameter > 0) { query += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; params.push(diameter); }
+    if (outerDiameter > 0) { query += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; params.push(outerDiameter); }
   }
 
   const [ledgerData] = await executor.query(query, params);
@@ -553,14 +552,12 @@ const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, con
     const diameter = parseFloat(dimensions.diameter || 0);
     const outerDiameter = parseFloat(dimensions.outer_diameter || dimensions.outerDiameter || 0);
 
-    query += `
-      AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
-      AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
-      AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
-      AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
-      AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
-    `;
-    params.push(length, width, thickness, diameter, outerDiameter);
+    // Only filter on dimensions that are actually specified (non-zero)
+    if (length > 0) { query += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; params.push(length); }
+    if (width > 0) { query += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; params.push(width); }
+    if (thickness > 0) { query += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; params.push(thickness); }
+    if (diameter > 0) { query += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; params.push(diameter); }
+    if (outerDiameter > 0) { query += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; params.push(outerDiameter); }
   }
 
   query += ` ORDER BY current_balance DESC `;
@@ -611,7 +608,15 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     const outerDiameter = options.outer_diameter !== undefined ? options.outer_diameter : (options.outerDiameter !== undefined ? options.outerDiameter : null);
     const density = options.density !== undefined ? options.density : null;
 
-    const dimsObj = { length, width, thickness, diameter, outer_diameter: outerDiameter, density };
+    // Only apply dimension filter if at least one dimension is non-zero
+    // (avoids filtering out BOUGHT_OUT/NOS items that have no dims on the MR but may have dims stored on stock_balance)
+    const lenV = parseFloat(length || 0);
+    const widV = parseFloat(width || 0);
+    const thkV = parseFloat(thickness || 0);
+    const diaV = parseFloat(diameter || 0);
+    const odV  = parseFloat(outerDiameter || 0);
+    const hasDimsForLookup = lenV > 0 || widV > 0 || thkV > 0 || diaV > 0 || odV > 0;
+    const dimsObj = hasDimsForLookup ? { length, width, thickness, diameter, outer_diameter: outerDiameter, density } : null;
 
     // Get existing balance for this item, warehouse and dimensions
     let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, useConnection, dimsObj);
@@ -623,18 +628,22 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
       const thkVal = parseFloat(thickness || 0);
       const diaVal = parseFloat(diameter || 0);
       const odiaVal = parseFloat(outerDiameter || 0);
+      const hasDimsForFallback = lenVal > 0 || widVal > 0 || thkVal > 0 || diaVal > 0 || odiaVal > 0;
 
-      const [anyBalance] = await useConnection.query(
-        `SELECT * FROM stock_balance 
-         WHERE item_code = ? 
+      let fallbackQuery = `SELECT * FROM stock_balance WHERE item_code = ?`;
+      const fallbackParams = [itemCode];
+      if (hasDimsForFallback) {
+        fallbackQuery += `
            AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
            AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
            AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
            AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
-           AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
-         ORDER BY current_balance DESC LIMIT 1`,
-        [itemCode, lenVal, widVal, thkVal, diaVal, odiaVal]
-      );
+           AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)`;
+        fallbackParams.push(lenVal, widVal, thkVal, diaVal, odiaVal);
+      }
+      fallbackQuery += ' ORDER BY current_balance DESC LIMIT 1';
+
+      const [anyBalance] = await useConnection.query(fallbackQuery, fallbackParams);
       if (anyBalance.length > 0) {
         existingBalance = anyBalance[0];
         if (parseFloat(existingBalance.current_balance) === 0 && warehouse) {
