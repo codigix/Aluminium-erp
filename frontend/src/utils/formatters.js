@@ -53,10 +53,10 @@ export const formatDimensions = (item) => {
     matchedShape = 'threaded rod';
   } else if (shape.includes('square tube') || (shape.includes('square') && shape.includes('tube'))) {
     matchedShape = 'square tube';
+  } else if (shape.includes('square bar') || (shape.includes('square') && !shape.includes('tube'))) {
+    matchedShape = 'square bar';
   } else if (shape.includes('rectangular tube') || shape.includes('rect tube') || (shape.includes('rect') && shape.includes('tube'))) {
     matchedShape = 'rectangular tube';
-  } else if (shape.includes('square bar') || (shape.includes('square') && shape.includes('bar'))) {
-    matchedShape = 'square bar';
   } else if (shape.includes('rectangular bar') || (shape.includes('rect') && shape.includes('bar'))) {
     matchedShape = 'rectangular bar';
   } else if (shape.includes('hex') || shape.includes('hexagonal')) {
@@ -115,8 +115,9 @@ export const formatDimensions = (item) => {
     const parts = [n(wid), n(len), n(thk)].filter(Boolean);
     dimStr = parts.join(' × ');
   } else if (matchedShape === 'flat bar') {
-    prefix = 'FB';
-    const parts = [n(wid), n(thk), n(len)].filter(Boolean);
+    prefix = 'FL';
+    const hOrT = thk > 0 ? thk : (od > 0 ? od : 0);
+    const parts = [n(wid), n(hOrT), n(len)].filter(Boolean);
     dimStr = parts.join(' × ');
   } else if (matchedShape === 'round bar') {
     prefix = 'RB';
@@ -128,7 +129,7 @@ export const formatDimensions = (item) => {
     const parts = [`AF${n(wid)}`, n(len)].filter(Boolean);
     dimStr = parts.join(' × ');
   } else if (matchedShape === 'square bar') {
-    prefix = 'SQ';
+    prefix = 'SB';
     const parts = [n(wid), n(len)].filter(Boolean);
     dimStr = parts.join(' × ');
   } else if (matchedShape === 'rectangular bar') {
