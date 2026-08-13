@@ -686,7 +686,13 @@ const ensureStockColumns = async () => {
       { name: 'hsn_code', definition: 'VARCHAR(50) NULL' },
       { name: 'min_stock', definition: 'DECIMAL(12, 3) DEFAULT 10.000' },
       { name: 'max_stock', definition: 'DECIMAL(12, 3) DEFAULT 500.000' },
-      { name: 'reorder_level', definition: 'DECIMAL(12, 3) DEFAULT 20.000' }
+      { name: 'reorder_level', definition: 'DECIMAL(12, 3) DEFAULT 20.000' },
+      { name: 'length', definition: 'DECIMAL(12, 4) NULL' },
+      { name: 'width', definition: 'DECIMAL(12, 4) NULL' },
+      { name: 'thickness', definition: 'DECIMAL(12, 4) NULL' },
+      { name: 'diameter', definition: 'DECIMAL(12, 4) NULL' },
+      { name: 'outer_diameter', definition: 'DECIMAL(12, 4) NULL' },
+      { name: 'density', definition: 'DECIMAL(10, 4) NULL' }
     ];
 
     const missingLedgerCols = requiredStockCols.filter(c => !existingLedgerCols.has(c.name));
@@ -713,20 +719,25 @@ const ensureStockColumns = async () => {
       console.log('Stock Balance material columns synchronized');
     }
 
-    // Add unique index for item_code + warehouse if it doesn't exist
+    // Drop unique_item_warehouse unique index if it exists, and replace with non-unique index
     const [indexes] = await connection.query('SHOW INDEX FROM stock_balance');
-    const hasItemWhIndex = indexes.some(idx => idx.Key_name === 'unique_item_warehouse');
+    const oldUniqueIndex = indexes.find(idx => idx.Key_name === 'unique_item_warehouse' && idx.Non_unique === 0);
+    if (oldUniqueIndex) {
+      try {
+        await connection.query('ALTER TABLE stock_balance DROP INDEX unique_item_warehouse');
+        console.log('Dropped unique index unique_item_warehouse from stock_balance');
+      } catch (e) {
+        console.error('Failed to drop unique index unique_item_warehouse:', e.message);
+      }
+    }
+
+    const hasItemWhIndex = indexes.some(idx => idx.Key_name === 'idx_item_warehouse');
     if (!hasItemWhIndex) {
       try {
-        // First drop existing unique constraint on item_code if it exists and is not the PK
-        const itemCodeIndex = indexes.find(idx => idx.Column_name === 'item_code' && idx.Non_unique === 0 && idx.Key_name !== 'PRIMARY');
-        if (itemCodeIndex) {
-          await connection.query(`ALTER TABLE stock_balance DROP INDEX ${itemCodeIndex.Key_name}`);
-        }
-        await connection.query('ALTER TABLE stock_balance ADD UNIQUE INDEX unique_item_warehouse (item_code, warehouse)');
-        console.log('Added unique index for item_code and warehouse in stock_balance');
+        await connection.query('ALTER TABLE stock_balance ADD INDEX idx_item_warehouse (item_code, warehouse)');
+        console.log('Added non-unique index idx_item_warehouse in stock_balance');
       } catch (e) {
-        console.error('Failed to add unique index to stock_balance:', e.message);
+        console.error('Failed to add index idx_item_warehouse:', e.message);
       }
     }
 

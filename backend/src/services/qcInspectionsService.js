@@ -10,113 +10,53 @@ const mustache = require('mustache');
  */
 const getCorrectItemCode = async (item, connection) => {
   let itemCode = item.item_code || item.drawing_no;
+  const matName = item.material_name;
+  const matType = item.material_type;
 
-  const length = item.length || 0;
-  const width = item.width || 0;
-  const thickness = item.thickness || 0;
-  const diameter = item.diameter || 0;
-  const outerDiameter = item.outer_diameter || item.outerDiameter || 0;
+  const length = parseFloat(item.length || 0);
+  const width = parseFloat(item.width || 0);
+  const thickness = parseFloat(item.thickness || 0);
+  const diameter = parseFloat(item.diameter || 0);
+  const outerDiameter = parseFloat(item.outer_diameter || item.outerDiameter || 0);
 
-  // 0. If we already have a specific item code that exists in stock_balance and matches name + dimensions, use it!
+  // 0. If itemCode is provided and valid, reuse it directly!
   if (itemCode && itemCode !== 'auto-generated') {
-    const [existing] = await connection.query(
-      `SELECT item_code, material_type FROM stock_balance 
-       WHERE (item_code = ? OR drawing_no = ?) 
-         AND LOWER(TRIM(material_name)) = LOWER(TRIM(?))
-         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
-       LIMIT 1`,
-      [itemCode, itemCode, item.material_name, length, width, thickness, diameter, outerDiameter]
-    );
-    if (existing.length > 0) {
-      if (existing[0].material_type) {
-        item.material_type = existing[0].material_type;
-      }
-      return existing[0].item_code;
-    }
-  }
-
-  if (item.material_name) {
-    // 1. Try matching by name, material type, and dimensions
-    const [sb] = await connection.query(
-      `SELECT item_code FROM stock_balance 
-       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
-         AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
-         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
-       LIMIT 1`,
-      [item.material_name, item.material_type, item.material_type, length, width, thickness, diameter, outerDiameter]
-    );
-
-    if (sb.length > 0) {
-      return sb[0].item_code;
-    }
-
-    // 2. Try matching by name and dimensions only (more flexible type match)
-    const [sbNameDims] = await connection.query(
-      `SELECT item_code FROM stock_balance 
-       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
-         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
-       LIMIT 1`,
-      [item.material_name, length, width, thickness, diameter, outerDiameter]
-    );
-
-    if (sbNameDims.length > 0) {
-      return sbNameDims[0].item_code;
-    }
-  }
-
-  // 3. Fallback: If we have an item code, check if it exists in stock_balance with different dimensions.
-  // If it does, we ignore it (isMismatch = true) so we generate a new unique code.
-  // If it doesn't exist, or has empty dimensions, or matches, we reuse it.
-  let isMismatch = false;
-  if (itemCode && itemCode !== 'auto-generated') {
-    const [existing] = await connection.query(
-      `SELECT item_code, length, width, thickness, diameter, outer_diameter FROM stock_balance 
-       WHERE item_code = ? LIMIT 1`,
-      [itemCode]
-    );
-    if (existing.length > 0) {
-      const ext = existing[0];
-      const hasDimensions = (parseFloat(ext.length || 0) > 0 || parseFloat(ext.width || 0) > 0 || parseFloat(ext.thickness || 0) > 0 || parseFloat(ext.diameter || 0) > 0 || parseFloat(ext.outer_diameter || 0) > 0);
-      const incomingHasDimensions = (length > 0 || width > 0 || thickness > 0 || diameter > 0 || outerDiameter > 0);
-
-      if (incomingHasDimensions && (!hasDimensions || itemCode.startsWith('RM-'))) {
-        isMismatch = true;
-      } else if (hasDimensions) {
-        const lengthDiff = Math.abs(parseFloat(ext.length || 0) - length) >= 0.0001;
-        const widthDiff = Math.abs(parseFloat(ext.width || 0) - width) >= 0.0001;
-        const thicknessDiff = Math.abs(parseFloat(ext.thickness || 0) - thickness) >= 0.0001;
-        const diameterDiff = Math.abs(parseFloat(ext.diameter || 0) - diameter) >= 0.0001;
-        const outerDiameterDiff = Math.abs(parseFloat(ext.outer_diameter || 0) - outerDiameter) >= 0.0001;
-
-        if (lengthDiff || widthDiff || thicknessDiff || diameterDiff || outerDiameterDiff) {
-          isMismatch = true;
-        }
-      }
-    }
-  }
-
-  if (itemCode && itemCode !== 'auto-generated' && !isMismatch) {
     return itemCode;
   }
 
-  // 4. Fallback: Generate a standard item code and create a new master record in stock_balance
-  if (item.material_name) {
-    const generatedCode = await stockService.generateItemCode(item.material_name, item.material_type);
+  // 1. Try matching by material name and dimensions in stock_balance
+  if (matName) {
+    const [sbDims] = await connection.query(
+      `SELECT item_code FROM stock_balance 
+       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
+       LIMIT 1`,
+      [matName, length, width, thickness, diameter, outerDiameter]
+    );
 
-    // Create new blank record in stock_balance for the new item so future lookups match it
-    const normalizedType = (item.material_type || '').toUpperCase().trim().replace(/ /g, '_');
+    if (sbDims.length > 0) {
+      return sbDims[0].item_code;
+    }
+
+    // 2. Try matching by material name only (reuse Item Master code for this material)
+    const [sbName] = await connection.query(
+      `SELECT item_code FROM stock_balance 
+       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+       LIMIT 1`,
+      [matName]
+    );
+
+    if (sbName.length > 0) {
+      return sbName[0].item_code;
+    }
+
+    // 3. Fallback: Generate a standard item code only if this material has never been created
+    const generatedCode = await stockService.generateItemCode(matName, matType);
+    const normalizedType = (matType || '').toUpperCase().trim().replace(/ /g, '_');
     await connection.execute(
       `INSERT INTO stock_balance (
         item_code, material_name, material_type, unit, current_balance, valuation_rate,
@@ -124,24 +64,24 @@ const getCorrectItemCode = async (item, connection) => {
       ) VALUES (?, ?, ?, ?, 0.000, 0.00, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         generatedCode,
-        item.material_name,
+        matName,
         normalizedType,
-        item.unit || 'NOS',
-        item.length || null,
-        item.width || null,
-        item.thickness || null,
-        item.diameter || null,
-        item.outer_diameter || null,
+        item.unit || item.uom || 'NOS',
+        length || null,
+        width || null,
+        thickness || null,
+        diameter || null,
+        outerDiameter || null,
         item.density || null,
-        item.weight_per_unit || null,
-        item.shape_id || null,
-        item.material_id || null
+        item.weight_per_unit || item.weightPerUnit || null,
+        item.shape_id || item.shapeId || null,
+        item.material_id || item.materialId || null
       ]
     );
     return generatedCode;
   }
 
-  return null;
+  return itemCode;
 };
 
 const getQCWithDetails = async (qcId) => {

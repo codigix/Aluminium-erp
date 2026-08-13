@@ -135,7 +135,7 @@ const StockLedger = () => {
       label: 'Material',
       sortable: true,
       render: (val, row) => {
-        const shapeName = (shapes.find(s => String(s.id) === String(row.shape_id))?.name || '');
+        const shapeName = (shapes.find(s => String(s.id) === String(row.shape_id))?.name || row.grn_shape_type || '');
         const formatted = formatDimensions({ ...row, shape_type: shapeName });
         const dimensionStr = formatted ? ` (${formatted})` : '';
 

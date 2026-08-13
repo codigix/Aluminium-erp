@@ -1955,7 +1955,7 @@ model stock_balance {
   max_stock        Decimal?  @default(500.000) @db.Decimal(12, 3)
   reorder_level    Decimal?  @default(20.000) @db.Decimal(12, 3)
 
-  @@unique([item_code, warehouse], map: "unique_item_warehouse")
+  @@index([item_code, warehouse], map: "idx_item_warehouse")
   @@index([item_code], map: "idx_item_code")
 }
 
