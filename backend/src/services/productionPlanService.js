@@ -478,11 +478,11 @@ const createProductionPlan = async (planData, createdBy) => {
             mat.total_wt || 0,
             mat.is_kg_material ? 1 : 0,
             mat.status || '--',
-            mat.dimensions?.length || mat.length || 0,
-            mat.dimensions?.width || mat.width || 0,
-            mat.dimensions?.thickness || mat.thickness || 0,
-            mat.dimensions?.diameter || mat.diameter || 0,
-            mat.dimensions?.outer_diameter || mat.outer_diameter || 0
+            mat.length !== undefined && mat.length !== null && mat.length !== '' ? mat.length : (mat.dimensions?.length || 0),
+            mat.width !== undefined && mat.width !== null && mat.width !== '' ? mat.width : (mat.dimensions?.width || 0),
+            mat.thickness !== undefined && mat.thickness !== null && mat.thickness !== '' ? mat.thickness : (mat.dimensions?.thickness || 0),
+            mat.diameter !== undefined && mat.diameter !== null && mat.diameter !== '' ? mat.diameter : (mat.dimensions?.diameter || 0),
+            mat.outer_diameter !== undefined && mat.outer_diameter !== null && mat.outer_diameter !== '' ? mat.outer_diameter : (mat.dimensions?.outer_diameter || 0)
           ]
         );
       }
@@ -649,11 +649,11 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
             mat.sourceAssembly || mat.source_assembly || null,
             mat.materialCategory || mat.material_category || mat.category || (mat.sourceAssembly || mat.source_assembly ? 'EXPLODED' : 'CORE'),
             mat.status || '--',
-            mat.dimensions?.length || mat.length || 0,
-            mat.dimensions?.width || mat.width || 0,
-            mat.dimensions?.thickness || mat.thickness || 0,
-            mat.dimensions?.diameter || mat.diameter || 0,
-            mat.dimensions?.outer_diameter || mat.outer_diameter || 0
+            mat.length !== undefined && mat.length !== null && mat.length !== '' ? mat.length : (mat.dimensions?.length || 0),
+            mat.width !== undefined && mat.width !== null && mat.width !== '' ? mat.width : (mat.dimensions?.width || 0),
+            mat.thickness !== undefined && mat.thickness !== null && mat.thickness !== '' ? mat.thickness : (mat.dimensions?.thickness || 0),
+            mat.diameter !== undefined && mat.diameter !== null && mat.diameter !== '' ? mat.diameter : (mat.dimensions?.diameter || 0),
+            mat.outer_diameter !== undefined && mat.outer_diameter !== null && mat.outer_diameter !== '' ? mat.outer_diameter : (mat.dimensions?.outer_diameter || 0)
           ]
         );
       }
@@ -1926,6 +1926,28 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
   const enrichWithDimensions = async (list, codeField) => {
     for (const item of list) {
+      // SOURCE OF TRUTH: If item already has dimensions from the BOM line, preserve them!
+      // Do NOT overwrite BOM line dimensions with arbitrary stock_balance rows.
+      const hasBomDimensions = (
+        (item.length !== undefined && item.length !== null && parseFloat(item.length) > 0) ||
+        (item.width !== undefined && item.width !== null && parseFloat(item.width) > 0) ||
+        (item.thickness !== undefined && item.thickness !== null && parseFloat(item.thickness) > 0) ||
+        (item.diameter !== undefined && item.diameter !== null && parseFloat(item.diameter) > 0) ||
+        (item.outer_diameter !== undefined && item.outer_diameter !== null && parseFloat(item.outer_diameter) > 0)
+      );
+
+      if (hasBomDimensions) {
+        item.dimensions = {
+          length: item.length || 0,
+          width: item.width || 0,
+          thickness: item.thickness || 0,
+          diameter: item.diameter || 0,
+          outer_diameter: item.outer_diameter || 0,
+          density: item.density || 0
+        };
+        continue;
+      }
+
       const itemCode = item[codeField];
       const matName = item.material_name || item.materialName;
 
