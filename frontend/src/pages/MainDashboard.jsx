@@ -1,45 +1,24 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { 
-  LayoutDashboard, 
-  Clock, 
-  RefreshCw, 
-  ShieldCheck,
-  Users
-} from 'lucide-react';
+import { SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 
-// Lazy load departmental dashboards
-const SalesDashboard = lazy(() => import('./SalesDashboard'));
-const DesignDashboard = lazy(() => import('./DesignDashboard'));
-const ProcurementDashboard = lazy(() => import('./ProcurementDashboard'));
-const ProductionDashboard = lazy(() => import('./ProductionDashboard'));
-const InventoryDashboard = lazy(() => import('./InventoryDashboard'));
-const QualityDashboard = lazy(() => import('./QualityDashboard'));
-const ShipmentDashboard = lazy(() => import('./ShipmentDashboard'));
-const AccountsDashboard = lazy(() => import('./AccountsDashboard'));
-
-// Admin/Unified Dashboard View
-const AdminDashboard = lazy(() => import('./AdminDashboard'));
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+// Lazy load dashboards for code splitting
+const AdminDashboard = lazy(() => import('./AdminDashboard.jsx'));
+const SalesDashboard = lazy(() => import('./SalesDashboard.jsx'));
+const DesignDashboard = lazy(() => import('./DesignDashboard.jsx'));
+const ProcurementDashboard = lazy(() => import('./ProcurementDashboard.jsx'));
+const ProductionDashboard = lazy(() => import('./ProductionDashboard.jsx'));
+const InventoryDashboard = lazy(() => import('./InventoryDashboard.jsx'));
+const QualityDashboard = lazy(() => import('./QualityDashboard.jsx'));
+const ShipmentDashboard = lazy(() => import('./ShipmentDashboard.jsx'));
+const AccountsDashboard = lazy(() => import('./AccountsDashboard.jsx'));
 
 const MainDashboard = ({ apiRequest }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('authUser');
     if (storedUser) setUser(JSON.parse(storedUser));
-    setLoading(false);
   }, []);
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-2">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-        <p className="text-xs text-slate-500    text-xs">Loading Workspace...</p>
-      </div>
-    );
-  }
 
   const dept = user?.department_code || 'ADMIN';
 
@@ -72,9 +51,16 @@ const MainDashboard = ({ apiRequest }) => {
 
   return (
     <Suspense fallback={
-      <div className="flex flex-col items-center justify-center p-22 space-y-2">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-        <p className="text-xs text-slate-500    text-xs">Initializing Departmental Hub...</p>
+      <div className="space-y-4 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <div className="bg-white rounded border border-slate-100 p-4">
+          <SkeletonTable rows={4} columns={5} />
+        </div>
       </div>
     }>
       {renderDepartmentDashboard()}

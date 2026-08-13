@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, DataTable, StatusBadge } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import { 
   ShoppingCart, 
   TrendingUp, 
@@ -84,14 +84,7 @@ const ProcurementDashboard = () => {
     </div>
   );
 
-  if (loading || !stats) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-2">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-        <p className="text-xs text-slate-500   ">Initializing Purchase Hub...</p>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !stats;
 
   return (
     <div className="space-y-2 pb-12">
@@ -153,10 +146,21 @@ const ProcurementDashboard = () => {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Open RFQs" count={stats.openRfqs || 0} subtitle="Awaiting vendor response" color="bg-indigo-500" icon={FileText} trend={12} />
-        <StatCard title="Pending POs" count={stats.pendingPos || 0} subtitle="Ready for dispatch" color="bg-emerald-500" icon={ClipboardList} trend={5} />
-        <StatCard title="Material Requests" count={stats.materialRequests || 0} subtitle="From Production" color="bg-amber-500" icon={Box} />
-        <StatCard title="Purchase Spend" count={`₹${(stats.monthlySpend || 0).toLocaleString()}`} subtitle="This Month" color="bg-blue-500" icon={IndianRupee} trend={-8} />
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <StatCard title="Open RFQs" count={stats?.openRfqs || 0} subtitle="Awaiting vendor response" color="bg-indigo-500" icon={FileText} trend={12} />
+            <StatCard title="Pending POs" count={stats?.pendingPos || 0} subtitle="Ready for dispatch" color="bg-emerald-500" icon={ClipboardList} trend={5} />
+            <StatCard title="Material Requests" count={stats?.materialRequests || 0} subtitle="From Production" color="bg-amber-500" icon={Box} />
+            <StatCard title="Purchase Spend" count={`₹${(stats?.monthlySpend || 0).toLocaleString()}`} subtitle="This Month" color="bg-blue-500" icon={IndianRupee} trend={-8} />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -172,21 +176,27 @@ const ProcurementDashboard = () => {
             </div>
           </div>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.chartData || []}>
-                <defs>
-                  <linearGradient id="colorSpend" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
-                <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}} />
-                <Area type="monotone" dataKey="spend" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#colorSpend)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {isDataLoading ? (
+              <div className="w-full h-full flex flex-col justify-end gap-2 p-4 bg-slate-50/50 rounded animate-pulse">
+                <div className="h-40 bg-slate-200/80 rounded w-full"></div>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats?.chartData || []}>
+                  <defs>
+                    <linearGradient id="colorSpend" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                  <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}} />
+                  <Area type="monotone" dataKey="spend" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#colorSpend)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -194,27 +204,33 @@ const ProcurementDashboard = () => {
         <div className="bg-white rounded] p-2 border border-slate-100 shadow-sm flex flex-col">
           <h3 className="text-md  text-slate-900  mb-2">Category Split</h3>
           <div className="flex-1 h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={stats.categorySpend || []}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {(stats.categorySpend || []).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={['#4f46e5', '#10b981', '#f59e0b', '#3b82f6', '#ef4444'][index % 5]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            {isDataLoading ? (
+              <div className="w-full h-full flex items-center justify-center animate-pulse">
+                <div className="w-32 h-32 rounded-full bg-slate-200/80"></div>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stats?.categorySpend || []}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {(stats?.categorySpend || []).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={['#4f46e5', '#10b981', '#f59e0b', '#3b82f6', '#ef4444'][index % 5]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
           <div className="mt-4 space-y-2">
-            {(stats.categorySpend || []).map((item, idx) => (
+            {!isDataLoading && (stats?.categorySpend || []).map((item, idx) => (
               <div key={idx} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded ${['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-blue-500', 'bg-rose-500'][idx % 5]}`} />
@@ -232,22 +248,30 @@ const ProcurementDashboard = () => {
         <div className="bg-white rounded] p-2 border border-slate-100 shadow-sm flex flex-col">
           <h3 className="text-md  text-slate-900  mb-2">Supply Chain Health</h3>
           <div className="space-y-2 flex-1">
-            {(stats.health || [
-              { label: 'On-Time Delivery', value: 0, color: 'bg-indigo-500' },
-              { label: 'Quality Compliance', value: 0, color: 'bg-emerald-500' },
-              { label: 'Cost Variance', value: 0, color: 'bg-amber-500' },
-              { label: 'Vendor Lead Time', value: 0, color: 'bg-blue-500' }
-            ]).map((item, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex justify-between items-end">
-                  <span className="text-xs   text-slate-500  ">{item.label}</span>
-                  <span className="text-md  text-slate-900">{item.value}%</span>
-                </div>
-                <div className="h-3 w-full bg-slate-50 rounded overflow-hidden border border-slate-100">
-                  <div className={`h-full ${item.color} rounded transition-all duration-1000`} style={{ width: `${item.value}%` }} />
-                </div>
+            {isDataLoading ? (
+              <div className="space-y-4 animate-pulse">
+                <div className="h-4 bg-slate-200 rounded w-full"></div>
+                <div className="h-4 bg-slate-200 rounded w-full"></div>
+                <div className="h-4 bg-slate-200 rounded w-full"></div>
               </div>
-            ))}
+            ) : (
+              (stats?.health || [
+                { label: 'On-Time Delivery', value: 0, color: 'bg-indigo-500' },
+                { label: 'Quality Compliance', value: 0, color: 'bg-emerald-500' },
+                { label: 'Cost Variance', value: 0, color: 'bg-amber-500' },
+                { label: 'Vendor Lead Time', value: 0, color: 'bg-blue-500' }
+              ]).map((item, idx) => (
+                <div key={idx} className="space-y-2">
+                  <div className="flex justify-between items-end">
+                    <span className="text-xs   text-slate-500  ">{item.label}</span>
+                    <span className="text-md  text-slate-900">{item.value}%</span>
+                  </div>
+                  <div className="h-3 w-full bg-slate-50 rounded overflow-hidden border border-slate-100">
+                    <div className={`h-full ${item.color} rounded transition-all duration-1000`} style={{ width: `${item.value}%` }} />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -269,7 +293,8 @@ const ProcurementDashboard = () => {
               { label: 'Items', key: 'item_count', render: (val) => `${val} items` },
               { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val} /> }
             ]}
-            data={stats.recentRfqs || []}
+            data={stats?.recentRfqs || []}
+            loading={isDataLoading}
             hideHeader={true}
             className="border-none"
           />

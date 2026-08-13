@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -250,14 +250,7 @@ const ProcurementReport = () => {
     </div>
   );
 
-  if (loading || !stats) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-4">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
-        <h3 className="text-slate-900   ">Generating Procurement Report...</h3>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !stats;
 
   if (fetchingDetail) {
     return (
@@ -309,7 +302,7 @@ const ProcurementReport = () => {
             className="bg-white border border-slate-200 rounded p-2 text-xs  text-slate-600 outline-none"
           >
             <option value="All">All Suppliers</option>
-            {stats.vendorPerformance?.map((vendor, idx) => (
+            {stats?.vendorPerformance?.map((vendor, idx) => (
               <option key={idx} value={vendor.supplier}>{vendor.supplier}</option>
             ))}
           </select>
@@ -325,12 +318,25 @@ const ProcurementReport = () => {
 
       {/* KPIs Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-2">
-        <KPIStoreCard title="Total RFQs" value={stats.kpis.totalRfqs} subtitle="All Time" icon={FileText} color="text-indigo-600" subColor="bg-indigo-50" />
-        <KPIStoreCard title="RFQs Sent" value={stats.kpis.sentRfqs} subtitle="This Period" icon={Send} color="text-blue-600" subColor="bg-blue-50" />
-        <KPIStoreCard title="RFQs Received" value={stats.kpis.receivedRfqs} subtitle="This Period" icon={FileText} color="text-emerald-600" subColor="bg-emerald-50" />
-        <KPIStoreCard title="POs Created" value={stats.kpis.posCreated} subtitle="This Period" icon={ShoppingCart} color="text-amber-600" subColor="bg-amber-50" />
-        <KPIStoreCard title="Completed Orders" value={stats.kpis.completedOrders} subtitle="This Period" icon={CheckCircle} color="text-indigo-600" subColor="bg-indigo-50" />
-        <KPIStoreCard title="Pending Orders" value={stats.kpis.pendingOrders} subtitle="This Period" icon={Clock} color="text-rose-600" subColor="bg-rose-50" />
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <KPIStoreCard title="Total RFQs" value={stats?.kpis?.totalRfqs || 0} subtitle="All Time" icon={FileText} color="text-indigo-600" subColor="bg-indigo-50" />
+            <KPIStoreCard title="RFQs Sent" value={stats?.kpis?.sentRfqs || 0} subtitle="This Period" icon={Send} color="text-blue-600" subColor="bg-blue-50" />
+            <KPIStoreCard title="RFQs Received" value={stats?.kpis?.receivedRfqs || 0} subtitle="This Period" icon={FileText} color="text-emerald-600" subColor="bg-emerald-50" />
+            <KPIStoreCard title="POs Created" value={stats?.kpis?.posCreated || 0} subtitle="This Period" icon={ShoppingCart} color="text-amber-600" subColor="bg-amber-50" />
+            <KPIStoreCard title="Completed Orders" value={stats?.kpis?.completedOrders || 0} subtitle="This Period" icon={CheckCircle} color="text-indigo-600" subColor="bg-indigo-50" />
+            <KPIStoreCard title="Pending Orders" value={stats?.kpis?.pendingOrders || 0} subtitle="This Period" icon={Clock} color="text-rose-600" subColor="bg-rose-50" />
+          </>
+        )}
       </div>
 
       {/* Funnel & Trend */}
@@ -343,19 +349,19 @@ const ProcurementReport = () => {
           </div>
           <div className="flex-1 flex flex-col justify-center gap-6">
             <div className="flex items-center justify-between gap-2">
-              {stats.funnelData.map((item, idx) => (
+              {(stats?.funnelData || []).map((item, idx) => (
                 <React.Fragment key={idx}>
                   <div className="flex-1 flex flex-col items-center gap-2 p-3 bg-slate-50 rounded border border-slate-100 relative group transition-all hover:bg-white hover:shadow-md">
                     <p className="text-[9px] text-slate-400   er text-center">{item.name}</p>
                     <h4 className="text-lg  text-slate-900">{item.value}</h4>
                   </div>
-                  {idx < stats.funnelData.length - 1 && <ArrowRight className="w-4 h-4 text-slate-300" />}
+                  {idx < (stats?.funnelData || []).length - 1 && <ArrowRight className="w-4 h-4 text-slate-300" />}
                 </React.Fragment>
               ))}
             </div>
             <div className="bg-blue-50/50 p-3 rounded border border-blue-100/50">
                <p className="text-xs  text-blue-600  ">
-                 Conversion Rate: <span className="text-sm ml-2">{stats.kpis.conversionRate}%</span>
+                 Conversion Rate: <span className="text-sm ml-2">{stats?.kpis?.conversionRate || 0}%</span>
                  <span className="text-slate-400 ml-2  normal-case">(RFQ Created to GRN Completed)</span>
                </p>
             </div>
@@ -375,7 +381,7 @@ const ProcurementReport = () => {
           </div>
           <div className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.purchaseTrend}>
+              <AreaChart data={stats?.purchaseTrend || []}>
                 <defs>
                   <linearGradient id="colorPurchaseTrend" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
@@ -635,7 +641,7 @@ const ProcurementReport = () => {
         {totalSummaryPages > 1 && (
           <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
              <p className="text-xs  text-slate-400  ">
-               Showing {(summaryPage - 1) * itemsPerPage + 1} to {Math.min(summaryPage * itemsPerPage, stats.poGrnSummary.length)} of {stats.poGrnSummary.length} entries
+               Showing {(summaryPage - 1) * itemsPerPage + 1} to {Math.min(summaryPage * itemsPerPage, stats?.poGrnSummary?.length || 0)} of {stats?.poGrnSummary?.length || 0} entries
              </p>
              <div className="flex items-center gap-1">
                <button 

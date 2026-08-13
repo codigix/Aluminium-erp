@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, Cell, PieChart, Pie, Legend
@@ -175,14 +175,7 @@ const QualityReports = () => {
     </div>
   );
 
-  if (loading || !data) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-4">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
-        <h3 className="text-slate-900   ">Generating Quality Report...</h3>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !data;
 
   if (showAllHistory) {
     return (
@@ -329,7 +322,7 @@ const QualityReports = () => {
             className="bg-white border border-slate-200 rounded p-2 text-xs  text-slate-600 outline-none"
           >
             <option value="All">All Suppliers</option>
-            {data.supplierPerformance?.map((s, idx) => (
+            {data?.supplierPerformance?.map((s, idx) => (
               <option key={idx} value={s.supplier}>{s.supplier}</option>
             ))}
           </select>
@@ -345,11 +338,23 @@ const QualityReports = () => {
 
       {/* KPIs Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <KPIStoreCard title="Total Inspections" value={data.kpis.totalInspections} subtitle="All Inspections" icon={ClipboardList} color="text-indigo-600" subColor="bg-indigo-50" />
-        <KPIStoreCard title="Pass Rate" value={data.kpis.passRate} subtitle="Success Ratio" icon={CheckCircle} color="text-emerald-600" subColor="bg-emerald-50" />
-        <KPIStoreCard title="Rejection Rate" value={data.kpis.rejectionRate} subtitle="Failure Ratio" icon={AlertTriangle} color="text-rose-600" subColor="bg-rose-50" />
-        <KPIStoreCard title="Quality Score" value={data.kpis.qualityScore} subtitle="Compliance Rating" icon={ShieldCheck} color="text-blue-600" subColor="bg-blue-50" />
-        <KPIStoreCard title="Defect Score" value={data.kpis.defectScore} subtitle="Issue Frequency" icon={RotateCcw} color="text-amber-600" subColor="bg-amber-50" />
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <KPIStoreCard title="Total Inspections" value={data?.kpis?.totalInspections || 0} subtitle="All Inspections" icon={ClipboardList} color="text-indigo-600" subColor="bg-indigo-50" />
+            <KPIStoreCard title="Pass Rate" value={data?.kpis?.passRate || '0%'} subtitle="Success Ratio" icon={CheckCircle} color="text-emerald-600" subColor="bg-emerald-50" />
+            <KPIStoreCard title="Rejection Rate" value={data?.kpis?.rejectionRate || '0%'} subtitle="Failure Ratio" icon={AlertTriangle} color="text-rose-600" subColor="bg-rose-50" />
+            <KPIStoreCard title="Quality Score" value={data?.kpis?.qualityScore || '0/10'} subtitle="Compliance Rating" icon={ShieldCheck} color="text-blue-600" subColor="bg-blue-50" />
+            <KPIStoreCard title="Defect Score" value={data?.kpis?.defectScore || '0/10'} subtitle="Issue Frequency" icon={RotateCcw} color="text-amber-600" subColor="bg-amber-50" />
+          </>
+        )}
       </div>
 
       {/* Main Charts Section */}
@@ -362,7 +367,7 @@ const QualityReports = () => {
           </div>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.monthlyTrend}>
+              <BarChart data={data?.monthlyTrend || []}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis 
                   dataKey="month" 
@@ -395,7 +400,7 @@ const QualityReports = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={data.defectBreakdown}
+                    data={data?.defectBreakdown || []}
                     cx="50%"
                     cy="50%"
                     innerRadius={70}
@@ -403,7 +408,7 @@ const QualityReports = () => {
                     paddingAngle={8}
                     dataKey="value"
                   >
-                    {data.defectBreakdown.map((entry, index) => (
+                    {(data?.defectBreakdown || []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} stroke="none" />
                     ))}
                   </Pie>
@@ -411,12 +416,12 @@ const QualityReports = () => {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                <span className="text-xl   text-slate-900">{data.kpis.rejectionRate}</span>
+                <span className="text-xl   text-slate-900">{data?.kpis?.rejectionRate || '0%'}</span>
                 <span className="text-xs  text-slate-400 ">Avg Rejection</span>
               </div>
             </div>
             <div className="flex-1 space-y-3 w-full">
-              {data.defectBreakdown.map((item, index) => (
+              {(data?.defectBreakdown || []).map((item, index) => (
                 <div key={index} className="flex items-center justify-between group">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }}></div>
@@ -528,7 +533,7 @@ const QualityReports = () => {
           {totalInspectionPages > 1 && (
             <div className="p-2 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
               <p className="text-xs  text-slate-400  ">
-                Showing {(inspectionsPage - 1) * inspectionsPerPage + 1} to {Math.min(inspectionsPage * inspectionsPerPage, data.recentReports.length)} of {data.recentReports.length} entries
+                Showing {(inspectionsPage - 1) * inspectionsPerPage + 1} to {Math.min(inspectionsPage * inspectionsPerPage, data?.recentReports?.length || 0)} of {data?.recentReports?.length || 0} entries
               </p>
               <div className="flex items-center gap-1">
                 <button 

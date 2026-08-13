@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { cleanProjectName } from '../utils/formatters';
-import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, Cell, PieChart, Pie, Legend
@@ -228,19 +228,12 @@ const ProductionReport = () => {
     </div>
   );
 
-  if (loading || !stats) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-4">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
-        <h3 className="text-slate-900   ">Generating Production Report...</h3>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !stats;
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f43f5e'];
 
   return (
-    <div className="space-y-2 pb-12 animate-in fade-in duration-500">
+    <div className="space-y-2 pb-12">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -270,7 +263,7 @@ const ProductionReport = () => {
             className="bg-white border border-slate-200 rounded p-2 text-xs  text-slate-600 outline-none"
           >
             <option value="All">All Projects</option>
-            {stats.topProjects?.map((project, idx) => (
+            {stats?.topProjects?.map((project, idx) => (
               <option key={idx} value={project.name}>{project.name}</option>
             ))}
           </select>
@@ -286,12 +279,25 @@ const ProductionReport = () => {
 
       {/* KPIs Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-2">
-        <KPIStoreCard title="Total Work Orders" value={stats.kpis.totalWorkOrders} subtitle="All Time" icon={ClipboardList} color="text-indigo-600" subColor="bg-indigo-50" />
-        <KPIStoreCard title="In Progress" value={stats.kpis.inProgress} subtitle={`${stats.kpis.inProgressPercent}%`} icon={Play} color="text-blue-600" subColor="bg-blue-50" />
-        <KPIStoreCard title="Completed" value={stats.kpis.completed} subtitle={`${stats.kpis.completedPercent}%`} icon={CheckCircle2} color="text-emerald-600" subColor="bg-emerald-50" />
-        <KPIStoreCard title="Planned Qty" value={stats.kpis.plannedQty} subtitle="Total Units" icon={Target} color="text-amber-600" subColor="bg-amber-50" />
-        <KPIStoreCard title="Produced Qty" value={stats.kpis.producedQty} subtitle="Total Units" icon={Layers} color="text-indigo-600" subColor="bg-indigo-50" />
-        <KPIStoreCard title="Overall Efficiency" value={`${stats.kpis.efficiency}%`} subtitle="(Produced / Planned)" icon={Activity} color="text-rose-600" subColor="bg-rose-50" />
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <KPIStoreCard title="Total Work Orders" value={stats?.kpis?.totalWorkOrders || 0} subtitle="All Time" icon={ClipboardList} color="text-indigo-600" subColor="bg-indigo-50" />
+            <KPIStoreCard title="In Progress" value={stats?.kpis?.inProgress || 0} subtitle={`${stats?.kpis?.inProgressPercent || 0}%`} icon={Play} color="text-blue-600" subColor="bg-blue-50" />
+            <KPIStoreCard title="Completed" value={stats?.kpis?.completed || 0} subtitle={`${stats?.kpis?.completedPercent || 0}%`} icon={CheckCircle2} color="text-emerald-600" subColor="bg-emerald-50" />
+            <KPIStoreCard title="Planned Qty" value={stats?.kpis?.plannedQty || 0} subtitle="Total Units" icon={Target} color="text-amber-600" subColor="bg-amber-50" />
+            <KPIStoreCard title="Produced Qty" value={stats?.kpis?.producedQty || 0} subtitle="Total Units" icon={Layers} color="text-indigo-600" subColor="bg-indigo-50" />
+            <KPIStoreCard title="Overall Efficiency" value={`${stats?.kpis?.efficiency || 0}%`} subtitle="(Produced / Planned)" icon={Activity} color="text-rose-600" subColor="bg-rose-50" />
+          </>
+        )}
       </div>
 
       {/* Charts Row */}
@@ -309,7 +315,7 @@ const ProductionReport = () => {
           </div>
           <div className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.productionTrend}>
+              <AreaChart data={stats?.productionTrend || []}>
                 <defs>
                   <linearGradient id="colorPlanned" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
@@ -343,13 +349,13 @@ const ProductionReport = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={stats.statusDistribution}
+                    data={stats?.statusDistribution || []}
                     innerRadius={60}
                     outerRadius={80}
                     paddingAngle={5}
                     dataKey="value"
                   >
-                    {stats.statusDistribution.map((entry, index) => (
+                    {(stats?.statusDistribution || []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -358,11 +364,11 @@ const ProductionReport = () => {
               </ResponsiveContainer>
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
                 <p className="text-xs text-slate-400   er">Total</p>
-                <h4 className="text-xl  text-slate-900">{stats.kpis.totalWorkOrders}</h4>
+                <h4 className="text-xl  text-slate-900">{stats?.kpis?.totalWorkOrders || 0}</h4>
               </div>
             </div>
             <div className="w-full mt-6 space-y-2">
-              {stats.statusDistribution.map((item, idx) => (
+              {(stats?.statusDistribution || []).map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
@@ -388,7 +394,7 @@ const ProductionReport = () => {
                 <span className="w-20 text-center">Efficiency</span>
                 <span className="w-16 text-right">Status</span>
               </div>
-              {stats.operationEfficiency.map((op, idx) => (
+              {(stats?.operationEfficiency || []).map((op, idx) => (
                 <div key={idx} className="flex items-center group py-1">
                   <span className="flex-1 text-xs  text-slate-900">{op.name}</span>
                   <span className="w-20 text-center text-xs  text-slate-600">{op.efficiency}%</span>
@@ -496,7 +502,7 @@ const ProductionReport = () => {
           </div>
           <div className="max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
             <div className="space-y-4">
-              {stats.recentActivity.map((activity, idx) => (
+              {(stats?.recentActivity || []).map((activity, idx) => (
                 <div key={idx} className="flex items-start gap-3 group">
                   <div className={`p-2 rounded ${
                     activity.type === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600' : 
@@ -687,7 +693,7 @@ const ProductionReport = () => {
         {totalSummaryPages > 1 && (
           <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
              <p className="text-xs  text-slate-400  ">
-               Showing {(summaryPage - 1) * itemsPerPage + 1} to {Math.min(summaryPage * itemsPerPage, stats.summaryTable.length)} of {stats.summaryTable.length} entries
+               Showing {(summaryPage - 1) * itemsPerPage + 1} to {Math.min(summaryPage * itemsPerPage, stats?.summaryTable?.length || 0)} of {stats?.summaryTable?.length || 0} entries
              </p>
              <div className="flex items-center gap-1">
                <button 

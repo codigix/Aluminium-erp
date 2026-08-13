@@ -1,35 +1,14 @@
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  Truck,
-  CheckCircle,
-  AlertTriangle,
-  RotateCcw,
-  Package,
-  TrendingUp,
-  Filter,
-  Clock,
-  RefreshCw,
-  Download,
-  ExternalLink,
-  ChevronRight,
-  ArrowRight,
-  ShieldCheck
-} from "lucide-react";
-
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  CartesianGrid,
-  Legend
-} from "recharts";
-import { StatusBadge, DataTable } from "../components/ui.jsx";
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, DataTable, StatusBadge, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
+import { 
+  Truck, CheckCircle, AlertTriangle, RotateCcw, Package,
+  TrendingUp, Filter, Clock, RefreshCw, Download, ExternalLink,
+  ChevronRight, ArrowRight, ShieldCheck, Calendar, MapPin
+} from 'lucide-react';
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, BarChart, Bar
+} from 'recharts';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -41,22 +20,23 @@ const ShipmentDashboard = ({ apiRequest }) => {
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
-      let res;
       if (apiRequest) {
-        res = await apiRequest('/dashboard/shipment');
+        const res = await apiRequest('/dashboard/shipment');
+        setData(res);
       } else {
         const token = localStorage.getItem('authToken');
         const response = await fetch(`${API_BASE}/dashboard/shipment`, {
-          headers: { 
+          headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
             'X-ERP-Request': 'true'
           }
         });
+
         if (!response.ok) throw new Error('Failed to fetch shipment stats');
-        res = await response.json();
+        const res = await response.json();
+        setData(res);
       }
-      setData(res);
       setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching shipment dashboard:', error);
@@ -69,23 +49,10 @@ const ShipmentDashboard = ({ apiRequest }) => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  if (loading || !data) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-2">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-          <Truck className="w-3 h-3 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-        </div>
-        <div className="text-center">
-          <h3 className="text-slate-900  ">Syncing Logistics</h3>
-          <p className="text-xs text-slate-500 mt-1">Gathering transit data and shipment milestones...</p>
-        </div>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !data;
 
   const { stats, monthlyData, recentShipments } = data || {};
-  
+
   const safeStats = stats || { active: 0, delivered: 0, delayed: 0, returns: 0, dispatched: 0, total: 0, sla: 0, health: [] };
   const safeMonthlyData = monthlyData || [];
   const safeRecentShipments = recentShipments || [];
@@ -109,7 +76,7 @@ const ShipmentDashboard = ({ apiRequest }) => {
   const StatCard = ({ title, value, subtitle, color, icon: Icon }) => (
     <div className="bg-white rounded  p-2 border border-slate-100 shadow-sm hover: transition-all group relative overflow-hidden">
       <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded -mr-8 -mt-8 transition-transform group-hover:scale-110`} />
-      
+
       <div className="flex items-start justify-between relative z-10">
         <div>
           <p className="text-xs  text-slate-400   mb-1">{title}</p>
@@ -140,7 +107,7 @@ const ShipmentDashboard = ({ apiRequest }) => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button 
+          <button
             onClick={fetchDashboardData}
             className="flex items-center gap-2 p-2 bg-slate-50 text-slate-600 rounded  text-xs  hover:bg-slate-100 transition-all border border-slate-200 active:scale-95"
           >
@@ -156,9 +123,19 @@ const ShipmentDashboard = ({ apiRequest }) => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
-        {kpis.map((kpi, i) => (
-          <StatCard key={i} {...kpi} />
-        ))}
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          kpis.map((kpi, i) => (
+            <StatCard key={i} {...kpi} />
+          ))
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -177,19 +154,19 @@ const ShipmentDashboard = ({ apiRequest }) => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={safeMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="month" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
+                <XAxis
+                  dataKey="month"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
                   dy={10}
                 />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} 
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
                 />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   cursor={{ fill: '#f8fafc' }}
                 />
@@ -261,8 +238,8 @@ const ShipmentDashboard = ({ apiRequest }) => {
               </h3>
               <p className="text-xs text-slate-500  mt-0.5  ">REAL-TIME MOVEMENT LOGS</p>
             </div>
-            <button 
-              onClick={() => window.location.href='/shipment-orders'}
+            <button
+              onClick={() => window.location.href = '/shipment-orders'}
               className="flex items-center gap-2 text-xs  text-indigo-600   hover:gap-2 transition-all"
             >
               View Full Fleet <ArrowRight className="w-3 h-3" />

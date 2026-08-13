@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import DataTableDT from 'datatables.net-dt';
+import 'datatables.net-dt/css/dataTables.dataTables.css';
 import { ChevronUp, ChevronDown, ChevronsUpDown, X, Search, FileText, ChevronRight, ChevronLeft, Loader2, Check, ChevronsLeft, ChevronsRight, Home, User, Settings, Info } from 'lucide-react';
 
 export const Card = ({ id, title, subtitle, action, children, className = '' }) => (
@@ -15,6 +17,55 @@ export const Card = ({ id, title, subtitle, action, children, className = '' }) 
     <div className="p-2">{children}</div>
   </div>
 )
+
+export const Skeleton = ({ className = '', ...props }) => (
+  <div className={`animate-pulse bg-slate-200/80 rounded ${className}`} {...props} />
+);
+
+export const SkeletonCard = ({ className = '' }) => (
+  <div className={`bg-white rounded p-4 border border-slate-100 shadow-sm space-y-3 ${className}`}>
+    <div className="flex justify-between items-start">
+      <div className="space-y-2 w-2/3">
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-7 w-32" />
+        <Skeleton className="h-3 w-20" />
+      </div>
+      <Skeleton className="h-9 w-9 rounded-lg" />
+    </div>
+  </div>
+);
+
+export const SkeletonTable = ({ rows = 5, columns = 4, className = '' }) => (
+  <div className={`w-full bg-white rounded border border-slate-100 shadow-sm overflow-hidden ${className}`}>
+    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+      <Skeleton className="h-5 w-36" />
+      <Skeleton className="h-8 w-48 rounded" />
+    </div>
+    <table className="min-w-full divide-y divide-slate-100">
+      <thead className="bg-slate-50">
+        <tr>
+          {Array.from({ length: columns }).map((_, i) => (
+            <th key={i} className="px-6 py-3 text-left">
+              <Skeleton className="h-3 w-20" />
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-100">
+        {Array.from({ length: rows }).map((_, rIdx) => (
+          <tr key={rIdx}>
+            {Array.from({ length: columns }).map((_, cIdx) => (
+              <td key={cIdx} className="px-6 py-4">
+                <Skeleton className={`h-4 ${cIdx === 0 ? 'w-3/4' : cIdx === columns - 1 ? 'w-1/2' : 'w-2/3'}`} />
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
 
 export const SearchableSelect = ({
   options,
@@ -891,7 +942,7 @@ export const DataTable = ({
       )}
 
       <div className="overflow-x-auto custom-scrollbar bg-white relative max-h-[90vh]">
-        <table className="w-full text-left bg-white text-sm border-collapse">
+        <table className="display dataTable stripe hover w-full text-left bg-white text-sm border-collapse">
           <thead className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
             <tr>
               {selectable && (
@@ -934,14 +985,25 @@ export const DataTable = ({
           </thead>
           <tbody className="divide-y bg-white divide-slate-100">
             {loading ? (
-              <tr>
-                <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0) + (selectable ? 1 : 0)} className="p-12 text-center">
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="w-8 h-8 text-rose-600 animate-spin" />
-                    <span className="text-slate-500 text-sm  animate-pulse">{loadingMessage}</span>
-                  </div>
-                </td>
-              </tr>
+              Array.from({ length: Math.min(pageSize, 5) }).map((_, rowIdx) => (
+                <tr key={`skeleton-${rowIdx}`} className="animate-pulse">
+                  {selectable && (
+                    <td className="p-2 w-10">
+                      <div className="h-4 w-4 bg-slate-200/80 rounded"></div>
+                    </td>
+                  )}
+                  {renderExpanded && !hideExpander && (
+                    <td className="p-4 w-10">
+                      <div className="h-4 w-4 bg-slate-200/80 rounded"></div>
+                    </td>
+                  )}
+                  {columns.map((col, colIdx) => (
+                    <td key={colIdx} style={{ width: col.width, minWidth: col.width }} className="p-2.5 whitespace-nowrap">
+                      <div className={`h-4 bg-slate-200/80 rounded ${colIdx === 0 ? 'w-3/4' : colIdx === columns.length - 1 ? 'w-1/2' : 'w-2/3'}`}></div>
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : paginatedData.length === 0 ? (
               <tr>
                 <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0) + (selectable ? 1 : 0)} className="p-16 text-center">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, Cell, PieChart, Pie
@@ -124,14 +124,7 @@ const SalesReport = () => {
     </div>
   );
 
-  if (loading || !stats) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-4">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
-        <h3 className="text-slate-900   ">Generating Sales Report...</h3>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !stats;
 
   return (
     <div className="space-y-2 pb-12 animate-in fade-in duration-500">
@@ -168,7 +161,7 @@ const SalesReport = () => {
             className="bg-white border border-slate-200 rounded p-2 text-xs  text-slate-600 outline-none"
           >
             <option value="All">All Customers</option>
-            {stats.activeClients?.map(client => (
+            {stats?.activeClients?.map(client => (
               <option key={client.id} value={client.name}>{client.name}</option>
             ))}
           </select>
@@ -186,46 +179,58 @@ const SalesReport = () => {
       <div className="space-y-3">
         <h3 className="text-sm text-slate-900   ">Activity Overview</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          <KPIStoreCard 
-            title="Total Sales Orders" 
-            value={stats.kpis.totalSalesOrders} 
-            subtitle="This Period" 
-            icon={ShoppingCart} 
-            color="text-indigo-600" 
-            subColor="bg-indigo-50" 
-          />
-          <KPIStoreCard 
-            title="Total Customer POs" 
-            value={stats.kpis.totalCustomerPos} 
-            subtitle="This Period" 
-            icon={FileText} 
-            color="text-blue-600" 
-            subColor="bg-blue-50" 
-          />
-          <KPIStoreCard 
-            title="Approved Quotations" 
-            value={stats.kpis.approvedQuotes} 
-            subtitle="This Period" 
-            icon={CheckCircle} 
-            color="text-emerald-600" 
-            subColor="bg-emerald-50" 
-          />
-          <KPIStoreCard 
-            title="Rejected Quotations" 
-            value={stats.kpis.rejectedQuotes} 
-            subtitle="This Period" 
-            icon={XCircle} 
-            color="text-rose-600" 
-            subColor="bg-rose-50" 
-          />
-          <KPIStoreCard 
-            title="Conversion Rate" 
-            value={`${stats.kpis.conversionRate}%`} 
-            subtitle="Quotation to Order" 
-            icon={Target} 
-            color="text-amber-600" 
-            subColor="bg-amber-50" 
-          />
+          {isDataLoading ? (
+            <>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </>
+          ) : (
+            <>
+              <KPIStoreCard 
+                title="Total Sales Orders" 
+                value={stats?.kpis?.totalSalesOrders || 0} 
+                subtitle="This Period" 
+                icon={ShoppingCart} 
+                color="text-indigo-600" 
+                subColor="bg-indigo-50" 
+              />
+              <KPIStoreCard 
+                title="Total Customer POs" 
+                value={stats?.kpis?.totalCustomerPos || 0} 
+                subtitle="This Period" 
+                icon={FileText} 
+                color="text-blue-600" 
+                subColor="bg-blue-50" 
+              />
+              <KPIStoreCard 
+                title="Approved Quotations" 
+                value={stats?.kpis?.approvedQuotes || 0} 
+                subtitle="This Period" 
+                icon={CheckCircle} 
+                color="text-emerald-600" 
+                subColor="bg-emerald-50" 
+              />
+              <KPIStoreCard 
+                title="Rejected Quotations" 
+                value={stats?.kpis?.rejectedQuotes || 0} 
+                subtitle="This Period" 
+                icon={XCircle} 
+                color="text-rose-600" 
+                subColor="bg-rose-50" 
+              />
+              <KPIStoreCard 
+                title="Conversion Rate" 
+                value={`${stats?.kpis?.conversionRate || 0}%`} 
+                subtitle="Quotation to Order" 
+                icon={Target} 
+                color="text-amber-600" 
+                subColor="bg-amber-50" 
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -243,34 +248,40 @@ const SalesReport = () => {
             </select>
           </div>
           <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.chartData}>
-                <defs>
-                  <linearGradient id="colorSalesTrend" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}} 
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}}
-                  tickFormatter={(val) => `₹${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`}
-                />
-                <Tooltip 
-                  contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                  formatter={(val) => [`₹${parseFloat(val).toLocaleString('en-IN')}`, 'Value']}
-                />
-                <Area type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={2} fillOpacity={1} fill="url(#colorSalesTrend)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {isDataLoading ? (
+              <div className="w-full h-full flex flex-col justify-end gap-2 p-4 bg-slate-50/50 rounded animate-pulse">
+                <div className="h-32 bg-slate-200/80 rounded w-full"></div>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats?.chartData || []}>
+                  <defs>
+                    <linearGradient id="colorSalesTrend" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}} 
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}}
+                    tickFormatter={(val) => `₹${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`}
+                  />
+                  <Tooltip 
+                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                    formatter={(val) => [`₹${parseFloat(val).toLocaleString('en-IN')}`, 'Value']}
+                  />
+                  <Area type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={2} fillOpacity={1} fill="url(#colorSalesTrend)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -281,46 +292,56 @@ const SalesReport = () => {
             <p className="text-xs text-slate-400   mt-1">Track conversion of quotations</p>
           </div>
           
-          <div className="w-full flex flex-col items-center justify-center space-y-1 py-4 relative">
-             {/* Funnel Visualization */}
-             {stats.funnelData.map((item, idx) => (
-               <div 
-                 key={idx} 
-                 className="relative group transition-all duration-300"
-                 style={{ 
-                   width: `${100 - (idx * 15)}%`, 
-                   height: '40px',
-                   backgroundColor: item.color,
-                   clipPath: 'polygon(5% 0%, 95% 0%, 100% 100%, 0% 100%)'
-                 }}
-               >
-                 <div className="absolute inset-0 flex items-center justify-center text-white">
-                   <span className="text-xs   er opacity-0 group-hover:opacity-100 transition-opacity">
-                     {item.name}
-                   </span>
-                   <span className="text-xs  ml-2">{item.value}</span>
+          {isDataLoading ? (
+            <div className="w-full space-y-4 animate-pulse p-4">
+              <div className="h-6 bg-slate-200 rounded w-full"></div>
+              <div className="h-6 bg-slate-200 rounded w-4/5"></div>
+              <div className="h-6 bg-slate-200 rounded w-3/5"></div>
+            </div>
+          ) : (
+            <>
+              <div className="w-full flex flex-col items-center justify-center space-y-1 py-4 relative">
+                 {/* Funnel Visualization */}
+                 {(stats?.funnelData || []).map((item, idx) => (
+                   <div 
+                     key={idx} 
+                     className="relative group transition-all duration-300"
+                     style={{ 
+                       width: `${100 - (idx * 15)}%`, 
+                       height: '40px',
+                       backgroundColor: item.color,
+                       clipPath: 'polygon(5% 0%, 95% 0%, 100% 100%, 0% 100%)'
+                     }}
+                   >
+                     <div className="absolute inset-0 flex items-center justify-center text-white">
+                       <span className="text-xs   er opacity-0 group-hover:opacity-100 transition-opacity">
+                         {item.name}
+                       </span>
+                       <span className="text-xs  ml-2">{item.value}</span>
+                     </div>
+                   </div>
+                 ))}
+
+                 {/* Conversion Rate Side Info */}
+                 <div className="absolute right-0 top-1/2 -translate-y-1/2 text-center pr-2">
+                    <p className="text-[8px] text-slate-400   ">Conversion Rate</p>
+                    <h4 className="text-lg text-slate-900 ">{stats?.kpis?.conversionRate || 0}%</h4>
+                    <p className="text-[8px] text-slate-500  mt-1  er">
+                      {stats?.kpis?.approvedQuotes || 0} / {stats?.kpis?.sentQuotes || 0}<br/>Sent to Order
+                    </p>
                  </div>
-               </div>
-             ))}
-
-             {/* Conversion Rate Side Info */}
-             <div className="absolute right-0 top-1/2 -translate-y-1/2 text-center pr-2">
-                <p className="text-[8px] text-slate-400   ">Conversion Rate</p>
-                <h4 className="text-lg text-slate-900 ">{stats.kpis.conversionRate}%</h4>
-                <p className="text-[8px] text-slate-500  mt-1  er">
-                  {stats.kpis.approvedQuotes} / {stats.kpis.sentQuotes}<br/>Sent to Order
-                </p>
-             </div>
-          </div>
-
-          <div className="w-full mt-auto pt-6 grid grid-cols-2 gap-2">
-            {stats.funnelData.map((item, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded" style={{ backgroundColor: item.color }} />
-                <span className="text-[9px]  text-slate-500  er">{item.name}</span>
               </div>
-            ))}
-          </div>
+
+              <div className="w-full mt-auto pt-6 grid grid-cols-2 gap-2">
+                {(stats?.funnelData || []).map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded" style={{ backgroundColor: item.color }} />
+                    <span className="text-[9px]  text-slate-500  er">{item.name}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Recent Activity */}
@@ -335,29 +356,37 @@ const SalesReport = () => {
             </button>
           </div>
           <div className="space-y-4">
-            {stats.recentActivity.map((activity, idx) => (
-              <div key={idx} className="flex items-start gap-3 group">
-                <div className={`p-2 rounded ${
-                  activity.type === 'QUOTE_APPROVED' ? 'bg-emerald-50 text-emerald-600' : 
-                  activity.type === 'ORDER_CREATED' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
-                }`}>
-                  {activity.type === 'QUOTE_APPROVED' ? <CheckCircle2 className="w-3.5 h-3.5" /> : 
-                   activity.type === 'ORDER_CREATED' ? <ShoppingCart className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
-                </div>
-                <div className="flex-1 border-b border-slate-50 pb-3 last:border-0">
-                  <div className="flex justify-between items-start">
-                    <p className="text-xs  text-slate-900 ">
-                      {activity.type === 'QUOTE_APPROVED' ? `Quotation ${activity.ref} approved` : 
-                       `Sales Order ${activity.ref} created`}
-                    </p>
-                    <span className="text-[9px] text-slate-400  whitespace-nowrap">
-                      {new Date(activity.time).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500  mt-0.5">{activity.customer}</p>
-                </div>
+            {isDataLoading ? (
+              <div className="space-y-3 animate-pulse">
+                <div className="h-10 bg-slate-100 rounded"></div>
+                <div className="h-10 bg-slate-100 rounded"></div>
+                <div className="h-10 bg-slate-100 rounded"></div>
               </div>
-            ))}
+            ) : (
+              (stats?.recentActivity || []).map((activity, idx) => (
+                <div key={idx} className="flex items-start gap-3 group">
+                  <div className={`p-2 rounded ${
+                    activity.type === 'QUOTE_APPROVED' ? 'bg-emerald-50 text-emerald-600' : 
+                    activity.type === 'ORDER_CREATED' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
+                  }`}>
+                    {activity.type === 'QUOTE_APPROVED' ? <CheckCircle2 className="w-3.5 h-3.5" /> : 
+                     activity.type === 'ORDER_CREATED' ? <ShoppingCart className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
+                  </div>
+                  <div className="flex-1 border-b border-slate-50 pb-3 last:border-0">
+                    <div className="flex justify-between items-start">
+                      <p className="text-xs  text-slate-900 ">
+                        {activity.type === 'QUOTE_APPROVED' ? `Quotation ${activity.ref} approved` : 
+                         `Sales Order ${activity.ref} created`}
+                      </p>
+                      <span className="text-[9px] text-slate-400  whitespace-nowrap">
+                        {new Date(activity.time).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500  mt-0.5">{activity.customer}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

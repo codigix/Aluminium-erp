@@ -10,7 +10,7 @@ import {
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend
 } from 'recharts';
-import { Card, StatusBadge, Button } from '../components/ui.jsx';
+import { Card, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -200,9 +200,22 @@ const SalesReportDetails = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin"></div>
-        <p className="text-slate-500 text-sm font-medium">Fetching order details...</p>
+      <div className="space-y-4 p-4">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back
+          </Button>
+          <div className="h-6 bg-slate-200 rounded w-48 animate-pulse"></div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <div className="bg-white rounded border border-slate-100 p-4">
+          <SkeletonTable rows={4} columns={5} />
+        </div>
       </div>
     );
   }

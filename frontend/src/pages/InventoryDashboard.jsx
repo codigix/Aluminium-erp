@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, DataTable, StatusBadge } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, SkeletonCard } from '../components/ui.jsx';
 import { 
   Package, 
   ClipboardList, 
@@ -139,20 +139,7 @@ const InventoryDashboard = () => {
     { key: 'unit', label: 'Unit' }
   ];
 
-  if (loading && !stats.incomingPos.length) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-2">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-          <Package className="w-3 h-3 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-        </div>
-        <div className="text-center">
-          <h3 className="text-slate-900  ">Syncing Inventory</h3>
-          <p className="text-xs text-slate-500 mt-1">Gathering real-time stock insights...</p>
-        </div>
-      </div>
-    );
-  }
+  const isDataLoading = loading;
 
   return (
     <div className="space-y-2 pb-12">
@@ -183,36 +170,47 @@ const InventoryDashboard = () => {
 
       {/* Quick Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Incoming Orders" 
-          count={stats.incomingPos.length} 
-          subtitle="Active in pipeline"
-          color="bg-indigo-500"
-          icon={Truck}
-          trend={12}
-        />
-        <StatCard 
-          title="Material Requests" 
-          count={stats.materialRequests.length} 
-          subtitle="Pending fulfillment"
-          color="bg-emerald-500"
-          icon={ClipboardList}
-        />
-        <StatCard 
-          title="Pending GRNs" 
-          count={stats.pendingGRNs.length} 
-          subtitle="Awaiting inspection"
-          color="bg-amber-500"
-          icon={RefreshCw}
-        />
-        <StatCard 
-          title="Low Stock Alert" 
-          count={stats.lowStockItems.length} 
-          subtitle="Below reorder level"
-          color="bg-rose-500"
-          icon={AlertTriangle}
-          trend={-5}
-        />
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <StatCard 
+              title="Incoming Orders" 
+              count={stats?.incomingPos?.length || 0} 
+              subtitle="Active in pipeline"
+              color="bg-indigo-500"
+              icon={Truck}
+              trend={12}
+            />
+            <StatCard 
+              title="Material Requests" 
+              count={stats?.materialRequests?.length || 0} 
+              subtitle="Pending fulfillment"
+              color="bg-emerald-500"
+              icon={ClipboardList}
+            />
+            <StatCard 
+              title="Pending GRNs" 
+              count={stats?.pendingGRNs?.length || 0} 
+              subtitle="Awaiting inspection"
+              color="bg-amber-500"
+              icon={RefreshCw}
+            />
+            <StatCard 
+              title="Low Stock Alert" 
+              count={stats?.lowStockItems?.length || 0} 
+              subtitle="Below reorder level"
+              color="bg-rose-500"
+              icon={AlertTriangle}
+              trend={-5}
+            />
+          </>
+        )}
       </div>
 
       {/* Main Content Sections */}

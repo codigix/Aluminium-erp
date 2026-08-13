@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, Cell, PieChart, Pie, Legend
@@ -365,14 +365,7 @@ const AccountsReport = () => {
     </div>
   );
 
-  if (loading || !stats) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-4">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
-        <h3 className="text-slate-900   ">Generating Accounts Report...</h3>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !stats;
 
   if (showAllTransactions) {
     return (
@@ -475,7 +468,7 @@ const AccountsReport = () => {
             className="bg-white border border-slate-200 rounded p-2 text-xs  text-slate-600 outline-none"
           >
             <option value="All">All Customers</option>
-            {stats.topCustomers?.map((customer, idx) => (
+            {stats?.topCustomers?.map((customer, idx) => (
               <option key={idx} value={customer.name}>{customer.name}</option>
             ))}
           </select>
@@ -491,11 +484,23 @@ const AccountsReport = () => {
 
       {/* KPIs Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 my-5 gap-4">
-        <KPIStoreCard title="Total Receivables" value={`₹${parseFloat(stats.kpis.totalReceivables).toLocaleString('en-IN')}`} subtitle={`From ${stats.kpis.receivableCustomers} Customers`} icon={FileText} color="text-indigo-600" subColor="bg-indigo-50" />
-        <KPIStoreCard title="Total Payables" value={`₹${parseFloat(stats.kpis.totalPayables).toLocaleString('en-IN')}`} subtitle={`To ${stats.kpis.payableVendors} Vendors`} icon={ShoppingCart} color="text-emerald-600" subColor="bg-emerald-50" />
-        <KPIStoreCard title="Cash Received" value={`₹${parseFloat(stats.kpis.cashReceived).toLocaleString('en-IN')}`} subtitle="This Period" icon={IndianRupee} color="text-amber-600" subColor="bg-amber-50" />
-        <KPIStoreCard title="Invoices Sent" value={stats.kpis.invoicesSent} subtitle="This Period" icon={Receipt} color="text-blue-600" subColor="bg-blue-50" />
-        <KPIStoreCard title="Overdue Amount" value={`₹${parseFloat(stats.kpis.overdueAmount).toLocaleString('en-IN')}`} subtitle={`${stats.kpis.overdueInvoices} Overdue Invoices`} icon={Clock} color="text-rose-600" subColor="bg-rose-50" />
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <KPIStoreCard title="Total Receivables" value={`₹${parseFloat(stats?.kpis?.totalReceivables || 0).toLocaleString('en-IN')}`} subtitle={`From ${stats?.kpis?.receivableCustomers || 0} Customers`} icon={FileText} color="text-indigo-600" subColor="bg-indigo-50" />
+            <KPIStoreCard title="Total Payables" value={`₹${parseFloat(stats?.kpis?.totalPayables || 0).toLocaleString('en-IN')}`} subtitle={`To ${stats?.kpis?.payableVendors || 0} Vendors`} icon={ShoppingCart} color="text-emerald-600" subColor="bg-emerald-50" />
+            <KPIStoreCard title="Cash Received" value={`₹${parseFloat(stats?.kpis?.cashReceived || 0).toLocaleString('en-IN')}`} subtitle="This Period" icon={IndianRupee} color="text-amber-600" subColor="bg-amber-50" />
+            <KPIStoreCard title="Invoices Sent" value={stats?.kpis?.invoicesSent || 0} subtitle="This Period" icon={Receipt} color="text-blue-600" subColor="bg-blue-50" />
+            <KPIStoreCard title="Overdue Amount" value={`₹${parseFloat(stats?.kpis?.overdueAmount || 0).toLocaleString('en-IN')}`} subtitle={`${stats?.kpis?.overdueInvoices || 0} Overdue Invoices`} icon={Clock} color="text-rose-600" subColor="bg-rose-50" />
+          </>
+        )}
       </div>
 
       {/* Charts Row */}
@@ -511,13 +516,13 @@ const AccountsReport = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={stats.receivablesPayables}
+                    data={stats?.receivablesPayables || []}
                     innerRadius={60}
                     outerRadius={80}
                     paddingAngle={5}
                     dataKey="value"
                   >
-                    {stats.receivablesPayables.map((entry, index) => (
+                    {(stats?.receivablesPayables || []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -526,7 +531,7 @@ const AccountsReport = () => {
               </ResponsiveContainer>
             </div>
             <div className="w-full mt-3 ">
-              {stats.receivablesPayables.map((item, idx) => (
+              {(stats?.receivablesPayables || []).map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
@@ -551,7 +556,7 @@ const AccountsReport = () => {
           </div>
           <div className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.cashFlowTrend}>
+              <AreaChart data={stats?.cashFlowTrend || []}>
                 <defs>
                   <linearGradient id="colorInflow" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
@@ -581,7 +586,7 @@ const AccountsReport = () => {
             <p className="text-xs text-slate-400   mt-1">Outstanding by aging buckets</p>
           </div>
           <div className="">
-            {stats.agingSummary.map((bucket, idx) => (
+            {(stats?.agingSummary || []).map((bucket, idx) => (
               <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded ${
@@ -593,14 +598,14 @@ const AccountsReport = () => {
                   <span className="text-xs  text-slate-900  er">{bucket.range}</span>
                 </div>
                 <div className="text-right">
-                   <p className="text-xs  text-slate-900">₹{parseFloat(bucket.amount).toLocaleString('en-IN')}</p>
-                   <span className="text-xs  text-slate-400 ">{bucket.invoiceCount} Invoice</span>
+                  <p className="text-xs  text-slate-900">₹{parseFloat(bucket.amount).toLocaleString('en-IN')}</p>
+                  <span className="text-xs  text-slate-400 ">{bucket.invoiceCount} Invoice</span>
                 </div>
               </div>
             ))}
             <div className="pt-4 mt-2 border-t border-slate-50 flex items-center justify-between ">
               <span className="text-xs text-slate-500  ">Total Outstanding</span>
-              <span className="text-sm text-indigo-600">₹{parseFloat(stats.kpis.totalReceivables).toLocaleString('en-IN')}</span>
+              <span className="text-sm text-indigo-600">₹{parseFloat(stats?.kpis?.totalReceivables || 0).toLocaleString('en-IN')}</span>
             </div>
           </div>
         </div>
@@ -768,7 +773,7 @@ const AccountsReport = () => {
         {totalTransactionPages > 1 && (
           <div className="p-2 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
              <p className="text-xs  text-slate-400  ">
-               Showing {(transactionsPage - 1) * transactionsPerPage + 1} to {Math.min(transactionsPage * transactionsPerPage, stats.recentTransactions.length)} of {stats.recentTransactions.length} entries
+               Showing {(transactionsPage - 1) * transactionsPerPage + 1} to {Math.min(transactionsPage * transactionsPerPage, stats?.recentTransactions?.length || 0)} of {stats?.recentTransactions?.length || 0} entries
              </p>
              <div className="flex items-center gap-1">
                <button 

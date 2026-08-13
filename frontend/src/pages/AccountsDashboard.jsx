@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, DataTable, StatusBadge } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell, BarChart, Bar
@@ -79,20 +79,7 @@ const AccountsDashboard = () => {
     </div>
   );
 
-  if (loading || !stats) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-2">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-          <IndianRupee className="w-3 h-3 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-        </div>
-        <div className="text-center">
-          <h3 className="text-slate-900  ">Financial Sync in Progress</h3>
-          <p className="text-xs text-slate-500 mt-1">Calculating payables, receipts and cash flow trends...</p>
-        </div>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !stats;
 
   const tableColumns = [
     { key: 'no', label: 'REFERENCE', render: (val) => <span className=" text-slate-900">{val}</span> },
@@ -153,45 +140,57 @@ const AccountsDashboard = () => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
-        <StatCard 
-          title="Total Invoices" 
-          amount={stats.kpis.totalInvoices} 
-          subtitle="Processed this period"
-          color="bg-indigo-500"
-          icon={FileText}
-          trend="up"
-          trendValue="8.4%"
-        />
-        <StatCard 
-          title="Total Payables" 
-          amount={`₹${Number(stats.kpis.totalPayable).toLocaleString('en-IN')}`} 
-          subtitle="Total liability"
-          color="bg-rose-500"
-          icon={IndianRupee}
-        />
-        <StatCard 
-          title="Paid to Vendors" 
-          amount={`₹${Number(stats.kpis.paidAmount).toLocaleString('en-IN')}`} 
-          subtitle="Cleared payments"
-          color="bg-emerald-500"
-          icon={CheckCircle}
-          trend="up"
-          trendValue="12.1%"
-        />
-        <StatCard 
-          title="Pending Payments" 
-          amount={`₹${Number(stats.kpis.pendingPayable).toLocaleString('en-IN')}`} 
-          subtitle="Awaiting clearance"
-          color="bg-amber-500"
-          icon={Clock}
-        />
-        <StatCard 
-          title="Overdue Items" 
-          amount={stats.kpis.overdueCount} 
-          subtitle="Requires attention"
-          color="bg-rose-600"
-          icon={AlertCircle}
-        />
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <StatCard 
+              title="Total Invoices" 
+              amount={stats?.kpis?.totalInvoices || 0} 
+              subtitle="Processed this period"
+              color="bg-indigo-500"
+              icon={FileText}
+              trend="up"
+              trendValue="8.4%"
+            />
+            <StatCard 
+              title="Total Payables" 
+              amount={`₹${Number(stats?.kpis?.totalPayable || 0).toLocaleString('en-IN')}`} 
+              subtitle="Total liability"
+              color="bg-rose-500"
+              icon={IndianRupee}
+            />
+            <StatCard 
+              title="Paid to Vendors" 
+              amount={`₹${Number(stats?.kpis?.paidAmount || 0).toLocaleString('en-IN')}`} 
+              subtitle="Cleared payments"
+              color="bg-emerald-500"
+              icon={CheckCircle}
+              trend="up"
+              trendValue="12.1%"
+            />
+            <StatCard 
+              title="Pending Payments" 
+              amount={`₹${Number(stats?.kpis?.pendingPayable || 0).toLocaleString('en-IN')}`} 
+              subtitle="Awaiting clearance"
+              color="bg-amber-500"
+              icon={Clock}
+            />
+            <StatCard 
+              title="Overdue Items" 
+              amount={stats?.kpis?.overdueCount || 0} 
+              subtitle="Requires attention"
+              color="bg-rose-600"
+              icon={AlertCircle}
+            />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -207,43 +206,49 @@ const AccountsDashboard = () => {
             </div>
           </div>
           <div className="h-[350px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={stats.cashFlow}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} 
-                  dy={10} 
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} 
-                  tickFormatter={(v) => `₹${v/1000}K`} 
-                />
-                <Tooltip 
-                  contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px'}}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="receipts" 
-                  stroke={COLORS.blue} 
-                  strokeWidth={4} 
-                  dot={{ r: 4, fill: COLORS.blue, strokeWidth: 2, stroke: '#fff' }} 
-                  activeDot={{ r: 6 }} 
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="payments" 
-                  stroke={COLORS.emerald} 
-                  strokeWidth={4} 
-                  dot={{ r: 4, fill: COLORS.emerald, strokeWidth: 2, stroke: '#fff' }} 
-                  activeDot={{ r: 6 }} 
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {isDataLoading ? (
+              <div className="w-full h-full flex flex-col justify-end gap-2 p-4 bg-slate-50/50 rounded animate-pulse">
+                <div className="h-48 bg-slate-200/80 rounded w-full"></div>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={stats?.cashFlow || []}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} 
+                    dy={10} 
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} 
+                    tickFormatter={(v) => `₹${v/1000}K`} 
+                  />
+                  <Tooltip 
+                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px'}}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="receipts" 
+                    stroke={COLORS.blue} 
+                    strokeWidth={4} 
+                    dot={{ r: 4, fill: COLORS.blue, strokeWidth: 2, stroke: '#fff' }} 
+                    activeDot={{ r: 6 }} 
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="payments" 
+                    stroke={COLORS.emerald} 
+                    strokeWidth={4} 
+                    dot={{ r: 4, fill: COLORS.emerald, strokeWidth: 2, stroke: '#fff' }} 
+                    activeDot={{ r: 6 }} 
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -251,46 +256,55 @@ const AccountsDashboard = () => {
         <div className="bg-white rounded  p-8 border border-slate-100 shadow-sm flex flex-col">
           <h3 className="text-md  text-slate-900  mb-8">Status Analytics</h3>
           <div className="flex-1 flex flex-col">
-            <div className="h-64 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={stats.statusBreakdown.map(item => ({
-                      name: item.name,
-                      value: item.count,
-                      color: item.name === 'PAID' ? COLORS.emerald : (item.name === 'OVERDUE' ? COLORS.rose : COLORS.amber)
-                    }))}
-                    innerRadius={70}
-                    outerRadius={95}
-                    paddingAngle={8}
-                    dataKey="value"
-                  >
-                    {stats.statusBreakdown.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.name === 'PAID' ? COLORS.emerald : (entry.name === 'OVERDUE' ? COLORS.rose : COLORS.amber)} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-xl  text-slate-900">72%</span>
-                <span className="text-xs text-slate-400   ">Collection Rate</span>
+            {isDataLoading ? (
+              <div className="space-y-4 animate-pulse">
+                <div className="w-32 h-32 bg-slate-200 rounded-full mx-auto"></div>
+                <div className="h-4 bg-slate-200 rounded w-full"></div>
               </div>
-            </div>
-            <div className="mt-8 space-y-2 flex-1">
-              {stats.statusBreakdown.map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded" style={{ backgroundColor: item.name === 'PAID' ? COLORS.emerald : (item.name === 'OVERDUE' ? COLORS.rose : COLORS.amber) }}></div>
-                    <span className="text-xs   text-slate-600  ">{item.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs  text-slate-900">{item.count}</span>
-                    <span className="text-xs  text-slate-400 w-8 text-right">{item.percentage}%</span>
+            ) : (
+              <>
+                <div className="h-64 w-full relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={(stats?.statusBreakdown || []).map(item => ({
+                          name: item.name,
+                          value: item.count,
+                          color: item.name === 'PAID' ? COLORS.emerald : (item.name === 'OVERDUE' ? COLORS.rose : COLORS.amber)
+                        }))}
+                        innerRadius={70}
+                        outerRadius={95}
+                        paddingAngle={8}
+                        dataKey="value"
+                      >
+                        {(stats?.statusBreakdown || []).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.name === 'PAID' ? COLORS.emerald : (entry.name === 'OVERDUE' ? COLORS.rose : COLORS.amber)} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-xl  text-slate-900">72%</span>
+                    <span className="text-xs text-slate-400   ">Collection Rate</span>
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="mt-8 space-y-2 flex-1">
+                  {(stats?.statusBreakdown || []).map((item, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded" style={{ backgroundColor: item.name === 'PAID' ? COLORS.emerald : (item.name === 'OVERDUE' ? COLORS.rose : COLORS.amber) }}></div>
+                        <span className="text-xs   text-slate-600  ">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs  text-slate-900">{item.count}</span>
+                        <span className="text-xs  text-slate-400 w-8 text-right">{item.percentage}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -311,8 +325,8 @@ const AccountsDashboard = () => {
           <div className="p-2">
             <DataTable
               columns={tableColumns}
-              data={stats.recentActivity.filter(a => a.type === 'INVOICE').slice(0, 8)}
-              loading={loading}
+              data={(stats?.recentActivity || []).filter(a => a.type === 'INVOICE').slice(0, 8)}
+              loading={isDataLoading}
               hideHeader
               emptyMessage="No recent financial activity recorded."
             />

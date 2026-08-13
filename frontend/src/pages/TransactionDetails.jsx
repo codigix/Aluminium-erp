@@ -6,7 +6,7 @@ import {
   ArrowRight, Package, Info, Paperclip, MessageSquare,
   Clock, CheckCircle, ShieldCheck, Send, Wallet, MoreVertical
 } from 'lucide-react';
-import { Card, StatusBadge, Button } from '../components/ui.jsx';
+import { Card, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -152,9 +152,22 @@ const TransactionDetails = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-        <p className="text-slate-400 text-[10px] tracking-widest uppercase font-bold">Fetching Transaction Data...</p>
+      <div className="space-y-4 p-4">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
+            <ChevronLeft className="w-4 h-4 mr-2" /> Back
+          </Button>
+          <div className="h-6 bg-slate-200 rounded w-48 animate-pulse"></div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <div className="bg-white rounded border border-slate-100 p-4">
+          <SkeletonTable rows={4} columns={5} />
+        </div>
       </div>
     );
   }

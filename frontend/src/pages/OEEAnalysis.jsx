@@ -14,7 +14,7 @@ import {
   Layout, AlertCircle, ArrowUpRight, ArrowDownRight, Database, ArrowRight,
   Pause, MoreHorizontal, HelpCircle, Wallet, ChevronDown
 } from 'lucide-react';
-import { Card, Button, StatusBadge, DataTable } from '../components/ui.jsx';
+import { Card, Button, StatusBadge, DataTable, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -132,20 +132,7 @@ const OEEAnalysis = () => {
     </div>
   );
 
-  if (loading || !data) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-2">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
-          <BrainCircuit className="w-6 h-6 text-rose-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-        </div>
-        <div className="text-center">
-          <h3 className="text-slate-900   ">OEE Intelligence Matrix Syncing</h3>
-          <p className="text-xs text-slate-500 mt-1">Synchronizing real-time telemetry and workstation metrics...</p>
-        </div>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !data;
 
   const overall = data?.overall || { oee: 0, availability: 0, performance: 0, quality: 0, utilization: 0 };
 
@@ -328,11 +315,23 @@ const OEEAnalysis = () => {
       {activeTab === 'Executive Overview' && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <StatCard title="Overall OEE" count={`${overall.oee}%`} subtitle="Efficiency Core" color="bg-indigo-500" icon={Activity} trend="down" trendValue="2.4%" />
-            <StatCard title="Availability" count={`${overall.availability}%`} subtitle="Machine Uptime" color="bg-emerald-500" icon={Clock} trend="up" trendValue="1.8%" />
-            <StatCard title="Performance" count={`${overall.performance}%`} subtitle="Cycle Velocity" color="bg-amber-500" icon={Zap} trend="down" trendValue="1.3%" />
-            <StatCard title="Quality" count={`${overall.quality}%`} subtitle="Yield Quality" color="bg-rose-600" icon={ShieldCheck} trend="up" trendValue="0.9%" />
-            <StatCard title="Utilization" count={`${overall.utilization}%`} subtitle="Asset Loading" color="bg-blue-500" icon={Target} trend="up" trendValue="1.2%" />
+            {isDataLoading ? (
+              <>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </>
+            ) : (
+              <>
+                <StatCard title="Overall OEE" count={`${overall.oee}%`} subtitle="Efficiency Core" color="bg-indigo-500" icon={Activity} trend="down" trendValue="2.4%" />
+                <StatCard title="Availability" count={`${overall.availability}%`} subtitle="Machine Uptime" color="bg-emerald-500" icon={Clock} trend="up" trendValue="1.8%" />
+                <StatCard title="Performance" count={`${overall.performance}%`} subtitle="Cycle Velocity" color="bg-amber-500" icon={Zap} trend="down" trendValue="1.3%" />
+                <StatCard title="Quality" count={`${overall.quality}%`} subtitle="Yield Quality" color="bg-rose-600" icon={ShieldCheck} trend="up" trendValue="0.9%" />
+                <StatCard title="Utilization" count={`${overall.utilization}%`} subtitle="Asset Loading" color="bg-blue-500" icon={Target} trend="up" trendValue="1.2%" />
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

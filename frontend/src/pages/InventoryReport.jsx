@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import { useNavigate } from 'react-router-dom';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -168,14 +168,7 @@ const InventoryReport = () => {
     </div>
   );
 
-  if (loading || !stats) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-4">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
-        <h3 className="text-slate-900   ">Generating Inventory Report...</h3>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !stats;
 
   if (showAllLowStock) {
     return (
@@ -433,7 +426,7 @@ const InventoryReport = () => {
             className="bg-white border border-slate-200 rounded p-2 text-xs  text-slate-600 outline-none"
           >
             <option value="All">All Warehouses</option>
-            {stats.stockByWarehouse?.map((warehouse, idx) => (
+            {stats?.stockByWarehouse?.map((warehouse, idx) => (
               <option key={idx} value={warehouse.name}>{warehouse.name}</option>
             ))}
           </select>
@@ -449,11 +442,23 @@ const InventoryReport = () => {
 
       {/* KPIs Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <KPIStoreCard title="Total Items" value={stats.kpis.totalItems} subtitle="All Items" icon={Box} color="text-indigo-600" subColor="bg-indigo-50" />
-        <KPIStoreCard title="Total Stock Value" value={`₹${parseFloat(stats.kpis.totalValue).toLocaleString('en-IN')}`} subtitle="Total Value" icon={IndianRupee} color="text-emerald-600" subColor="bg-emerald-50" />
-        <KPIStoreCard title="Low Stock Items" value={stats.kpis.lowStockCount} subtitle="Need Attention" icon={AlertTriangle} color="text-amber-600" subColor="bg-amber-50" />
-        <KPIStoreCard title="Out of Stock Items" value={stats.kpis.outOfStockCount} subtitle="Not Available" icon={XCircle} color="text-rose-600" subColor="bg-rose-50" />
-        <KPIStoreCard title="Active Warehouses" value={stats.kpis.activeWarehouses} subtitle="Total Locations" icon={Warehouse} color="text-blue-600" subColor="bg-blue-50" />
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <KPIStoreCard title="Total Items" value={stats?.kpis?.totalItems || 0} subtitle="All Items" icon={Box} color="text-indigo-600" subColor="bg-indigo-50" />
+            <KPIStoreCard title="Total Value" value={`₹${((stats?.kpis?.totalValue || 0)/100000).toFixed(1)}L`} subtitle="Current Assets" icon={IndianRupee} color="text-emerald-600" subColor="bg-emerald-50" />
+            <KPIStoreCard title="Active Warehouses" value={stats?.kpis?.activeWarehouses || 0} subtitle="Storage Locations" icon={Warehouse} color="text-blue-600" subColor="bg-blue-50" />
+            <KPIStoreCard title="Low Stock Items" value={stats?.kpis?.lowStockCount || 0} subtitle="Needs Reorder" icon={AlertTriangle} color="text-amber-600" subColor="bg-amber-50" />
+            <KPIStoreCard title="Stock Turnover" value={stats?.kpis?.turnoverRate || '0x'} subtitle="Annual Rate" icon={Activity} color="text-rose-600" subColor="bg-rose-50" />
+          </>
+        )}
       </div>
 
       {/* Charts Row */}
@@ -469,13 +474,13 @@ const InventoryReport = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={stats.categoryDistribution}
+                    data={stats?.categoryDistribution || []}
                     innerRadius={60}
                     outerRadius={80}
                     paddingAngle={5}
                     dataKey="value"
                   >
-                    {stats.categoryDistribution.map((entry, index) => (
+                    {(stats?.categoryDistribution || []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -484,7 +489,7 @@ const InventoryReport = () => {
               </ResponsiveContainer>
             </div>
             <div className="w-full mt-6 space-y-2">
-              {stats.categoryDistribution.map((item, idx) => (
+              {(stats?.categoryDistribution || []).map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
@@ -504,7 +509,7 @@ const InventoryReport = () => {
             <p className="text-xs text-slate-400   mt-1">Current stock availability overview</p>
           </div>
           <div className="space-y-6">
-            {stats.statusSummary.map((item, idx) => (
+            {(stats?.statusSummary || []).map((item, idx) => (
               <div key={idx} className="space-y-2">
                 <div className="flex items-center justify-between text-xs   tracking-wider">
                   <div className="flex items-center gap-2">
@@ -520,13 +525,13 @@ const InventoryReport = () => {
                   <div className={`h-full rounded-full ${
                     item.name === 'Available' ? 'bg-emerald-500' : 
                     item.name === 'Low Stock' ? 'bg-amber-500' : 'bg-rose-500'
-                  }`} style={{ width: `${(item.value / stats.kpis.totalItems) * 100}%` }} />
+                  }`} style={{ width: `${(item.value / (stats?.kpis?.totalItems || 1)) * 100}%` }} />
                 </div>
               </div>
             ))}
             <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
               <span className="text-xs  text-slate-400  ">Total Items</span>
-              <span className="text-sm  text-slate-900">{stats.kpis.totalItems}</span>
+              <span className="text-sm  text-slate-900">{stats?.kpis?.totalItems || 0}</span>
             </div>
           </div>
         </div>
@@ -544,7 +549,7 @@ const InventoryReport = () => {
           </div>
           <div className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.stockTrend}>
+              <AreaChart data={stats?.stockTrend || []}>
                 <defs>
                   <linearGradient id="colorStock" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
@@ -585,7 +590,7 @@ const InventoryReport = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {stats.warehouseStock.map((warehouse, idx) => (
+                {(stats?.warehouseStock || []).map((warehouse, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors group">
                     <td className="py-4 pr-2 text-xs  text-slate-900">{warehouse.name}</td>
                     <td className="py-4 text-xs  text-slate-600 text-center">{warehouse.totalItems}</td>
@@ -731,7 +736,7 @@ const InventoryReport = () => {
         {totalMovementsPages > 1 && (
           <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
              <p className="text-xs  text-slate-400  ">
-               Showing {(movementsPage - 1) * itemsPerPage + 1} to {Math.min(movementsPage * itemsPerPage, stats.recentMovements.length)} of {stats.recentMovements.length} entries
+               Showing {(movementsPage - 1) * itemsPerPage + 1} to {Math.min(movementsPage * itemsPerPage, stats?.recentMovements?.length || 0)} of {stats?.recentMovements?.length || 0} entries
              </p>
              <div className="flex items-center gap-1">
                <button 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, DataTable, StatusBadge } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import { 
   Factory, 
   TrendingUp, 
@@ -89,14 +89,7 @@ const ProductionDashboard = ({ apiRequest }) => {
     </div>
   );
 
-  if (loading || !stats) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-2">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-        <p className="text-xs text-slate-500   ">Initializing Production Command Center...</p>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !stats;
 
   return (
     <div className="space-y-2 pb-12">
@@ -138,10 +131,21 @@ const ProductionDashboard = ({ apiRequest }) => {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Active Jobs" count={stats.activeWorkOrders || 0} subtitle="On production floor" color="bg-indigo-500" icon={Hammer} trend={8} />
-        <StatCard title="Planned Orders" count={stats.plannedOrders || 0} subtitle="Awaiting material" color="bg-emerald-500" icon={Layers} trend={15} />
-        <StatCard title="Resource Load" count={`${stats.resourceLoad || 0}%`} subtitle="Workstation utilization" color="bg-amber-500" icon={Activity} />
-        <StatCard title="Throughput" count={`${stats.completedToday || 0}`} subtitle="Items finished today" color="bg-blue-500" icon={CheckCircle} trend={4} />
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <StatCard title="Active Jobs" count={stats?.activeWorkOrders || 0} subtitle="On production floor" color="bg-indigo-500" icon={Hammer} trend={8} />
+            <StatCard title="Planned Orders" count={stats?.plannedOrders || 0} subtitle="Awaiting material" color="bg-emerald-500" icon={Layers} trend={15} />
+            <StatCard title="Resource Load" count={`${stats?.resourceLoad || 0}%`} subtitle="Workstation utilization" color="bg-amber-500" icon={Activity} />
+            <StatCard title="Throughput" count={`${stats?.completedToday || 0}`} subtitle="Items finished today" color="bg-blue-500" icon={CheckCircle} trend={4} />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -157,21 +161,27 @@ const ProductionDashboard = ({ apiRequest }) => {
             </div>
           </div>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.chartData || []}>
-                <defs>
-                  <linearGradient id="colorOutput" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
-                <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}} />
-                <Area type="monotone" dataKey="output" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#colorOutput)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {isDataLoading ? (
+              <div className="w-full h-full flex flex-col justify-end gap-2 p-4 bg-slate-50/50 rounded animate-pulse">
+                <div className="h-40 bg-slate-200/80 rounded w-full"></div>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats?.chartData || []}>
+                  <defs>
+                    <linearGradient id="colorOutput" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                  <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'}} />
+                  <Area type="monotone" dataKey="output" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#colorOutput)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -179,22 +189,30 @@ const ProductionDashboard = ({ apiRequest }) => {
         <div className="bg-white rounded] p-2 border border-slate-100 shadow-sm flex flex-col">
           <h3 className="text-md  text-slate-900  mb-2">Operational Health</h3>
           <div className="space-y-2 flex-1">
-            {(stats.health || [
-              { label: 'Schedule Adherence', value: 0, color: 'bg-indigo-500' },
-              { label: 'Yield Quality', value: 0, color: 'bg-emerald-500' },
-              { label: 'Downtime Variance', value: 0, color: 'bg-amber-500' },
-              { label: 'Scrap Rate', value: 0, color: 'bg-rose-500' }
-            ]).map((item, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex justify-between items-end">
-                  <span className="text-xs   text-slate-500  ">{item.label}</span>
-                  <span className="text-md  text-slate-900">{item.value}%</span>
-                </div>
-                <div className="h-3 w-full bg-slate-50 rounded overflow-hidden border border-slate-100">
-                  <div className={`h-full ${item.color} rounded transition-all duration-1000`} style={{ width: `${item.value}%` }} />
-                </div>
+            {isDataLoading ? (
+              <div className="space-y-4 animate-pulse">
+                <div className="h-4 bg-slate-200 rounded w-full"></div>
+                <div className="h-4 bg-slate-200 rounded w-full"></div>
+                <div className="h-4 bg-slate-200 rounded w-full"></div>
               </div>
-            ))}
+            ) : (
+              (stats?.health || [
+                { label: 'Schedule Adherence', value: 0, color: 'bg-indigo-500' },
+                { label: 'Yield Quality', value: 0, color: 'bg-emerald-500' },
+                { label: 'Downtime Variance', value: 0, color: 'bg-amber-500' },
+                { label: 'Scrap Rate', value: 0, color: 'bg-rose-500' }
+              ]).map((item, idx) => (
+                <div key={idx} className="space-y-2">
+                  <div className="flex justify-between items-end">
+                    <span className="text-xs   text-slate-500  ">{item.label}</span>
+                    <span className="text-md  text-slate-900">{item.value}%</span>
+                  </div>
+                  <div className="h-3 w-full bg-slate-50 rounded overflow-hidden border border-slate-100">
+                    <div className={`h-full ${item.color} rounded transition-all duration-1000`} style={{ width: `${item.value}%` }} />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -233,8 +251,8 @@ const ProductionDashboard = ({ apiRequest }) => {
               render: (val) => <StatusBadge status={val} />
             }
           ]}
-          data={stats.priorityOrders || []}
-          loading={loading}
+          data={stats?.priorityOrders || []}
+          loading={isDataLoading}
           hideSearch={true}
           hidePagination={true}
         />

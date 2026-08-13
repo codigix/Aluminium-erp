@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, DataTable, Badge, StatusBadge } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import { 
   ClipboardList, 
   Clock, 
@@ -156,20 +156,7 @@ const QualityDashboard = () => {
     }
   ];
 
-  if (loading && !stats.totalQc) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-2">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-          <Beaker className="w-3 h-3 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-        </div>
-        <div className="text-center">
-          <h3 className="text-slate-900  ">Gathering Quality Metrics</h3>
-          <p className="text-xs text-slate-500 mt-1">Analyzing inspection results and rejection trends...</p>
-        </div>
-      </div>
-    );
-  }
+  const isDataLoading = loading && !stats.totalQc;
 
   return (
     <div className="space-y-2 pb-12">
@@ -305,7 +292,7 @@ const QualityDashboard = () => {
                     paddingAngle={8}
                     dataKey="value"
                   >
-                    {stats.rejectionReasons.map((entry, index) => (
+                    {(stats?.rejectionReasons || []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -318,7 +305,7 @@ const QualityDashboard = () => {
               </div>
             </div>
             <div className="mt-8 space-y-2 flex-1">
-              {stats.rejectionReasons.map((item, index) => (
+              {(stats?.rejectionReasons || []).map((item, index) => (
                 <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50/50 hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded" style={{ backgroundColor: item.color }}></div>

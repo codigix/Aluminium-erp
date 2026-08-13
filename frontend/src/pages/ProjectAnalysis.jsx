@@ -18,7 +18,7 @@ import {
    Map, MoveRight, Receipt, Timer, Cpu, Monitor, AlertTriangle,
    ChevronDown, ChevronUp, X
 } from 'lucide-react';
-import { Card, DataTable, Button, StatusBadge } from '../components/ui.jsx';
+import { Card, DataTable, Button, StatusBadge, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -392,20 +392,7 @@ const ProjectAnalysis = () => {
       </div>
    );
 
-   if (loading || !data) {
-      return (
-         <div className="flex flex-col items-center justify-center p-22 space-y-2">
-            <div className="relative">
-               <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-               <BarChart3 className="w-4 h-4 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-            </div>
-            <div className="text-center">
-               <h3 className="text-slate-900  ">Analyzing Project Matrix</h3>
-               <p className="text-xs text-slate-500 mt-1">Processing intelligence, timelines and resource yields...</p>
-            </div>
-         </div>
-      );
-   }
+   const isDataLoading = loading || !data;
 
    const columns = [
       {
@@ -472,9 +459,22 @@ const ProjectAnalysis = () => {
    if (selectedProject) {
       if (detailsLoading || !projectDetails) {
          return (
-            <div className="flex flex-col items-center justify-center p-22 space-y-2">
-               <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-               <p className="text-xs text-slate-500 mt-1   ">Hydrating Intelligence Matrix...</p>
+            <div className="space-y-4 p-4">
+               <div className="flex items-center gap-4">
+                  <Button variant="outline" size="sm" onClick={() => setSelectedProject(null)}>
+                     <ArrowLeft className="w-4 h-4 mr-2" /> Back to Project Hub
+                  </Button>
+                  <div className="h-6 bg-slate-200 rounded w-48 animate-pulse"></div>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+               </div>
+               <div className="bg-white rounded border border-slate-100 p-4">
+                  <SkeletonTable rows={4} columns={5} />
+               </div>
             </div>
          );
       }
@@ -1884,74 +1884,106 @@ const ProjectAnalysis = () => {
 
          {/* KPI Cards */}
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
-            <StatCard title="Total Projects" amount={data?.kpis?.totalProjects} subtitle="Active engagements" icon={Briefcase} trend="up" trendValue="12%" />
-            <StatCard title="Estimated Revenue" amount={`₹${(data?.kpis?.estimatedRevenue / 100000).toFixed(1)}L`} subtitle="Projected value" icon={IndianRupee} trend="up" trendValue="8%" />
-            <StatCard title="Ready For Shipment" amount={data?.kpis?.readyForShipment} subtitle="Approved for dispatch" icon={Truck} color="bg-emerald-500" subColor="text-emerald-600" animate />
-            <StatCard title="System Completion" amount={`${data?.kpis?.completionRate}%`} subtitle="Overall throughput" icon={Target} trend="up" trendValue="5%" />
-            <StatCard title="Critical Assets" amount={data?.kpis?.atRiskProjects} subtitle="Requires attention" icon={Flame} trend="down" trendValue="2%" animate />
+            {isDataLoading ? (
+               <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+               </>
+            ) : (
+               <>
+                  <StatCard title="Total Projects" amount={data?.kpis?.totalProjects} subtitle="Active engagements" icon={Briefcase} trend="up" trendValue="12%" />
+                  <StatCard title="Estimated Revenue" amount={`₹${(data?.kpis?.estimatedRevenue / 100000).toFixed(1)}L`} subtitle="Projected value" icon={IndianRupee} trend="up" trendValue="8%" />
+                  <StatCard title="Ready For Shipment" amount={data?.kpis?.readyForShipment} subtitle="Approved for dispatch" icon={Truck} color="bg-emerald-500" subColor="text-emerald-600" animate />
+                  <StatCard title="System Completion" amount={`${data?.kpis?.completionRate}%`} subtitle="Overall throughput" icon={Target} trend="up" trendValue="5%" />
+                  <StatCard title="Critical Assets" amount={data?.kpis?.atRiskProjects} subtitle="Requires attention" icon={Flame} trend="down" trendValue="2%" animate />
+               </>
+            )}
          </div>
 
          <div className="grid grid-cols-1 xl:grid-cols-3 gap-2">
             <div className="xl:col-span-2 bg-white rounded p-2 border border-slate-100 shadow-sm flex flex-col">
-               <h3 className="text-xs text-slate-400    flex items-center gap-2 mb-8">
+               <h3 className="text-xs text-slate-400 flex items-center gap-2 mb-8 font-bold">
                   <TrendingUp className="w-4 h-4 text-indigo-600" />
                   Timeline Analytics
                </h3>
                <div className="h-[350px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                     <AreaChart data={data?.timelineData || []}>
-                        <defs>
-                           <linearGradient id="colorProd" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1} />
-                              <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
-                           </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
-                        <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                        <Area type="monotone" dataKey="production" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorProd)" />
-                        <Area type="monotone" dataKey="forecast" stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 5" fill="none" />
-                     </AreaChart>
-                  </ResponsiveContainer>
+                  {isDataLoading ? (
+                     <div className="w-full h-full p-4 flex flex-col justify-between animate-pulse bg-slate-50/60 rounded border border-slate-100">
+                        <div className="h-44 w-full bg-slate-200/50 rounded" />
+                        <div className="flex justify-between items-center pt-2">
+                           <Skeleton className="h-3 w-10" />
+                           <Skeleton className="h-3 w-10" />
+                           <Skeleton className="h-3 w-10" />
+                           <Skeleton className="h-3 w-10" />
+                        </div>
+                     </div>
+                  ) : (
+                     <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data?.timelineData || []}>
+                           <defs>
+                              <linearGradient id="colorProd" x1="0" y1="0" x2="0" y2="1">
+                                 <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1} />
+                                 <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+                              </linearGradient>
+                           </defs>
+                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                           <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} dy={10} />
+                           <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                           <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                           <Area type="monotone" dataKey="production" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorProd)" />
+                           <Area type="monotone" dataKey="forecast" stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 5" fill="none" />
+                        </AreaChart>
+                     </ResponsiveContainer>
+                  )}
                </div>
             </div>
 
             <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex flex-col">
-               <h3 className="text-xs text-slate-400   mb-8 ">Status Distribution</h3>
-               <div className="flex-1 flex flex-col items-center">
-                  <div className="h-64 w-full relative">
-                     <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                           <Pie
-                              data={data?.statusBreakdown || []}
-                              innerRadius={70} outerRadius={95}
-                              paddingAngle={8} dataKey="value" stroke="none"
-                           >
-                              {(data?.statusBreakdown || []).map((entry, index) => (
-                                 <Cell key={`cell-${index}`} fill={COLORS.chart[index % COLORS.chart.length]} />
-                              ))}
-                           </Pie>
-                           <Tooltip />
-                        </PieChart>
-                     </ResponsiveContainer>
-                     <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-                        <span className="text-3xl  text-slate-900">{data?.kpis?.completionRate}%</span>
-                        <span className="text-xs  text-slate-400  ">Throughput</span>
+               <h3 className="text-xs text-slate-400 mb-8 font-bold">Status Distribution</h3>
+               {isDataLoading ? (
+                  <div className="space-y-4 p-4 animate-pulse flex-1 flex flex-col items-center justify-center">
+                     <Skeleton className="h-36 w-36 rounded-full mx-auto" />
+                     <Skeleton className="h-4 w-full" />
+                     <Skeleton className="h-4 w-full" />
+                  </div>
+               ) : (
+                  <div className="flex-1 flex flex-col items-center">
+                     <div className="h-64 w-full relative">
+                        <ResponsiveContainer width="100%" height="100%">
+                           <PieChart>
+                              <Pie
+                                 data={data?.statusBreakdown || []}
+                                 innerRadius={70} outerRadius={95}
+                                 paddingAngle={8} dataKey="value" stroke="none"
+                              >
+                                 {(data?.statusBreakdown || []).map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS.chart[index % COLORS.chart.length]} />
+                                 ))}
+                              </Pie>
+                              <Tooltip />
+                           </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
+                           <span className="text-3xl text-slate-900">{data?.kpis?.completionRate}%</span>
+                           <span className="text-xs text-slate-400">Throughput</span>
+                        </div>
+                     </div>
+                     <div className="mt-8 space-y-1 w-full">
+                        {(data?.statusBreakdown || []).map((item, index) => (
+                           <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50/50 border border-transparent hover:border-slate-100 transition-all text-xs">
+                              <div className="flex items-center gap-2">
+                                 <div className="w-2 h-2 rounded" style={{ backgroundColor: COLORS.chart[index % COLORS.chart.length] }} />
+                                 <span className="text-slate-600">{item.name}</span>
+                              </div>
+                              <span className="text-slate-900">{item.value}</span>
+                           </div>
+                        ))}
                      </div>
                   </div>
-                  <div className="mt-8 space-y-1 w-full">
-                     {(data?.statusBreakdown || []).map((item, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50/50 border border-transparent hover:border-slate-100 transition-all  text-xs ">
-                           <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded" style={{ backgroundColor: COLORS.chart[index % COLORS.chart.length] }} />
-                              <span className="text-slate-600 ">{item.name}</span>
-                           </div>
-                           <span className="text-slate-900">{item.value}</span>
-                        </div>
-                     ))}
-                  </div>
-               </div>
+               )}
             </div>
 
             <div className="xl:col-span-3 bg-white rounded border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[520px]">

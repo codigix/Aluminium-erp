@@ -14,7 +14,7 @@ import {
   Settings, Database, Filter, ArrowRight, Flame,
   TrendingDown, Box, Microscope, Wind, MoreHorizontal
 } from 'lucide-react';
-import { Card, Button, StatusBadge, DataTable } from '../components/ui.jsx';
+import { Card, Button, StatusBadge, DataTable, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -127,26 +127,13 @@ const MachineAnalysis = () => {
     </div>
   );
 
-  if (loading || !data) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-2">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
-          <Monitor className="w-4 h-4 text-rose-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-        </div>
-        <div className="text-center">
-          <h3 className="text-slate-900  ">Machine Pulse Sync</h3>
-          <p className="text-xs text-slate-500 mt-1">Aggregating real-time line telemetry and asset health...</p>
-        </div>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !data;
 
   const kpis = [
-    { label: 'System OEE', value: `${data?.kpis?.oee}%`, icon: Waves, color: 'bg-indigo-500', sub: 'Plant Efficiency', trend: 'down', trendValue: '1.2%' },
-    { label: 'Performance', value: `${data?.kpis?.performance}%`, icon: TrendingUp, color: 'bg-amber-500', sub: 'Global Avg', trend: 'up', trendValue: '0.8%' },
-    { label: 'Availability', value: `${data?.kpis?.availability}%`, icon: Clock, color: 'bg-blue-500', sub: 'Uptime Index', trend: 'up', trendValue: '2.1%' },
-    { label: 'Active Units', value: data?.assetHealth?.active, icon: Zap, color: 'bg-emerald-500', sub: 'Live Stream', animate: true },
+    { label: 'System OEE', value: `${data?.kpis?.oee || 0}%`, icon: Waves, color: 'bg-indigo-500', sub: 'Plant Efficiency', trend: 'down', trendValue: '1.2%' },
+    { label: 'Performance', value: `${data?.kpis?.performance || 0}%`, icon: TrendingUp, color: 'bg-amber-500', sub: 'Global Avg', trend: 'up', trendValue: '0.8%' },
+    { label: 'Availability', value: `${data?.kpis?.availability || 0}%`, icon: Clock, color: 'bg-blue-500', sub: 'Uptime Index', trend: 'up', trendValue: '2.1%' },
+    { label: 'Active Units', value: data?.assetHealth?.active || 0, icon: Zap, color: 'bg-emerald-500', sub: 'Live Stream', animate: true },
     { label: 'System Alerts', value: '5', icon: AlertTriangle, color: 'bg-rose-500', sub: 'Attention Req' }
   ];
 
@@ -191,19 +178,29 @@ const MachineAnalysis = () => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        {kpis.map((kpi, idx) => (
-          <StatCard 
-            key={idx}
-            title={kpi.label} 
-            amount={kpi.value} 
-            subtitle={kpi.sub}
-            color={kpi.color}
-            icon={kpi.icon}
-            trend={kpi.trend}
-            trendValue={kpi.trendValue}
-            animate={kpi.animate}
-          />
-        ))}
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          kpis.map((kpi, idx) => (
+            <StatCard 
+              key={idx}
+              title={kpi.label} 
+              amount={kpi.value} 
+              subtitle={kpi.sub}
+              color={kpi.color}
+              icon={kpi.icon}
+              trend={kpi.trend}
+              trendValue={kpi.trendValue}
+              animate={kpi.animate}
+            />
+          ))
+        )}
       </div>
 
       {/* Tabs */}

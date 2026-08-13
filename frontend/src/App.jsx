@@ -1420,264 +1420,368 @@ function App() {
 
   if (!token || !user) {
     return (
-      <div className="flex min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 items-center justify-center p-2">
-        <div className="w-full max-w-md">
-          <div className="bg-white rounded  shadow-2xl p-2 space-y-2">
-            <div className="text-center space-y-2">
+      <div className="min-h-screen w-full bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden font-sans">
+        {/* Soft Decorative Light Mesh Gradients */}
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-200/50 rounded-full blur-3xl pointer-events-none animate-pulse" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-violet-200/50 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-100/40 rounded-full blur-3xl pointer-events-none" />
+        
+        {/* Subtle Background Pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#cbd5e125_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e125_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
+
+        <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+          
+          {/* Left Hero Branding Section (Light Mode) */}
+          <div className="lg:col-span-5 space-y-6 text-slate-900 text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-xs font-semibold shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />
+              <span>Next-Gen Aluminium ERP</span>
+            </div>
+
+            <div className="space-y-2">
+              <h1 className="text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
+                SPTECHPIONEER
+              </h1>
+              <p className="text-xs font-bold text-indigo-600 tracking-wider uppercase">
+                Sales & Operations Enterprise Platform
+              </p>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto lg:mx-0 font-normal">
+              Streamlining aluminium manufacturing from sales orders, design drawings, and procurement to quality inspections, inventory control, and financial operations.
+            </p>
+
+            {/* Feature Highlights Grid */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <div className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+                <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+                  <Package className="w-4 h-4" />
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-slate-900">Inventory Sync</p>
+                  <p className="text-[10px] text-slate-500">Real-time balances</p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-slate-900">Quality Standard</p>
+                  <p className="text-[10px] text-slate-500">QC & Inspection</p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+                <div className="p-2 rounded-lg bg-amber-50 text-amber-600">
+                  <Factory className="w-4 h-4" />
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-slate-900">Production Plan</p>
+                  <p className="text-[10px] text-slate-500">Work orders & BOM</p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow">
+                <div className="p-2 rounded-lg bg-rose-50 text-rose-600">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-slate-900">Accounts & Billing</p>
+                  <p className="text-[10px] text-slate-500">Invoices & Cashflow</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Auth Card Section (Light Mode) */}
+          <div className="lg:col-span-7">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-6 lg:p-8 shadow-xl shadow-slate-200/60">
               
-              <h1 className="text-xl text-slate-900">SPTECHPIONEER</h1>
-              <p className="text-xs text-slate-500">Sales & Operations ERP</p>
-            </div>
-
-            <div className="flex gap-2 border-b border-slate-200">
-              <button
-                type="button"
-                onClick={() => setAuthMode('login')}
-                className={`flex-1 pb-3 text-xs  transition ${
-                  authMode === 'login'
-                    ? 'text-slate-900 border-b-2 border-slate-900'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAuthMode('signup'); loadDepartmentsAndRoles() }}
-                className={`flex-1 pb-3 text-xs  transition ${
-                  authMode === 'signup'
-                    ? 'text-slate-900 border-b-2 border-slate-900'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Sign Up
-              </button>
-            </div>
-
-            {authMode === 'login' ? (
-              <form onSubmit={handleLogin} className="grid my-5 grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs  text-slate-700 mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={loginEmail}
-                    onChange={e => setLoginEmail(e.target.value)}
-                    placeholder="your.email@company.com"
-                    className="w-full p-2  rounded  border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    disabled={loginLoading}
-                  />
-                </div>
-                <div className=''>
-                  <label className="block text-xs  text-slate-700 mb-2">Password</label>
-                  <input
-                    type="password"
-                    value={loginPassword}
-                    onChange={e => setLoginPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full p-2  rounded  border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    disabled={loginLoading}
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  variant="rosey"
-                  loading={loginLoading}
-                  className="w-full col-span-2"
+              {/* Tab Selector */}
+              <div className="flex bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 mb-6">
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('login')}
+                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 ${
+                    authMode === 'login'
+                      ? 'bg-white text-indigo-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
                 >
+                  <LogIn className="w-3.5 h-3.5" />
                   Sign In
-                </Button >
-              </form>
-            ) : (
-              <form onSubmit={handleSignup} className="space-y-3 max-h-96 overflow-y-auto">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs  text-slate-700 mb-1">First Name</label>
-                    <input
-                      type="text"
-                      value={signupForm.first_name}
-                      onChange={e => setSignupForm({ ...signupForm, first_name: e.target.value })}
-                      placeholder="John"
-                      className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                      disabled={signupLoading}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs  text-slate-700 mb-1">Last Name</label>
-                    <input
-                      type="text"
-                      value={signupForm.last_name}
-                      onChange={e => setSignupForm({ ...signupForm, last_name: e.target.value })}
-                      placeholder="Doe"
-                      className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                      disabled={signupLoading}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs  text-slate-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={signupForm.email}
-                    onChange={e => setSignupForm({ ...signupForm, email: e.target.value })}
-                    placeholder="john@company.com"
-                    className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    disabled={signupLoading}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs  text-slate-700 mb-1">Department</label>
-                  <select
-                    value={signupForm.department_id}
-                    onChange={e => {
-                      const deptId = e.target.value
-                      setSignupForm({ ...signupForm, department_id: deptId, role_id: '' })
-                      if (deptId) {
-                        fetch(`${API_BASE}/departments/${deptId}/roles`)
-                          .then(res => res.ok ? res.json() : [])
-                          .then(rolesData => setRoles(Array.isArray(rolesData) ? rolesData : []))
-                          .catch(() => setRoles([]))
-                      } else {
-                        setRoles([])
-                      }
-                    }}
-                    className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    disabled={signupLoading}
-                  >
-                    <option value="">Select Department</option>
-                    {departments.map(dept => (
-                      <option key={dept.id} value={dept.id}>{dept.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs  text-slate-700 mb-1">Role</label>
-                  <select
-                    value={signupForm.role_id}
-                    onChange={e => setSignupForm({ ...signupForm, role_id: e.target.value })}
-                    className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                    disabled={signupLoading || !signupForm.department_id}
-                  >
-                    <option value="">Select Role</option>
-                    {roles.map(role => (
-                      <option key={role.id} value={role.id}>{role.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs  text-slate-700 mb-1">Password</label>
-                    <input
-                      type="password"
-                      value={signupForm.password}
-                      onChange={e => setSignupForm({ ...signupForm, password: e.target.value })}
-                      placeholder="••••••••"
-                      className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                      disabled={signupLoading}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs  text-slate-700 mb-1">Confirm</label>
-                    <input
-                      type="password"
-                      value={signupForm.confirmPassword}
-                      onChange={e => setSignupForm({ ...signupForm, confirmPassword: e.target.value })}
-                      placeholder="••••••••"
-                      className="w-full p-2 rounded  text-xs border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                      disabled={signupLoading}
-                    />
-                  </div>
-                </div>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  loading={signupLoading}
-                  className="w-full"
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('signup'); loadDepartmentsAndRoles() }}
+                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 ${
+                    authMode === 'signup'
+                      ? 'bg-white text-indigo-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
                 >
-                  Sign Up
-                </Button>
-              </form>
-            )}
-
-            {toast && (
-              <div className={`p-2 rounded  border text-xs ${
-                toast.includes('success') || toast.includes('Welcome')
-                  ? 'bg-green-50 border-green-200 text-green-700'
-                  : 'bg-red-50 border-red-200 text-red-700'
-              }`}>
-                {toast}
+                  <Users className="w-3.5 h-3.5" />
+                  Create Account
+                </button>
               </div>
-            )}
 
-            {authMode === 'login' && (
-              <div className="text-left text-xs text-slate-500 space-y-2 border-t border-slate-200 pt-4 mt-4">
-                <p className="">Demo Credentials:</p>
-                <div className="grid grid-cols-3 gap-2 text-left bg-slate-50 p-2 rounded  overflow-y-auto max-h-64">
-                  <button 
-                    onClick={() => performLogin('admin@company.com', 'Admin@123')}
-                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
+              {/* Login Form */}
+              {authMode === 'login' ? (
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Email Address</label>
+                      <input
+                        type="email"
+                        value={loginEmail}
+                        onChange={e => setLoginEmail(e.target.value)}
+                        placeholder="your.email@company.com"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                        disabled={loginLoading}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">Password</label>
+                      <input
+                        type="password"
+                        value={loginPassword}
+                        onChange={e => setLoginPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
+                        disabled={loginLoading}
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    variant="rosey"
+                    loading={loginLoading}
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-200 transition-all active:scale-[0.99] flex items-center justify-center gap-2 border-none"
                   >
-                    <p className=" text-slate-700 group-hover:text-blue-600">Admin</p>
-                    <p className="opacity-70">Full Access</p>
-                  </button>
-                  <button 
-                    onClick={() => performLogin('sales@company.com', 'Sales@123')}
-                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
+                    <span>Sign In to ERP System</span>
+                  </Button>
+                </form>
+              ) : (
+                /* Signup Form */
+                <form onSubmit={handleSignup} className="space-y-3.5 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">First Name</label>
+                      <input
+                        type="text"
+                        value={signupForm.first_name}
+                        onChange={e => setSignupForm({ ...signupForm, first_name: e.target.value })}
+                        placeholder="John"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 font-medium"
+                        disabled={signupLoading}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Last Name</label>
+                      <input
+                        type="text"
+                        value={signupForm.last_name}
+                        onChange={e => setSignupForm({ ...signupForm, last_name: e.target.value })}
+                        placeholder="Doe"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 font-medium"
+                        disabled={signupLoading}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      value={signupForm.email}
+                      onChange={e => setSignupForm({ ...signupForm, email: e.target.value })}
+                      placeholder="john@company.com"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 font-medium"
+                      disabled={signupLoading}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Department</label>
+                      <select
+                        value={signupForm.department_id}
+                        onChange={e => {
+                          const deptId = e.target.value
+                          setSignupForm({ ...signupForm, department_id: deptId, role_id: '' })
+                          if (deptId) {
+                            fetch(`${API_BASE}/departments/${deptId}/roles`)
+                              .then(res => res.ok ? res.json() : [])
+                              .then(rolesData => setRoles(Array.isArray(rolesData) ? rolesData : []))
+                              .catch(() => setRoles([]))
+                          } else {
+                            setRoles([])
+                          }
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 font-medium"
+                        disabled={signupLoading}
+                      >
+                        <option value="">Select Department</option>
+                        {departments.map(dept => (
+                          <option key={dept.id} value={dept.id}>{dept.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
+                      <select
+                        value={signupForm.role_id}
+                        onChange={e => setSignupForm({ ...signupForm, role_id: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 font-medium"
+                        disabled={signupLoading || !signupForm.department_id}
+                      >
+                        <option value="">Select Role</option>
+                        {roles.map(role => (
+                          <option key={role.id} value={role.id}>{role.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
+                      <input
+                        type="password"
+                        value={signupForm.password}
+                        onChange={e => setSignupForm({ ...signupForm, password: e.target.value })}
+                        placeholder="••••••••"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 font-medium"
+                        disabled={signupLoading}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm Password</label>
+                      <input
+                        type="password"
+                        value={signupForm.confirmPassword}
+                        onChange={e => setSignupForm({ ...signupForm, confirmPassword: e.target.value })}
+                        placeholder="••••••••"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-xs placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 font-medium"
+                        disabled={signupLoading}
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    loading={signupLoading}
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-200 transition-all border-none"
                   >
-                    <p className=" text-slate-700 group-hover:text-blue-600">Sales</p>
-                    <p className="opacity-70">Sales Module</p>
-                  </button>
-                  <button 
-                    onClick={() => performLogin('design@company.com', 'Design@123')}
-                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
-                  >
-                    <p className=" text-slate-700 group-hover:text-blue-600">Design</p>
-                    <p className="opacity-70">Orders & Files</p>
-                  </button>
-                  <button 
-                    onClick={() => performLogin('procurement@company.com', 'Procurement@123')}
-                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
-                  >
-                    <p className=" text-slate-700 group-hover:text-blue-600">Purchase</p>
-                    <p className="opacity-70">PO & Vendors</p>
-                  </button>
-                  <button 
-                    onClick={() => performLogin('production@company.com', 'Production@123')}
-                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
-                  >
-                    <p className=" text-slate-700 group-hover:text-blue-600">Production</p>
-                    <p className="opacity-70">Inventory & GRN</p>
-                  </button>
-                  <button 
-                    onClick={() => performLogin('quality@company.com', 'Quality@123')}
-                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
-                  >
-                    <p className=" text-slate-700 group-hover:text-blue-600">Quality</p>
-                    <p className="opacity-70">QC & Inspection</p>
-                  </button>
-                  <button 
-                    onClick={() => performLogin('shipment@company.com', 'Shipment@123')}
-                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
-                  >
-                    <p className=" text-slate-700 group-hover:text-blue-600">Shipment</p>
-                    <p className="opacity-70">Dispatch</p>
-                  </button>
-                  <button 
-                    onClick={() => performLogin('accounts@company.com', 'Accounts@123')}
-                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
-                  >
-                    <p className=" text-slate-700 group-hover:text-blue-600">Accounts</p>
-                    <p className="opacity-70">Billing</p>
-                  </button>
-                  <button 
-                    onClick={() => performLogin('inventory@company.com', 'Inventory@123')}
-                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
-                  >
-                    <p className=" text-slate-700 group-hover:text-blue-600">Inventory</p>
-                    <p className="opacity-70">Stock</p>
-                  </button>
+                    Create ERP Account
+                  </Button>
+                </form>
+              )}
+
+              {/* Toast Notification */}
+              {toast && (
+                <div className={`mt-4 p-3 rounded-xl border text-xs font-semibold ${
+                  toast.includes('success') || toast.includes('Welcome')
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    : 'bg-rose-50 border-rose-200 text-rose-700'
+                }`}>
+                  {toast}
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* Demo Credentials Drawer (Light Mode) */}
+              {authMode === 'login' && (
+                <div className="mt-6 border-t border-slate-100 pt-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                      Quick Demo Access
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">Click to auto-login</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                    <button 
+                      type="button"
+                      onClick={() => performLogin('admin@company.com', 'Admin@123')}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
+                    >
+                      <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Admin</p>
+                      <p className="text-[10px] text-slate-500 font-medium">Full Access</p>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => performLogin('sales@company.com', 'Sales@123')}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
+                    >
+                      <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Sales</p>
+                      <p className="text-[10px] text-slate-500 font-medium">Sales Module</p>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => performLogin('design@company.com', 'Design@123')}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
+                    >
+                      <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Design</p>
+                      <p className="text-[10px] text-slate-500 font-medium">Orders & Files</p>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => performLogin('procurement@company.com', 'Procurement@123')}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
+                    >
+                      <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Purchase</p>
+                      <p className="text-[10px] text-slate-500 font-medium">PO & Vendors</p>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => performLogin('production@company.com', 'Production@123')}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
+                    >
+                      <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Production</p>
+                      <p className="text-[10px] text-slate-500 font-medium">Inventory & GRN</p>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => performLogin('quality@company.com', 'Quality@123')}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
+                    >
+                      <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Quality</p>
+                      <p className="text-[10px] text-slate-500 font-medium">QC & Inspection</p>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => performLogin('shipment@company.com', 'Shipment@123')}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
+                    >
+                      <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Shipment</p>
+                      <p className="text-[10px] text-slate-500 font-medium">Dispatch</p>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => performLogin('accounts@company.com', 'Accounts@123')}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
+                    >
+                      <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Accounts</p>
+                      <p className="text-[10px] text-slate-500 font-medium">Billing</p>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => performLogin('inventory@company.com', 'Inventory@123')}
+                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
+                    >
+                      <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Inventory</p>
+                      <p className="text-[10px] text-slate-500 font-medium">Stock</p>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

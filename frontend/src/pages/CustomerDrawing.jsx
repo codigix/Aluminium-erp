@@ -129,9 +129,12 @@ const CustomerDrawing = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="text-slate-900 font-medium">{val || '—'}</span>
+          <span className="text-xs font-bold text-slate-900">{val || '—'}</span>
           {row.drawing_count > 0 && (
-            <span className="text-xs text-indigo-600 font-semibold">{row.drawing_count} Drawings</span>
+            <span className="text-[10px] text-indigo-600 font-bold mt-0.5 inline-flex items-center gap-1">
+              <FileText className="w-3 h-3" />
+              {row.drawing_count} {row.drawing_count === 1 ? 'Drawing' : 'Drawings'}
+            </span>
           )}
         </div>
       )
@@ -141,7 +144,7 @@ const CustomerDrawing = () => {
       key: 'client_name',
       sortable: true,
       render: (val, row) => (
-        <span className=" text-slate-900">{val || row.company_name || '—'}</span>
+        <span className="text-xs font-bold text-slate-800">{val || row.company_name || '—'}</span>
       )
     },
     {
@@ -154,10 +157,10 @@ const CustomerDrawing = () => {
 
         return (
           <div className="flex flex-col">
-            <span className=" text-slate-900">{phone}</span>
-            <span className="text-xs  text-slate-500">{email}</span>
+            <span className="text-xs font-bold text-slate-900">{phone}</span>
+            <span className="text-[11px] text-slate-500 font-medium">{email}</span>
             {person && person !== phone && (
-              <span className="text-xs  text-indigo-600 italic">{person}</span>
+              <span className="text-[10px] text-indigo-600 font-semibold italic">{person}</span>
             )}
           </div>
         );
@@ -172,10 +175,10 @@ const CustomerDrawing = () => {
       label: 'Actions',
       key: 'actions',
       render: (_, row) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => handleViewClientDrawings(row)}
-            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg border border-transparent hover:border-indigo-100 transition-all shadow-2xs"
             title="View Details"
           >
             <Eye size={15} />
@@ -190,7 +193,7 @@ const CustomerDrawing = () => {
                 state: { type: 'edit-requirement', data: row }
               });
             }}
-            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
+            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg border border-transparent hover:border-amber-100 transition-all shadow-2xs"
             title="Edit Client & Drawings"
           >
             <Edit2 size={15} />
@@ -200,7 +203,7 @@ const CustomerDrawing = () => {
             row.status?.trim().toUpperCase() === 'CREATED') && (
               <button
                 onClick={() => handleShareClientGroupWithDesign(row.client_name || row.company_name, row)}
-                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg border border-transparent hover:border-emerald-100 transition-all shadow-2xs"
                 title="Send to Design"
               >
                 <Send size={15} />
@@ -208,7 +211,7 @@ const CustomerDrawing = () => {
             )}
           <button
             onClick={() => handleDeleteProject(row.id, row.project_name)}
-            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
+            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-100 transition-all shadow-2xs"
             title="Delete Project & Drawings"
           >
             <Trash2 size={15} />
@@ -2376,24 +2379,26 @@ const CustomerDrawing = () => {
   };
 
   return (
-    <div className="space-y-2 animate-in fade-in duration-500">
+    <div className="space-y-5">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200/90 shadow-xs">
         <div className="flex items-center gap-3">
-
+          <div className="p-2.5 bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-xl shadow-md shadow-indigo-100">
+            <FileText className="w-5 h-5" />
+          </div>
           <div>
-            <h1 className="text-xl  text-slate-900 ">Customer Drawings</h1>
-            <p className="text-xs text-slate-500 ">Manage customer reference drawings and technical documentation</p>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">Customer Drawings & Requirements</h1>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">Manage customer reference drawings, specifications and project requirements</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {selectedRequirements.size > 0 && (
             <Button
               variant="secondary"
               onClick={handleBulkSendToDesign}
               disabled={selectedRequirements.size === 0}
-              className="flex items-center gap-1.5"
+              className="flex items-center gap-1.5 font-bold"
             >
               <span>📤</span> Send to Design (Bulk)
             </Button>
@@ -2402,6 +2407,7 @@ const CustomerDrawing = () => {
             variant="secondary"
             onClick={() => { setShowApprovedDrawings(true); fetchApprovedDrawings(); }}
             icon={Check}
+            className="font-bold"
           >
             Approved Drawings
           </Button>
@@ -2442,21 +2448,27 @@ const CustomerDrawing = () => {
               setShowFormModal(true);
             }}
             icon={Plus}
+            className="font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
           >
             Client Requirement
           </Button>
         </div>
       </div>
 
-      {/* SEARCH & FILTER SECTION */}
-
-
       {/* SECTION 2: CLIENT REQUIREMENTS TABLE */}
-      <Card className="overflow-hidden">
-        <div className="">
-          <h2 className="text-lg  text-slate-800 flex items-center gap-2">
-            Client Requirements
-          </h2>
+      <Card className="overflow-hidden border border-slate-200/90 rounded-xl shadow-xs">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+              <Package className="w-4 h-4" />
+            </div>
+            <h2 className="text-sm font-black text-slate-900 tracking-tight uppercase">
+              Client Requirements Repository
+            </h2>
+          </div>
+          <span className="text-xs text-slate-500 font-bold px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200">
+            {requirements.length} Projects Total
+          </span>
         </div>
         <div className="p-0">
           <DataTable

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, DataTable, StatusBadge } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import { 
   Palette, 
   TrendingUp, 
@@ -91,28 +91,21 @@ const DesignDashboard = ({ apiRequest }) => {
     </div>
   );
 
-  if (loading || !stats) {
-    return (
-      <div className="flex flex-col items-center justify-center p-24 space-y-4">
-        <div className="w-12 h-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-        <p className="text-xs text-slate-500 font-medium animate-pulse">Initializing Design Studio Hub...</p>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !stats;
 
   // Filter out health items that are 0%
-  const activeHealth = (stats.health || []).filter(item => item.value > 0);
+  const activeHealth = (stats?.health || []).filter(item => item.value > 0);
 
   // Quick Summary Items (Filter out undefined or 0 values)
-  const totalProjects = stats.activeProjects + stats.completedProjects;
+  const totalProjects = (stats?.activeProjects || 0) + (stats?.completedProjects || 0);
   const summaryItems = [
     { label: 'Total Projects', value: totalProjects },
-    { label: 'Released to Production', value: stats.completedProjects },
-    { label: 'Pending Projects', value: stats.activeProjects }
+    { label: 'Released to Production', value: stats?.completedProjects || 0 },
+    { label: 'Pending Projects', value: stats?.activeProjects || 0 }
   ].filter(item => item.value > 0);
 
   return (
-    <div className="space-y-4 pb-12 animate-in fade-in duration-500">
+    <div className="space-y-4 pb-12">
       
       {/* Professional Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
@@ -144,17 +137,20 @@ const DesignDashboard = ({ apiRequest }) => {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.activeProjects !== undefined && (
-          <StatCard title="Active Projects" count={stats.activeProjects} subtitle="In design phase" color="bg-indigo-500" icon={PencilRuler} trend={12} />
-        )}
-        {stats.pendingBoms !== undefined && (
-          <StatCard title="Pending BOMs" count={stats.pendingBoms} subtitle="Awaiting submission" color="bg-emerald-500" icon={Layers} trend={5} />
-        )}
-        {stats.drawingReviews > 0 && (
-          <StatCard title="Drawing Reviews" count={stats.drawingReviews} subtitle="Pending approval" color="bg-amber-500" icon={FileSearch} />
-        )}
-        {stats.completedProjects !== undefined && (
-          <StatCard title="Completed" count={stats.completedProjects} subtitle="Released to production" color="bg-blue-500" icon={CheckCircle} trend={8} />
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <StatCard title="Active Projects" count={stats?.activeProjects || 0} subtitle="In design phase" color="bg-indigo-500" icon={PencilRuler} trend={12} />
+            <StatCard title="Pending BOMs" count={stats?.pendingBoms || 0} subtitle="Awaiting submission" color="bg-emerald-500" icon={Layers} trend={5} />
+            <StatCard title="Drawing Reviews" count={stats?.drawingReviews || 0} subtitle="Pending approval" color="bg-amber-500" icon={FileSearch} />
+            <StatCard title="Completed" count={stats?.completedProjects || 0} subtitle="Released to production" color="bg-blue-500" icon={CheckCircle} trend={8} />
+          </>
         )}
       </div>
 
@@ -170,98 +166,120 @@ const DesignDashboard = ({ apiRequest }) => {
             <p className="text-xs text-slate-400 mt-0.5">Project release throughput over time</p>
           </div>
           <div className="h-[260px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.chartData || []}>
-                <defs>
-                  <linearGradient id="colorReleases" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.12}/>
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} allowDecimals={false} />
-                <Tooltip 
-                  contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'}}
-                  formatter={(val) => [val, 'Releases']}
-                />
-                <Area type="monotone" dataKey="releases" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorReleases)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {isDataLoading ? (
+              <div className="w-full h-full flex flex-col justify-end gap-2 p-4 bg-slate-50/50 rounded animate-pulse">
+                <div className="h-32 bg-slate-200/80 rounded w-full"></div>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats?.chartData || []}>
+                  <defs>
+                    <linearGradient id="colorReleases" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.12}/>
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} allowDecimals={false} />
+                  <Tooltip 
+                    contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'}}
+                    formatter={(val) => [val, 'Releases']}
+                  />
+                  <Area type="monotone" dataKey="releases" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorReleases)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
         {/* Design Health & Quick Summary Panel */}
         <div className="bg-white rounded-lg p-4 border border-slate-100 shadow-sm flex flex-col justify-between space-y-4">
-          {activeHealth.length > 0 ? (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-slate-800">Engineering Health</h3>
-              <div className="space-y-2">
-                {activeHealth.map((item, idx) => (
-                  <div key={idx} className="space-y-1">
-                    <div className="flex justify-between items-end">
-                      <span className="text-[11px] font-semibold text-slate-500">{item.label}</span>
-                      <span className="text-xs font-bold text-slate-700">{item.value}%</span>
-                    </div>
-                    <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                      <div className={`h-full ${item.color} rounded-full transition-all duration-1000`} style={{ width: `${item.value}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {isDataLoading ? (
+            <div className="space-y-4 animate-pulse">
+              <div className="h-4 bg-slate-200 rounded w-1/2"></div>
+              <div className="h-8 bg-slate-100 rounded w-full"></div>
+              <div className="h-8 bg-slate-100 rounded w-full"></div>
             </div>
-          ) : null}
+          ) : (
+            <>
+              {activeHealth.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-slate-800">Engineering Health</h3>
+                  <div className="space-y-2">
+                    {activeHealth.map((item, idx) => (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex justify-between items-end">
+                          <span className="text-[11px] font-semibold text-slate-500">{item.label}</span>
+                          <span className="text-xs font-bold text-slate-700">{item.value}%</span>
+                        </div>
+                        <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                          <div className={`h-full ${item.color} rounded-full transition-all duration-1000`} style={{ width: `${item.value}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {summaryItems.length > 0 ? (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-slate-800">Quick Summary</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {summaryItems.map((item, idx) => (
-                  <div key={idx} className="bg-slate-50 border border-slate-100 rounded-lg p-2.5 flex flex-col justify-center">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{item.label}</span>
-                    <span className="text-lg font-bold text-slate-700 mt-0.5">{item.value}</span>
+              {summaryItems.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-slate-800">Quick Summary</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {summaryItems.map((item, idx) => (
+                      <div key={idx} className="bg-slate-50 border border-slate-100 rounded-lg p-2.5 flex flex-col justify-center">
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{item.label}</span>
+                        <span className="text-lg font-bold text-slate-700 mt-0.5">{item.value}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
       {/* Pending Design Tasks Table */}
-      {stats.pendingTasks && stats.pendingTasks.length > 0 && (
-        <div className="bg-white rounded-lg border border-slate-100 shadow-sm overflow-hidden">
-          <div className="p-3.5 border-b border-slate-50 bg-slate-50/20">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <CheckSquare className="w-4 h-4 text-indigo-600" />
-              Critical Design Queue
-            </h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-50 bg-slate-50/10">
-                  <th className="px-6 py-3 text-[11px] font-semibold text-slate-400 uppercase">Project Code</th>
-                  <th className="px-6 py-3 text-[11px] font-semibold text-slate-400 uppercase">Client</th>
-                  <th className="px-6 py-3 text-[11px] font-semibold text-slate-400 uppercase">Deadline</th>
-                  <th className="px-6 py-3 text-[11px] font-semibold text-slate-400 uppercase text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {stats.pendingTasks.map((task, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-3 text-xs font-bold text-indigo-600">{task.project_code}</td>
-                    <td className="px-6 py-3 text-xs text-slate-600 font-medium">{task.company_name}</td>
-                    <td className="px-6 py-3 text-xs text-slate-500">{task.deadline}</td>
-                    <td className="px-6 py-3 text-center">
-                      <StatusBadge status={task.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {isDataLoading ? (
+        <div className="bg-white rounded-lg border border-slate-100 shadow-sm p-4">
+          <SkeletonTable rows={3} columns={4} />
         </div>
+      ) : (
+        stats?.pendingTasks && stats.pendingTasks.length > 0 && (
+          <div className="bg-white rounded-lg border border-slate-100 shadow-sm overflow-hidden">
+            <div className="p-3.5 border-b border-slate-50 bg-slate-50/20">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <CheckSquare className="w-4 h-4 text-indigo-600" />
+                Critical Design Queue
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-50 bg-slate-50/10">
+                    <th className="px-6 py-3 text-[11px] font-semibold text-slate-400 uppercase">Project Code</th>
+                    <th className="px-6 py-3 text-[11px] font-semibold text-slate-400 uppercase">Client</th>
+                    <th className="px-6 py-3 text-[11px] font-semibold text-slate-400 uppercase">Deadline</th>
+                    <th className="px-6 py-3 text-[11px] font-semibold text-slate-400 uppercase text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {(stats?.pendingTasks || []).map((task, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-3 text-xs font-bold text-indigo-600">{task.project_code}</td>
+                      <td className="px-6 py-3 text-xs text-slate-600 font-medium">{task.company_name}</td>
+                      <td className="px-6 py-3 text-xs text-slate-500">{task.deadline}</td>
+                      <td className="px-6 py-3 text-center">
+                        <StatusBadge status={task.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
       )}
 
     </div>

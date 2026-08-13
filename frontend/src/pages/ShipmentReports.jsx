@@ -46,7 +46,7 @@ import {
   PieChart,
   Pie
 } from "recharts";
-import { StatusBadge, Button } from "../components/ui.jsx";
+import { Card, DataTable, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -177,22 +177,13 @@ const ShipmentReports = ({ apiRequest }) => {
     </div>
   );
 
-  if (loading || !data) {
-    return (
-      <div className="flex flex-col items-center justify-center p-22 space-y-2">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-          <Truck className="w-6 h-6 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-        </div>
-        <div className="text-center">
-          <h3 className="text-slate-900 font-bold">Generating Logistics Analytics</h3>
-          <p className="text-xs text-slate-500 mt-1 font-medium">Fetching shipment metrics and regional distribution...</p>
-        </div>
-      </div>
-    );
-  }
+  const isDataLoading = loading || !data;
 
-  const { stats, statusTrends, byRegion, byDestination, detailedTrend, recentDeliveries } = data;
+  const { stats, statusTrends, byRegion, byDestination, detailedTrend, recentDeliveries } = data || {};
+  const safeStats = stats || { total_shipments: 0, total_delivered: 0, total_delayed: 0, total_returns: 0, total_revenue: 0, total_customers: 0 };
+  const safeByDestination = byDestination || [];
+  const safeStatusTrends = statusTrends || [];
+  const safeRecentDeliveries = recentDeliveries || [];
 
   if (showTrackingHistory) {
     return (
@@ -201,8 +192,8 @@ const ShipmentReports = ({ apiRequest }) => {
           <div className="flex items-center gap-4">
             <h2 className="text-xl text-slate-900 font-bold">Shipment Tracking History</h2>
             <div className="hidden md:flex items-center gap-2">
-               <div className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold">Total: {stats.total_shipments}</div>
-               <div className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold">Delivered: {stats.total_delivered || 0}</div>
+               <div className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold">Total: {safeStats.total_shipments}</div>
+               <div className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold">Delivered: {safeStats.total_delivered || 0}</div>
             </div>
           </div>
           <Button 
@@ -217,11 +208,11 @@ const ShipmentReports = ({ apiRequest }) => {
 
         {/* KPI Cards for History View */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <StatCard title="Total Shipments" amount={stats.total_shipments} subtitle="Outbound volume" icon={Package} color="bg-blue-500" trend="up" trendValue={stats.shipmentsGrowth} />
-          <StatCard title="Delayed" amount={stats.total_delayed} subtitle="Critical attention" icon={AlertTriangle} color="bg-rose-500" trend="down" trendValue={stats.delayedGrowth} />
-          <StatCard title="Returns" amount={stats.total_returns} subtitle="Processing required" icon={RotateCcw} color="bg-amber-500" trend="up" trendValue={stats.returnsGrowth} />
-          <StatCard title="Revenue" amount={`₹${parseFloat(stats.total_revenue).toLocaleString()}`} subtitle="Shipment value" icon={DollarSign} color="bg-emerald-500" trend="up" trendValue="+12%" />
-          <StatCard title="Customers" amount={stats.total_customers} subtitle="Active destinations" icon={Users} color="bg-indigo-500" trend="up" trendValue={stats.customersGrowth} />
+          <StatCard title="Total Shipments" amount={safeStats.total_shipments} subtitle="Outbound volume" icon={Package} color="bg-blue-500" trend="up" trendValue={safeStats.shipmentsGrowth} />
+          <StatCard title="Delayed" amount={safeStats.total_delayed} subtitle="Critical attention" icon={AlertTriangle} color="bg-rose-500" trend="down" trendValue={safeStats.delayedGrowth} />
+          <StatCard title="Returns" amount={safeStats.total_returns} subtitle="Processing required" icon={RotateCcw} color="bg-amber-500" trend="up" trendValue={safeStats.returnsGrowth} />
+          <StatCard title="Revenue" amount={`₹${parseFloat(safeStats.total_revenue || 0).toLocaleString()}`} subtitle="Shipment value" icon={DollarSign} color="bg-emerald-500" trend="up" trendValue="+12%" />
+          <StatCard title="Customers" amount={safeStats.total_customers} subtitle="Active destinations" icon={Users} color="bg-indigo-500" trend="up" trendValue={safeStats.customersGrowth} />
         </div>
 
         <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden flex flex-col">
@@ -322,10 +313,10 @@ const ShipmentReports = ({ apiRequest }) => {
 
         {/* KPI Cards for Regions View */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatCard title="Total Shipments" amount={stats.total_shipments} subtitle="Outbound volume" icon={Package} color="bg-blue-500" />
-          <StatCard title="Primary Region" amount={byDestination[0]?.destination || 'N/A'} subtitle="Highest volume" icon={MapPin} color="bg-indigo-500" />
-          <StatCard title="Avg per Region" amount={Math.ceil(stats.total_shipments / byDestination.length)} subtitle="Distribution density" icon={Activity} color="bg-emerald-500" />
-          <StatCard title="Active Markets" amount={byDestination.length} subtitle="Regional reach" icon={Globe} color="bg-amber-500" />
+          <StatCard title="Total Shipments" amount={safeStats.total_shipments} subtitle="Outbound volume" icon={Package} color="bg-blue-500" />
+          <StatCard title="Primary Region" amount={safeByDestination[0]?.destination || 'N/A'} subtitle="Highest volume" icon={MapPin} color="bg-indigo-500" />
+          <StatCard title="Avg per Region" amount={Math.ceil(safeStats.total_shipments / (safeByDestination.length || 1))} subtitle="Distribution density" icon={Activity} color="bg-emerald-500" />
+          <StatCard title="Active Markets" amount={safeByDestination.length} subtitle="Regional reach" icon={Globe} color="bg-amber-500" />
         </div>
 
         <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden flex flex-col">
@@ -354,11 +345,11 @@ const ShipmentReports = ({ apiRequest }) => {
                         <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-indigo-500" 
-                            style={{ width: `${(dest.count / stats.total_shipments * 100).toFixed(1)}%` }}
+                            style={{ width: `${(dest.count / (safeStats.total_shipments || 1) * 100).toFixed(1)}%` }}
                           />
                         </div>
                         <span className="text-[10px] font-bold text-slate-500">
-                          {(dest.count / stats.total_shipments * 100).toFixed(1)}%
+                          {(dest.count / (safeStats.total_shipments || 1) * 100).toFixed(1)}%
                         </span>
                       </div>
                     </td>
@@ -447,11 +438,23 @@ const ShipmentReports = ({ apiRequest }) => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
-        <StatCard title="Total Shipments" amount={stats.total_shipments} subtitle="Outbound volume" icon={Package} color="bg-blue-500" trend="up" trendValue={stats.shipmentsGrowth} />
-        <StatCard title="Delayed" amount={stats.total_delayed} subtitle="Critical attention" icon={AlertTriangle} color="bg-rose-500" trend="down" trendValue={stats.delayedGrowth} />
-        <StatCard title="Returns" amount={stats.total_returns} subtitle="Processing required" icon={RotateCcw} color="bg-amber-500" trend="up" trendValue={stats.returnsGrowth} />
-        <StatCard title="Revenue" amount={`₹${parseFloat(stats.total_revenue).toLocaleString()}`} subtitle="Shipment value" icon={DollarSign} color="bg-emerald-500" trend="up" trendValue="+12%" />
-        <StatCard title="Customers" amount={stats.total_customers} subtitle="Active destinations" icon={Users} color="bg-indigo-500" trend="up" trendValue={stats.customersGrowth} />
+        {isDataLoading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : (
+          <>
+            <StatCard title="Total Shipments" amount={stats?.total_shipments || 0} subtitle="Outbound volume" icon={Package} color="bg-blue-500" trend="up" trendValue={stats?.shipmentsGrowth} />
+            <StatCard title="Delayed" amount={stats?.total_delayed || 0} subtitle="Critical attention" icon={AlertTriangle} color="bg-rose-500" trend="down" trendValue={stats?.delayedGrowth} />
+            <StatCard title="Returns" amount={stats?.total_returns || 0} subtitle="Processing required" icon={RotateCcw} color="bg-amber-500" trend="up" trendValue={stats?.returnsGrowth} />
+            <StatCard title="Revenue" amount={`₹${parseFloat(stats?.total_revenue || 0).toLocaleString()}`} subtitle="Shipment value" icon={DollarSign} color="bg-emerald-500" trend="up" trendValue="+12%" />
+            <StatCard title="Customers" amount={stats?.total_customers || 0} subtitle="Active destinations" icon={Users} color="bg-indigo-500" trend="up" trendValue={stats?.customersGrowth} />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-2">
@@ -468,7 +471,7 @@ const ShipmentReports = ({ apiRequest }) => {
           </div>
           <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusTrends}>
+              <BarChart data={safeStatusTrends}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis 
                   dataKey="month" 
@@ -497,7 +500,7 @@ const ShipmentReports = ({ apiRequest }) => {
         <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex flex-col">
           <h3 className="text-md font-bold text-slate-900 mb-8 ">Regional Distribution</h3>
           <div className="space-y-2 flex-1 overflow-y-auto pr-2">
-            {byDestination.map((dest, i) => (
+            {safeByDestination.map((dest, i) => (
               <div key={i} className="flex items-center justify-between p-2 rounded bg-slate-50/50 hover:bg-slate-50 transition-colors group">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded bg-indigo-50 flex items-center justify-center text-indigo-600 transition-transform group-hover:scale-110">
@@ -557,7 +560,7 @@ const ShipmentReports = ({ apiRequest }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {recentDeliveries.slice(0, 10).map((shipment, idx) => (
+                {safeRecentDeliveries.slice(0, 10).map((shipment, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
                     <td className="p-2  text-indigo-600 font-bold">{shipment.shipment_code}</td>
                     <td className="p-2  text-slate-600 font-medium">{shipment.customer}</td>
