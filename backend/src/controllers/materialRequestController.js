@@ -230,7 +230,9 @@ const calculateItemStockAndAvailability = async (connection, item, mrStatus = ''
   const totalWeight = Math.round(stockRows.reduce((sum, row) => sum + parseFloat(row.current_weight || 0), 0) * 1000) / 1000;
 
   const matType = (item.material_type || item.item_type || '').toUpperCase().trim();
-  const isBoughtOut = matType === 'BOUGHT_OUT' || matType === 'BOUGHT OUT' || matType === 'BOUGHT-OUT' || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+  const uomClean = (item.uom || item.unit || '').toUpperCase().trim();
+  const isKgUom = uomClean === 'KG' || uomClean === 'KGS' || uomClean === 'KILOGRAM';
+  const isBoughtOut = matType.includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-')) || !isKgUom;
 
   if (isBoughtOut) {
     const requiredQty = Math.round(parseFloat(item.quantity || item.design_qty || 0) * 1000) / 1000;
@@ -254,13 +256,13 @@ const calculateItemStockAndAvailability = async (connection, item, mrStatus = ''
     return {
       resolvedItemCode,
       totalStock,
-      totalWeight,
+      totalWeight: 0,
       requiredQty,
-      requiredWeight,
+      requiredWeight: 0,
       releasedQty,
-      releasedWeight,
+      releasedWeight: 0,
       remainingQty,
-      remainingWeight,
+      remainingWeight: 0,
       targetQty,
       available: isAvailable,
       stocks: stockRows
@@ -476,7 +478,9 @@ const calculateItemStockAndAvailabilityInMemory = (sbRows, item, mrStatus = '') 
   const totalWeight = Math.round(stockRows.reduce((sum, row) => sum + parseFloat(row.current_weight || 0), 0) * 1000) / 1000;
 
   const matType = (item.material_type || item.item_type || '').toUpperCase().trim();
-  const isBoughtOut = matType === 'BOUGHT_OUT' || matType === 'BOUGHT OUT' || matType === 'BOUGHT-OUT' || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+  const uomClean = (item.uom || item.unit || '').toUpperCase().trim();
+  const isKgUom = uomClean === 'KG' || uomClean === 'KGS' || uomClean === 'KILOGRAM';
+  const isBoughtOut = matType.includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-')) || !isKgUom;
 
   if (isBoughtOut) {
     const requiredQty = Math.round(parseFloat(item.quantity || item.design_qty || 0) * 1000) / 1000;
@@ -500,13 +504,13 @@ const calculateItemStockAndAvailabilityInMemory = (sbRows, item, mrStatus = '') 
     return {
       resolvedItemCode,
       totalStock,
-      totalWeight,
+      totalWeight: 0,
       requiredQty,
-      requiredWeight,
+      requiredWeight: 0,
       releasedQty,
-      releasedWeight,
+      releasedWeight: 0,
       remainingQty,
-      remainingWeight,
+      remainingWeight: 0,
       targetQty,
       available: isAvailable,
       stocks: stockRows
@@ -806,6 +810,10 @@ const materialRequestController = {
                mri.quantity,
                mri.allocated_quantity,
                CASE 
+                 WHEN LOWER(TRIM(COALESCE(mri.item_type, sb.material_type, ''))) IN ('bought_out', 'bought out', 'bought-out')
+                      OR UPPER(COALESCE(mri.item_code, '')) LIKE 'BO-%'
+                      OR LOWER(TRIM(COALESCE(mri.uom, sb.unit, ''))) NOT IN ('kg', 'kgs', 'kilogram')
+                 THEN 0
                  WHEN LOWER(TRIM(COALESCE(mri.uom, sb.unit, ''))) IN ('kg', 'kgs', 'kilogram') THEN mri.quantity
                  ELSE COALESCE(NULLIF(mri.required_weight, 0), mri.quantity * COALESCE(NULLIF(mri.weight_per_unit, 0), sb.weight_per_unit, 0), 0)
                END as required_weight,
@@ -1013,7 +1021,9 @@ const materialRequestController = {
 
               let amountToDeduct = remainingQty;
               const itemMatType = (item.material_type || item.item_type || '').toUpperCase().trim();
-              const isItemBoughtOut = itemMatType === 'BOUGHT_OUT' || itemMatType === 'BOUGHT OUT' || itemMatType === 'BOUGHT-OUT' || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+              const itemUomClean = (item.uom || item.unit || '').toUpperCase().trim();
+              const isItemKg = itemUomClean === 'KG' || itemUomClean === 'KGS' || itemUomClean === 'KILOGRAM';
+              const isItemBoughtOut = itemMatType.includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-')) || !isItemKg;
               const weightPerUnit = (!isItemBoughtOut && requiredQty > 0) ? (requiredWeight / requiredQty) : 0;
 
               if (stockRows.length > 0) {
