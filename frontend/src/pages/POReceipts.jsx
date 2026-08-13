@@ -532,6 +532,10 @@ const POReceipts = () => {
 
               const rate = parseFloat(item.unit_rate || item.rate || 0);
               const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+              const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
+              const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" ||
+                              lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+                              lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
               const effectiveQty = (isLaser || isBoughtOut) ? defaultCurrentQty : defaultCurrentWeight;
 
               return {
