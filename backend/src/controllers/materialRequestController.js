@@ -138,7 +138,7 @@ const calculateItemStockAndAvailability = async (connection, item, mrStatus = ''
   const outerDiameterVal1 = parseFloat(item.outer_diameter || item.outerDiameter || 0);
   const hasDimensions1 = (lengthVal1 > 0 || widthVal1 > 0 || thicknessVal1 > 0 || diameterVal1 > 0 || outerDiameterVal1 > 0);
 
-  // 1. Check by candidate item_codes in stock_balance WITH dimension filter (all 5 dimensions)
+  // 1. Check by candidate item_codes in stock_balance WITH dimension filter (non-zero dims only)
   for (const code of candidateCodes) {
     let dimQuery = `
       SELECT warehouse as warehouse_name, current_balance as current_stock, COALESCE(current_weight, 0) as current_weight
@@ -146,15 +146,12 @@ const calculateItemStockAndAvailability = async (connection, item, mrStatus = ''
       WHERE item_code = ? AND current_balance > 0`;
     const dimParams = [code];
 
-    if (hasDimensions1) {
-      dimQuery += `
-        AND (ABS(COALESCE(length, 0) - ?) < 0.0001)
-        AND (ABS(COALESCE(width, 0) - ?) < 0.0001)
-        AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)
-        AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)
-        AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)`;
-      dimParams.push(lengthVal1, widthVal1, thicknessVal1, diameterVal1, outerDiameterVal1);
-    }
+    // Only filter on non-zero dimensions (zero means "not applicable for this shape")
+    if (lengthVal1 > 0) { dimQuery += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; dimParams.push(lengthVal1); }
+    if (widthVal1 > 0) { dimQuery += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; dimParams.push(widthVal1); }
+    if (thicknessVal1 > 0) { dimQuery += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; dimParams.push(thicknessVal1); }
+    if (diameterVal1 > 0) { dimQuery += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; dimParams.push(diameterVal1); }
+    if (outerDiameterVal1 > 0) { dimQuery += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; dimParams.push(outerDiameterVal1); }
 
     const [byCode] = await connection.query(dimQuery, dimParams);
     if (byCode.length > 0) {
@@ -803,12 +800,12 @@ const materialRequestController = {
                COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
                COALESCE(mri.uom, sb.unit) as uom,
                COALESCE(mri.item_type, sb.material_type) as material_type,
-               COALESCE(mri.length, 0) as length,
-               COALESCE(mri.width, 0) as width,
-               COALESCE(mri.thickness, 0) as thickness,
-               COALESCE(mri.diameter, 0) as diameter,
-               COALESCE(mri.outer_diameter, 0) as outer_diameter,
-               COALESCE(mri.density, 0) as density,
+               COALESCE(NULLIF(mri.length, 0), sb.length, 0) as length,
+               COALESCE(NULLIF(mri.width, 0), sb.width, 0) as width,
+               COALESCE(NULLIF(mri.thickness, 0), sb.thickness, 0) as thickness,
+               COALESCE(NULLIF(mri.diameter, 0), sb.diameter, 0) as diameter,
+               COALESCE(NULLIF(mri.outer_diameter, 0), sb.outer_diameter, 0) as outer_diameter,
+               COALESCE(NULLIF(mri.density, 0), sb.density, 0) as density,
                COALESCE(NULLIF(mri.weight_per_unit, 0), sb.weight_per_unit, 0) as weight_per_unit,
                mri.quantity,
                mri.allocated_quantity,
@@ -839,6 +836,12 @@ const materialRequestController = {
                  MAX(item_description) as item_description, 
                  MAX(unit) as unit,
                  MAX(material_type) as material_type,
+                 MAX(length) as length,
+                 MAX(width) as width,
+                 MAX(thickness) as thickness,
+                 MAX(diameter) as diameter,
+                 MAX(outer_diameter) as outer_diameter,
+                 MAX(density) as density,
                  MAX(weight_per_unit) as weight_per_unit
           FROM stock_balance 
           GROUP BY item_code

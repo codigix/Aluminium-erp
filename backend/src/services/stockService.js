@@ -551,17 +551,13 @@ const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, con
     const thickness = parseFloat(dimensions.thickness || 0);
     const diameter = parseFloat(dimensions.diameter || 0);
     const outerDiameter = parseFloat(dimensions.outer_diameter || dimensions.outerDiameter || 0);
-    const hasDims = length > 0 || width > 0 || thickness > 0 || diameter > 0 || outerDiameter > 0;
 
-    if (hasDims) {
-      query += `
-        AND (ABS(COALESCE(length, 0) - ?) < 0.0001)
-        AND (ABS(COALESCE(width, 0) - ?) < 0.0001)
-        AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)
-        AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)
-        AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)`;
-      params.push(length, width, thickness, diameter, outerDiameter);
-    }
+    // Only filter on dimensions that are actually specified (non-zero)
+    if (length > 0) { query += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; params.push(length); }
+    if (width > 0) { query += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; params.push(width); }
+    if (thickness > 0) { query += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; params.push(thickness); }
+    if (diameter > 0) { query += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; params.push(diameter); }
+    if (outerDiameter > 0) { query += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; params.push(outerDiameter); }
   }
 
   query += ` ORDER BY current_balance DESC `;
