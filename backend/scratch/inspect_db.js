@@ -1,15 +1,14 @@
 const pool = require('../src/config/db');
 
-async function main() {
+(async () => {
   try {
-    const [payments] = await pool.query('SELECT * FROM payments');
-    console.log('Payments rows count:', payments.length);
-    console.log('Payments rows:', payments);
-  } catch (error) {
-    console.error('Error:', error);
-  } finally {
-    process.exit(0);
-  }
-}
+    console.log('\n--- stock_balance for RM-ALIUMNINUM-0001 ---');
+    const [sb] = await pool.query("SELECT * FROM stock_balance WHERE item_code LIKE '%ALIUMNINUM%' OR item_code LIKE '%ALUMIN%'");
+    console.log(sb);
 
-main();
+    process.exit(0);
+  } catch (err) {
+    console.error(err);
+    process.exit(1);
+  }
+})();
