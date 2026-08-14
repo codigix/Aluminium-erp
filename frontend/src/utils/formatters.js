@@ -36,16 +36,14 @@ export const formatDimensions = (item) => {
     return '';
   }
 
+  const matNameStr = (item.material_name || item.name || item.item_name || '').toLowerCase();
+  const hasPlateDims = wid > 0 || thk > 0;
+  const isPlateMaterial = (matNameStr.includes('plate') || matNameStr.includes('sheet')) && hasPlateDims;
+
   // Determine shape
   let shape = (
-    item.shape_type || 
-    item.shape_name || 
-    item.shape || 
-    item.material_name || 
-    item.name || 
-    item.item_name || 
-    item.item_code || 
-    ''
+    isPlateMaterial ? matNameStr :
+    (item.shape_type || item.shape_name || item.shape || matNameStr || item.item_code || '')
   ).toLowerCase();
 
   let matchedShape = '';
