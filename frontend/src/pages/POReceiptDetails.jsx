@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card } from '../components/ui.jsx';
+import DataTable from '../components/DataTable.jsx';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions } from '../utils/formatters';
 
@@ -26,6 +27,136 @@ const POReceiptDetails = () => {
   const [poItems, setPoItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  const getItemVars = (item) => {
+    const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+    const dQty = parseFloat(item.planned_qty || item.design_qty || (isBoughtOut ? (item.quantity || item.received_quantity) : 0) || 0);
+    const reqWt = isBoughtOut ? 0 : parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0);
+    
+    const rawRecQty = parseFloat(item.received_qty);
+    const rawRecWt = parseFloat(item.received_weight);
+    
+    const recWt = isBoughtOut ? 0 : ((!isNaN(rawRecWt) && rawRecWt > 0) ? rawRecWt : parseFloat(item.received_quantity || 0));
+    const recQty = (!isNaN(rawRecQty) && rawRecQty > 0) ? rawRecQty : dQty;
+
+    const pQty = Math.max(0, dQty - recQty);
+    const pWt = isBoughtOut ? 0 : parseFloat(Math.max(0, reqWt - recWt).toFixed(3));
+    const unitStr = isBoughtOut ? 'NOS' : (item.unit || item.uom || 'KG').toUpperCase();
+
+    return { isBoughtOut, dQty, reqWt, recWt, recQty, pQty, pWt, unitStr };
+  };
+
+  const detailColumns = [
+    {
+      key: 'drawing_no',
+      label: 'Drawing No',
+      width: '15%',
+      render: (val, row) => <span className="font-bold text-slate-900">{row.drawing_no || '—'}</span>
+    },
+    {
+      key: 'item_code',
+      label: 'Item',
+      width: '25%',
+      render: (val, row) => (
+        <div>
+          <div className="font-semibold text-slate-900">{row.item_code}</div>
+          <div className="text-slate-500 mt-0.5">{row.material_name || row.description}</div>
+          {formatDimensions(row) && (
+            <div className="mt-0.5">
+              <span className="text-[10px] text-slate-400">{formatDimensions(row)}</span>
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'design_qty',
+      label: 'Design Qty',
+      className: 'text-center',
+      width: '10%',
+      render: (val, row) => {
+        const { dQty } = getItemVars(row);
+        return (
+          <div className="text-slate-600">
+            <span className="font-medium">{dQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
+          </div>
+        );
+      }
+    },
+    {
+      key: 'required_qty',
+      label: 'Required Weight',
+      className: 'text-center',
+      width: '12%',
+      render: (val, row) => {
+        const { isBoughtOut, reqWt, unitStr } = getItemVars(row);
+        if (isBoughtOut) return <span className="font-medium text-slate-400">—</span>;
+        return (
+          <div className="text-slate-700">
+            <span className="font-medium">{reqWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span>
+          </div>
+        );
+      }
+    },
+    {
+      key: 'received_qty',
+      label: 'Received Qty',
+      className: 'text-center',
+      width: '12%',
+      render: (val, row) => {
+        const { recQty } = getItemVars(row);
+        return (
+          <div className="text-blue-600 font-bold">
+            <span>{recQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
+          </div>
+        );
+      }
+    },
+    {
+      key: 'received_weight',
+      label: 'Received Weight',
+      className: 'text-center',
+      width: '12%',
+      render: (val, row) => {
+        const { isBoughtOut, recWt, unitStr } = getItemVars(row);
+        if (isBoughtOut) return <span className="font-medium text-slate-400">—</span>;
+        return (
+          <div className="text-indigo-600 font-bold">
+            <span>{recWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span>
+          </div>
+        );
+      }
+    },
+    {
+      key: 'pending_qty',
+      label: 'Pending Qty',
+      className: 'text-center',
+      width: '12%',
+      render: (val, row) => {
+        const { pQty } = getItemVars(row);
+        return (
+          <div className="text-amber-600 font-bold">
+            <span>{pQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
+          </div>
+        );
+      }
+    },
+    {
+      key: 'pending_weight',
+      label: 'Pending Weight',
+      className: 'text-center',
+      width: '12%',
+      render: (val, row) => {
+        const { isBoughtOut, pWt, unitStr } = getItemVars(row);
+        if (isBoughtOut) return <span className="font-medium text-slate-400">—</span>;
+        return (
+          <div className="text-amber-600 font-bold">
+            <span>{pWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span>
+          </div>
+        );
+      }
+    }
+  ];
 
   const fetchPOItems = useCallback(async (poId, token) => {
     try {
@@ -193,82 +324,14 @@ const POReceiptDetails = () => {
               <div className="mb-8">
                 <h3 className="text-md text-slate-900 font-bold mb-4">Received Items</h3>
                 <div className="overflow-x-auto border border-slate-200 rounded-lg">
-                  <table className="w-full text-xs">
-                    <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200">
-                      <tr>
-                        <th className="p-2.5 text-left">Drawing No</th>
-                        <th className="p-2.5 text-left">Item</th>
-                        <th className="p-2.5 text-center">Design Qty</th>
-                        <th className="p-2.5 text-center">Required Weight</th>
-                        <th className="p-2.5 text-center">Received Qty</th>
-                        <th className="p-2.5 text-center">Received Weight</th>
-                        <th className="p-2.5 text-center">Pending Qty</th>
-                        <th className="p-2.5 text-center">Pending Weight</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {((receipt?.items && receipt.items.length > 0) ? receipt.items : poItems).map((item, idx) => {
-                        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
-                        const dQty = parseFloat(item.planned_qty || item.design_qty || (isBoughtOut ? (item.quantity || item.received_quantity) : 0) || 0);
-                        const reqWt = isBoughtOut ? 0 : parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0);
-                        
-                        const rawRecQty = parseFloat(item.received_qty);
-                        const rawRecWt = parseFloat(item.received_weight);
-                        
-                        const recWt = isBoughtOut ? 0 : ((!isNaN(rawRecWt) && rawRecWt > 0) ? rawRecWt : parseFloat(item.received_quantity || 0));
-                        const recQty = (!isNaN(rawRecQty) && rawRecQty > 0) ? rawRecQty : dQty;
-
-                        const pQty = Math.max(0, dQty - recQty);
-                        const pWt = isBoughtOut ? 0 : parseFloat(Math.max(0, reqWt - recWt).toFixed(3));
-                        const unitStr = isBoughtOut ? 'NOS' : (item.unit || item.uom || 'KG').toUpperCase();
-
-                        return (
-                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="p-2.5 font-bold text-slate-900">{item.drawing_no || '—'}</td>
-                            <td className="p-2.5">
-                              <div className="font-semibold text-slate-900">{item.item_code}</div>
-                              <div className="text-slate-500 mt-0.5">{item.material_name || item.description}</div>
-                              {formatDimensions(item) && (
-                                <div className="mt-0.5">
-                                  <span className="text-[10px] text-slate-400">{formatDimensions(item)}</span>
-                                </div>
-                              )}
-                            </td>
-                            <td className="p-2.5 text-center text-slate-600">
-                              <span className="font-medium">{dQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
-                            </td>
-                            <td className="p-2.5 text-center text-slate-700">
-                              {isBoughtOut ? (
-                                <span className="font-medium text-slate-400">—</span>
-                              ) : (
-                                <><span className="font-medium">{reqWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span></>
-                              )}
-                            </td>
-                            <td className="p-2.5 text-center text-blue-600 font-bold">
-                              <span>{recQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
-                            </td>
-                            <td className="p-2.5 text-center text-indigo-600 font-bold">
-                              {isBoughtOut ? (
-                                <span className="font-medium text-slate-400">—</span>
-                              ) : (
-                                <><span className="font-medium">{recWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span></>
-                              )}
-                            </td>
-                            <td className="p-2.5 text-center text-amber-600 font-semibold">
-                              <span>{pQty.toFixed(0)}</span> <span className="text-[10px] text-slate-400">NOS</span>
-                            </td>
-                            <td className="p-2.5 text-center text-amber-600 font-semibold">
-                              {isBoughtOut ? (
-                                <span className="font-medium text-slate-400">—</span>
-                              ) : (
-                                <><span className="font-medium">{pWt.toFixed(3)}</span> <span className="text-[10px] text-slate-400">{unitStr}</span></>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  <DataTable
+                    columns={detailColumns}
+                    data={(receipt?.items && receipt.items.length > 0) ? receipt.items : poItems}
+                    loading={false}
+                    hideHeader={true}
+                    pageSize={100}
+                    className="border-none shadow-none rounded-none"
+                  />
                 </div>
               </div>
             )}

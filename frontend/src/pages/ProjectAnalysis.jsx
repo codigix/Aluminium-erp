@@ -359,34 +359,34 @@ const ProjectAnalysis = () => {
    };
 
    const StatCard = ({ title, amount, subtitle, icon: Icon, color = 'bg-indigo-500', trend, trendValue, animate, subColor }) => (
-      <div className="bg-white rounded p-2 border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
-         <div className={`absolute top-0 right-0 w-16 h-16 ${color} opacity-5 rounded -mr-6 -mt-6 transition-transform group-hover:scale-110`} />
+      <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+         <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded-full -mr-10 -mt-10 transition-transform group-hover:scale-110`} />
 
          <div className="flex flex-col h-full justify-between relative z-10">
-            <div className="flex items-start justify-between">
-               <div>
-                  <p className="text-xs text-slate-400    mb-1">{title}</p>
-                  <div className="flex items-baseline gap-2">
-                     <h3 className="text-xl text-slate-900  ">{amount}</h3>
-                     {trendValue && (
-                        <span className={`flex items-center text-xs  ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                           {trend === 'up' ? <TrendingUp className="w-2.5 h-2.5 mr-0.5" /> : <AlertCircle className="w-2.5 h-2.5 mr-0.5" />}
-                           {trendValue}
-                        </span>
-                     )}
-                  </div>
+            <div className="flex items-center gap-3 mb-3">
+               <div className={`p-2.5 rounded-lg ${color.replace('bg-', 'bg-').replace('500', '50')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:scale-110`}>
+                  {Icon && <Icon className={`w-5 h-5 ${animate ? 'animate-pulse' : ''}`} />}
                </div>
-               <div className={`p-1.5 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
-                  {Icon && <Icon className={`w-3 h-3 ${animate ? 'animate-pulse' : ''}`} />}
-               </div>
+               <span className="text-sm font-semibold text-slate-500">{title}</span>
             </div>
-            <div className="mt-2">
-               <p className={`text-xs   ${subColor || 'text-slate-500'}`}>{subtitle}</p>
+            
+            <div className="mb-1">
+               <h3 className="text-3xl font-bold text-slate-800 tracking-tight">{amount}</h3>
+            </div>
+            
+            <div className="flex items-center justify-between mt-2">
+               <p className={`text-xs font-medium ${subColor || 'text-slate-400'}`}>{subtitle}</p>
+               {trendValue && (
+                  <span className={`flex items-center text-xs font-bold ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                     {trend === 'up' ? <TrendingUp className="w-3 h-3 mr-1" /> : <AlertCircle className="w-3 h-3 mr-1" />}
+                     {trendValue}
+                  </span>
+               )}
             </div>
          </div>
          {title === 'Completion' && (
             <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-50">
-               <div className="h-full bg-indigo-600 transition-all duration-1000" style={{ width: amount }} />
+               <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: amount }} />
             </div>
          )}
       </div>
@@ -756,42 +756,59 @@ const ProjectAnalysis = () => {
                            </div>
                         </div>
 
-                        <div className="bg-white rounded border border-slate-100 p-4 h-[250px] flex flex-col">
-                           <h3 className="text-xs text-slate-400    mb-4">Machine Utilization</h3>
+                        <div className="bg-white rounded-xl border border-slate-100 p-5 h-[280px] flex flex-col shadow-sm">
+                           <h3 className="text-sm font-bold text-slate-900 mb-1">Machine Utilization</h3>
+                           <p className="text-xs text-slate-400 font-medium mb-4">Equipment efficiency across nodes</p>
                            <div className="flex-1">
                               <ResponsiveContainer width="100%" height="100%">
-                                 <BarChart data={machineUtilization}>
+                                 <BarChart data={machineUtilization} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <defs>
+                                       <linearGradient id="colorUtil" x1="0" y1="0" x2="0" y2="1">
+                                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.2}/>
+                                       </linearGradient>
+                                    </defs>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="n" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 8, fontWeight: 700 }} />
-                                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                    <Bar dataKey="v" fill="#10b981" radius={[2, 2, 0, 0]} barSize={25} />
+                                    <XAxis dataKey="n" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} />
+                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} cursor={{fill: 'transparent'}} />
+                                    <Bar dataKey="v" fill="url(#colorUtil)" radius={[4, 4, 0, 0]} barSize={28} />
                                  </BarChart>
                               </ResponsiveContainer>
                            </div>
-                           <div className="flex gap-4 mt-4 text-xs  ">
-                              <span className="text-slate-400">Nodes: <span className="text-slate-900">{machineUtilization.length}</span></span>
-                              <span className="text-slate-400">Avg Eff: <span className="text-slate-900">{Math.round(machineUtilization.reduce((acc, curr) => acc + parseFloat(curr.v || 0), 0) / (machineUtilization.length || 1))}%</span></span>
+                           <div className="flex gap-6 mt-4 pt-4 border-t border-slate-50 text-xs">
+                              <span className="text-slate-500 font-medium">Nodes: <span className="text-slate-900 font-bold ml-1">{machineUtilization.length}</span></span>
+                              <span className="text-slate-500 font-medium">Avg Eff: <span className="text-slate-900 font-bold ml-1">{Math.round(machineUtilization.reduce((acc, curr) => acc + parseFloat(curr.v || 0), 0) / (machineUtilization.length || 1))}%</span></span>
                            </div>
                         </div>
                      </div>
 
-                     <div className="bg-white rounded border border-slate-100 p-6 shadow-sm">
-                        <div className="flex items-center justify-between mb-8">
-                           <h3 className="text-xs text-slate-400   ">Verified Progress by Stage</h3>
-                           <div className="flex items-center gap-2">
-                              <div className="w-2.5 h-2.5 rounded bg-blue-500" />
-                              <span className="text-xs text-slate-400   ">Verified Stage Output</span>
+                     <div className="bg-white rounded-xl border border-slate-100 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                           <div>
+                              <h3 className="text-sm font-bold text-slate-900">Verified Progress by Stage</h3>
+                              <p className="text-xs text-slate-400 font-medium mt-1">Completion rate across all defined phases</p>
+                           </div>
+                           <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-100">
+                              <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                              <span className="text-xs text-blue-700 font-bold">Verified Stage Output</span>
                            </div>
                         </div>
                         <div className="h-[350px] w-full flex items-center justify-center">
                            {productionFlow.length > 0 ? (
                               <ResponsiveContainer width="100%" height="100%">
-                                 <BarChart data={productionFlow.map(p => ({ n: p.item_name, v: p.planned_qty > 0 ? (p.produced_qty / p.planned_qty) * 100 : 0 }))}>
+                                 <BarChart data={productionFlow.map(p => ({ n: p.item_name, v: p.planned_qty > 0 ? (p.produced_qty / p.planned_qty) * 100 : 0 }))} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
+                                    <defs>
+                                       <linearGradient id="colorFlow" x1="0" y1="0" x2="0" y2="1">
+                                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.9}/>
+                                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                                       </linearGradient>
+                                    </defs>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="n" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} dy={10} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 700 }} />
-                                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                    <Bar dataKey="v" fill="#3b82f6" radius={[0, 0, 0, 0]} barSize={25} />
+                                    <XAxis dataKey="n" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }} />
+                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} cursor={{fill: 'transparent'}} />
+                                    <Bar dataKey="v" fill="url(#colorFlow)" radius={[4, 4, 0, 0]} barSize={35} />
                                  </BarChart>
                               </ResponsiveContainer>
                            ) : (
@@ -990,8 +1007,11 @@ const ProjectAnalysis = () => {
 
                            {/* OEE Bar Chart + Loss Pie Chart */}
                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                              <div className="bg-white border border-slate-100 rounded p-4 shadow-sm">
-                                 <h3 className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-4">OEE by Workstation (%)</h3>
+                              <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm">
+                                 <div className="mb-4">
+                                    <h3 className="text-sm font-bold text-slate-900">OEE by Workstation (%)</h3>
+                                    <p className="text-xs text-slate-400 font-medium mt-0.5">Overall effectiveness per machine</p>
+                                 </div>
                                  {(workstationAnalysis || []).length === 0 ? (
                                     <div className="h-48 flex items-center justify-center"><p className="text-xs text-slate-300">No data</p></div>
                                  ) : (
@@ -1002,44 +1022,53 @@ const ProjectAnalysis = () => {
                                              layout="vertical"
                                              margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
                                           >
+                                             <defs>
+                                                <linearGradient id="colorOee" x1="0" y1="0" x2="1" y2="0">
+                                                   <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.9}/>
+                                                   <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.2}/>
+                                                </linearGradient>
+                                             </defs>
                                              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                                             <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 9 }} />
-                                             <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 9 }} />
-                                             <Tooltip formatter={(value) => [`${value}%`, 'OEE']} />
-                                             <Bar dataKey="oee" fill="#4f46e5" radius={[0, 4, 4, 0]} />
+                                             <XAxis type="number" domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                                             <YAxis dataKey="name" type="category" width={120} tick={{ fill: '#475569', fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                                             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} cursor={{fill: 'transparent'}} formatter={(value) => [`${value}%`, 'OEE']} />
+                                             <Bar dataKey="oee" fill="url(#colorOee)" radius={[0, 4, 4, 0]} barSize={20} />
                                           </BarChart>
                                        </ResponsiveContainer>
                                     </div>
                                  )}
                               </div>
 
-                              <div className="bg-white border border-slate-100 rounded p-4 shadow-sm flex flex-col justify-between">
+                              <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm flex flex-col justify-between">
                                  <div>
-                                    <h3 className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-4">Loss Distribution</h3>
+                                    <div className="mb-4">
+                                       <h3 className="text-sm font-bold text-slate-900">Loss Distribution</h3>
+                                       <p className="text-xs text-slate-400 font-medium mt-0.5">Breakdown of inefficiency sources</p>
+                                    </div>
                                     <div className="h-48">
                                        <ResponsiveContainer width="100%" height="100%">
                                           <PieChart>
                                              <Pie
                                                 data={(lossDistribution || []).filter(l => parseFloat(l.value) > 0).map(l => ({ name: l.name, value: parseFloat(l.value) }))}
-                                                cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={3} dataKey="value"
+                                                cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={4} dataKey="value" stroke="none"
                                              >
                                                 {(lossDistribution || []).map((_, index) => (
                                                    <Cell key={index} fill={['#ef4444', '#f59e0b', '#6366f1'][index % 3]} />
                                                 ))}
                                              </Pie>
-                                             <Tooltip formatter={(v) => [`${v}%`, 'Loss']} />
+                                             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(v) => [`${v}%`, 'Loss']} />
                                           </PieChart>
                                        </ResponsiveContainer>
                                     </div>
                                  </div>
-                                 <div className="grid grid-cols-1 gap-1.5 pt-3 border-t border-slate-50">
+                                 <div className="grid grid-cols-1 gap-2 pt-4 border-t border-slate-50 mt-2">
                                     {(lossDistribution || []).map((l, i) => (
-                                       <div key={i} className="flex items-center justify-between text-[10px]">
-                                          <div className="flex items-center gap-1.5">
-                                             <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: ['#ef4444', '#f59e0b', '#6366f1'][i % 3] }} />
-                                             <span className="text-slate-500">{l.name}</span>
+                                       <div key={i} className="flex items-center justify-between text-xs">
+                                          <div className="flex items-center gap-2">
+                                             <span className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: ['#ef4444', '#f59e0b', '#6366f1'][i % 3] }} />
+                                             <span className="text-slate-600 font-medium">{l.name}</span>
                                           </div>
-                                          <span className="font-bold text-slate-700">{l.value}%</span>
+                                          <span className="font-bold text-slate-800 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">{l.value}%</span>
                                        </div>
                                     ))}
                                  </div>
