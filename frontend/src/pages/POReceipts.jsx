@@ -287,6 +287,8 @@ const POReceipts = () => {
                       lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
 
       const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+      const currQty = parseFloat(item.current_receiving_qty !== undefined && item.current_receiving_qty !== '' ? item.current_receiving_qty : (item.received_qty || 0)) || 0;
+      const currWeight = parseFloat(item.current_receiving_weight !== undefined && item.current_receiving_weight !== '' ? item.current_receiving_weight : (item.received_weight || 0)) || 0;
       const effectiveQty = (isLaser || isBoughtOut) ? currQty : currWeight;
       const rate = parseFloat(item.rate !== undefined && item.rate !== '' ? item.rate : (item.unit_rate || 0)) || 0;
 
