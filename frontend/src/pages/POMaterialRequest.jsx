@@ -1422,7 +1422,10 @@ const POMaterialRequest = () => {
                       const type = (item.material_type || '').toUpperCase();
                       return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
                     }).map((item, idx) => {
-                      const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                      const matType = (item.material_type || item.item_type || '').toUpperCase().trim();
+                      const uomClean = (item.uom || item.unit || '').toUpperCase().trim();
+                      const isKgUom = uomClean === 'KG' || uomClean === 'KGS' || uomClean === 'KILOGRAM';
+                      const isBoughtOut = matType.includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-')) || !isKgUom;
                       return (
                         <tr key={idx} className="hover:bg-slate-50/30 transition-colors group">
                           <td className="px-6 py-5">
@@ -1472,12 +1475,16 @@ const POMaterialRequest = () => {
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span className={`w-2 h-2 rounded-full ${parseFloat(item.total_weight || 0) > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-                              <span className={`text-xs font-semibold ${parseFloat(item.total_weight || 0) > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                                {Number(item.total_weight || 0).toFixed(3)} KG
-                              </span>
-                            </div>
+                            {isBoughtOut ? (
+                              <span className="text-xs text-slate-400 font-medium">—</span>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${parseFloat(item.total_weight || 0) > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                                <span className={`text-xs font-semibold ${parseFloat(item.total_weight || 0) > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                                  {Number(item.total_weight || 0).toFixed(3)} KG
+                                </span>
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Card, StatusBadge, Modal, FormControl, SearchableSelect } from '../components/ui.jsx';
-import DataTable from '../components/DataTable.jsx';
+import { Card, DataTable, StatusBadge, Modal, FormControl, SearchableSelect } from '../components/ui.jsx';
 import {
   Plus,
   Search,
@@ -288,8 +287,8 @@ const POReceipts = () => {
                       lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
 
       const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
-      const currQty = parseFloat(item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty) || 0;
-      const currWeight = isBoughtOut ? 0 : (parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : (item.received_weight || 0)) || 0);
+      const currQty = parseFloat(item.current_receiving_qty !== undefined && item.current_receiving_qty !== '' ? item.current_receiving_qty : (item.received_qty || 0)) || 0;
+      const currWeight = parseFloat(item.current_receiving_weight !== undefined && item.current_receiving_weight !== '' ? item.current_receiving_weight : (item.received_weight || 0)) || 0;
       const effectiveQty = (isLaser || isBoughtOut) ? currQty : currWeight;
       const rate = parseFloat(item.rate !== undefined && item.rate !== '' ? item.rate : (item.unit_rate || 0)) || 0;
 
@@ -536,7 +535,7 @@ const POReceipts = () => {
               const rate = parseFloat(item.unit_rate || item.rate || 0);
               const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
               const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
-              const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
+              const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" ||
                               lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
                               lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
               const effectiveQty = (isLaser || isBoughtOut) ? defaultCurrentQty : defaultCurrentWeight;
@@ -1057,509 +1056,6 @@ const POReceipts = () => {
     }
   ];
 
-  const getCreateItemVars = (item) => {
-    const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
-    const ordQty = parseFloat(item.ordered_qty || item.design_qty || (isBoughtOut ? item.quantity : 0) || 0);
-    const ordWeight = isBoughtOut ? 0 : parseFloat(item.ordered_weight || item.quantity || 0);
-    const prevQty = parseFloat(item.prev_received_qty || 0);
-    const prevWeight = isBoughtOut ? 0 : parseFloat(item.prev_received_weight || 0);
-    const isFullyReceived = ordQty - prevQty <= 0;
-    const currQty = parseFloat(item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty) || 0;
-    const currWeight = isBoughtOut ? 0 : (parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : (item.received_weight || 0)) || 0);
-
-    const pendingQty = Math.max(0, ordQty - (prevQty + currQty));
-    const pendingWeight = isBoughtOut ? 0 : parseFloat(Math.max(0, ordWeight - (prevWeight + currWeight)).toFixed(3));
-    const unitStr = isBoughtOut ? 'NOS' : (item.unit || 'KG').toUpperCase();
-
-    return { isBoughtOut, ordQty, ordWeight, prevQty, prevWeight, isFullyReceived, currQty, currWeight, pendingQty, pendingWeight, unitStr };
-  };
-
-  const createItemsColumns = [
-    {
-      key: 'drawing_no',
-      label: 'Drawing No',
-      width: '10%',
-      render: (val, row, idx) => (
-        <input
-          type="text"
-          value={row.drawing_no || ''}
-          placeholder="Drawing No"
-          onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
-          className="w-28 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-        />
-      )
-    },
-    {
-      key: 'item_code',
-      label: 'Item ID',
-      width: '15%',
-      render: (val, row, idx) => (
-        <div className="flex flex-col min-w-[150px]">
-          <SearchableSelect
-            options={stockItems}
-            value={row.item_code}
-            onChange={(e) => handleItemChange(idx, 'item_code', e.target.value)}
-            placeholder="Select Item ID"
-            labelField="item_code"
-            valueField="item_code"
-            subLabelField="material_name"
-            allowCustom={true}
-          />
-        </div>
-      )
-    },
-    {
-      key: 'material_name',
-      label: 'Material Name & Dimensions',
-      width: '20%',
-      render: (val, row, idx) => (
-        <div className="flex flex-col gap-1 min-w-[200px]">
-          <SearchableSelect
-            options={stockItems}
-            value={row.material_name}
-            onChange={(e) => {
-              handleItemChange(idx, 'material_name', e.target.value);
-              const selectedItem = stockItems.find(it => it.material_name === e.target.value);
-              if (selectedItem) {
-                handleItemChange(idx, 'item_code', selectedItem.item_code);
-              }
-            }}
-            placeholder="Select Material Name"
-            labelField="material_name"
-            valueField="material_name"
-            subLabelField="item_code"
-            allowCustom={true}
-          />
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[9px] font-semibold text-slate-400 uppercase">Store:</span>
-            <select
-              value={row.warehouse || 'main'}
-              onChange={(e) => handleItemChange(idx, 'warehouse', e.target.value)}
-              className="bg-transparent text-xs text-slate-600 outline-none border-b border-slate-200 cursor-pointer font-medium pb-0.5"
-            >
-              {warehouses.length > 0 ? (
-                warehouses.map(w => (
-                  <option key={w.id} value={w.warehouse_code}>{w.warehouse_name || w.warehouse_code}</option>
-                ))
-              ) : (
-                <option value="main">Main Warehouse</option>
-              )}
-            </select>
-          </div>
-        </div>
-      )
-    },
-    {
-      key: 'ordered_qty',
-      label: 'Ordered Qty',
-      className: 'text-center',
-      width: '8%',
-      render: (val, row) => {
-        const { ordQty } = getCreateItemVars(row);
-        return (
-          <div className="flex items-center justify-center">
-            <span className="font-semibold text-slate-800">{ordQty.toFixed(0)}</span>
-            <span className="text-[10px] text-slate-400 ml-1">Nos</span>
-          </div>
-        );
-      }
-    },
-    {
-      key: 'ordered_weight',
-      label: 'Ordered Weight',
-      className: 'text-center',
-      width: '8%',
-      render: (val, row) => {
-        const { isBoughtOut, ordWeight } = getCreateItemVars(row);
-        if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
-        return (
-          <div className="flex items-center justify-center">
-            <span className="font-semibold text-indigo-600">{ordWeight.toFixed(3)}</span>
-            <span className="text-[10px] text-slate-400 ml-1">Kg</span>
-          </div>
-        );
-      }
-    },
-    {
-      key: 'prev_received_qty',
-      label: 'Prev. Received',
-      className: 'text-center',
-      width: '10%',
-      render: (val, row) => {
-        const { isBoughtOut, prevQty, prevWeight } = getCreateItemVars(row);
-        return (
-          <div className="flex flex-col items-center text-[11px]">
-            <span className="font-medium text-slate-700">{prevQty.toFixed(0)} Nos</span>
-            <span className="text-[10px] text-slate-400">{isBoughtOut ? '—' : `${prevWeight.toFixed(3)} Kg`}</span>
-          </div>
-        );
-      }
-    },
-    {
-      key: 'current_receiving_qty',
-      label: 'Receiving Qty (Nos)',
-      className: 'text-center',
-      width: '8%',
-      render: (val, row, idx) => {
-        const { ordQty, prevQty, isFullyReceived } = getCreateItemVars(row);
-        return (
-          <div className="flex justify-center">
-            <input
-              type="number"
-              value={row.current_receiving_qty !== undefined ? row.current_receiving_qty : row.received_qty}
-              disabled={isFullyReceived}
-              onChange={(e) => {
-                const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
-                const maxAllowed = Math.max(0, ordQty - prevQty);
-                const cappedVal = val === '' ? '' : Math.min(val, maxAllowed);
-                handleItemChange(idx, 'current_receiving_qty', cappedVal);
-                handleItemChange(idx, 'received_qty', cappedVal);
-              }}
-              max={Math.max(0, ordQty - prevQty)}
-              className={`w-16 p-1.5 border rounded-lg text-center text-xs font-semibold focus:ring-2 outline-none ${
-                isFullyReceived 
-                  ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' 
-                  : 'bg-white border-blue-200 text-blue-600 focus:ring-blue-500/20'
-              }`}
-              placeholder="0"
-            />
-          </div>
-        );
-      }
-    },
-    {
-      key: 'current_receiving_weight',
-      label: 'Receiving Weight (Kg)',
-      className: 'text-center',
-      width: '8%',
-      render: (val, row, idx) => {
-        const { isBoughtOut } = getCreateItemVars(row);
-        if (isBoughtOut) {
-          return (
-            <div className="flex justify-center">
-              <input
-                type="text"
-                value=""
-                placeholder="—"
-                disabled={true}
-                readOnly={true}
-                className="w-20 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs text-slate-400 font-medium outline-none cursor-not-allowed"
-              />
-            </div>
-          );
-        }
-        return (
-          <div className="flex justify-center">
-            <input
-              type="number"
-              step="0.001"
-              value={row.current_receiving_weight !== undefined && row.current_receiving_weight !== null ? row.current_receiving_weight : (row.received_weight !== undefined ? row.received_weight : '')}
-              readOnly
-              className="w-20 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs text-slate-500 font-semibold outline-none cursor-not-allowed"
-              placeholder="0.000"
-            />
-          </div>
-        );
-      }
-    },
-    {
-      key: 'pending_qty',
-      label: 'Pending Qty',
-      className: 'text-center',
-      width: '8%',
-      render: (val, row) => {
-        const { pendingQty } = getCreateItemVars(row);
-        return (
-          <div className="flex items-center justify-center font-semibold text-amber-600">
-            {pendingQty.toFixed(0)} <span className="text-[9px] text-slate-400 font-normal ml-0.5">Nos</span>
-          </div>
-        );
-      }
-    },
-    {
-      key: 'pending_weight',
-      label: 'Pending Weight',
-      className: 'text-center',
-      width: '8%',
-      render: (val, row) => {
-        const { isBoughtOut, pendingWeight } = getCreateItemVars(row);
-        if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
-        return (
-          <div className="flex items-center justify-center font-semibold text-amber-600">
-            {pendingWeight.toFixed(3)} <span className="text-[9px] text-slate-400 font-normal ml-0.5">Kg</span>
-          </div>
-        );
-      }
-    },
-    {
-      key: 'rate',
-      label: 'Rate',
-      className: 'text-center',
-      width: '8%',
-      render: (val, row, idx) => (
-        <div className="flex justify-center">
-          <input
-            type="number"
-            value={row.rate !== undefined && row.rate !== null ? row.rate : (row.unit_rate || '')}
-            onChange={(e) => {
-              const rateVal = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
-              handleItemChange(idx, 'rate', rateVal);
-              handleItemChange(idx, 'unit_rate', rateVal);
-            }}
-            className="w-16 p-1.5 bg-white border border-slate-200 rounded-lg text-center text-xs text-emerald-600 font-semibold outline-none"
-          />
-        </div>
-      )
-    },
-    {
-      key: 'amount',
-      label: 'Amount',
-      className: 'text-right pr-4',
-      width: '10%',
-      render: (val, row) => {
-        const { isBoughtOut, currQty, currWeight } = getCreateItemVars(row);
-        const lcStr = String(row.laser_cutting || '').trim().toUpperCase();
-        const isLaser = row.laser_cutting === "With Material" || row.laser_cutting === "Without Material" || 
-                        lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
-                        lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
-        const effectiveQty = (isLaser || isBoughtOut) ? currQty : currWeight;
-        const rate = parseFloat(row.rate || row.unit_rate) || 0;
-        return (
-          <span className="text-slate-900 text-xs font-bold">
-            {formatCurrency(effectiveQty * rate)}
-          </span>
-        );
-      }
-    },
-    {
-      key: 'remove',
-      label: '',
-      className: 'text-center',
-      width: '4%',
-      render: (val, row, idx) => {
-        const { isFullyReceived } = getCreateItemVars(row);
-        if (isFullyReceived) {
-          return (
-            <span className="text-[10px] text-emerald-600 font-semibold px-2 py-0.5 bg-emerald-50 rounded">
-              Locked
-            </span>
-          );
-        }
-        return (
-          <button
-            type="button"
-            onClick={() => handleRemoveItem(idx)}
-            className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        );
-      }
-    }
-  ];
-
-  const getDetailItemVars = (item) => {
-    const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
-    const dQty = parseFloat(item.planned_qty || item.design_qty || (isBoughtOut ? (item.quantity || item.received_quantity) : 0) || 0);
-    const reqWt = isBoughtOut ? 0 : parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0);
-    
-    const rawRecQty = parseFloat(item.received_qty);
-    const rawRecWt = parseFloat(item.received_weight);
-    
-    const recWt = isBoughtOut ? 0 : ((!isNaN(rawRecWt) && rawRecWt > 0) ? rawRecWt : parseFloat(item.received_quantity || 0));
-    const recQty = (!isNaN(rawRecQty) && rawRecQty > 0) ? rawRecQty : dQty;
-
-    const cumQty = parseFloat(item.cumulative_received_qty !== undefined ? item.cumulative_received_qty : recQty) || recQty;
-    const cumWt = isBoughtOut ? 0 : (parseFloat(item.cumulative_received_weight !== undefined ? item.cumulative_received_weight : recWt) || recWt);
-
-    const pQty = Math.max(0, dQty - cumQty);
-    const pWt = isBoughtOut ? 0 : parseFloat(Math.max(0, reqWt - cumWt).toFixed(3));
-    const unitStr = isBoughtOut ? 'NOS' : (item.unit || 'KG').toUpperCase();
-
-    return { isBoughtOut, dQty, reqWt, recWt, recQty, pQty, pWt, unitStr };
-  };
-
-  const viewItemsColumns = [
-    {
-      key: 'drawing_no',
-      label: 'Drawing No',
-      width: '12%',
-      render: (val, row, idx) => {
-        return isViewEditMode ? (
-          <input
-            type="text"
-            value={row.drawing_no || ''}
-            onChange={e => handleViewItemChange(idx, 'drawing_no', e.target.value)}
-            placeholder="Drawing No"
-            className="w-28 px-2 py-1 border border-blue-300 rounded text-xs focus:ring-2 focus:ring-blue-400/30 outline-none bg-white font-bold"
-          />
-        ) : (
-          row.drawing_no || '—'
-        );
-      }
-    },
-    {
-      key: 'item_code',
-      label: 'Item',
-      width: '25%',
-      render: (val, row) => (
-        <div>
-          <div className="text-xs text-slate-900 font-medium">{row.item_code}</div>
-          <div className="text-xs text-slate-500 mt-0.5">{row.material_name || row.description}</div>
-          {formatDimensions(row) && (
-            <div className="mt-1">
-              <span className="text-xs text-slate-400">{formatDimensions(row)}</span>
-            </div>
-          )}
-        </div>
-      )
-    },
-    {
-      key: 'design_qty',
-      label: 'Design Qty',
-      className: 'text-center',
-      width: '10%',
-      render: (val, row, idx) => {
-        const { dQty } = getDetailItemVars(row);
-        return isViewEditMode ? (
-          <div className="flex flex-col items-center gap-1">
-            <input
-              type="number"
-              step="1"
-              min="0"
-              value={(row.planned_qty === 0 || row.design_qty === 0) ? 0 : (row.planned_qty || row.design_qty || '')}
-              onChange={e => {
-                handleViewItemChange(idx, 'planned_qty', e.target.value);
-                handleViewItemChange(idx, 'design_qty', e.target.value);
-              }}
-              className="w-20 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
-            />
-            <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center">
-            <span>{dQty.toFixed(0)}</span>
-            <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
-          </div>
-        );
-      }
-    },
-    {
-      key: 'required_qty',
-      label: 'Required Weight',
-      className: 'text-center',
-      width: '12%',
-      render: (val, row, idx) => {
-        const { isBoughtOut, reqWt, unitStr } = getDetailItemVars(row);
-        if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
-        return isViewEditMode ? (
-          <div className="flex flex-col items-center gap-1">
-            <input
-              type="number"
-              step="0.001"
-              min="0"
-              value={(row.required_qty === 0 || row.expected_quantity === 0 || row.quantity === 0) ? 0 : (row.required_qty || row.expected_quantity || row.quantity || '')}
-              onChange={e => handleViewItemChange(idx, 'required_qty', e.target.value)}
-              className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
-            />
-            <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center">
-            <span className="text-slate-700 font-medium">{reqWt.toFixed(3)}</span>
-            <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
-          </div>
-        );
-      }
-    },
-    {
-      key: 'received_qty',
-      label: 'Received Qty',
-      className: 'text-center',
-      width: '10%',
-      render: (val, row, idx) => {
-        const { recQty } = getDetailItemVars(row);
-        return isViewEditMode ? (
-          <div className="flex flex-col items-center gap-1">
-            <input
-              type="number"
-              step="1"
-              min="0"
-              value={row.received_qty === 0 ? 0 : (row.received_qty || '')}
-              onChange={e => handleViewItemChange(idx, 'received_qty', e.target.value)}
-              className="w-20 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white font-semibold text-blue-600"
-            />
-            <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center">
-            <span className="font-bold text-blue-600">{recQty.toFixed(0)}</span>
-            <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
-          </div>
-        );
-      }
-    },
-    {
-      key: 'received_weight',
-      label: 'Received Weight',
-      className: 'text-center',
-      width: '12%',
-      render: (val, row, idx) => {
-        const { isBoughtOut, recWt, unitStr } = getDetailItemVars(row);
-        if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
-        return isViewEditMode ? (
-          <div className="flex flex-col items-center gap-1">
-            <input
-              type="number"
-              step="0.001"
-              min="0"
-              value={row.received_weight === 0 ? 0 : (row.received_weight || row.received_quantity || '')}
-              onChange={e => handleViewItemChange(idx, 'received_weight', e.target.value)}
-              className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white font-semibold text-indigo-600"
-            />
-            <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center">
-            <span className="font-bold text-indigo-600">{recWt.toFixed(3)}</span>
-            <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
-          </div>
-        );
-      }
-    },
-    {
-      key: 'pending_qty',
-      label: 'Pending Qty',
-      className: 'text-center',
-      width: '10%',
-      render: (val, row) => {
-        const { pQty } = getDetailItemVars(row);
-        return (
-          <div className="flex flex-col items-center text-amber-600 font-semibold">
-            <span>{pQty.toFixed(0)}</span>
-            <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
-          </div>
-        );
-      }
-    },
-    {
-      key: 'pending_weight',
-      label: 'Pending Weight',
-      className: 'text-center',
-      width: '10%',
-      render: (val, row) => {
-        const { isBoughtOut, pWt, unitStr } = getDetailItemVars(row);
-        if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
-        return (
-          <div className="flex flex-col items-center text-amber-600 font-semibold">
-            <span>{pWt.toFixed(3)}</span>
-            <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
-          </div>
-        );
-      }
-    }
-  ];
-
   if (showCreateModal) {
     return (
       <div className="p-4 animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-4">
@@ -1787,15 +1283,227 @@ const POReceipts = () => {
               </div>
 
               <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-sm">
-                <DataTable
-                  columns={createItemsColumns}
-                  data={formData.items}
-                  loading={false}
-                  hideHeader={true}
-                  pageSize={100}
-                  className="border-none shadow-none rounded-none"
-                  emptyMessage="No Items Added. Select a drawing to populate receipt line items."
-                />
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50/80">
+                    <tr className="text-[11px] text-slate-500 border-b border-slate-200 font-semibold uppercase">
+                      <th className="p-3 pl-4">Drawing No</th>
+                      <th className="p-3">Item ID</th>
+                      <th className="p-3">Material Name & Dimensions</th>
+                      <th className="p-3 text-center">Ordered Qty</th>
+                      <th className="p-3 text-center">Ordered Weight</th>
+                      <th className="p-3 text-center">Prev. Received</th>
+                      <th className="p-3 text-center">Receiving Qty (Nos)</th>
+                      <th className="p-3 text-center">Receiving Weight (Kg)</th>
+                      <th className="p-3 text-center">Pending Qty</th>
+                      <th className="p-3 text-center">Pending Weight</th>
+                      <th className="p-3 text-center">Rate</th>
+                      <th className="p-3 text-right pr-4">Amount</th>
+                      <th className="p-3 text-center"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {formData.items.map((item, idx) => {
+                      const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                      const ordQty = parseFloat(item.ordered_qty || item.design_qty || (isBoughtOut ? item.quantity : 0) || 0);
+                      const ordWeight = isBoughtOut ? 0 : parseFloat(item.ordered_weight || item.quantity || 0);
+                      const prevQty = parseFloat(item.prev_received_qty || 0);
+                      const prevWeight = isBoughtOut ? 0 : parseFloat(item.prev_received_weight || 0);
+                      const isFullyReceived = ordQty - prevQty <= 0;
+                      const currQty = parseFloat(item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty) || 0;
+                      const currWeight = isBoughtOut ? 0 : (parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : (item.received_weight || 0)) || 0);
+
+                      const pendingQty = Math.max(0, ordQty - (prevQty + currQty));
+                      const pendingWeight = isBoughtOut ? 0 : parseFloat(Math.max(0, ordWeight - (prevWeight + currWeight)).toFixed(3));
+
+                      return (
+                        <tr key={idx} className="group hover:bg-slate-50/50 transition-all text-xs">
+                          <td className="p-3 pl-4 font-bold text-slate-900">
+                            <input
+                              type="text"
+                              value={item.drawing_no || ''}
+                              placeholder="Drawing No"
+                              onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
+                              className="w-28 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <div className="flex flex-col min-w-[150px]">
+                              <SearchableSelect
+                                options={stockItems}
+                                value={item.item_code}
+                                onChange={(e) => handleItemChange(idx, 'item_code', e.target.value)}
+                                placeholder="Select Item ID"
+                                labelField="item_code"
+                                valueField="item_code"
+                                subLabelField="material_name"
+                                allowCustom={true}
+                              />
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex flex-col gap-1 min-w-[200px]">
+                              <SearchableSelect
+                                options={stockItems}
+                                value={item.material_name}
+                                onChange={(e) => {
+                                  handleItemChange(idx, 'material_name', e.target.value);
+                                  const selectedItem = stockItems.find(it => it.material_name === e.target.value);
+                                  if (selectedItem) {
+                                    handleItemChange(idx, 'item_code', selectedItem.item_code);
+                                  }
+                                }}
+                                placeholder="Select Material Name"
+                                labelField="material_name"
+                                valueField="material_name"
+                                subLabelField="item_code"
+                                allowCustom={true}
+                              />
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[9px] font-semibold text-slate-400 uppercase">Store:</span>
+                                <select
+                                  value={item.warehouse || 'main'}
+                                  onChange={(e) => handleItemChange(idx, 'warehouse', e.target.value)}
+                                  className="bg-transparent text-xs text-slate-600 outline-none border-b border-slate-200 cursor-pointer font-medium pb-0.5"
+                                >
+                                  {warehouses.length > 0 ? (
+                                    warehouses.map(w => (
+                                      <option key={w.id} value={w.warehouse_code}>{w.warehouse_name || w.warehouse_code}</option>
+                                    ))
+                                  ) : (
+                                    <option value="main">Main Warehouse</option>
+                                  )}
+                                </select>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="font-semibold text-slate-800">{ordQty.toFixed(0)}</span>
+                            <span className="text-[10px] text-slate-400 ml-1">Nos</span>
+                          </td>
+                          <td className="p-3 text-center">
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : (
+                              <>
+                                <span className="font-semibold text-indigo-600">{ordWeight.toFixed(3)}</span>
+                                <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                              </>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex flex-col items-center text-[11px]">
+                              <span className="font-medium text-slate-700">{prevQty.toFixed(0)} Nos</span>
+                              <span className="text-[10px] text-slate-400">{isBoughtOut ? '—' : `${prevWeight.toFixed(3)} Kg`}</span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-center">
+                            <input
+                              type="number"
+                              value={item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty}
+                              disabled={isFullyReceived}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
+                                const maxAllowed = Math.max(0, ordQty - prevQty);
+                                const cappedVal = val === '' ? '' : Math.min(val, maxAllowed);
+                                handleItemChange(idx, 'current_receiving_qty', cappedVal);
+                                handleItemChange(idx, 'received_qty', cappedVal);
+                              }}
+                              max={Math.max(0, ordQty - prevQty)}
+                              className={`w-16 p-1.5 border rounded-lg text-center text-xs font-semibold focus:ring-2 outline-none ${
+                                isFullyReceived 
+                                  ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' 
+                                  : 'bg-white border-blue-200 text-blue-600 focus:ring-blue-500/20'
+                              }`}
+                              placeholder="0"
+                            />
+                          </td>
+                          <td className="p-3 text-center">
+                            {isBoughtOut ? (
+                              <input
+                                type="text"
+                                value=""
+                                placeholder="—"
+                                disabled={true}
+                                readOnly={true}
+                                className="w-20 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs text-slate-400 font-medium outline-none cursor-not-allowed"
+                              />
+                            ) : (
+                              <input
+                                type="number"
+                                step="0.001"
+                                value={item.current_receiving_weight !== undefined && item.current_receiving_weight !== null ? item.current_receiving_weight : (item.received_weight !== undefined ? item.received_weight : '')}
+                                readOnly
+                                className="w-20 p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center text-xs text-slate-500 font-semibold outline-none cursor-not-allowed"
+                                placeholder="0.000"
+                              />
+                            )}
+                          </td>
+                          <td className="p-3 text-center font-semibold text-amber-600">
+                            {pendingQty.toFixed(0)} <span className="text-[9px] text-slate-400 font-normal">Nos</span>
+                          </td>
+                          <td className="p-3 text-center font-semibold text-amber-600">
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : (
+                              <>{pendingWeight.toFixed(3)} <span className="text-[9px] text-slate-400 font-normal">Kg</span></>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <input
+                              type="number"
+                              value={item.rate !== undefined && item.rate !== null ? item.rate : (item.unit_rate || '')}
+                              onChange={(e) => {
+                                const rateVal = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
+                                handleItemChange(idx, 'rate', rateVal);
+                                handleItemChange(idx, 'unit_rate', rateVal);
+                              }}
+                              className="w-16 p-1.5 bg-white border border-slate-200 rounded-lg text-center text-xs text-emerald-600 font-semibold outline-none"
+                            />
+                          </td>
+                          <td className="p-3 text-right pr-4">
+                            <div className="flex flex-col items-end">
+                              <span className="text-slate-900 text-xs font-bold">
+                                {(() => {
+                                    const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
+                                    const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
+                                                    lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+                                                    lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
+                                    const effectiveQty = (isLaser || isBoughtOut) ? currQty : currWeight;
+                                    const rate = parseFloat(item.rate || item.unit_rate) || 0;
+                                    return formatCurrency(effectiveQty * rate);
+                                  })()}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-3 text-center">
+                            {isFullyReceived ? (
+                              <span className="text-[10px] text-emerald-600 font-semibold px-2 py-0.5 bg-emerald-50 rounded">
+                                Locked
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(idx)}
+                                className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {formData.items.length === 0 && (
+                  <div className="p-12 text-center">
+                    <div className="w-16 h-16 bg-slate-50 text-slate-200 rounded-xl flex items-center justify-center mx-auto mb-4">
+                      <Package className="w-8 h-8" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-700">No Items Added</p>
+                    <p className="text-xs text-slate-400 mt-1">Select a drawing to populate receipt line items</p>
+                  </div>
+                )}
               </div>
 
               {/* Attachments Section */}
@@ -2203,15 +1911,186 @@ const POReceipts = () => {
                 <h4 className="text-xs  text-slate-900  ">Received Items</h4>
               </div>
 
-              <div className="bg-white border border-slate-200 rounded overflow-visible">
-                <DataTable
-                  columns={viewItemsColumns}
-                  data={isViewEditMode ? viewEditItems : (selectedReceiptForView.items || [])}
-                  loading={false}
-                  hideHeader={true}
-                  pageSize={100}
-                  className="border-none shadow-none rounded-none"
-                />
+              <div className="bg-white border border-slate-200 rounded  overflow-visible ">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50/50">
+                    <tr className="text-xs text-slate-400 border-b border-slate-200">
+                      <th className="p-2">Drawing No</th>
+                      <th className="p-2">Item</th>
+                      <th className="p-2 text-center">Design Qty</th>
+                      <th className="p-2 text-center">Required Weight</th>
+                      <th className="p-2 text-center">Received Qty</th>
+                      <th className="p-2 text-center">Received Weight</th>
+                      <th className="p-2 text-center">Pending Qty</th>
+                      <th className="p-2 text-center">Pending Weight</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(isViewEditMode ? viewEditItems : (selectedReceiptForView.items || [])).map((item, idx) => {
+                      const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                      const dQty = parseFloat(item.planned_qty || item.design_qty || (isBoughtOut ? (item.quantity || item.received_quantity) : 0) || 0);
+                      const reqWt = isBoughtOut ? 0 : parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0);
+                      
+                      const rawRecQty = parseFloat(item.received_qty);
+                      const rawRecWt = parseFloat(item.received_weight);
+                      
+                      const recWt = isBoughtOut ? 0 : ((!isNaN(rawRecWt) && rawRecWt > 0) ? rawRecWt : parseFloat(item.received_quantity || 0));
+                      const recQty = (!isNaN(rawRecQty) && rawRecQty > 0) ? rawRecQty : dQty;
+
+                      const cumQty = parseFloat(item.cumulative_received_qty !== undefined ? item.cumulative_received_qty : recQty) || recQty;
+                      const cumWt = isBoughtOut ? 0 : (parseFloat(item.cumulative_received_weight !== undefined ? item.cumulative_received_weight : recWt) || recWt);
+
+                      const pQty = Math.max(0, dQty - cumQty);
+                      const pWt = isBoughtOut ? 0 : parseFloat(Math.max(0, reqWt - cumWt).toFixed(3));
+                      const unitStr = isBoughtOut ? 'NOS' : (item.unit || 'KG').toUpperCase();
+
+                      return (
+                        <tr key={idx} className={`group transition-colors ${isViewEditMode ? 'bg-blue-50/20 hover:bg-blue-50/40' : 'hover:bg-slate-50/50'}`}>
+                          {/* Drawing No */}
+                          <td className="p-2 text-xs font-bold text-slate-900">
+                            {isViewEditMode ? (
+                              <input
+                                type="text"
+                                value={item.drawing_no || ''}
+                                onChange={e => handleViewItemChange(idx, 'drawing_no', e.target.value)}
+                                placeholder="Drawing No"
+                                className="w-28 px-2 py-1 border border-blue-300 rounded text-xs focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                              />
+                            ) : (
+                              item.drawing_no || '—'
+                            )}
+                          </td>
+
+                          {/* Item */}
+                          <td className="p-2">
+                            <div className="text-xs text-slate-900 font-medium">{item.item_code}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">{item.material_name || item.description}</div>
+                            {formatDimensions(item) && (
+                              <div className="mt-1">
+                                <span className="text-xs text-slate-400">{formatDimensions(item)}</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Design Qty (NOS) */}
+                          <td className="p-2 text-center text-slate-500 text-xs">
+                            {isViewEditMode ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  value={(item.planned_qty === 0 || item.design_qty === 0) ? 0 : (item.planned_qty || item.design_qty || '')}
+                                  onChange={e => {
+                                    handleViewItemChange(idx, 'planned_qty', e.target.value);
+                                    handleViewItemChange(idx, 'design_qty', e.target.value);
+                                  }}
+                                  className="w-20 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                                />
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span>{dQty.toFixed(0)}</span>
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Required Weight */}
+                          <td className="p-2 text-center text-slate-500 text-xs">
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : isViewEditMode ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={(item.required_qty === 0 || item.expected_quantity === 0 || item.quantity === 0) ? 0 : (item.required_qty || item.expected_quantity || item.quantity || '')}
+                                  onChange={e => handleViewItemChange(idx, 'required_qty', e.target.value)}
+                                  className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                                />
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span className="text-slate-700 font-medium">{reqWt.toFixed(3)}</span>
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Received Qty (NOS) */}
+                          <td className="p-2 text-center text-slate-900 text-xs">
+                            {isViewEditMode ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  value={item.received_qty === 0 ? 0 : (item.received_qty || '')}
+                                  onChange={e => handleViewItemChange(idx, 'received_qty', e.target.value)}
+                                  className="w-20 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                                />
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span className="font-bold text-blue-600">{recQty.toFixed(0)}</span>
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Received Weight (KG) */}
+                          <td className="p-2 text-center text-slate-900 text-xs">
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : isViewEditMode ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  min="0"
+                                  value={item.received_weight === 0 ? 0 : (item.received_weight || item.received_quantity || '')}
+                                  onChange={e => handleViewItemChange(idx, 'received_weight', e.target.value)}
+                                  className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                                />
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span className="font-bold text-indigo-600">{recWt.toFixed(3)}</span>
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Pending Qty (NOS) */}
+                          <td className="p-2 text-center text-amber-600 font-semibold text-xs">
+                            <div className="flex flex-col items-center">
+                              <span>{pQty.toFixed(0)}</span>
+                              <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
+                            </div>
+                          </td>
+
+                          {/* Pending Weight (KG) */}
+                          <td className="p-2 text-center text-amber-600 font-semibold text-xs">
+                            {isBoughtOut ? (
+                              <span className="text-slate-400 font-medium">—</span>
+                            ) : (
+                              <div className="flex flex-col items-center">
+                                <span>{pWt.toFixed(3)}</span>
+                                <span className="text-xs text-slate-400 uppercase tracking-wider">{unitStr}</span>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
 

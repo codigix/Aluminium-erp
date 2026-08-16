@@ -4,6 +4,8 @@ const stockService = require('./stockService');
 
 const getCorrectItemCode = async (item, connection) => {
   let itemCode = item.itemCode || item.item_code;
+  const matName = item.materialName || item.material_name;
+  const matType = item.materialType || item.material_type;
 
   const length = parseFloat(item.length || 0);
   const width = parseFloat(item.width || 0);
@@ -11,51 +13,14 @@ const getCorrectItemCode = async (item, connection) => {
   const diameter = parseFloat(item.diameter || 0);
   const outerDiameter = parseFloat(item.outerDiameter || item.outer_diameter || 0);
 
-  // 0. If we already have a specific item code that exists in stock_balance and matches name + dimensions, use it!
+  // 0. If itemCode is provided and valid, reuse it directly!
   if (itemCode && itemCode !== 'auto-generated') {
-    const [existing] = await connection.query(
-      `SELECT item_code, material_type FROM stock_balance 
-       WHERE (item_code = ? OR drawing_no = ?) 
-         AND LOWER(TRIM(material_name)) = LOWER(TRIM(?))
-         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
-       LIMIT 1`,
-      [itemCode, itemCode, item.materialName || item.material_name, length, width, thickness, diameter, outerDiameter]
-    );
-    if (existing.length > 0) {
-      if (existing[0].material_type) {
-        item.materialType = existing[0].material_type;
-      }
-      return existing[0].item_code;
-    }
+    return itemCode;
   }
 
-  if (item.materialName || item.material_name) {
-    const matName = item.materialName || item.material_name;
-    const matType = item.materialType || item.material_type;
-    // 1. Try matching by name, material type, and dimensions
-    const [sb] = await connection.query(
-      `SELECT item_code FROM stock_balance 
-       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
-         AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
-         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
-         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
-       LIMIT 1`,
-      [matName, matType, matType, length, width, thickness, diameter, outerDiameter]
-    );
-
-    if (sb.length > 0) {
-      return sb[0].item_code;
-    }
-
-    // 2. Try matching by name and dimensions only (more flexible type match)
-    const [sbNameDims] = await connection.query(
+  // 1. Try matching by material name and dimensions in stock_balance
+  if (matName) {
+    const [sbDims] = await connection.query(
       `SELECT item_code FROM stock_balance 
        WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
          AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
@@ -67,51 +32,24 @@ const getCorrectItemCode = async (item, connection) => {
       [matName, length, width, thickness, diameter, outerDiameter]
     );
 
-    if (sbNameDims.length > 0) {
-      return sbNameDims[0].item_code;
+    if (sbDims.length > 0) {
+      return sbDims[0].item_code;
     }
-  }
 
-  // 3. Fallback: If we have an item code, check if it exists in stock_balance with different dimensions.
-  // If it does, we ignore it (isMismatch = true) so we generate a new unique code.
-  let isMismatch = false;
-  if (itemCode && itemCode !== 'auto-generated') {
-    const [existing] = await connection.query(
-      `SELECT item_code, length, width, thickness, diameter, outer_diameter FROM stock_balance 
-       WHERE item_code = ? LIMIT 1`,
-      [itemCode]
+    // 2. Try matching by material name only (reuse Item Master code for this material)
+    const [sbName] = await connection.query(
+      `SELECT item_code FROM stock_balance 
+       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+       LIMIT 1`,
+      [matName]
     );
-    if (existing.length > 0) {
-      const ext = existing[0];
-      const hasDimensions = (parseFloat(ext.length || 0) > 0 || parseFloat(ext.width || 0) > 0 || parseFloat(ext.thickness || 0) > 0 || parseFloat(ext.diameter || 0) > 0 || parseFloat(ext.outer_diameter || 0) > 0);
-      const incomingHasDimensions = (length > 0 || width > 0 || thickness > 0 || diameter > 0 || outerDiameter > 0);
 
-      if (incomingHasDimensions && (!hasDimensions || itemCode.startsWith('RM-'))) {
-        isMismatch = true;
-      } else if (hasDimensions) {
-        const lengthDiff = Math.abs(parseFloat(ext.length || 0) - length) >= 0.0001;
-        const widthDiff = Math.abs(parseFloat(ext.width || 0) - width) >= 0.0001;
-        const thicknessDiff = Math.abs(parseFloat(ext.thickness || 0) - thickness) >= 0.0001;
-        const diameterDiff = Math.abs(parseFloat(ext.diameter || 0) - diameter) >= 0.0001;
-        const outerDiameterDiff = Math.abs(parseFloat(ext.outer_diameter || 0) - outerDiameter) >= 0.0001;
-
-        if (lengthDiff || widthDiff || thicknessDiff || diameterDiff || outerDiameterDiff) {
-          isMismatch = true;
-        }
-      }
+    if (sbName.length > 0) {
+      return sbName[0].item_code;
     }
-  }
 
-  if (itemCode && itemCode !== 'auto-generated' && !isMismatch) {
-    return itemCode;
-  }
-
-  // 4. Fallback: Generate a standard item code and create a new master record in stock_balance
-  const matName = item.materialName || item.material_name;
-  const matType = item.materialType || item.material_type;
-  if (matName) {
+    // 3. Fallback: Generate a standard item code only if this material has never been created
     const generatedCode = await stockService.generateItemCode(matName, matType);
-
     const normalizedType = (matType || '').toUpperCase().trim().replace(/ /g, '_');
     await connection.execute(
       `INSERT INTO stock_balance (

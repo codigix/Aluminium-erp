@@ -1,6 +1,6 @@
 const pool = require('../config/db');
 
-const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, connection = null) => {
+const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, connection = null, dimensions = null) => {
   const executor = connection || pool;
   let query = `
     SELECT 
@@ -21,7 +21,22 @@ const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, con
   } else if (warehouse === null || warehouse === '') {
     query += ` AND (warehouse IS NULL OR warehouse = '') `;
   }
-  // If warehouse === 'ALL', no additional filter is added
+
+  if (dimensions && typeof dimensions === 'object') {
+    const length = parseFloat(dimensions.length || 0);
+    const width = parseFloat(dimensions.width || 0);
+    const thickness = parseFloat(dimensions.thickness || 0);
+    const diameter = parseFloat(dimensions.diameter || 0);
+    const outerDiameter = parseFloat(dimensions.outer_diameter || dimensions.outerDiameter || 0);
+
+    // Only filter on dimensions that are actually specified (non-zero)
+    // A zero value means "not specified for this shape" — do not restrict by it
+    if (length > 0) { query += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; params.push(length); }
+    if (width > 0) { query += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; params.push(width); }
+    if (thickness > 0) { query += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; params.push(thickness); }
+    if (diameter > 0) { query += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; params.push(diameter); }
+    if (outerDiameter > 0) { query += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; params.push(outerDiameter); }
+  }
 
   const [ledgerData] = await executor.query(query, params);
 
@@ -140,14 +155,16 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
     sl.balance_after,
     sl.remarks,
     sl.created_at,
-    sb.shape_id,
-    sb.length,
-    sb.width,
-    sb.thickness,
-    sb.diameter,
-    sb.outer_diameter,
-    sb.material_grade
+    sb.shape_id as shape_id,
+    COALESCE(sl.length, grn.length, sb.length) as length,
+    COALESCE(sl.width, grn.width, sb.width) as width,
+    COALESCE(sl.thickness, grn.thickness, sb.thickness) as thickness,
+    COALESCE(sl.diameter, grn.diameter, sb.diameter) as diameter,
+    COALESCE(sl.outer_diameter, grn.outer_diameter, sb.outer_diameter) as outer_diameter,
+    COALESCE(sl.material_grade, sb.material_grade) as material_grade,
+    grn.shape_type as grn_shape_type
   FROM stock_ledger sl
+  LEFT JOIN grn_items grn ON sl.grn_item_id = grn.id
   LEFT JOIN (
     SELECT 
       item_code, 
@@ -398,7 +415,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       query += " WHERE " + conditions.join(" AND ");
     }
 
-    query += ` GROUP BY sb.item_code ORDER BY id DESC `;
+    query += ` GROUP BY sb.item_code, sb.warehouse, COALESCE(sb.length, 0), COALESCE(sb.width, 0), COALESCE(sb.thickness, 0), COALESCE(sb.diameter, 0), COALESCE(sb.outer_diameter, 0) ORDER BY sb.item_code, MAX(sb.id) DESC `;
 
     const [balances] = await pool.query(query, params);
 
@@ -519,14 +536,33 @@ const getStockBalanceByItem = async (itemCode) => {
   };
 };
 
-const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, connection = null) => {
+const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, connection = null, dimensions = null) => {
   const executor = connection || pool;
   const wh = warehouse || '';
-  const [balance] = await executor.query(`
+  let query = `
     SELECT * FROM stock_balance 
     WHERE item_code = ? AND (warehouse = ? OR (warehouse IS NULL AND (? IS NULL OR ? = '')))
-    ORDER BY current_balance DESC
-  `, [itemCode, wh, wh, wh]);
+  `;
+  const params = [itemCode, wh, wh, wh];
+
+  if (dimensions && typeof dimensions === 'object') {
+    const length = parseFloat(dimensions.length || 0);
+    const width = parseFloat(dimensions.width || 0);
+    const thickness = parseFloat(dimensions.thickness || 0);
+    const diameter = parseFloat(dimensions.diameter || 0);
+    const outerDiameter = parseFloat(dimensions.outer_diameter || dimensions.outerDiameter || 0);
+
+    // Only filter on dimensions that are actually specified (non-zero)
+    if (length > 0) { query += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; params.push(length); }
+    if (width > 0) { query += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; params.push(width); }
+    if (thickness > 0) { query += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; params.push(thickness); }
+    if (diameter > 0) { query += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; params.push(diameter); }
+    if (outerDiameter > 0) { query += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; params.push(outerDiameter); }
+  }
+
+  query += ` ORDER BY current_balance DESC `;
+
+  const [balance] = await executor.query(query, params);
 
   return balance.length > 0 ? balance[0] : null;
 };
@@ -565,18 +601,51 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     const qcId = options.qcId || null;
     const grnItemId = options.grnItemId || null;
 
-    // Get existing balance for this item and warehouse
-    let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, useConnection);
+    const length = options.length !== undefined ? options.length : null;
+    const width = options.width !== undefined ? options.width : null;
+    const thickness = options.thickness !== undefined ? options.thickness : null;
+    const diameter = options.diameter !== undefined ? options.diameter : null;
+    const outerDiameter = options.outer_diameter !== undefined ? options.outer_diameter : (options.outerDiameter !== undefined ? options.outerDiameter : null);
+    const density = options.density !== undefined ? options.density : null;
 
-    // If not found for this specific warehouse, check if any balance entry exists for this item_code
+    // Only apply dimension filter if at least one dimension is non-zero
+    // (avoids filtering out BOUGHT_OUT/NOS items that have no dims on the MR but may have dims stored on stock_balance)
+    const lenV = parseFloat(length || 0);
+    const widV = parseFloat(width || 0);
+    const thkV = parseFloat(thickness || 0);
+    const diaV = parseFloat(diameter || 0);
+    const odV  = parseFloat(outerDiameter || 0);
+    const hasDimsForLookup = lenV > 0 || widV > 0 || thkV > 0 || diaV > 0 || odV > 0;
+    const dimsObj = hasDimsForLookup ? { length, width, thickness, diameter, outer_diameter: outerDiameter, density } : null;
+
+    // Get existing balance for this item, warehouse and dimensions
+    let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, useConnection, dimsObj);
+
+    // If not found for this specific warehouse, check if any balance entry exists for this item_code with matching dimensions
     if (!existingBalance) {
-      const [anyBalance] = await useConnection.query(
-        'SELECT * FROM stock_balance WHERE item_code = ? ORDER BY current_balance DESC LIMIT 1',
-        [itemCode]
-      );
+      const lenVal = parseFloat(length || 0);
+      const widVal = parseFloat(width || 0);
+      const thkVal = parseFloat(thickness || 0);
+      const diaVal = parseFloat(diameter || 0);
+      const odiaVal = parseFloat(outerDiameter || 0);
+      const hasDimsForFallback = lenVal > 0 || widVal > 0 || thkVal > 0 || diaVal > 0 || odiaVal > 0;
+
+      let fallbackQuery = `SELECT * FROM stock_balance WHERE item_code = ?`;
+      const fallbackParams = [itemCode];
+      if (hasDimsForFallback) {
+        fallbackQuery += `
+           AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+           AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+           AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+           AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+           AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)`;
+        fallbackParams.push(lenVal, widVal, thkVal, diaVal, odiaVal);
+      }
+      fallbackQuery += ' ORDER BY current_balance DESC LIMIT 1';
+
+      const [anyBalance] = await useConnection.query(fallbackQuery, fallbackParams);
       if (anyBalance.length > 0) {
         existingBalance = anyBalance[0];
-        // If the generic record has 0 balance and warehouse is provided, adopt it for this warehouse
         if (parseFloat(existingBalance.current_balance) === 0 && warehouse) {
           await useConnection.execute(
             'UPDATE stock_balance SET warehouse = ? WHERE id = ?',
@@ -667,21 +736,21 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     // Insert into stock_ledger
     await useConnection.execute(`
       INSERT INTO stock_ledger 
-      (item_code, material_name, material_type, transaction_type, transaction_date, quantity, qty_in, qty_out, weight_in, weight_out, weight_after, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate, qc_id, grn_item_id)
-      VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [itemCode, matName, matType, transactionType, quantity, qtyIn, qtyOut, weightIn, weightOut, refDocType, refDocId, refDocNumber, 0, remarks, userId, warehouse, valuationRate, qcId, grnItemId]);
+      (item_code, material_name, material_type, transaction_type, transaction_date, quantity, qty_in, qty_out, weight_in, weight_out, weight_after, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate, qc_id, grn_item_id, length, width, thickness, diameter, outer_diameter, density)
+      VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [itemCode, matName, matType, transactionType, quantity, qtyIn, qtyOut, weightIn, weightOut, refDocType, refDocId, refDocNumber, 0, remarks, userId, warehouse, valuationRate, qcId, grnItemId, length, width, thickness, diameter, outerDiameter, density]);
 
     const ledgerId = (await useConnection.query('SELECT LAST_INSERT_ID() as id'))[0][0].id;
 
     // Recalculate balances for accuracy
-    const globalDetails = await calculateBalanceDetailsFromLedger(itemCode, 'ALL', useConnection);
+    const globalDetails = await calculateBalanceDetailsFromLedger(itemCode, 'ALL', useConnection, dimsObj);
     const globalBalance = globalDetails.current_balance;
     const globalWeight = globalDetails.current_weight;
 
     let warehouseBalance = globalBalance;
     let warehouseWeight = globalWeight;
     if (warehouse && warehouse !== 'ALL') {
-      const whDetails = await calculateBalanceDetailsFromLedger(itemCode, warehouse, useConnection);
+      const whDetails = await calculateBalanceDetailsFromLedger(itemCode, warehouse, useConnection, dimsObj);
       warehouseBalance = whDetails.current_balance;
       warehouseWeight = whDetails.current_weight;
     }
@@ -692,12 +761,6 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     // Ensure we have a warehouse string for the query
     const whName = warehouse || '';
 
-    const length = options.length !== undefined ? options.length : (existingBalance?.length || null);
-    const width = options.width !== undefined ? options.width : (existingBalance?.width || null);
-    const thickness = options.thickness !== undefined ? options.thickness : (existingBalance?.thickness || null);
-    const diameter = options.diameter !== undefined ? options.diameter : (existingBalance?.diameter || null);
-    const outerDiameter = options.outer_diameter !== undefined ? options.outer_diameter : (options.outerDiameter !== undefined ? options.outerDiameter : (existingBalance?.outer_diameter || null));
-    const density = options.density !== undefined ? options.density : (existingBalance?.density || null);
     const weightPerUnit = options.weight_per_unit !== undefined ? options.weight_per_unit : (options.weightPerUnit !== undefined ? options.weightPerUnit : (existingBalance?.weight_per_unit || null));
     let shapeId = options.shape_id !== undefined ? options.shape_id : (options.shapeId !== undefined ? options.shapeId : (existingBalance?.shape_id || null));
     if (!shapeId && (options.shape_type || options.shapeType)) {
@@ -712,64 +775,70 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     }
     const materialId = options.material_id !== undefined ? options.material_id : (options.materialId !== undefined ? options.materialId : (existingBalance?.material_id || null));
 
-    // Use Upsert (INSERT ... ON DUPLICATE KEY UPDATE) for reliability
-    // This handles both new warehouse records and updates to existing ones
-    await useConnection.execute(`
-      INSERT INTO stock_balance 
-      (item_code, material_name, material_type, warehouse, unit, current_balance, current_weight, valuation_rate, item_description,
-       length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_id, material_id, last_updated)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      ON DUPLICATE KEY UPDATE 
-        current_balance = ?,
-        current_weight = ?,
-        material_name = COALESCE(?, material_name),
-        material_type = COALESCE(?, material_type),
-        valuation_rate = CASE WHEN ? > 0 THEN ? ELSE valuation_rate END,
-        length = COALESCE(?, length),
-        width = COALESCE(?, width),
-        thickness = COALESCE(?, thickness),
-        diameter = COALESCE(?, diameter),
-        outer_diameter = COALESCE(?, outer_diameter),
-        density = COALESCE(?, density),
-        weight_per_unit = COALESCE(?, weight_per_unit),
-        shape_id = COALESCE(?, shape_id),
-        material_id = COALESCE(?, material_id),
-        last_updated = CURRENT_TIMESTAMP
-    `, [
-      itemCode,
-      matName,
-      matType,
-      whName,
-      options.unit || existingBalance?.unit || 'NOS',
-      warehouseBalance,
-      warehouseWeight,
-      valuationRate,
-      options.remarks || options.description || existingBalance?.item_description || null,
-      length,
-      width,
-      thickness,
-      diameter,
-      outerDiameter,
-      density,
-      weightPerUnit,
-      shapeId,
-      materialId,
-      warehouseBalance, // for update
-      warehouseWeight,  // for update
-      matName, // for update
-      matType, // for update
-      valuationRate, // for check
-      valuationRate, // for update
-      length,
-      width,
-      thickness,
-      diameter,
-      outerDiameter,
-      density,
-      weightPerUnit,
-      shapeId,
-      materialId
-    ]);
+    if (existingBalance) {
+      await useConnection.execute(`
+        UPDATE stock_balance SET 
+          current_balance = ?,
+          current_weight = ?,
+          material_name = COALESCE(?, material_name),
+          material_type = COALESCE(?, material_type),
+          valuation_rate = CASE WHEN ? > 0 THEN ? ELSE valuation_rate END,
+          length = COALESCE(?, length),
+          width = COALESCE(?, width),
+          thickness = COALESCE(?, thickness),
+          diameter = COALESCE(?, diameter),
+          outer_diameter = COALESCE(?, outer_diameter),
+          density = COALESCE(?, density),
+          weight_per_unit = COALESCE(?, weight_per_unit),
+          shape_id = COALESCE(?, shape_id),
+          material_id = COALESCE(?, material_id),
+          last_updated = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [
+        warehouseBalance,
+        warehouseWeight,
+        matName,
+        matType,
+        valuationRate,
+        valuationRate,
+        length,
+        width,
+        thickness,
+        diameter,
+        outerDiameter,
+        density,
+        weightPerUnit,
+        shapeId,
+        materialId,
+        existingBalance.id
+      ]);
+    } else {
+      await useConnection.execute(`
+        INSERT INTO stock_balance 
+        (item_code, material_name, material_type, warehouse, unit, current_balance, current_weight, valuation_rate, item_description,
+         length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_id, material_id, last_updated)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `, [
+        itemCode,
+        matName,
+        matType,
+        whName,
+        options.unit || 'NOS',
+        warehouseBalance,
+        warehouseWeight,
+        valuationRate,
+        options.remarks || options.description || null,
+        length,
+        width,
+        thickness,
+        diameter,
+        outerDiameter,
+        density,
+        weightPerUnit,
+        shapeId,
+        materialId
+      ]);
+    }
 
     if (shouldRelease) {
       await useConnection.commit();
