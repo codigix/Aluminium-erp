@@ -36,14 +36,15 @@ export const formatDimensions = (item) => {
     return '';
   }
 
-  const matNameStr = (item.material_name || item.name || item.item_name || '').toLowerCase();
+  const explicitShape = (item.shape_type || item.shape_name || item.shape || '').toLowerCase().trim();
+  const matNameStr = (item.material_name || item.name || item.item_name || '').toLowerCase().trim();
   const hasPlateDims = wid > 0 || thk > 0;
-  const isPlateMaterial = (matNameStr.includes('plate') || matNameStr.includes('sheet')) && hasPlateDims;
+  const isPlateMaterial = !explicitShape && (matNameStr.includes('plate') || matNameStr.includes('sheet')) && hasPlateDims;
 
   // Determine shape
   let shape = (
-    isPlateMaterial ? matNameStr :
-    (item.shape_type || item.shape_name || item.shape || matNameStr || item.item_code || '')
+    explicitShape ? explicitShape :
+    (isPlateMaterial ? matNameStr : (matNameStr || item.item_code || ''))
   ).toLowerCase();
 
   let matchedShape = '';
@@ -65,10 +66,10 @@ export const formatDimensions = (item) => {
     matchedShape = 'equal angle';
   } else if (shape.includes('angle')) {
     matchedShape = 'angle';
+  } else if (shape.includes('flat') || shape === 'fl' || shape.startsWith('fl ')) {
+    matchedShape = 'flat bar';
   } else if (shape.includes('plate') || shape.includes('sheet')) {
     matchedShape = 'plate';
-  } else if (shape.includes('flat')) {
-    matchedShape = 'flat bar';
   } else if (shape.includes('pipe') || shape.includes('tube')) {
     matchedShape = 'pipe';
   } else if (shape.includes('round') || shape.includes('rod') || shape.includes('bar')) {

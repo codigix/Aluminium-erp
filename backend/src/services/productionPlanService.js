@@ -131,12 +131,15 @@ const getProductionPlanById = async (id) => {
     `SELECT ppm.*, MAX(s.name) as shape_type
      FROM production_plan_materials ppm
      LEFT JOIN sales_order_item_materials som ON (
-          LOWER(TRIM(REPLACE(ppm.material_name, '\t', ''))) = LOWER(TRIM(REPLACE(som.material_name, '\t', '')))
-         AND ABS(COALESCE(ppm.length, 0) - COALESCE(som.length, 0)) < 0.0001
-         AND ABS(COALESCE(ppm.width, 0) - COALESCE(som.width, 0)) < 0.0001
-         AND ABS(COALESCE(ppm.thickness, 0) - COALESCE(som.thickness, 0)) < 0.0001
-         AND ABS(COALESCE(ppm.diameter, 0) - COALESCE(som.diameter, 0)) < 0.0001
-         AND ABS(COALESCE(ppm.outer_diameter, 0) - COALESCE(som.outer_diameter, 0)) < 0.0001
+          (ppm.item_code IS NOT NULL AND LOWER(TRIM(ppm.item_code)) = LOWER(TRIM(som.item_code)))
+          OR (
+            LOWER(TRIM(REPLACE(ppm.material_name, '\t', ''))) = LOWER(TRIM(REPLACE(som.material_name, '\t', '')))
+            AND ABS(COALESCE(ppm.length, 0) - COALESCE(som.length, 0)) < 0.0001
+            AND ABS(COALESCE(ppm.width, 0) - COALESCE(som.width, 0)) < 0.0001
+            AND ABS(COALESCE(ppm.thickness, 0) - COALESCE(som.thickness, 0)) < 0.0001
+            AND ABS(COALESCE(ppm.diameter, 0) - COALESCE(som.diameter, 0)) < 0.0001
+            AND ABS(COALESCE(ppm.outer_diameter, 0) - COALESCE(som.outer_diameter, 0)) < 0.0001
+          )
      )
      LEFT JOIN shapes s ON som.shape_id = s.id
      WHERE ppm.plan_id = ?
