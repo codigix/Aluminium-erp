@@ -2939,7 +2939,7 @@ const mergePurchaseOrders = async (payload) => {
   }
 };
 
-const forwardToAccounts = async (poId) => {
+const forwardToAccounts = async (poId, receiptId = null) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -2948,6 +2948,26 @@ const forwardToAccounts = async (poId) => {
     const po = await getPurchaseOrderById(poId);
     if (!po) {
       throw new Error('Purchase Order not found');
+    }
+
+    let poAmount = po.total_amount || 0.00;
+    let grnNumber = null;
+
+    if (receiptId) {
+      const poReceiptService = require('./poReceiptService');
+      const receipt = await poReceiptService.getPOReceiptById(receiptId);
+      if (receipt && receipt.items && receipt.items.length > 0) {
+        let subtotal = 0;
+        receipt.items.forEach(it => {
+          const recQty = parseFloat(it.received_qty || 0);
+          const recWt = parseFloat(it.received_weight || 0);
+          const rate = parseFloat(it.unit_rate || 0);
+          subtotal += recWt > 0 ? (recWt * rate) : (recQty * rate);
+        });
+        const gst = subtotal * 0.18;
+        poAmount = Number((subtotal + gst).toFixed(2));
+        grnNumber = `GRN-${String(receipt.id).padStart(4, '0')}`;
+      }
     }
 
     // 2. Mark PO as forwarded
@@ -2966,27 +2986,39 @@ const forwardToAccounts = async (poId) => {
     const pdfFilePath = path.join('uploads', pdfFileName);
     fs.writeFileSync(path.join(uploadsDir, pdfFileName), pdfBuffer);
 
-    // 4. Insert into vendor_invoices
-    const [result] = await connection.query(
-      `INSERT INTO vendor_invoices (
-        po_id, po_number, po_date, vendor_id, project_name, mr_number, drawing_no, payment_terms, po_pdf_path, po_amount, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'FORWARDED')`,
-      [
-        poId,
-        po.po_number,
-        po.created_at ? new Date(po.created_at) : new Date(),
-        po.vendor_id,
-        po.project_name || 'Stock/Internal',
-        po.mr_number || null,
-        po.drawing_no || null,
-        po.notes || 'As per Purchase Order terms',
-        pdfFilePath,
-        po.total_amount || 0.00
-      ]
+    // 4. Check if vendor invoice already exists for this GRN/PO
+    const [existingVi] = await connection.query(
+      'SELECT id FROM vendor_invoices WHERE po_id = ? AND (mr_number = ? OR (mr_number IS NULL AND po_number = ?))',
+      [poId, grnNumber || po.mr_number, po.po_number]
     );
 
+    let insertId;
+    if (existingVi.length === 0) {
+      // Insert into vendor_invoices
+      const [result] = await connection.query(
+        `INSERT INTO vendor_invoices (
+          po_id, po_number, po_date, vendor_id, project_name, mr_number, drawing_no, payment_terms, po_pdf_path, po_amount, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'FORWARDED')`,
+        [
+          poId,
+          po.po_number,
+          po.created_at ? new Date(po.created_at) : new Date(),
+          po.vendor_id,
+          po.project_name || 'Stock/Internal',
+          grnNumber || po.mr_number || null,
+          po.drawing_no || null,
+          po.notes || 'As per Purchase Order terms',
+          pdfFilePath,
+          poAmount
+        ]
+      );
+      insertId = result.insertId;
+    } else {
+      insertId = existingVi[0].id;
+    }
+
     await connection.commit();
-    return { id: result.insertId, po_number: po.po_number };
+    return { id: insertId, po_number: po.po_number };
   } catch (error) {
     await connection.rollback();
     throw error;

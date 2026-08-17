@@ -811,6 +811,8 @@ const generateVendorInvoicePDF = async (id, type) => {
   let cgst_rate = 9;
   let sgst_rate = 9;
   let net_total = 0;
+  let po = {};
+  let grn = null;
 
   if (type === 'SUBCONTRACTING') {
     const [logRows] = await pool.query(
@@ -871,182 +873,285 @@ const generateVendorInvoicePDF = async (id, type) => {
   } else {
     let targetPoId = id;
     if (type === 'GRN' || type === 'PO_RECEIPT') {
-      const [prRows] = await pool.query(
-        `SELECT pr.po_id FROM po_receipts pr WHERE pr.id = ?`,
-        [id]
-      );
-      if (prRows.length > 0 && prRows[0].po_id) {
-        targetPoId = prRows[0].po_id;
-      } else {
-        const [gRows] = await pool.query(
-          `SELECT po.id as po_id FROM grns g JOIN purchase_orders po ON g.po_number = po.po_number WHERE g.id = ?`,
-          [id]
-        );
-        if (gRows.length > 0 && gRows[0].po_id) {
-          targetPoId = gRows[0].po_id;
+      const poReceiptService = require('./poReceiptService');
+      let receipt = await poReceiptService.getPOReceiptById(id);
+      if (!receipt) {
+        const [gRows] = await pool.query('SELECT po_receipt_id FROM grns WHERE id = ?', [id]);
+        if (gRows.length > 0 && gRows[0].po_receipt_id) {
+          receipt = await poReceiptService.getPOReceiptById(gRows[0].po_receipt_id);
         }
       }
-    }
 
-    const [poRows] = await pool.query(
-      `SELECT po.*, v.vendor_code, v.vendor_name, v.gstin as vendor_gstin, v.location as vendor_address,
-              v.email as vendor_email, v.phone as vendor_phone
-       FROM purchase_orders po
-       LEFT JOIN vendors v ON po.vendor_id = v.id
-       WHERE po.id = ?`,
-      [targetPoId]
-    );
+      if (receipt) {
+        targetPoId = receipt.po_id;
+        const [poRows] = await pool.query(
+          `SELECT po.*, v.vendor_code, v.vendor_name, v.gstin as vendor_gstin, v.location as vendor_address,
+                  v.email as vendor_email, v.phone as vendor_phone
+           FROM purchase_orders po
+           LEFT JOIN vendors v ON po.vendor_id = v.id
+           WHERE po.id = ?`,
+          [targetPoId]
+        );
+        po = poRows.length > 0 ? poRows[0] : {};
+        grn = { grn_no: `GRN-${String(receipt.id).padStart(4, '0')}`, grn_date: receipt.receipt_date || receipt.created_at };
 
-    if (poRows.length === 0) throw new Error('Purchase Order not found');
-    const po = poRows[0];
+        vendor_name = po.vendor_name || 'N/A';
+        vendor_address = po.vendor_address || 'N/A';
+        vendor_gstin = po.vendor_gstin || 'N/A';
+        invoice_no = `INV-GRN-${String(receipt.id).padStart(4, '0')}`;
+        created_at = formatDate(receipt.receipt_date || receipt.created_at);
+        po_number = receipt.po_number || po.po_number || 'N/A';
+        po_date = formatDate(po.created_at);
 
-    // Fetch related GRN if available
-    const [grnRows] = await pool.query(
-      `SELECT g.* FROM grns g
-       JOIN po_receipts pr ON g.po_receipt_id = pr.id
-       WHERE pr.po_id = ?
-       ORDER BY g.id DESC LIMIT 1`,
-      [targetPoId]
-    );
-    const grn = grnRows.length > 0 ? grnRows[0] : null;
+        const receiptItems = receipt.items || [];
+        subtotal = 0;
 
-    vendor_name = po.vendor_name || 'N/A';
-    vendor_address = po.vendor_address || 'N/A';
-    vendor_gstin = po.vendor_gstin || 'N/A';
-    invoice_no = `INV-${po.po_number || po.id}`;
-    created_at = formatDate(po.created_at);
-    po_number = po.po_number || 'N/A';
-    po_date = formatDate(po.created_at);
+        itemsList = receiptItems.map((item, idx) => {
+          const recQty = parseFloat(item.received_qty || item.received_quantity || 0);
+          const recWt = parseFloat(item.received_weight || 0);
+          const unitRate = parseFloat(item.unit_rate || item.rate || 0);
 
-    const [itemRows] = await pool.query(
-      `SELECT poi.*,
-              COALESCE(
-                (SELECT hsn_code FROM stock_balance WHERE item_code = poi.item_code LIMIT 1),
-                '84790000'
-              ) as hsn_code
-       FROM purchase_order_items poi
-       WHERE poi.purchase_order_id = ?`,
-      [targetPoId]
-    );
+          const unitRaw = (item.unit || 'Nos').trim().toLowerCase();
+          const isKgItem = unitRaw === 'kg' || unitRaw === 'kgs' || recWt > 0;
 
-    subtotal = itemRows.reduce((sum, item) => sum + (item.quantity * item.unit_rate), 0);
-    cgst_total = itemRows.reduce((sum, item) => sum + parseFloat(item.cgst_amount || 0), 0);
-    sgst_total = itemRows.reduce((sum, item) => sum + parseFloat(item.sgst_amount || 0), 0);
-    net_total = parseFloat(po.total_amount || (subtotal + cgst_total + sgst_total));
+          let qtyFormatted;
+          let weightFormatted;
+          let lineAmount = 0;
 
-    itemsList = itemRows.map((item, idx) => {
-      let weightVal = parseFloat(item.calculated_weight || item.weight || item.total_weight || item.unit_weight || 0);
-      if (weightVal === 0) {
+          if (isKgItem && recWt > 0) {
+            qtyFormatted = recQty > 0 ? (recQty % 1 === 0 ? String(Math.round(recQty)) : recQty.toFixed(3)) : '1';
+            weightFormatted = `${recWt.toFixed(3)} Kg`;
+            lineAmount = recWt * unitRate;
+          } else {
+            qtyFormatted = recQty % 1 === 0 ? String(Math.round(recQty)) : recQty.toFixed(3);
+            weightFormatted = '—';
+            lineAmount = recQty * unitRate;
+          }
+
+          subtotal += lineAmount;
+
+          const len = parseFloat(item.length || 0);
+          const wid = parseFloat(item.width || 0);
+          const thk = parseFloat(item.thickness || 0);
+          const dia = parseFloat(item.diameter || 0);
+          const od = parseFloat(item.outer_diameter || 0);
+          const shapeRaw = (item.shape_type || item.shape_name || item.material_name || '').toLowerCase();
+          const nf = (v) => { if (!v || isNaN(parseFloat(v))) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
+
+          let matchedShape = '';
+          if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) matchedShape = 'threaded rod';
+          else if (shapeRaw.includes('square tube')) matchedShape = 'square tube';
+          else if (shapeRaw.includes('rectangular tube')) matchedShape = 'rectangular tube';
+          else if (shapeRaw.includes('square bar')) matchedShape = 'square bar';
+          else if (shapeRaw.includes('rectangular bar')) matchedShape = 'rectangular bar';
+          else if (shapeRaw.includes('hex')) matchedShape = 'hexagonal bar';
+          else if (shapeRaw.includes('unequal angle')) matchedShape = 'unequal angle';
+          else if (shapeRaw.includes('equal angle')) matchedShape = 'equal angle';
+          else if (shapeRaw.includes('angle')) matchedShape = 'angle';
+          else if (shapeRaw.includes('plate') || shapeRaw.includes('sheet')) matchedShape = 'plate';
+          else if (shapeRaw.includes('flat')) matchedShape = 'flat bar';
+          else if (shapeRaw.includes('pipe') || shapeRaw.includes('tube')) matchedShape = 'pipe';
+          else if (shapeRaw.includes('round') || shapeRaw.includes('rod') || shapeRaw.includes('bar')) {
+            if (thk > 0) matchedShape = 'threaded rod'; else matchedShape = 'round bar';
+          } else if (dia > 0) {
+            if (thk > 0) matchedShape = 'threaded rod'; else matchedShape = 'round bar';
+          } else if (od > 0 && thk > 0) matchedShape = 'pipe';
+          else if (wid > 0 && thk > 0 && len > 0) matchedShape = 'plate';
+
+          let dimPrefix = '', dimParts = [];
+          if (matchedShape === 'plate')           { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
+          else if (matchedShape === 'flat bar')   { dimPrefix = 'FB';   dimParts = [nf(wid), nf(thk), nf(len)]; }
+          else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
+          else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [`AF${nf(wid)}`, nf(len)]; }
+          else if (matchedShape === 'square bar') { dimPrefix = 'SQ';   dimParts = [nf(wid), nf(len)]; }
+          else if (matchedShape === 'rectangular bar') { dimPrefix = 'REC'; dimParts = [nf(wid), nf(od), nf(len)]; }
+          else if (matchedShape === 'pipe')       { dimPrefix = 'PIPE'; const ov = od > 0 ? od : dia; dimParts = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
+          else if (matchedShape === 'square tube') { dimPrefix = 'SQT'; dimParts = [nf(wid), nf(thk), nf(len)]; }
+          else if (matchedShape === 'rectangular tube') { dimPrefix = 'RCT'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
+          else if (matchedShape === 'threaded rod') { dimPrefix = 'TR'; const dv = dia > 0 ? dia : od; dimParts = [`M${nf(dv)}`, nf(len)]; }
+          else if (matchedShape === 'angle')      { dimPrefix = 'L';   dimParts = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
+          else if (matchedShape === 'equal angle') { dimPrefix = 'EA'; dimParts = [nf(wid), nf(wid), nf(thk), nf(len)]; }
+          else if (matchedShape === 'unequal angle') { dimPrefix = 'UA'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
+          else { dimParts = [nf(wid), nf(od), nf(thk), nf(dia), nf(len)]; }
+
+          const dimPartsClean = dimParts.filter(Boolean);
+          const dimsSpec = dimPartsClean.length > 0 ? `${dimPrefix} ${dimPartsClean.join(' × ')} mm`.trim() : '';
+
+          return {
+            sr: idx + 1,
+            drawingNoOrCode: item.drawing_no || item.item_code || 'N/A',
+            itemCode: item.item_code || 'N/A',
+            materialName: item.material_name || item.description || 'N/A',
+            description: item.material_name || item.description || 'N/A',
+            hsnCode: item.hsn_code || '84790000',
+            qty: qtyFormatted,
+            weight: weightFormatted,
+            unit: item.unit || 'Nos',
+            rate: unitRate.toFixed(2),
+            amount: lineAmount.toFixed(2),
+            dimsSpec
+          };
+        });
+
+        cgst_total = subtotal * 0.09;
+        sgst_total = subtotal * 0.09;
+        net_total = subtotal + cgst_total + sgst_total;
+      }
+    } else {
+      const [poRows] = await pool.query(
+        `SELECT po.*, v.vendor_code, v.vendor_name, v.gstin as vendor_gstin, v.location as vendor_address,
+                v.email as vendor_email, v.phone as vendor_phone
+         FROM purchase_orders po
+         LEFT JOIN vendors v ON po.vendor_id = v.id
+         WHERE po.id = ?`,
+        [targetPoId]
+      );
+
+      if (poRows.length === 0) throw new Error('Purchase Order not found');
+      po = poRows[0];
+
+      // Fetch related GRN if available
+      const [grnRows] = await pool.query(
+        `SELECT g.* FROM grns g
+         JOIN po_receipts pr ON g.po_receipt_id = pr.id
+         WHERE pr.po_id = ?
+         ORDER BY g.id DESC LIMIT 1`,
+        [targetPoId]
+      );
+      grn = grnRows.length > 0 ? grnRows[0] : null;
+
+      vendor_name = po.vendor_name || 'N/A';
+      vendor_address = po.vendor_address || 'N/A';
+      vendor_gstin = po.vendor_gstin || 'N/A';
+      invoice_no = `INV-${po.po_number || po.id}`;
+      created_at = formatDate(po.created_at);
+      po_number = po.po_number || 'N/A';
+      po_date = formatDate(po.created_at);
+
+      const [itemRows] = await pool.query(
+        `SELECT poi.*,
+                COALESCE(
+                  (SELECT hsn_code FROM stock_balance WHERE item_code = poi.item_code LIMIT 1),
+                  '84790000'
+                ) as hsn_code
+         FROM purchase_order_items poi
+         WHERE poi.purchase_order_id = ?`,
+        [targetPoId]
+      );
+
+      subtotal = itemRows.reduce((sum, item) => sum + (item.quantity * item.unit_rate), 0);
+      cgst_total = itemRows.reduce((sum, item) => sum + parseFloat(item.cgst_amount || 0), 0);
+      sgst_total = itemRows.reduce((sum, item) => sum + parseFloat(item.sgst_amount || 0), 0);
+      net_total = parseFloat(po.total_amount || (subtotal + cgst_total + sgst_total));
+      itemsList = itemRows.map((item, idx) => {
+        let weightVal = parseFloat(item.calculated_weight || item.weight || item.total_weight || item.unit_weight || 0);
+        if (weightVal === 0) {
+          const len = parseFloat(item.length || item.dimensions?.length || 0);
+          const wid = parseFloat(item.width || item.dimensions?.width || 0);
+          const thk = parseFloat(item.thickness || item.dimensions?.thickness || 0);
+          const dia = parseFloat(item.diameter || item.dimensions?.diameter || 0);
+          const od = parseFloat(item.outer_diameter || item.outerDiameter || item.dimensions?.outer_diameter || 0);
+          const density = parseFloat(item.density || 7.85);
+          const shapeStr = String(item.shape_type || item.shape_name || item.shape || item.material_name || '').trim().toLowerCase();
+
+          if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
+            const dVal = dia > 0 ? dia : od;
+            const pVal = parseFloat(item.thread_pitch || item.threadPitch || item.dimensions?.thread_pitch || item.dimensions?.threadPitch || 0);
+            if (dVal > 0 && pVal > 0 && pVal < dVal && len > 0) {
+              const tensileArea = 0.7854 * Math.pow(dVal - (0.9382 * pVal), 2);
+              weightVal = (tensileArea * len * density) / 1000000;
+            }
+          } else if (len > 0 && wid > 0 && thk > 0) {
+            weightVal = (len * wid * thk * density) / 1000000;
+          } else if (len > 0 && dia > 0) {
+            weightVal = (Math.PI * Math.pow(dia, 2) / 4 * len * density) / 1000000;
+          }
+        }
+        const unitRaw = (item.unit || 'Nos').trim().toLowerCase();
+        const isKgItem = unitRaw === 'kg' || unitRaw === 'kgs';
+
+        let qtyFormatted;
+        let weightFormatted;
+
+        if (isKgItem) {
+          const pieceCount = parseFloat(item.design_qty || item.planned_qty || 1);
+          qtyFormatted = pieceCount % 1 === 0 ? String(Math.round(pieceCount)) : pieceCount.toFixed(3);
+          const totalWeightKg = weightVal > 0 ? weightVal : parseFloat(item.quantity || 0);
+          weightFormatted = totalWeightKg > 0 ? `${totalWeightKg.toFixed(3)} Kg` : '—';
+        } else {
+          const qty = parseFloat(item.quantity || 0);
+          qtyFormatted = qty % 1 === 0 ? String(Math.round(qty)) : qty.toFixed(3);
+          weightFormatted = '—';
+        }
+
         const len = parseFloat(item.length || item.dimensions?.length || 0);
         const wid = parseFloat(item.width || item.dimensions?.width || 0);
         const thk = parseFloat(item.thickness || item.dimensions?.thickness || 0);
         const dia = parseFloat(item.diameter || item.dimensions?.diameter || 0);
         const od = parseFloat(item.outer_diameter || item.outerDiameter || item.dimensions?.outer_diameter || 0);
-        const density = parseFloat(item.density || 7.85);
-        const shapeStr = String(item.shape_type || item.shape_name || item.shape || item.material_name || '').trim().toLowerCase();
+        const shapeRaw = (item.shape_type || item.shape_name || item.shape || item.material_name || '').toLowerCase();
 
-        if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
-          const dVal = dia > 0 ? dia : od;
-          const pVal = parseFloat(item.thread_pitch || item.threadPitch || item.dimensions?.thread_pitch || item.dimensions?.threadPitch || 0);
-          if (dVal > 0 && pVal > 0 && pVal < dVal && len > 0) {
-            const tensileArea = 0.7854 * Math.pow(dVal - (0.9382 * pVal), 2);
-            weightVal = (tensileArea * len * density) / 1000000;
-          }
-        } else if (len > 0 && wid > 0 && thk > 0) {
-          weightVal = (len * wid * thk * density) / 1000000;
-        } else if (len > 0 && dia > 0) {
-          weightVal = (Math.PI * Math.pow(dia, 2) / 4 * len * density) / 1000000;
+        const nf = (v) => { if (!v || isNaN(parseFloat(v))) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
+
+        let matchedShape = '';
+        if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) matchedShape = 'threaded rod';
+        else if (shapeRaw.includes('square tube') || (shapeRaw.includes('square') && shapeRaw.includes('tube'))) matchedShape = 'square tube';
+        else if (shapeRaw.includes('rectangular tube') || shapeRaw.includes('rect tube') || (shapeRaw.includes('rect') && shapeRaw.includes('tube'))) matchedShape = 'rectangular tube';
+        else if (shapeRaw.includes('square bar') || (shapeRaw.includes('square') && shapeRaw.includes('bar'))) matchedShape = 'square bar';
+        else if (shapeRaw.includes('rectangular bar') || (shapeRaw.includes('rect') && shapeRaw.includes('bar'))) matchedShape = 'rectangular bar';
+        else if (shapeRaw.includes('hex')) matchedShape = 'hexagonal bar';
+        else if (shapeRaw.includes('unequal angle')) matchedShape = 'unequal angle';
+        else if (shapeRaw.includes('equal angle')) matchedShape = 'equal angle';
+        else if (shapeRaw.includes('angle')) matchedShape = 'angle';
+        else if (shapeRaw.includes('plate') || shapeRaw.includes('sheet')) matchedShape = 'plate';
+        else if (shapeRaw.includes('flat')) matchedShape = 'flat bar';
+        else if (shapeRaw.includes('pipe') || shapeRaw.includes('tube')) matchedShape = 'pipe';
+        else if (shapeRaw.includes('round') || shapeRaw.includes('rod') || shapeRaw.includes('bar')) {
+          if (thk > 0) matchedShape = 'threaded rod';
+          else matchedShape = 'round bar';
         }
-      }
-      const unitRaw = (item.unit || 'Nos').trim().toLowerCase();
-      const isKgItem = unitRaw === 'kg' || unitRaw === 'kgs';
+        else if (dia > 0) {
+          if (thk > 0) matchedShape = 'threaded rod';
+          else matchedShape = 'round bar';
+        }
+        else if (od > 0 && thk > 0) matchedShape = 'pipe';
+        else if (wid > 0 && thk > 0 && len > 0) matchedShape = 'plate';
 
-      let qtyFormatted;
-      let weightFormatted;
+        let dimPrefix = '', dimParts = [];
+        if (matchedShape === 'plate')           { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
+        else if (matchedShape === 'flat bar')   { dimPrefix = 'FB';   dimParts = [nf(wid), nf(thk), nf(len)]; }
+        else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
+        else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [`AF${nf(wid)}`, nf(len)]; }
+        else if (matchedShape === 'square bar') { dimPrefix = 'SQ';   dimParts = [nf(wid), nf(len)]; }
+        else if (matchedShape === 'rectangular bar') { dimPrefix = 'REC'; dimParts = [nf(wid), nf(od), nf(len)]; }
+        else if (matchedShape === 'pipe')       { dimPrefix = 'PIPE'; const ov = od > 0 ? od : dia; dimParts = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
+        else if (matchedShape === 'square tube') { dimPrefix = 'SQT'; dimParts = [nf(wid), nf(thk), nf(len)]; }
+        else if (matchedShape === 'rectangular tube') { dimPrefix = 'RCT'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
+        else if (matchedShape === 'threaded rod') { dimPrefix = 'TR'; const dv = dia > 0 ? dia : od; const pv = parseFloat(item.thread_pitch || item.threadPitch || thk || item.thickness || 0); dimParts = [`M${nf(dv)}`, pv > 0 ? nf(pv) : null, nf(len)]; }
+        else if (matchedShape === 'angle')      { dimPrefix = 'L';   dimParts = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
+        else if (matchedShape === 'equal angle') { dimPrefix = 'EA'; dimParts = [nf(wid), nf(wid), nf(thk), nf(len)]; }
+        else if (matchedShape === 'unequal angle') { dimPrefix = 'UA'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
+        else { dimParts = [nf(wid), nf(od), nf(thk), nf(dia), nf(len)]; }
 
-      if (isKgItem) {
-        // KG / raw-material: quantity = total weight in Kg, design_qty/planned_qty = piece count
-        const pieceCount = parseFloat(item.design_qty || item.planned_qty || 1);
-        qtyFormatted = pieceCount % 1 === 0 ? String(Math.round(pieceCount)) : pieceCount.toFixed(3);
-        // Weight: use weightVal if calculated, otherwise use quantity (which IS the weight for Kg items)
-        const totalWeightKg = weightVal > 0 ? weightVal : parseFloat(item.quantity || 0);
-        weightFormatted = totalWeightKg > 0 ? `${totalWeightKg.toFixed(3)} Kg` : '—';
-      } else {
-        // Bought-Out / NOS: quantity = piece count, no weight
-        const qty = parseFloat(item.quantity || 0);
-        qtyFormatted = qty % 1 === 0 ? String(Math.round(qty)) : qty.toFixed(3);
-        weightFormatted = '—';
-      }
+        const dimPartsClean = dimParts.filter(Boolean);
+        const dimsSpec = dimPartsClean.length > 0 ? `${dimPrefix} ${dimPartsClean.join(' × ')} mm`.trim() : '';
 
-      // Engineering standard size formatting (matches frontend formatters.js)
-      const len = parseFloat(item.length || item.dimensions?.length || 0);
-      const wid = parseFloat(item.width || item.dimensions?.width || 0);
-      const thk = parseFloat(item.thickness || item.dimensions?.thickness || 0);
-      const dia = parseFloat(item.diameter || item.dimensions?.diameter || 0);
-      const od = parseFloat(item.outer_diameter || item.outerDiameter || item.dimensions?.outer_diameter || 0);
-      const shapeRaw = (item.shape_type || item.shape_name || item.shape || item.material_name || '').toLowerCase();
-
-      const nf = (v) => { if (!v || isNaN(parseFloat(v))) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
-
-      let matchedShape = '';
-      if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) matchedShape = 'threaded rod';
-      else if (shapeRaw.includes('square tube') || (shapeRaw.includes('square') && shapeRaw.includes('tube'))) matchedShape = 'square tube';
-      else if (shapeRaw.includes('rectangular tube') || shapeRaw.includes('rect tube') || (shapeRaw.includes('rect') && shapeRaw.includes('tube'))) matchedShape = 'rectangular tube';
-      else if (shapeRaw.includes('square bar') || (shapeRaw.includes('square') && shapeRaw.includes('bar'))) matchedShape = 'square bar';
-      else if (shapeRaw.includes('rectangular bar') || (shapeRaw.includes('rect') && shapeRaw.includes('bar'))) matchedShape = 'rectangular bar';
-      else if (shapeRaw.includes('hex')) matchedShape = 'hexagonal bar';
-      else if (shapeRaw.includes('unequal angle')) matchedShape = 'unequal angle';
-      else if (shapeRaw.includes('equal angle')) matchedShape = 'equal angle';
-      else if (shapeRaw.includes('angle')) matchedShape = 'angle';
-      else if (shapeRaw.includes('plate') || shapeRaw.includes('sheet')) matchedShape = 'plate';
-      else if (shapeRaw.includes('flat')) matchedShape = 'flat bar';
-      else if (shapeRaw.includes('pipe') || shapeRaw.includes('tube')) matchedShape = 'pipe';
-      else if (shapeRaw.includes('round') || shapeRaw.includes('rod') || shapeRaw.includes('bar')) {
-        if (thk > 0) matchedShape = 'threaded rod';
-        else matchedShape = 'round bar';
-      }
-      else if (dia > 0) {
-        if (thk > 0) matchedShape = 'threaded rod';
-        else matchedShape = 'round bar';
-      }
-      else if (od > 0 && thk > 0) matchedShape = 'pipe';
-      else if (wid > 0 && thk > 0 && len > 0) matchedShape = 'plate';
-
-      let dimPrefix = '', dimParts = [];
-      if (matchedShape === 'plate')           { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
-      else if (matchedShape === 'flat bar')   { dimPrefix = 'FB';   dimParts = [nf(wid), nf(thk), nf(len)]; }
-      else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
-      else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [`AF${nf(wid)}`, nf(len)]; }
-      else if (matchedShape === 'square bar') { dimPrefix = 'SQ';   dimParts = [nf(wid), nf(len)]; }
-      else if (matchedShape === 'rectangular bar') { dimPrefix = 'REC'; dimParts = [nf(wid), nf(od), nf(len)]; }
-      else if (matchedShape === 'pipe')       { dimPrefix = 'PIPE'; const ov = od > 0 ? od : dia; dimParts = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
-      else if (matchedShape === 'square tube') { dimPrefix = 'SQT'; dimParts = [nf(wid), nf(thk), nf(len)]; }
-      else if (matchedShape === 'rectangular tube') { dimPrefix = 'RCT'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
-      else if (matchedShape === 'threaded rod') { dimPrefix = 'TR'; const dv = dia > 0 ? dia : od; const pv = parseFloat(item.thread_pitch || item.threadPitch || thk || item.thickness || 0); dimParts = [`M${nf(dv)}`, pv > 0 ? nf(pv) : null, nf(len)]; }
-      else if (matchedShape === 'angle')      { dimPrefix = 'L';   dimParts = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
-      else if (matchedShape === 'equal angle') { dimPrefix = 'EA'; dimParts = [nf(wid), nf(wid), nf(thk), nf(len)]; }
-      else if (matchedShape === 'unequal angle') { dimPrefix = 'UA'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
-      else { dimParts = [nf(wid), nf(od), nf(thk), nf(dia), nf(len)]; }
-
-      const dimPartsClean = dimParts.filter(Boolean);
-      const dimsSpec = dimPartsClean.length > 0 ? `${dimPrefix} ${dimPartsClean.join(' × ')} mm`.trim() : '';
-
-
-      return {
-        sr: idx + 1,
-        drawingNoOrCode: item.drawing_no || item.material_code || item.item_code || 'N/A',
-        itemCode: item.material_code || item.item_code || 'N/A',
-        materialName: item.material_name || item.material_code || 'N/A',
-        description: item.material_name || item.material_code || 'N/A',
-        hsnCode: item.hsn_code || '84790000',
-        qty: qtyFormatted,
-        weight: weightFormatted,
-        unit: item.unit || 'Nos',
-        rate: parseFloat(item.unit_rate || 0).toFixed(2),
-        amount: (item.quantity * (item.unit_rate || 0)).toFixed(2),
-        dimsSpec
-      };
-    });
+        return {
+          sr: idx + 1,
+          drawingNoOrCode: item.drawing_no || item.material_code || item.item_code || 'N/A',
+          itemCode: item.material_code || item.item_code || 'N/A',
+          materialName: item.material_name || item.material_code || 'N/A',
+          description: item.material_name || item.material_code || 'N/A',
+          hsnCode: item.hsn_code || '84790000',
+          qty: qtyFormatted,
+          weight: weightFormatted,
+          unit: item.unit || 'Nos',
+          rate: parseFloat(item.unit_rate || 0).toFixed(2),
+          amount: (item.quantity * (item.unit_rate || 0)).toFixed(2),
+          dimsSpec
+        };
+      });
+    }
 
     let logoBase64 = null;
     if (activeCompany && activeCompany.company_logo) {

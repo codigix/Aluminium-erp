@@ -1857,7 +1857,7 @@ const POMaterialRequest = () => {
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
                       </button>
                     )}
-                    {hasInsufficientStock && anyAvailableStock && !isFinalStatus && hasReleasedItems && (
+                    {hasInsufficientStock && anyAvailableStock && !isFinalStatus && hasReleasedItems && currentStatus !== 'PARTIALLY_RELEASED' && (
                       <button 
                         onClick={() => handleReleasePartialStock(selectedRequest?.id)}
                         className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"

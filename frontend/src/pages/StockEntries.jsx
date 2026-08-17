@@ -22,6 +22,7 @@ import {
   Activity,
   DollarSign
 } from 'lucide-react';
+import { formatDimensions, calculateWeight } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -403,49 +404,39 @@ const StockEntries = () => {
 
   // Auto-calculate weight per unit from dimensions + density
   useEffect(() => {
-    const shape = selectedShapeName;
-    const density = parseFloat(currentItem.density) || 0;
-    if (density <= 0 || !shape) return;
+    const sObj = shapes.find(s => String(s.id) === String(currentItem.shapeId));
+    const shape = (sObj?.name || currentItem.shape_type || currentItem.shapeType || currentItem.materialType || currentItem.materialName || '').toLowerCase().trim();
 
-    let calculatedWeight = 0;
-    if (shape === 'plate') {
-      const l = parseFloat(currentItem.length) || 0;
-      const w = parseFloat(currentItem.width) || 0;
-      const t = parseFloat(currentItem.thickness) || 0;
-      calculatedWeight = (l * w * t * density) / 1000000;
-    } else if (shape === 'round') {
-      const d = parseFloat(currentItem.diameter) || 0;
-      const l = parseFloat(currentItem.length) || 0;
-      calculatedWeight = (Math.PI * Math.pow(d, 2) / 4 * l * density) / 1000000;
-    } else if (shape === 'pipe') {
-      const od = parseFloat(currentItem.outerDiameter) || 0;
-      const t = parseFloat(currentItem.thickness) || 0;
-      const l = parseFloat(currentItem.length) || 0;
-      const id = od - 2 * t;
-      if (id >= 0) calculatedWeight = (Math.PI * (Math.pow(od, 2) - Math.pow(id, 2)) / 4 * l * density) / 1000000;
-    } else if (shape.includes('square tube')) {
-      const a = parseFloat(currentItem.width) || 0;
-      const t = parseFloat(currentItem.thickness) || 0;
-      const l = parseFloat(currentItem.length) || 0;
-      calculatedWeight = ((a * a - Math.pow(a - 2 * t, 2)) * l * density) / 1000000;
-    } else if (shape.includes('rectangular tube')) {
-      const b = parseFloat(currentItem.width) || 0;
-      const h = parseFloat(currentItem.outerDiameter) || 0;
-      const t = parseFloat(currentItem.thickness) || 0;
-      const l = parseFloat(currentItem.length) || 0;
-      calculatedWeight = ((b * h - (b - 2 * t) * (h - 2 * t)) * l * density) / 1000000;
-    } else if (shape === 'hexagonal bar') {
-      const af = parseFloat(currentItem.width) || 0;
-      const l = parseFloat(currentItem.length) || 0;
-      calculatedWeight = ((Math.sqrt(3) / 2) * af * af * l * density) / 1000000;
+    if (!shape) return;
+
+    let densityVal = parseFloat(currentItem.density) || 0;
+    if (densityVal <= 0) {
+      const mat = materials.find(m => String(m.id) === String(currentItem.materialId) || m.name.toLowerCase() === (currentItem.materialType || '').toLowerCase());
+      densityVal = parseFloat(mat?.density) || 2.70;
     }
 
+    const calculatedWeight = calculateWeight({
+      shape,
+      density: densityVal,
+      length: currentItem.length,
+      width: currentItem.width,
+      thickness: currentItem.thickness,
+      diameter: currentItem.diameter,
+      outerDiameter: currentItem.outerDiameter
+    });
+
     if (calculatedWeight > 0) {
-      setCurrentItem(prev => ({ ...prev, weightPerUnit: parseFloat(calculatedWeight.toFixed(4)) }));
+      setCurrentItem(prev => ({ 
+        ...prev, 
+        density: densityVal,
+        weightPerUnit: parseFloat(calculatedWeight.toFixed(4)) 
+      }));
     }
   }, [
     currentItem.length, currentItem.width, currentItem.thickness,
-    currentItem.diameter, currentItem.outerDiameter, currentItem.density, selectedShapeName
+    currentItem.diameter, currentItem.outerDiameter, currentItem.density,
+    currentItem.shapeId, currentItem.materialId, currentItem.materialType,
+    selectedShapeName, shapes, materials
   ]);
 
   const addItem = () => {
@@ -453,9 +444,11 @@ const StockEntries = () => {
       errorToast('Item code and quantity are required');
       return;
     }
+    const s = shapes.find(sh => String(sh.id) === String(currentItem.shapeId));
+    const shapeTypeName = s ? s.name : '';
     setFormData(prev => ({
       ...prev,
-      items: [...prev.items, { ...currentItem }]
+      items: [...prev.items, { ...currentItem, shape_type: shapeTypeName, shapeType: shapeTypeName }]
     }));
     setCurrentItem({
       itemCode: '',
@@ -1015,21 +1008,30 @@ const StockEntries = () => {
                         onChange={(e) => {
                           const code = e.target.value;
                           const selected = stockBalances.find(i => i.item_code === code);
+                          const matchedMaterial = materials.find(m => 
+                            String(m.id) === String(selected?.material_id) || 
+                            m.name.toLowerCase() === (selected?.material_type || '').toLowerCase()
+                          );
+                          const matchedShape = shapes.find(s =>
+                            String(s.id) === String(selected?.shape_id) ||
+                            s.name.toLowerCase() === (selected?.shape_type || '').toLowerCase()
+                          );
+                          const densityVal = selected?.density || matchedMaterial?.density || 2.70;
                           setCurrentItem(prev => ({
                             ...prev,
                             itemCode: code,
                             materialName: selected?.material_name || selected?.item_name || '',
-                            materialType: selected?.material_type || '',
+                            materialType: selected?.material_type || matchedMaterial?.name || '',
                             uom: selected?.unit || selected?.uom || prev.uom,
                             valuationRate: selected?.valuation_rate || selected?.rate || prev.valuationRate,
-                            materialId: selected?.material_id || '',
-                            shapeId: selected?.shape_id || '',
-                            length: selected?.length || '',
-                            width: selected?.width || '',
-                            thickness: selected?.thickness || '',
-                            diameter: selected?.diameter || '',
-                            outerDiameter: selected?.outer_diameter || '',
-                            density: selected?.density || ''
+                            materialId: selected?.material_id || matchedMaterial?.id || prev.materialId,
+                            shapeId: selected?.shape_id || matchedShape?.id || prev.shapeId,
+                            length: selected?.length || prev.length,
+                            width: selected?.width || prev.width,
+                            thickness: selected?.thickness || prev.thickness,
+                            diameter: selected?.diameter || prev.diameter,
+                            outerDiameter: selected?.outer_diameter || prev.outerDiameter,
+                            density: densityVal
                           }));
                         }}
                         allowCustom={false}
@@ -1084,7 +1086,7 @@ const StockEntries = () => {
                                 ...prev,
                                 materialId: mId,
                                 materialType: mat?.name || '',
-                                density: mat?.density || ''
+                                density: mat?.density || 2.70
                               }));
                             }}
                           >
@@ -1113,46 +1115,69 @@ const StockEntries = () => {
                       {/* Shape-wise dimension inputs */}
                       {selectedShapeName && (
                         <div className="grid grid-cols-3 gap-2">
-                          {selectedShapeName === 'plate' && (<>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Width (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.width} onChange={e => setCurrentItem(p => ({...p, width: e.target.value}))} /></div>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Thickness (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.thickness} onChange={e => setCurrentItem(p => ({...p, thickness: e.target.value}))} /></div>
+                          {(selectedShapeName === 'plate' || selectedShapeName.includes('plate') || selectedShapeName.includes('sheet') || selectedShapeName.includes('flat')) && (<>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Length (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Width (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.width} onChange={e => setCurrentItem(p => ({...p, width: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Thickness (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.thickness} onChange={e => setCurrentItem(p => ({...p, thickness: e.target.value}))} /></div>
                           </>)}
-                          {selectedShapeName === 'round' && (<>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Diameter (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.diameter} onChange={e => setCurrentItem(p => ({...p, diameter: e.target.value}))} /></div>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
+                          {(selectedShapeName === 'round' || (selectedShapeName.includes('round') || selectedShapeName.includes('rod') || selectedShapeName.includes('bar')) && !selectedShapeName.includes('hex') && !selectedShapeName.includes('threaded') && !selectedShapeName.includes('thread') && !selectedShapeName.includes('square') && !selectedShapeName.includes('flat')) && (<>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Diameter (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.diameter} onChange={e => setCurrentItem(p => ({...p, diameter: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Length (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
                           </>)}
                           {selectedShapeName === 'pipe' && (<>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Outer Dia (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.outerDiameter} onChange={e => setCurrentItem(p => ({...p, outerDiameter: e.target.value}))} /></div>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Thickness (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.thickness} onChange={e => setCurrentItem(p => ({...p, thickness: e.target.value}))} /></div>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Outer Dia (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.outerDiameter} onChange={e => setCurrentItem(p => ({...p, outerDiameter: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Thickness (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.thickness} onChange={e => setCurrentItem(p => ({...p, thickness: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Length (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
+                          </>)}
+                          {(selectedShapeName === 'square bar' || (selectedShapeName.includes('square') && !selectedShapeName.includes('tube'))) && (<>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Outside Side A (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.width} onChange={e => setCurrentItem(p => ({...p, width: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Length (L) (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
                           </>)}
                           {selectedShapeName.includes('square tube') && (<>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Side A (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.width} onChange={e => setCurrentItem(p => ({...p, width: e.target.value}))} /></div>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Thickness (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.thickness} onChange={e => setCurrentItem(p => ({...p, thickness: e.target.value}))} /></div>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Side A (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.width} onChange={e => setCurrentItem(p => ({...p, width: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Thickness (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.thickness} onChange={e => setCurrentItem(p => ({...p, thickness: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Length (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
                           </>)}
                           {selectedShapeName.includes('rectangular tube') && (<>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Width B (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.width} onChange={e => setCurrentItem(p => ({...p, width: e.target.value}))} /></div>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Height H (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.outerDiameter} onChange={e => setCurrentItem(p => ({...p, outerDiameter: e.target.value}))} /></div>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Thickness (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.thickness} onChange={e => setCurrentItem(p => ({...p, thickness: e.target.value}))} /></div>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Width B (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.width} onChange={e => setCurrentItem(p => ({...p, width: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Height H (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.outerDiameter} onChange={e => setCurrentItem(p => ({...p, outerDiameter: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Thickness (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.thickness} onChange={e => setCurrentItem(p => ({...p, thickness: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Length (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
                           </>)}
-                          {selectedShapeName === 'hexagonal bar' && (<>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Across Flats AF (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.width} onChange={e => setCurrentItem(p => ({...p, width: e.target.value}))} /></div>
-                            <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
+                          {(selectedShapeName === 'hexagonal bar' || selectedShapeName.includes('hex')) && (<>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Across Flats AF (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.width} onChange={e => setCurrentItem(p => ({...p, width: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Length (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
+                          </>)}
+                          {(selectedShapeName.includes('threaded') || selectedShapeName.includes('thread')) && (<>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Outer Dia D (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.diameter || currentItem.outerDiameter} onChange={e => setCurrentItem(p => ({...p, diameter: e.target.value, outerDiameter: e.target.value}))} /></div>
+                            <div className="space-y-1"><label className="text-xs text-slate-500 font-medium">Length (mm) *</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0.00" value={currentItem.length} onChange={e => setCurrentItem(p => ({...p, length: e.target.value}))} /></div>
                           </>)}
                         </div>
                       )}
 
-                      {/* Auto-calculated weight */}
-                      {currentItem.weightPerUnit > 0 && (
-                        <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-700">
-                          <span className="font-semibold">Weight/Unit:</span>
-                          <span>{currentItem.weightPerUnit.toFixed(4)} Kg</span>
-                          <span className="text-emerald-500 ml-1">(auto-calculated)</span>
+                      {/* Weight per Unit Box */}
+                      <div className="flex items-center justify-between gap-2 mt-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded text-xs">
+                        <div className="flex items-center gap-2 text-emerald-700">
+                          <span className="font-semibold">Calculated Weight / Unit:</span>
+                          <span className="font-mono font-bold text-sm text-emerald-800">
+                            {(parseFloat(currentItem.weightPerUnit) || 0).toFixed(3)} Kg
+                          </span>
+                          <span className="text-emerald-500 text-[11px]">
+                            {currentItem.quantity > 1 ? `(Total: ${((parseFloat(currentItem.weightPerUnit) || 0) * currentItem.quantity).toFixed(3)} Kg for ${currentItem.quantity} NOS)` : '(auto-calculated)'}
+                          </span>
                         </div>
-                      )}
+                        <div className="flex items-center gap-1.5">
+                          <label className="text-[11px] font-medium text-slate-600">Unit Weight (Kg):</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            className="w-24 bg-white border border-emerald-300 rounded px-2 py-1 text-xs font-mono font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500/20"
+                            value={currentItem.weightPerUnit || ''}
+                            onChange={e => setCurrentItem(p => ({ ...p, weightPerUnit: parseFloat(e.target.value) || 0 }))}
+                            placeholder="0.000"
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
@@ -1206,14 +1231,10 @@ const StockEntries = () => {
                           <td className="p-2   text-slate-900">
                               <div className="font-medium">{item.itemCode}</div>
                               {item.materialName && <div className="text-xs text-slate-400">{item.materialName}</div>}
-                              {(item.uom === 'Kg' || item.uom === 'Kgs') && item.shapeId && (() => {
-                                const sName = (shapes.find(s => String(s.id) === String(item.shapeId))?.name || '').toLowerCase();
-                                const dims = [];
-                                if (sName === 'plate') { if(item.length) dims.push(`L:${item.length}`); if(item.width) dims.push(`W:${item.width}`); if(item.thickness) dims.push(`T:${item.thickness}`); }
-                                else if (sName === 'round') { if(item.diameter) dims.push(`D:${item.diameter}`); if(item.length) dims.push(`L:${item.length}`); }
-                                else if (sName === 'pipe') { if(item.outerDiameter) dims.push(`OD:${item.outerDiameter}`); if(item.thickness) dims.push(`T:${item.thickness}`); if(item.length) dims.push(`L:${item.length}`); }
-                                else { if(item.length) dims.push(`L:${item.length}`); if(item.width) dims.push(`W:${item.width}`); if(item.thickness) dims.push(`T:${item.thickness}`); }
-                                return dims.length > 0 ? <div className="text-[10px] text-indigo-500 font-mono">{dims.join(' × ')} mm</div> : null;
+                              {(() => {
+                                const sName = item.shape_type || item.shapeType || (shapes.find(s => String(s.id) === String(item.shapeId))?.name) || '';
+                                const formatted = formatDimensions({ ...item, shape_type: sName });
+                                return formatted ? <div className="text-[11px] text-indigo-600 font-semibold mt-0.5">{formatted}</div> : null;
                               })()}
                             </td>
                             <td className="p-2  text-right">{item.quantity}</td>

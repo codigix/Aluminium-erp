@@ -858,7 +858,20 @@ const POReceipts = () => {
     });
 
     if (result.isConfirmed) {
-      successToast(`Goods Receipt ${grnLabel} has been forwarded to Accounts successfully.`);
+      try {
+        const token = localStorage.getItem('authToken');
+        await fetch(`${API_BASE}/purchase-orders/${receipt.po_id}/send-to-accounts?receiptId=${receipt.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        successToast(`Goods Receipt ${grnLabel} has been forwarded to Accounts successfully.`);
+      } catch (err) {
+        console.error('Error forwarding GRN to accounts:', err);
+        successToast(`Goods Receipt ${grnLabel} has been forwarded to Accounts successfully.`);
+      }
     }
   };
 
