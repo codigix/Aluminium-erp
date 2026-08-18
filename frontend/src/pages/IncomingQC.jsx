@@ -199,16 +199,22 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       const inspWt = (item.qc_inspection_weight !== undefined && item.qc_inspection_weight !== null && parseFloat(item.qc_inspection_weight) > 0)
         ? parseFloat(item.qc_inspection_weight)
         : recWt;
-      
-      const rejQty = item.rejected_qty !== undefined && item.rejected_qty !== null ? parseFloat(item.rejected_qty) : 0;
-      const accQty = item.accepted_qty !== undefined && item.accepted_qty !== null
-        ? parseFloat(item.accepted_qty)
-        : Math.max(0, inspQty - rejQty);
 
-      const rejWt = item.rejected_weight !== undefined && item.rejected_weight !== null ? parseFloat(item.rejected_weight) : 0;
-      const accWt = item.accepted_weight !== undefined && item.accepted_weight !== null
+      const accQty = (item.accepted_qty !== undefined && item.accepted_qty !== null)
+        ? parseFloat(item.accepted_qty)
+        : inspQty;
+
+      const rejQty = (item.rejected_qty !== undefined && item.rejected_qty !== null)
+        ? parseFloat(item.rejected_qty)
+        : Math.max(0, recQty - accQty);
+
+      const accWt = (item.accepted_weight !== undefined && item.accepted_weight !== null)
         ? parseFloat(item.accepted_weight)
-        : Math.max(0, inspWt - rejWt);
+        : (recQty > 0 ? parseFloat(((accQty / recQty) * recWt).toFixed(3)) : inspWt);
+
+      const rejWt = (item.rejected_weight !== undefined && item.rejected_weight !== null)
+        ? parseFloat(item.rejected_weight)
+        : Math.max(0, parseFloat((recWt - accWt).toFixed(3)));
 
       return {
         ...item,
@@ -406,45 +412,136 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
 
   const handleQcQtyChange = (idx, value) => {
     const newItems = [...editFormData.items];
-    const inspQty = value === '' ? '' : (parseFloat(value) || 0);
-    newItems[idx].qc_inspection_qty = inspQty;
-    const rejQty = parseFloat(newItems[idx].rejected_qty || 0);
-    const numInsp = typeof inspQty === 'number' ? inspQty : 0;
-    newItems[idx].accepted_qty = Math.max(0, numInsp - rejQty);
+    const valNum = value === '' ? '' : (parseFloat(value) || 0);
+    newItems[idx].qc_inspection_qty = valNum;
+    const inspQty = typeof valNum === 'number' ? Math.max(0, valNum) : 0;
+    const recQty = parseFloat(newItems[idx].received_qty || 0);
+    const recWt = parseFloat(newItems[idx].received_weight !== undefined && newItems[idx].received_weight !== null ? newItems[idx].received_weight : recQty);
+
+    let inspWt = recWt;
+    if (recQty > 0) {
+      inspWt = parseFloat(((recWt / recQty) * inspQty).toFixed(3));
+    }
+    newItems[idx].qc_inspection_weight = inspWt;
+    
+    const accQty = newItems[idx].accepted_qty !== undefined && newItems[idx].accepted_qty !== null ? parseFloat(newItems[idx].accepted_qty) : inspQty;
+    const rejQty = Math.max(0, recQty - accQty);
+
+    newItems[idx].accepted_qty = accQty;
+    newItems[idx].rejected_qty = rejQty;
+
+    const ratio = recQty > 0 ? (accQty / recQty) : 1;
+    const accWt = parseFloat((recWt * ratio).toFixed(3));
+    const rejWt = Math.max(0, parseFloat((recWt - accWt).toFixed(3)));
+
+    newItems[idx].accepted_weight = Math.max(0, accWt);
+    newItems[idx].rejected_weight = Math.max(0, rejWt);
+
     const newStatus = deriveQCStatus(newItems);
-    setEditFormData({ ...editFormData, items: newItems, status: newStatus });
+    const totalAccepted = newItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
+    const totalRejected = newItems.reduce((sum, item) => sum + (parseFloat(item.rejected_qty) || 0), 0);
+    setEditFormData({ ...editFormData, items: newItems, status: newStatus, passQuantity: totalAccepted, failQuantity: totalRejected });
+  };
+
+  const handleAcceptedQtyChange = (idx, value) => {
+    const newItems = [...editFormData.items];
+    const valNum = value === '' ? '' : (parseFloat(value) || 0);
+    const recQty = parseFloat(newItems[idx].received_qty || 0);
+    const recWt = parseFloat(newItems[idx].received_weight !== undefined && newItems[idx].received_weight !== null ? newItems[idx].received_weight : recQty);
+
+    let accQty = typeof valNum === 'number' ? Math.max(0, Math.min(recQty, valNum)) : 0;
+    let rejQty = Math.max(0, recQty - accQty);
+
+    newItems[idx].accepted_qty = value === '' ? '' : accQty;
+    newItems[idx].rejected_qty = rejQty;
+
+    const ratio = recQty > 0 ? (accQty / recQty) : 1;
+    const accWt = parseFloat((recWt * ratio).toFixed(3));
+    const rejWt = parseFloat((recWt - accWt).toFixed(3));
+
+    newItems[idx].accepted_weight = Math.max(0, accWt);
+    newItems[idx].rejected_weight = Math.max(0, rejWt);
+
+    const newStatus = deriveQCStatus(newItems);
+    const totalAccepted = newItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
+    const totalRejected = newItems.reduce((sum, item) => sum + (parseFloat(item.rejected_qty) || 0), 0);
+    setEditFormData({ ...editFormData, items: newItems, status: newStatus, passQuantity: totalAccepted, failQuantity: totalRejected });
   };
 
   const handleRejectedQtyChange = (idx, value) => {
     const newItems = [...editFormData.items];
-    const rejQty = value === '' ? '' : (parseFloat(value) || 0);
-    newItems[idx].rejected_qty = rejQty;
-    const inspQty = parseFloat(newItems[idx].qc_inspection_qty !== undefined ? newItems[idx].qc_inspection_qty : (newItems[idx].received_qty || 0));
-    const numRej = typeof rejQty === 'number' ? rejQty : 0;
-    newItems[idx].accepted_qty = Math.max(0, inspQty - numRej);
+    const valNum = value === '' ? '' : (parseFloat(value) || 0);
+    const recQty = parseFloat(newItems[idx].received_qty || 0);
+    const recWt = parseFloat(newItems[idx].received_weight !== undefined && newItems[idx].received_weight !== null ? newItems[idx].received_weight : recQty);
+
+    let rejQty = typeof valNum === 'number' ? Math.max(0, Math.min(recQty, valNum)) : 0;
+    let accQty = Math.max(0, recQty - rejQty);
+
+    newItems[idx].rejected_qty = value === '' ? '' : rejQty;
+    newItems[idx].accepted_qty = accQty;
+
+    const ratio = recQty > 0 ? (rejQty / recQty) : 0;
+    const rejWt = parseFloat((recWt * ratio).toFixed(3));
+    const accWt = parseFloat((recWt - rejWt).toFixed(3));
+
+    newItems[idx].accepted_weight = Math.max(0, accWt);
+    newItems[idx].rejected_weight = Math.max(0, rejWt);
+
     const newStatus = deriveQCStatus(newItems);
-    setEditFormData({ ...editFormData, items: newItems, status: newStatus });
+    const totalAccepted = newItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
+    const totalRejected = newItems.reduce((sum, item) => sum + (parseFloat(item.rejected_qty) || 0), 0);
+    setEditFormData({ ...editFormData, items: newItems, status: newStatus, passQuantity: totalAccepted, failQuantity: totalRejected });
   };
 
   const handleQcWeightChange = (idx, value) => {
     const newItems = [...editFormData.items];
-    const inspWt = value === '' ? '' : (parseFloat(value) || 0);
-    newItems[idx].qc_inspection_weight = inspWt;
-    const rejWt = parseFloat(newItems[idx].rejected_weight || 0);
-    const numInsp = typeof inspWt === 'number' ? inspWt : 0;
-    newItems[idx].accepted_weight = Math.max(0, numInsp - rejWt);
+    const valNum = value === '' ? '' : (parseFloat(value) || 0);
+    newItems[idx].qc_inspection_weight = valNum;
+    const inspWt = typeof valNum === 'number' ? Math.max(0, valNum) : 0;
+    const inspQty = parseFloat(newItems[idx].qc_inspection_qty !== undefined ? newItems[idx].qc_inspection_qty : (newItems[idx].received_qty || 0));
+    
+    let rejQty = parseFloat(newItems[idx].rejected_qty || 0);
+    let accQty = parseFloat(newItems[idx].accepted_qty !== undefined ? newItems[idx].accepted_qty : (inspQty - rejQty));
+
+    const ratio = inspQty > 0 ? (accQty / inspQty) : 1;
+    const accWt = parseFloat((inspWt * ratio).toFixed(3));
+    const rejWt = parseFloat((inspWt - accWt).toFixed(3));
+
+    newItems[idx].accepted_weight = Math.max(0, accWt);
+    newItems[idx].rejected_weight = Math.max(0, rejWt);
+
+    const newStatus = deriveQCStatus(newItems);
+    setEditFormData({ ...editFormData, items: newItems, status: newStatus });
+  };
+
+  const handleAcceptedWeightChange = (idx, value) => {
+    const newItems = [...editFormData.items];
+    const valNum = value === '' ? '' : (parseFloat(value) || 0);
+    const recWt = parseFloat(newItems[idx].received_weight !== undefined && newItems[idx].received_weight !== null ? newItems[idx].received_weight : (newItems[idx].received_qty || 0));
+    const inspWt = parseFloat(newItems[idx].qc_inspection_weight !== undefined ? newItems[idx].qc_inspection_weight : recWt);
+    
+    let accWt = typeof valNum === 'number' ? Math.max(0, Math.min(inspWt, valNum)) : 0;
+    let rejWt = Math.max(0, parseFloat((inspWt - accWt).toFixed(3)));
+
+    newItems[idx].accepted_weight = value === '' ? '' : accWt;
+    newItems[idx].rejected_weight = rejWt;
+
     const newStatus = deriveQCStatus(newItems);
     setEditFormData({ ...editFormData, items: newItems, status: newStatus });
   };
 
   const handleRejectedWeightChange = (idx, value) => {
     const newItems = [...editFormData.items];
-    const rejWt = value === '' ? '' : (parseFloat(value) || 0);
-    newItems[idx].rejected_weight = rejWt;
+    const valNum = value === '' ? '' : (parseFloat(value) || 0);
     const recWt = parseFloat(newItems[idx].received_weight !== undefined && newItems[idx].received_weight !== null ? newItems[idx].received_weight : (newItems[idx].received_qty || 0));
     const inspWt = parseFloat(newItems[idx].qc_inspection_weight !== undefined ? newItems[idx].qc_inspection_weight : recWt);
-    const numRej = typeof rejWt === 'number' ? rejWt : 0;
-    newItems[idx].accepted_weight = Math.max(0, inspWt - numRej);
+    
+    let rejWt = typeof valNum === 'number' ? Math.max(0, Math.min(inspWt, valNum)) : 0;
+    let accWt = Math.max(0, parseFloat((inspWt - rejWt).toFixed(3)));
+
+    newItems[idx].rejected_weight = value === '' ? '' : rejWt;
+    newItems[idx].accepted_weight = accWt;
+
     const newStatus = deriveQCStatus(newItems);
     setEditFormData({ ...editFormData, items: newItems, status: newStatus });
   };
@@ -1080,9 +1177,11 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       className: 'text-center',
       render: (val, item) => {
         if (selectedQC?.status === 'PENDING') return <span className="text-xs text-slate-400">Pending</span>;
-        const inspQty = parseFloat(item.qc_inspection_qty !== undefined ? item.qc_inspection_qty : (item.received_qty || 0));
-        const rejQty = parseFloat(item.rejected_qty || 0);
-        const accQty = Math.max(0, inspQty - rejQty);
+        const accQty = (val !== undefined && val !== null) 
+          ? parseFloat(val) 
+          : ((item.accepted_qty !== undefined && item.accepted_qty !== null) 
+              ? parseFloat(item.accepted_qty) 
+              : Math.max(0, parseFloat(item.qc_inspection_qty || item.received_qty || 0) - parseFloat(item.rejected_qty || 0)));
         return (
           <span className="text-xs text-emerald-600 font-bold">
             {accQty.toFixed(0)} <span className="text-[9px] text-emerald-400">NOS</span>
@@ -1098,8 +1197,11 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         if (selectedQC?.status === 'PENDING') return <span className="text-xs text-slate-400">Pending</span>;
         const recWt = parseFloat(item.received_weight !== undefined && item.received_weight !== null ? item.received_weight : (item.received_qty || 0));
         const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
-        const rejWt = parseFloat(item.rejected_weight || 0);
-        const accWt = Math.max(0, inspWt - rejWt);
+        const accWt = (val !== undefined && val !== null)
+          ? parseFloat(val)
+          : ((item.accepted_weight !== undefined && item.accepted_weight !== null)
+              ? parseFloat(item.accepted_weight)
+              : Math.max(0, inspWt - parseFloat(item.rejected_weight || 0)));
         return (
           <span className="text-xs text-emerald-600 font-bold">
             {accWt.toFixed(3)} <span className="text-[9px] text-emerald-400">KG</span>
@@ -1296,16 +1398,22 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       label: 'Accepted Qty (NOS)',
       key: 'accepted_qty',
       className: 'text-center',
-      render: (val, item) => {
+      render: (val, item, idx) => {
         const inspQty = parseFloat(item.qc_inspection_qty !== undefined ? item.qc_inspection_qty : (item.received_qty || 0));
         const rejQty = parseFloat(item.rejected_qty || 0);
-        const accQty = Math.max(0, inspQty - rejQty);
+        const accQty = val !== undefined && val !== null ? val : Math.max(0, inspQty - rejQty);
         return (
-          <div className="flex flex-col items-center gap-0.5">
-            <span className="text-xs font-bold text-emerald-600">
-              {accQty.toFixed(0)}
-            </span>
-            <span className="text-[9px] text-emerald-400 uppercase">NOS</span>
+          <div className="flex flex-col items-center gap-1">
+            <input
+              type="number"
+              step="1"
+              min="0"
+              max={inspQty}
+              value={accQty}
+              onChange={(e) => handleAcceptedQtyChange(idx, e.target.value)}
+              className="w-16 p-1.5 bg-white border border-emerald-300 rounded text-center text-xs text-emerald-600 font-bold focus:ring-2 focus:ring-emerald-500/20 outline-none"
+            />
+            <span className="text-[9px] text-emerald-500 uppercase font-semibold">NOS</span>
           </div>
         );
       }
@@ -1315,18 +1423,20 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'rejected_qty',
       className: 'text-center',
       render: (val, item, idx) => {
-        const rejQty = parseFloat(item.rejected_qty || 0);
+        const inspQty = parseFloat(item.qc_inspection_qty !== undefined ? item.qc_inspection_qty : (item.received_qty || 0));
+        const rejQty = val !== undefined && val !== null ? val : (item.rejected_qty || 0);
         return (
           <div className="flex flex-col items-center gap-1">
             <input
               type="number"
               step="1"
               min="0"
+              max={inspQty}
               value={rejQty}
               onChange={(e) => handleRejectedQtyChange(idx, e.target.value)}
               className="w-16 p-1.5 bg-white border border-rose-200 rounded text-center text-xs text-rose-600 font-semibold focus:ring-2 focus:ring-rose-500/20 outline-none"
             />
-            <span className="text-[9px] text-rose-400 uppercase">NOS</span>
+            <span className="text-[9px] text-rose-400 uppercase font-semibold">NOS</span>
           </div>
         );
       }
@@ -1335,19 +1445,25 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       label: 'Accepted Weight (KG)',
       key: 'accepted_weight',
       className: 'text-center',
-      render: (val, item) => {
+      render: (val, item, idx) => {
         const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
         if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
         const recWt = parseFloat(item.received_weight || 0);
         const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
         const rejWt = parseFloat(item.rejected_weight || 0);
-        const accWt = Math.max(0, inspWt - rejWt);
+        const accWt = val !== undefined && val !== null ? val : Math.max(0, inspWt - rejWt);
         return (
-          <div className="flex flex-col items-center gap-0.5">
-            <span className="text-xs font-bold text-emerald-600">
-              {accWt.toFixed(3)}
-            </span>
-            <span className="text-[9px] text-emerald-400 uppercase">KG</span>
+          <div className="flex flex-col items-center gap-1">
+            <input
+              type="number"
+              step="0.001"
+              min="0"
+              max={inspWt}
+              value={accWt}
+              onChange={(e) => handleAcceptedWeightChange(idx, e.target.value)}
+              className="w-24 p-1.5 bg-white border border-emerald-300 rounded text-center text-xs text-emerald-600 font-bold focus:ring-2 focus:ring-emerald-500/20 outline-none"
+            />
+            <span className="text-[9px] text-emerald-500 uppercase font-semibold">KG</span>
           </div>
         );
       }
@@ -1359,18 +1475,21 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, item, idx) => {
         const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
         if (isBoughtOut) return <span className="text-slate-400 font-medium">—</span>;
-        const rejWt = parseFloat(item.rejected_weight || 0);
+        const recWt = parseFloat(item.received_weight || 0);
+        const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
+        const rejWt = val !== undefined && val !== null ? val : (item.rejected_weight || 0);
         return (
           <div className="flex flex-col items-center gap-1">
             <input
               type="number"
               step="0.001"
               min="0"
+              max={inspWt}
               value={rejWt}
               onChange={(e) => handleRejectedWeightChange(idx, e.target.value)}
               className="w-20 p-1.5 bg-white border border-rose-200 rounded text-center text-xs text-rose-600 font-semibold focus:ring-2 focus:ring-rose-500/20 outline-none"
             />
-            <span className="text-[9px] text-rose-400 uppercase">KG</span>
+            <span className="text-[9px] text-rose-400 uppercase font-semibold">KG</span>
           </div>
         );
       }
@@ -1381,15 +1500,41 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       className: 'text-center text-rose-500',
       render: (_, item) => {
         const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
-        if (isBoughtOut) return <span className="text-slate-300 text-xs">—</span>;
+        const recQty = parseFloat(item.received_qty || 0);
+        const accQty = parseFloat(item.accepted_qty !== undefined ? item.accepted_qty : recQty);
+        const rejQty = parseFloat(item.rejected_qty || 0);
+        const qtyShortage = Math.max(0, recQty - (accQty + rejQty));
+
+        if (isBoughtOut) {
+          return qtyShortage > 0 ? (
+            <span className="text-xs font-semibold">
+              {qtyShortage.toFixed(0)} <span className="text-[9px] uppercase">NOS</span>
+            </span>
+          ) : <span className="text-slate-300 text-xs">0 NOS</span>;
+        }
+
         const recWt = parseFloat(item.received_weight || 0);
-        const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
-        const shortage = Math.max(0, recWt - inspWt);
-        return shortage > 0.0005 ? (
-          <span className="text-xs font-semibold">
-            {shortage.toFixed(3)} <span className="text-[9px] uppercase">KG</span>
-          </span>
-        ) : <span className="text-slate-300 text-xs">0.000</span>;
+        const accWt = parseFloat(item.accepted_weight !== undefined ? item.accepted_weight : recWt);
+        const rejWt = parseFloat(item.rejected_weight || 0);
+        const wtShortage = Math.max(0, parseFloat((recWt - (accWt + rejWt)).toFixed(3)));
+
+        if (qtyShortage > 0 || wtShortage > 0.0005) {
+          return (
+            <div className="flex flex-col items-center">
+              {qtyShortage > 0 && (
+                <span className="text-xs font-bold text-rose-600">
+                  {qtyShortage.toFixed(0)} <span className="text-[9px] text-rose-400 uppercase">NOS</span>
+                </span>
+              )}
+              {wtShortage > 0.0005 && (
+                <span className="text-xs font-semibold text-rose-500">
+                  {wtShortage.toFixed(3)} <span className="text-[9px] uppercase">KG</span>
+                </span>
+              )}
+            </div>
+          );
+        }
+        return <span className="text-slate-300 text-xs">0.000</span>;
       }
     },
     {

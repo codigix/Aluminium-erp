@@ -932,12 +932,38 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
     );
 
     if (existing.length > 0) {
-      console.log(`[Stock] Duplicate found - skipping`);
+      console.log(`[Stock] Duplicate found - updating existing stock ledger entry to Qty: ${passQty}, Weight: ${passWeight}`);
+      const ledgerId = existing[0].id;
+      await useConnection.query(
+        `UPDATE stock_ledger 
+         SET qty_in = ?, weight_in = ?, item_code = ? 
+         WHERE id = ?`,
+        [passQty, parseFloat(passWeight) || 0, itemCode, ledgerId]
+      );
+
+      const [totals] = await useConnection.query(
+        `SELECT 
+           SUM(COALESCE(qty_in, 0)) - SUM(COALESCE(qty_out, 0)) as current_qty,
+           SUM(COALESCE(weight_in, 0)) - SUM(COALESCE(weight_out, 0)) as current_weight
+         FROM stock_ledger 
+         WHERE item_code = ?`,
+        [itemCode]
+      );
+      const newQty = totals.length > 0 ? parseFloat(totals[0].current_qty || 0) : passQty;
+      const newWeight = totals.length > 0 ? parseFloat(totals[0].current_weight || 0) : (parseFloat(passWeight) || 0);
+
+      await useConnection.query(
+        `UPDATE stock_balance 
+         SET current_balance = ?, current_weight = ?, accepted_qty = ?
+         WHERE item_code = ?`,
+        [newQty, newWeight, newQty, itemCode]
+      );
+
       if (!connection) {
         await useConnection.commit();
         useConnection.release();
       }
-      return { success: true, duplicate: true };
+      return { success: true, duplicate: false, updated: true };
     }
 
     // Use addStockLedgerEntry for consistency and to ensure qty_in/qty_out/weight_in/weight_out are set

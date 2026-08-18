@@ -255,7 +255,7 @@ const generatePoPdf = async (data) => {
 
         let pfx = '', dp = [];
         if (ms === 'plate')              { pfx = 'PL';   dp = [nf(wid), nf(len), nf(thk)]; }
-        else if (ms === 'flat bar')      { pfx = 'FB';   dp = [nf(wid), nf(thk), nf(len)]; }
+        else if (ms === 'flat bar')      { pfx = 'FL';   dp = [nf(wid), nf(thk), nf(len)]; }
         else if (ms === 'round bar')     { pfx = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dp = [`Ø${nf(dv)}`, nf(len)]; }
         else if (ms === 'hexagonal bar') { pfx = 'HEX';  dp = [`AF${nf(wid)}`, nf(len)]; }
         else if (ms === 'square bar')    { pfx = 'SQ';   dp = [nf(wid), nf(len)]; }

@@ -245,16 +245,19 @@
     <table class="item-table" style="font-size: 8px;">
       <thead>
         <tr>
-          <th style="width: 30px;">Sr. No.</th>
+          <th style="width: 25px;">Sr. No.</th>
           <th>PO No.</th>
           <th>Part No.</th>
           <th>Drawing No.</th>
           <th>Item Description</th>
-          <th style="width: 70px;">Design Qty</th>
-          <th style="width: 70px;">Required Qty</th>
-          <th style="width: 70px;">Received Qty</th>
-          <th style="width: 70px;">Item Status</th>
-          <th style="width: 80px;">Reason</th>
+          <th style="width: 50px;">Received Qty</th>
+          <th style="width: 55px;">Inspection Qty</th>
+          <th style="width: 55px;">Accepted Qty</th>
+          <th style="width: 65px;">Accepted Wt</th>
+          <th style="width: 55px;">Rejected Qty</th>
+          <th style="width: 65px;">Rejected Wt</th>
+          <th style="width: 60px;">Item Status</th>
+          <th style="width: 60px;">Reason</th>
         </tr>
       </thead>
       <tbody>
@@ -267,11 +270,14 @@
           <td>
             <strong>{{description}}</strong>
           </td>
-          <td class="center">{{designQty}} {{uom}}</td>
-          <td class="center">{{requiredQty}} {{uom}}</td>
-          <td class="center">{{receivedQty}} {{uom}}</td>
+          <td class="center">{{receivedQty}} NOS</td>
+          <td class="center">{{inspectionQty}} NOS</td>
+          <td class="center" style="color: #16a34a; font-weight: bold;">{{acceptedQty}} NOS</td>
+          <td class="center" style="color: #16a34a; font-weight: bold;">{{acceptedWeight}} KG</td>
+          <td class="center" style="color: {{#hasRejected}}#dc2626{{/hasRejected}}{{^hasRejected}}#64748b{{/hasRejected}}; font-weight: bold;">{{rejectedQty}} NOS</td>
+          <td class="center" style="color: {{#hasRejected}}#dc2626{{/hasRejected}}{{^hasRejected}}#64748b{{/hasRejected}}; font-weight: bold;">{{rejectedWeight}} KG</td>
           <td class="center">
-            <span style="color: {{statusColor}}">{{itemStatus}}</span>
+            <span style="color: {{statusColor}}; font-weight: bold;">{{itemStatus}}</span>
           </td>
           <td class="center">{{reason}}</td>
         </tr>

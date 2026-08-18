@@ -760,7 +760,7 @@ const formatDimensions = (item) => {
 
   let prefix = '', dimParts = [];
   if (matchedShape === 'plate')              { prefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
-  else if (matchedShape === 'flat bar')      { prefix = 'FB';   dimParts = [nf(wid), nf(thk), nf(len)]; }
+  else if (matchedShape === 'flat bar')      { prefix = 'FL';   dimParts = [nf(wid), nf(thk), nf(len)]; }
   else if (matchedShape === 'round bar')     { prefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
   else if (matchedShape === 'hexagonal bar') { prefix = 'HEX';  dimParts = [`AF${nf(wid)}`, nf(len)]; }
   else if (matchedShape === 'square bar')    { prefix = 'SQ';   dimParts = [nf(wid), nf(len)]; }
@@ -960,7 +960,7 @@ const generateVendorInvoicePDF = async (id, type) => {
 
           let dimPrefix = '', dimParts = [];
           if (matchedShape === 'plate')           { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
-          else if (matchedShape === 'flat bar')   { dimPrefix = 'FB';   dimParts = [nf(wid), nf(thk), nf(len)]; }
+          else if (matchedShape === 'flat bar')   { dimPrefix = 'FL';   dimParts = [nf(wid), nf(thk), nf(len)]; }
           else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
           else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [`AF${nf(wid)}`, nf(len)]; }
           else if (matchedShape === 'square bar') { dimPrefix = 'SQ';   dimParts = [nf(wid), nf(len)]; }
@@ -1119,7 +1119,7 @@ const generateVendorInvoicePDF = async (id, type) => {
 
         let dimPrefix = '', dimParts = [];
         if (matchedShape === 'plate')           { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
-        else if (matchedShape === 'flat bar')   { dimPrefix = 'FB';   dimParts = [nf(wid), nf(thk), nf(len)]; }
+        else if (matchedShape === 'flat bar')   { dimPrefix = 'FL';   dimParts = [nf(wid), nf(thk), nf(len)]; }
         else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
         else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [`AF${nf(wid)}`, nf(len)]; }
         else if (matchedShape === 'square bar') { dimPrefix = 'SQ';   dimParts = [nf(wid), nf(len)]; }

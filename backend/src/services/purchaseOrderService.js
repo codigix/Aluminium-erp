@@ -7,6 +7,37 @@ const stockService = require('./stockService');
 const fs = require('fs');
 const path = require('path');
 
+const formatAddressToTwoLines = (addressStr) => {
+  if (!addressStr || addressStr === 'N/A' || String(addressStr).trim() === '') return 'N/A';
+
+  const rawParts = String(addressStr)
+    .split(/[\r\n,]+/)
+    .map(p => p.trim())
+    .filter(p => p.length > 0 && !/^gst/i.test(p) && !/^cin/i.test(p) && !/^pan/i.test(p));
+
+  if (rawParts.length === 0) return 'N/A';
+  if (rawParts.length === 1) return rawParts[0];
+
+  const parts = rawParts.map(p => p.replace(/^(pune)\s*[-–]?\s*(\d{6})$/i, (m, c, pin) => `${c} - ${pin}`));
+
+  if (parts.length === 2) {
+    return `${parts[0]}<br/>${parts[1]}`;
+  }
+
+  let splitIndex = parts.findIndex((p, idx) => 
+    idx > 0 && /(?:pune|mumbai|delhi|bangalore|hyderabad|chennai|kolkata|nagpur|nashik|\b\d{6}\b)/i.test(p)
+  );
+
+  if (splitIndex <= 0 || splitIndex >= parts.length) {
+    splitIndex = Math.ceil(parts.length / 2);
+  }
+
+  const line1 = parts.slice(0, splitIndex).join(', ');
+  const line2 = parts.slice(splitIndex).join(', ');
+
+  return `${line1}<br/>${line2}`;
+};
+
 /**
  * Helper to find the correct item_code from stock_balance by matching material name/type
  * if the provided item_code is missing or inconsistent.
@@ -2253,7 +2284,7 @@ const generatePurchaseOrderPDF = async (poId) => {
       <td style="width: 50%;">
         <div class="section-title">DISPATCH / SHIP TO ADDRESS</div>
         <div class="vendor-name">{{hostCompanyName}}</div>
-        <div class="address-text">{{{hostCompanyAddressHtml}}}</div>
+        <div class="address-text">{{{dispatchCompanyAddressHtml}}}</div>
         <table class="details-subtable" style="margin-top: 6px;">
           <tr>
             <td style="width: 32%; font-weight: bold;">GSTIN NO.</td>
@@ -2285,26 +2316,24 @@ const generatePurchaseOrderPDF = async (poId) => {
     <thead>
       <tr>
         <th style="width: 2%;">SL No.</th>
-        <th style="width: 7%; text-align: center; line-height: 1.3;">Drawing No</th>
-        <th style="width: 12%; text-align: center; line-height: 1.3;">GRADE</th>
-        <th style="width: 40%; text-align: center; line-height: 1.3;">Size</th>
+        <th style="width: 6.5%; text-align: center; line-height: 1.3; white-space: nowrap;">Drawing No</th>
+        <th style="width: 18.5%; text-align: center; line-height: 1.3;">GRADE</th>
+        <th style="width: 24%; text-align: center; line-height: 1.3;">Size</th>
         <th style="width: 4%; text-align: center;">HSN Code</th>
-        <th style="width: 4%; text-align: center;">Rate</th>
+        <th style="width: 5%; text-align: center;">Rate</th>
         <th style="width: 3%; text-align: center; line-height: 1.2;">Qty</th>
-        <th style="width: 4%; text-align: center; line-height: 1.2;">Weight</th>
-        <th style="width: 5%; text-align: center;">Amount</th>
-        <th style="width: 2%; text-align: center; line-height: 1.2;">CGST<br/>%</th>
-        <th style="width: 4%; text-align: center;">CGST Amt</th>
-        <th style="width: 2%; text-align: center; line-height: 1.2;">SGST<br/>%</th>
-        <th style="width: 4%; text-align: center;">SGST Amt</th>
-        <th style="width: 7%; text-align: center;">Total Amount</th>
+        <th style="width: 5%; text-align: center; line-height: 1.2;">Weight</th>
+        <th style="width: 7%; text-align: center;">Amount</th>
+        <th style="width: 7.5%; text-align: center; line-height: 1.2;">CGST AMT<br/>{{cgst_rate_summary}}%</th>
+        <th style="width: 7.5%; text-align: center; line-height: 1.2;">SGST AMT<br/>{{sgst_rate_summary}}%</th>
+        <th style="width: 10%; text-align: center;">Total Amount</th>
       </tr>
     </thead>
     <tbody>
       {{#items}}
       <tr {{#has_sub_assemblies}}class="parent-with-subs"{{/has_sub_assemblies}}>
         <td style="text-align: center;">{{sl_no}}</td>
-        <td style="text-align: center; font-weight: bold; color: #000;">{{drawing_no}}</td>
+        <td style="text-align: center; font-weight: bold; color: #000; white-space: nowrap;">{{drawing_no}}</td>
         <td style="text-align: center; line-height: 1.25;">
           <span style="font-size: 8px; color: #444; display: block; word-break: break-all;">{{item_no}}</span>
           <strong style="font-size: 10px; color: #000;">{{material_name}}</strong>
@@ -2315,9 +2344,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td style="text-align: center;">{{design_qty}}</td>
         <td style="text-align: center;">{{#is_bought_out}}—{{/is_bought_out}}{{^is_bought_out}}{{required_qty}} {{unit}}{{/is_bought_out}}</td>
         <td style="text-align: center;">{{amount}}</td>
-        <td style="text-align: center;">{{cgst_rate}}%</td>
         <td style="text-align: center;">{{cgst_amount}}</td>
-        <td style="text-align: center;">{{sgst_rate}}%</td>
         <td style="text-align: center;">{{sgst_amount}}</td>
         <td style="text-align: center; font-weight: bold; color: #000;">{{total_amount}}</td>
       </tr>
@@ -2332,8 +2359,6 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td></td>
         <td style="text-align: right;">{{displayQuantity}} {{unit}}</td>
         <td style="text-align: right; font-weight: bold;">{{displayTotal}}</td>
-        <td></td>
-        <td></td>
         <td></td>
         <td></td>
         <td></td>
@@ -2542,7 +2567,7 @@ const generatePurchaseOrderPDF = async (poId) => {
     expected_delivery_date: formatDate(po.expected_delivery_date),
     vendor_name: vendor?.vendor_name || 'N/A',
     vendor_email: email || 'N/A',
-    vendor_address_html: location ? location.split(', ').join('<br/>') : 'N/A',
+    vendor_address_html: formatAddressToTwoLines(location),
     phone: phone || 'N/A',
     vendor_gstin: vendor?.gstin || 'N/A',
     contact_person: po.contact_person || 'N/A',
@@ -2561,6 +2586,7 @@ const generatePurchaseOrderPDF = async (poId) => {
     total_amount_words: numberToWords(grand_total),
     hostCompanyName,
     hostCompanyAddressHtml,
+    dispatchCompanyAddressHtml: formatAddressToTwoLines(hostCompanyAddress),
     hostGSTIN,
     hostCIN,
     hostPAN,
@@ -2645,7 +2671,7 @@ const generatePurchaseOrderPDF = async (poId) => {
 
       let pfx = '', dp = [];
       if (ms === 'plate')              { pfx = 'PL';   dp = [nf(wid), nf(len), nf(thk)]; }
-      else if (ms === 'flat bar')      { pfx = 'FB';   dp = [nf(wid), nf(thk), nf(len)]; }
+      else if (ms === 'flat bar')      { pfx = 'FL';   dp = [nf(wid), nf(thk), nf(len)]; }
       else if (ms === 'round bar')     { pfx = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dp = [`Ø${nf(dv)}`, nf(len)]; }
       else if (ms === 'hexagonal bar') { pfx = 'HEX';  dp = [`AF${nf(wid)}`, nf(len)]; }
       else if (ms === 'square bar')    { pfx = 'SQ';   dp = [nf(wid), nf(len)]; }
@@ -2661,12 +2687,58 @@ const generatePurchaseOrderPDF = async (poId) => {
 
       const sizeStr = isBoughtOutItem ? '—' : (dp.filter(Boolean).length > 0 ? `${pfx} ${dp.filter(Boolean).join(' × ')} mm`.trim() : '—');
 
+      let gradeBomRef = null;
+      let itemPlanId = i.plan_id;
+      if (!itemPlanId && po.mr_id) {
+        try {
+          const [mrRow] = await pool.query('SELECT plan_id FROM material_requests WHERE id = ? LIMIT 1', [po.mr_id]);
+          if (mrRow.length > 0) itemPlanId = mrRow[0].plan_id;
+        } catch (e) {}
+      }
+
+      if (itemPlanId) {
+        try {
+          const [dimRows] = await pool.query(
+            `SELECT bom_ref FROM production_plan_materials 
+             WHERE plan_id = ? 
+             AND LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+             AND ABS(COALESCE(length,0) - COALESCE(?,0)) < 1 
+             AND ABS(COALESCE(width,0) - COALESCE(?,0)) < 1 
+             AND ABS(COALESCE(thickness,0) - COALESCE(?,0)) < 1 
+             LIMIT 1`,
+            [itemPlanId, i.material_name, i.length || 0, i.width || 0, i.thickness || 0]
+          );
+          if (dimRows.length > 0 && dimRows[0].bom_ref) {
+            gradeBomRef = dimRows[0].bom_ref;
+          }
+          if (!gradeBomRef) {
+            const [allPpm] = await pool.query(
+              `SELECT bom_ref FROM production_plan_materials WHERE plan_id = ? ORDER BY id ASC`,
+              [itemPlanId]
+            );
+            if (allPpm[idx] && allPpm[idx].bom_ref) {
+              gradeBomRef = allPpm[idx].bom_ref;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (!gradeBomRef || gradeBomRef === '—') {
+        gradeBomRef = i.bom_ref || i.bom_no;
+      }
+      if (!gradeBomRef || gradeBomRef === '—') {
+        gradeBomRef = await getItemParentDrawingNumber(pool, i);
+      }
+      if (!gradeBomRef || gradeBomRef === '—') {
+        gradeBomRef = (i.drawing_no && !/^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(i.drawing_no)) ? i.drawing_no : i.item_code;
+      }
+
       return {
         ...i,
         sl_no: idx + 1,
         is_bought_out: isBoughtOutItem,
         item_code: i.item_code || '—',
-        item_no: i.item_code || '—',
+        item_no: gradeBomRef || i.item_code || '—',
         drawing_no: resolvedDrawingNo || '—',
         material_name: i.material_name || i.description || '—',
         size: sizeStr,
