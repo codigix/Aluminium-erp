@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, DataTable, FormControl, StatusBadge, Badge, SearchableSelect, Tabs, Button } from '../components/ui.jsx';
+import { Card, FormControl, StatusBadge, Badge, SearchableSelect, Tabs, Button } from '../components/ui.jsx';
+import DataTable from '../components/DataTable.jsx';
 import { Truck, User } from 'lucide-react';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import {
@@ -1216,26 +1217,33 @@ const SalesOrders = () => {
       )
     },
     {
-      label: 'Customer',
+      label: 'Client Name',
       key: 'client',
       sortable: true,
       render: (val, row) => (
         <div className="flex items-center gap-2 py-1">
-          <div className="w-9 h-9 rounded  bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600  text-sm shadow-sm">
+          <div className="w-8 h-8 rounded bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs shadow-sm">
             {val ? val.substring(0, 2).toUpperCase() : 'C'}
           </div>
           <div className="flex flex-col">
-            <span className="font-semibold text-slate-900 leading-tight">{val}</span>
-            <span className="text-xs  text-slate-500 italic" title={row.project_name}>
-              {cleanProjectName(row.project_name, 'General Project')}
-            </span>
+            <span className="font-bold text-slate-900 leading-tight">{val || '—'}</span>
             {row.total_items_count > 0 && (
-              <span className="text-xs  mt-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 w-fit ">
-                {row.approved_items_count} / {row.total_items_count} Approved Designs
+              <span className="text-[10px] mt-0.5 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 w-fit">
+                {row.approved_items_count} / {row.total_items_count} Approved
               </span>
             )}
           </div>
         </div>
+      )
+    },
+    {
+      label: 'Project Name',
+      key: 'project_name',
+      sortable: true,
+      render: (val, row) => (
+        <span className="text-xs text-slate-600 font-medium italic" title={row.project_name}>
+          {cleanProjectName(row.project_name, 'General Project')}
+        </span>
       )
     },
     {
@@ -1345,6 +1353,62 @@ const SalesOrders = () => {
       }
     }
   ];
+
+  const viewOrderColumns = useMemo(() => [
+    {
+      label: 'Item Code',
+      key: 'item_code',
+      render: (val, item) => (
+        <div className="py-1">
+          <span className="font-mono font-bold text-indigo-600 block">
+            {item.drawing_no || item.item_code || val}
+          </span>
+          {item.description && (
+            <span className="text-[11px] text-slate-400 font-sans block mt-0.5 leading-tight max-w-[300px] truncate" title={item.description}>
+              {item.description}
+            </span>
+          )}
+        </div>
+      )
+    },
+    {
+      label: 'Type',
+      key: 'type',
+      render: (val) => <span className="text-slate-600 text-xs font-medium">{val || 'Standard'}</span>
+    },
+    {
+      label: 'HSN Code',
+      key: 'hsn_code',
+      render: (val) => <span className="text-slate-500 text-xs font-mono">{val || '—'}</span>
+    },
+    {
+      label: 'Item Delivery',
+      key: 'delivery_date',
+      render: (val) => (
+        <span className="text-slate-600 text-xs font-medium">
+          {val ? new Date(val).toLocaleDateString('en-GB') : '—'}
+        </span>
+      )
+    },
+    {
+      label: 'Qty',
+      key: 'quantity',
+      className: 'text-center',
+      render: (val) => <span className="text-slate-900 font-bold text-xs">{val || 0}</span>
+    },
+    {
+      label: 'Rate',
+      key: 'rate',
+      className: 'text-right',
+      render: (val) => <span className="text-slate-600 text-xs font-mono">₹ {(Number(val) || 0).toFixed(2)}</span>
+    },
+    {
+      label: 'Amount',
+      key: 'amount',
+      className: 'text-right',
+      render: (val) => <span className="text-emerald-600 font-bold text-xs font-mono">₹ {(Number(val) || 0).toFixed(2)}</span>
+    }
+  ], []);
 
   if (viewMode === 'list') {
     const totalOrders = orders.length;
@@ -1865,100 +1929,50 @@ const SalesOrders = () => {
                 </div>
               </div>
 
-              <div className="overflow-x-auto border border-slate-100 rounded ">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 text-slate-500 ">
-                    <tr>
-                      <th className="p-2  text-left">Item Code</th>
-                      <th className="p-2  text-left">Type</th>
-                      <th className="p-2  text-left">HSN Code</th>
-                      <th className="p-2  text-left">Item Delivery</th>
-                      <th className="p-2  text-center w-24">Qty</th>
-                      <th className="p-2  text-right">Rate</th>
-                      <th className="p-2  text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {formData.items.flatMap((item, idx) => {
-                      const rows = [];
-
-                      // Main Item Row
-                      rows.push(
-                        <tr key={`item-${idx}`} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="p-2    text-indigo-600">
-                            {item.drawing_no || item.item_code}
-                            <div className="text-xs text-slate-400 font-sans mt-0.5">{item.description}</div>
-                          </td>
-                          <td className="p-2  text-slate-500">{item.type || 'Standard'}</td>
-                          <td className="p-2  text-slate-500">{item.hsn_code || '—'}</td>
-                          <td className="p-2  text-slate-500">
-                            {item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : '—'}
-                          </td>
-                          <td className="p-2  text-center">
-                            {item.quantity}
-                          </td>
-                          <td className="p-2  text-right text-slate-600">₹ {(Number(item.rate) || 0).toFixed(2)}</td>
-                          <td className="p-2  text-right  text-emerald-600">₹ {(Number(item.amount) || 0).toFixed(2)}</td>
-                        </tr>
-                      );
-
-                      // Sub-Assembly Rows
-                      if (item.sub_assemblies && item.sub_assemblies.length > 0) {
-                        item.sub_assemblies.forEach((sa, saIdx) => {
-                          const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0));
-                          const saRate = parseFloat(sa.rate || 0);
-                          const saTotal = saQty * saRate;
-
-                          rows.push(
-                            <tr key={`item-${idx}-sa-${saIdx}`} className="bg-slate-50/30">
-                              <td className="p-2 border-b border-slate-100">
-                                <div className="flex items-center gap-2 pl-4">
-                                  <GitBranch size={10} className="text-blue-400 rotate-180" />
-                                  <span className="text-xs  text-slate-500 font-mono ">{sa.drawingNo || sa.drawing_no}</span>
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs max-h-[45vh] min-h-[220px] relative">
+                <DataTable
+                  columns={viewOrderColumns}
+                  data={formData.items}
+                  pageSize={100}
+                  hideSearch={true}
+                  emptyMessage="No items found in this order."
+                  expandable={formData.items.some(i => i.sub_assemblies && i.sub_assemblies.length > 0)}
+                  renderExpanded={(item) => {
+                    if (!item.sub_assemblies || item.sub_assemblies.length === 0) return null;
+                    const parentQty = parseFloat(item.quantity) || 1;
+                    return (
+                      <div className="bg-slate-50/70 p-3 space-y-2 border-t border-b border-slate-100/50">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sub Assemblies & Parts</p>
+                        <div className="space-y-1.5">
+                          {item.sub_assemblies.map((sa, saIdx) => {
+                            const saQty = (parseFloat(sa.quantity || 0) * parentQty);
+                            const saRate = parseFloat(sa.rate || 0);
+                            const saTotal = saQty * saRate;
+                            const saGroup = (sa.item_group || '').toUpperCase();
+                            const isSaPart = saGroup.includes('PART');
+                            return (
+                              <div key={saIdx} className="flex items-center justify-between text-xs p-2 bg-white rounded border border-slate-200/80 shadow-xs">
+                                <div className="flex items-center gap-2">
+                                  <GitBranch size={12} className="text-blue-500 rotate-180" />
+                                  <span className="font-mono text-slate-600 font-bold text-[11px]">{sa.drawingNo || sa.drawing_no}</span>
+                                  <span className="text-slate-800 font-semibold">{sa.description}</span>
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${isSaPart ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                    {isSaPart ? 'PART' : 'ASM'}
+                                  </span>
                                 </div>
-                              </td>
-                              <td className="p-2 border-b border-slate-100">
-                                <div className="flex items-center gap-2 pl-4">
-                                  <span className="text-xs  text-slate-700 ">{sa.description}</span>
-                                  {(() => {
-                                    const saGroup = (sa.item_group || '').toUpperCase();
-                                    const isSaPart = saGroup.includes('PART');
-                                    const displaySaGroup = 'PART';
-                                    return (
-                                      <span className={`px-1 py-0.5 rounded-[2px] text-[8px] border ${isSaPart
-                                        ? 'bg-blue-50 text-blue-600 border-blue-100/50'
-                                        : 'bg-emerald-50 text-emerald-600 border-emerald-100/50'
-                                        }`}>
-                                        {displaySaGroup}
-                                      </span>
-                                    );
-                                  })()}
+                                <div className="flex items-center gap-4 text-xs font-medium">
+                                  <span className="text-slate-600">Qty: <strong className="text-slate-900">{saQty.toFixed(3)}</strong></span>
+                                  <span className="text-slate-600">Rate: <strong className="text-slate-900">₹ {saRate.toFixed(2)}</strong></span>
+                                  <span className="text-indigo-600 font-bold">Total: ₹ {saTotal.toFixed(2)}</span>
                                 </div>
-                              </td>
-                              <td className="p-2 border-b border-slate-100 text-xs text-slate-500">
-                                {sa.hsn_code || '—'}
-                              </td>
-                              <td className="p-2 border-b border-slate-100 text-xs text-slate-500">
-                                {sa.delivery_date ? new Date(sa.delivery_date).toLocaleDateString() : '—'}
-                              </td>
-                              <td className="p-2 border-b border-slate-100 text-center text-xs  text-slate-600">
-                                {saQty.toFixed(3)}
-                              </td>
-                              <td className="p-2 border-b border-slate-100 text-right text-xs  text-slate-500">
-                                ₹ {saRate.toFixed(2)}
-                              </td>
-                              <td className="p-2 border-b border-slate-100 text-right pr-2 text-xs  text-slate-900 ">
-                                ₹ {saTotal.toFixed(2)}
-                              </td>
-                            </tr>
-                          );
-                        });
-                      }
-
-                      return rows;
-                    })}
-                  </tbody>
-                </table>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
               </div>
             </Card>
           )}

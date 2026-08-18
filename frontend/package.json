@@ -15,6 +15,7 @@
     "datatables.net": "^3.0.1",
     "datatables.net-dt": "^3.0.1",
     "datatables.net-react": "^1.0.2",
+    "date-fns": "^4.4.0",
     "formik": "^2.4.9",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.562.0",

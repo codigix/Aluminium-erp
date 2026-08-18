@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { Card, StatusBadge, Tabs, Button, DataTable } from '../components/ui.jsx';
+import { Card, StatusBadge, Tabs, Button } from '../components/ui.jsx';
+import DataTable from '../components/DataTable.jsx';
 import {
   MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Upload, Package, ChevronDown, ChevronUp, History, Search, CheckCheck, Plus, GitBranch, Download, Clock, ArrowUpRight, Calculator
 } from 'lucide-react';
@@ -804,52 +805,19 @@ const ClientQuotations = () => {
 
   const columns = React.useMemo(() => [
     {
-      label: 'Quotation ID / Type',
-      key: 'id',
-      render: (val, group) => {
-        const isPending = group.type === 'PENDING';
-        const hasUpdate = (group.quotes || []).some(q => q.pending_bom_cost);
-
-        return (
-          <div className="flex flex-col gap-1">
-            {isPending ? (
-              <span className="p-1 text-amber-600  text-xs">
-                Pending
-              </span>
-            ) : (
-              <div className="flex flex-col gap-1">
-                <span className="p-1 bg-indigo-50 text-indigo-600 rounded text-xs border border-indigo-100 w-fit">
-                  QRT-{String(group.display_id || val).padStart(4, '0')}
-                </span>
-                {group.version && (
-                  <span className="text-xs  text-slate-500  ml-1">
-                    Version {group.version}
-                  </span>
-                )}
-              </div>
-            )}
-            {hasUpdate && (
-              <span className="p-1 bg-rose-50 text-rose-600 rounded text-[9px] border border-rose-100 w-fit animate-pulse ">
-                BOM UPDATE REQUESTED
-              </span>
-            )}
-          </div>
-        );
-      }
+      label: 'Client Name',
+      key: 'company_name',
+      sortable: true,
+      render: (val) => <span className="text-xs font-bold text-slate-900">{val || '—'}</span>
     },
     {
-      label: 'Client & Project',
-      key: 'company_name',
+      label: 'Project Name',
+      key: 'project_name',
+      sortable: true,
       render: (val, group) => (
-        <div className="flex flex-col">
-          <span className="text-xs  text-slate-900">{val}</span>
-          <span className="text-[11px] text-slate-500 italic">
-            {group.project_name || 'General Project'}
-          </span>
-          <span className="text-[9px] text-slate-400 mt-0.5">
-            {new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </span>
-        </div>
+        <span className="text-xs text-slate-600 font-medium italic">
+          {group.project_name || 'General Project'}
+        </span>
       )
     },
     {
@@ -891,6 +859,40 @@ const ClientQuotations = () => {
           </div>
         </div>
       )
+    },
+    {
+      label: 'Quotation ID / Type',
+      key: 'id',
+      render: (val, group) => {
+        const isPending = group.type === 'PENDING';
+        const hasUpdate = (group.quotes || []).some(q => q.pending_bom_cost);
+
+        return (
+          <div className="flex flex-col gap-1">
+            {isPending ? (
+              <span className="p-1 text-amber-600  text-xs">
+                Pending
+              </span>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <span className="p-1 bg-indigo-50 text-indigo-600 rounded text-xs border border-indigo-100 w-fit">
+                  QRT-{String(group.display_id || val).padStart(4, '0')}
+                </span>
+                {group.version && (
+                  <span className="text-xs  text-slate-500  ml-1">
+                    Version {group.version}
+                  </span>
+                )}
+              </div>
+            )}
+            {hasUpdate && (
+              <span className="p-1 bg-rose-50 text-rose-600 rounded text-[9px] border border-rose-100 w-fit animate-pulse ">
+                BOM UPDATE REQUESTED
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       label: 'Amount',
@@ -953,6 +955,16 @@ const ClientQuotations = () => {
           );
         }
       }
+    },
+    {
+      label: 'Created Date',
+      key: 'created_at',
+      sortable: true,
+      render: (val, group) => (
+        <span className="text-xs text-slate-500">
+          {new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+        </span>
+      )
     },
     {
       label: 'Action',
@@ -2138,7 +2150,7 @@ const ClientQuotations = () => {
           data={combinedQuotations}
           loading={loading}
           renderExpanded={activeTab === 'pending' ? renderExpanded : undefined}
-          hideExpander={activeTab !== 'pending'}
+          expandable={activeTab === 'pending'}
           onRowClick={(group, e) => {
             // Check if the click was on an interactive element or the expander
             if (e && (e.target.closest('button') || e.target.closest('a') || e.target.closest('input') || e.target.closest('select') || e.target.closest('[data-expander="true"]'))) {

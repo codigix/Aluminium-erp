@@ -5,7 +5,8 @@ import {
   Search, RefreshCw, Filter, FileText, Calendar, Building2,
   DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch, Upload, MapPin, User, ArrowLeft, Check
 } from 'lucide-react'
-import { Card, DataTable, SearchableSelect } from '../components/ui.jsx'
+import { Card, SearchableSelect } from '../components/ui.jsx'
+import DataTable from '../components/DataTable.jsx'
 import SendEmailModal from '../components/SendEmailModal'
 import { getFileUrl } from '../utils/url'
 
@@ -1662,29 +1663,45 @@ const CustomerPO = ({
   const columns = [
     {
       label: 'Customer PO Details',
+      key: 'po_number',
+      sortable: true,
       render: (_, row) => (
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
             <FileText className="w-4 h-4" />
           </div>
-          <p className="text-xs  text-slate-900   ">{row.po_number}</p>
+          <p className="text-xs font-bold text-slate-900">{row.po_number}</p>
         </div>
       )
     },
     {
-      label: 'Client & Project',
+      label: 'Client Name',
+      key: 'company_name',
+      sortable: true,
       render: (_, row) => (
-        <div className="flex flex-col">
-          <span className="text-xs  text-slate-900">{row.company_name}</span>
-          <span className="text-[11px] text-slate-500 italic">
-            {row.project_name || 'General Project'}
+        <span className="text-xs font-bold text-slate-900">{row.company_name || '—'}</span>
+      )
+    },
+    {
+      label: 'Project Name',
+      key: 'project_name',
+      sortable: true,
+      render: (_, row) => (
+        <span className="text-xs text-slate-600 font-medium italic">
+          {row.project_name || 'General Project'}
+        </span>
+      )
+    },
+    {
+      label: 'PO Date',
+      key: 'po_date',
+      sortable: true,
+      render: (_, row) => (
+        <div className="flex items-center gap-1.5 text-slate-500">
+          <Calendar className="w-3 h-3 text-slate-400" />
+          <span className="text-xs font-medium">
+            {row.po_date ? new Date(row.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
           </span>
-          <div className="flex items-center gap-1.5 text-slate-400 mt-0.5">
-            <Calendar className="w-3 h-3" />
-            <span className="text-xs ">
-              {new Date(row.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-            </span>
-          </div>
         </div>
       )
     },
@@ -1843,6 +1860,260 @@ const CustomerPO = ({
       )
     }
   ];
+
+  const modalItemColumns = useMemo(() => [
+    {
+      label: 'Drawing No *',
+      key: 'drawingNo',
+      render: (val, item, index) => {
+        if (formMode === 'VIEW') {
+          return (
+            <span className="text-xs font-mono font-bold text-slate-700 block max-w-[380px]" title={item.drawingNo}>
+              {(item.drawingNo || val)?.toUpperCase() || '—'}
+            </span>
+          );
+        }
+        return (
+          <SearchableSelect
+            options={allDrawings.map(d => ({
+              value: d.drawing_no,
+              label: `${d.drawing_no} - ${d.drawing_description || d.description || ''}`
+            }))}
+            value={(item.drawingNo || val)?.toUpperCase() || ''}
+            onChange={(e) => handleItemChange(index, 'drawingNo', e.target.value.toUpperCase())}
+            placeholder="Search Drawing No..."
+            allowCustom={true}
+            openUpwards={false}
+            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
+          />
+        );
+      }
+    },
+    {
+      label: 'Description *',
+      key: 'description',
+      render: (val, item, index) => {
+        if (formMode === 'VIEW') {
+          return (
+            <span className="text-xs font-semibold text-slate-700 block truncate max-w-[200px]" title={val}>
+              {val || '—'}
+            </span>
+          );
+        }
+        return (
+          <input
+            type="text"
+            value={val || ''}
+            onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+            placeholder="Item description..."
+            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
+          />
+        );
+      }
+    },
+    {
+      label: 'HSN Code',
+      key: 'hsnCode',
+      className: 'text-center',
+      render: (val, item, index) => {
+        if (formMode === 'VIEW') {
+          return <span className="text-xs text-slate-600 font-medium">{val || '—'}</span>;
+        }
+        return (
+          <input
+            type="text"
+            value={val || ''}
+            onChange={(e) => handleItemChange(index, 'hsnCode', e.target.value)}
+            placeholder="HSN..."
+            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
+          />
+        );
+      }
+    },
+    {
+      label: 'Item Delivery',
+      key: 'deliveryDate',
+      className: 'text-center',
+      render: (val, item, index) => {
+        if (formMode === 'VIEW') {
+          return (
+            <span className="text-xs text-slate-600 font-medium">
+              {val ? new Date(val).toLocaleDateString('en-GB') : '—'}
+            </span>
+          );
+        }
+        return (
+          <input
+            type="date"
+            value={val || ''}
+            onChange={(e) => handleItemChange(index, 'deliveryDate', e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
+          />
+        );
+      }
+    },
+    {
+      label: 'Qty *',
+      key: 'quantity',
+      className: 'text-center',
+      render: (val, item, index) => {
+        if (formMode === 'VIEW') {
+          return <span className="text-xs font-bold text-slate-800">{val || 0}</span>;
+        }
+        return (
+          <input
+            type="number"
+            value={val || ''}
+            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-800"
+          />
+        );
+      }
+    },
+    {
+      label: 'Dispatch Progress',
+      key: 'dispatched_qty',
+      className: 'text-center',
+      render: (val, item) => {
+        const ordered = parseFloat(item.quantity) || 0;
+        const dispatched = parseFloat(val) || 0;
+        const percent = ordered > 0 ? Math.min(Math.round((dispatched / ordered) * 100), 100) : 0;
+
+        return (
+          <div className="flex flex-col w-full px-1 max-w-[140px] mx-auto">
+            <div className="flex justify-between items-center text-[11px] font-semibold text-slate-700 leading-tight">
+              <span>
+                {dispatched % 1 === 0 ? parseInt(dispatched) : dispatched}/{ordered % 1 === 0 ? parseInt(ordered) : ordered}
+              </span>
+              <span className="text-blue-600">{percent}%</span>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-1 mt-1 overflow-hidden">
+              <div className="bg-blue-600 h-1 rounded-full transition-all duration-350" style={{ width: `${percent}%` }} />
+            </div>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Unit',
+      key: 'unit',
+      className: 'text-center',
+      render: (val, item, index) => {
+        if (formMode === 'VIEW') {
+          return <span className="text-xs text-slate-600 font-medium">{val || 'Nos'}</span>;
+        }
+        return (
+          <input
+            type="text"
+            value={val || ''}
+            onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
+          />
+        );
+      }
+    },
+    {
+      label: 'Rate *',
+      key: 'rate',
+      className: 'text-center',
+      render: (val, item, index) => {
+        if (formMode === 'VIEW') {
+          return <span className="text-xs font-mono font-semibold text-slate-700">{formatCurrency(val)}</span>;
+        }
+        return (
+          <input
+            type="number"
+            value={val || ''}
+            onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
+            className="w-full bg-indigo-50 border border-indigo-100 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-indigo-600 placeholder:text-indigo-200"
+            placeholder="0.00"
+          />
+        );
+      }
+    },
+    {
+      label: 'CGST%',
+      key: 'cgstPercent',
+      className: 'text-center',
+      render: (val, item, index) => {
+        if (formMode === 'VIEW') {
+          return <span className="text-xs text-slate-500">{parseFloat(val) || 0}%</span>;
+        }
+        return (
+          <input
+            type="number"
+            value={val || ''}
+            onChange={(e) => handleItemChange(index, 'cgstPercent', e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
+          />
+        );
+      }
+    },
+    {
+      label: 'SGST%',
+      key: 'sgstPercent',
+      className: 'text-center',
+      render: (val, item, index) => {
+        if (formMode === 'VIEW') {
+          return <span className="text-xs text-slate-500">{parseFloat(val) || 0}%</span>;
+        }
+        return (
+          <input
+            type="number"
+            value={val || ''}
+            onChange={(e) => handleItemChange(index, 'sgstPercent', e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
+          />
+        );
+      }
+    },
+    {
+      label: 'IGST%',
+      key: 'igstPercent',
+      className: 'text-center',
+      render: (val, item, index) => {
+        if (formMode === 'VIEW') {
+          return <span className="text-xs text-slate-500">{parseFloat(val) || 0}%</span>;
+        }
+        return (
+          <input
+            type="number"
+            value={val || ''}
+            onChange={(e) => handleItemChange(index, 'igstPercent', e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
+          />
+        );
+      }
+    },
+    {
+      label: 'Total',
+      key: 'total',
+      className: 'text-right',
+      render: (_, item) => {
+        const subtotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
+        const tax = subtotal * ((parseFloat(item.cgstPercent) || 0) + (parseFloat(item.sgstPercent) || 0) + (parseFloat(item.igstPercent) || 0)) / 100;
+        return <span className="text-xs font-bold text-slate-900">{formatCurrency(subtotal + tax)}</span>;
+      }
+    },
+    {
+      label: 'Action',
+      key: 'actions',
+      className: 'text-center',
+      render: (_, item, index) => {
+        if (formMode === 'VIEW') return null;
+        return (
+          <button
+            type="button"
+            onClick={() => handleRemoveItem(index)}
+            className="p-1 bg-slate-50 border border-slate-200 rounded text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 transition-all active:scale-90"
+            title="Remove Item"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        );
+      }
+    }
+  ], [formMode, allDrawings, formatCurrency, handleItemChange, handleRemoveItem]);
 
   if (isPendingView) {
     return (
@@ -2952,294 +3223,60 @@ const CustomerPO = ({
                     )}
                   </div>
 
-                  <div className="overflow-x-auto overflow-y-auto rounded border-2 border-slate-100 bg-white max-h-[45vh] min-h-[280px] custom-scrollbar relative">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 border-b-2 border-slate-100">
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-left w-96 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Drawing No *</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-left z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Description *</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-20 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">HSN Code</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-28 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Item Delivery</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-16 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Qty *</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-22 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Dispatch Progress</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-12 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Unit</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-20 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Rate *</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-10 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">CGST%</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-10 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">SGST%</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-10 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">IGST%</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-right pr-6 w-24 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Total</th>
-                          <th className="sticky top-0 bg-slate-50 p-1.5 text-xs text-slate-400 text-center w-10 z-20 shadow-[0_1px_0_rgba(0,0,0,0.05)]">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {poForm.items.flatMap((item, index) => {
-                          const subtotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
-                          const tax = subtotal * ((parseFloat(item.cgstPercent) || 0) + (parseFloat(item.sgstPercent) || 0) + (parseFloat(item.igstPercent) || 0)) / 100;
-                          const total = subtotal + tax;
-                          const rows = [];
-                          rows.push(
-                            <tr key={`item-${index}`} className="group hover:bg-indigo-50/30 transition-all">
-                              <td className="p-1">
-                                {formMode === 'VIEW' ? (
-                                  <span className="text-xs font-mono font-bold text-slate-700 block px-1 max-w-[380px]" title={item.drawingNo}>
-                                    {item.drawingNo?.toUpperCase() || '—'}
-                                  </span>
-                                ) : (
-                                  <SearchableSelect
-                                    options={allDrawings.map(d => ({
-                                      value: d.drawing_no,
-                                      label: `${d.drawing_no} - ${d.drawing_description || d.description || ''}`
-                                    }))}
-                                    value={item.drawingNo?.toUpperCase() || ''}
-                                    onChange={(e) => handleItemChange(index, 'drawingNo', e.target.value.toUpperCase())}
-                                    placeholder="Search Drawing No..."
-                                    allowCustom={true}
-                                    openUpwards={false}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
-                                  />
-                                )}
-                              </td>
-                              <td className="p-1">
-                                {formMode === 'VIEW' ? (
-                                  <span className="text-xs font-semibold text-slate-700 block min-w-[140px] px-1 truncate max-w-[200px]" title={item.description}>
-                                    {item.description || '—'}
-                                  </span>
-                                ) : (
-                                  <input
-                                    type="text"
-                                    value={item.description}
-                                    onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                                    placeholder="Item description..."
-                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
-                                  />
-                                )}
-                              </td>
-                              <td className="p-1 text-center align-middle">
-                                {formMode === 'VIEW' ? (
-                                  <span className="text-xs text-slate-600 font-medium block text-center px-1">
-                                    {item.hsnCode || '—'}
-                                  </span>
-                                ) : (
-                                  <input
-                                    type="text"
-                                    value={item.hsnCode || ''}
-                                    onChange={(e) => handleItemChange(index, 'hsnCode', e.target.value)}
-                                    placeholder="HSN..."
-                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
-                                  />
-                                )}
-                              </td>
-                              <td className="p-1 text-center align-middle">
-                                {formMode === 'VIEW' ? (
-                                  <span className="text-xs text-slate-600 font-medium block text-center px-1">
-                                    {item.deliveryDate ? new Date(item.deliveryDate).toLocaleDateString('en-GB') : '—'}
-                                  </span>
-                                ) : (
-                                  <input
-                                    type="date"
-                                    value={item.deliveryDate || ''}
-                                    onChange={(e) => handleItemChange(index, 'deliveryDate', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
-                                  />
-                                )}
-                              </td>
-                              <td className="p-1 text-center align-middle">
-                                {formMode === 'VIEW' ? (
-                                  <span className="text-xs font-semibold text-slate-800 block text-center px-1">
-                                    {item.quantity || 0}
-                                  </span>
-                                ) : (
-                                  <input
-                                    type="number"
-                                    value={item.quantity}
-                                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-800"
-                                  />
-                                )}
-                              </td>
-                              <td className="p-1 text-center align-middle min-w-[88px]">
-                                {(() => {
-                                  const ordered = parseFloat(item.quantity) || 0;
-                                  const dispatched = parseFloat(item.dispatched_qty) || 0;
-                                  const percent = ordered > 0 ? Math.min(Math.round((dispatched / ordered) * 100), 100) : 0;
-
-                                  return (
-                                    <div className="flex flex-col w-full px-1 max-w-[140px] mx-auto">
-                                      <div className="flex justify-between items-center text-[11px] font-semibold text-slate-700 leading-tight">
-                                        <span>
-                                          {dispatched % 1 === 0 ? parseInt(dispatched) : dispatched}/{ordered % 1 === 0 ? parseInt(ordered) : ordered}
-                                        </span>
-                                        <span className="text-blue-600">
-                                          {percent}%
-                                        </span>
-                                      </div>
-                                      <div className="w-full bg-slate-100 rounded-full h-1 mt-1 overflow-hidden">
-                                        <div
-                                          className="bg-blue-600 h-1 rounded-full transition-all duration-350"
-                                          style={{ width: `${percent}%` }}
-                                        />
-                                      </div>
+                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs max-h-[45vh] min-h-[220px] relative">
+                    <DataTable
+                      columns={modalItemColumns}
+                      data={poForm.items}
+                      pageSize={100}
+                      hideSearch={true}
+                      emptyMessage="No purchase items found."
+                      expandable={poForm.items.some(i => i.sub_assemblies && i.sub_assemblies.length > 0)}
+                      renderExpanded={(item) => {
+                        if (!item.sub_assemblies || item.sub_assemblies.length === 0) return null;
+                        const parentQty = (item.quantity === '' || item.quantity === undefined || item.quantity === null || isNaN(parseFloat(item.quantity))) ? 1 : (parseFloat(item.quantity) || 0);
+                        return (
+                          <div className="bg-slate-50/70 p-3 space-y-2 border-t border-b border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sub Assemblies & Parts</p>
+                            <div className="space-y-1.5">
+                              {item.sub_assemblies.map((sa, saIdx) => {
+                                const saQty = (parseFloat(sa.quantity || 0) * parentQty);
+                                const saRate = parseFloat(sa.rate || 0);
+                                const saTotal = saQty * saRate;
+                                const saGroup = (sa.item_group || sa.drawing_type || '').toUpperCase();
+                                const isSaPart = saGroup.includes('PART') || (saGroup !== 'ASM' && saGroup !== 'ASSEMBLY' && !saGroup.includes('ASSEMBLY') && !sa.is_assembly);
+                                return (
+                                  <div key={saIdx} className="flex items-center justify-between text-xs p-2 bg-white rounded border border-slate-200/80 shadow-xs">
+                                    <div className="flex items-center gap-2">
+                                      <GitBranch size={12} className="text-blue-500 rotate-180" />
+                                      <span className="font-mono text-slate-600 font-bold text-[11px]">{(sa.drawingNo || '').toUpperCase()}</span>
+                                      <span className="text-slate-800 font-semibold">{sa.description}</span>
+                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${isSaPart ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>
+                                        {isSaPart ? 'PART' : 'ASM'}
+                                      </span>
                                     </div>
-                                  );
-                                })()}
-                              </td>
-                              <td className="p-1 text-center align-middle">
-                                {formMode === 'VIEW' ? (
-                                  <span className="text-xs text-slate-600 font-medium block text-center px-1">{item.unit || 'Nos'}</span>
-                                ) : (
-                                  <input
-                                    type="text"
-                                    value={item.unit}
-                                    onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600 "
-                                  />
-                                )}
-                              </td>
-                              <td className="p-1 text-center align-middle">
-                                {formMode === 'VIEW' ? (
-                                  <span className="text-xs font-mono font-semibold text-slate-700 block text-center px-1">{formatCurrency(item.rate)}</span>
-                                ) : (
-                                  <input
-                                    type="number"
-                                    value={item.rate}
-                                    onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
-                                    className="w-full bg-indigo-50 border border-indigo-100 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-indigo-600 placeholder:text-indigo-200"
-                                    placeholder="0.00"
-                                  />
-                                )}
-                              </td>
-                              <td className="p-1 text-center align-middle">
-                                {formMode === 'VIEW' ? (
-                                  <span className="text-xs text-slate-500 block text-center px-1">{parseFloat(item.cgstPercent) || 0}%</span>
-                                ) : (
-                                  <input
-                                    type="number"
-                                    value={item.cgstPercent}
-                                    onChange={(e) => handleItemChange(index, 'cgstPercent', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
-                                  />
-                                )}
-                              </td>
-                              <td className="p-1 text-center align-middle">
-                                {formMode === 'VIEW' ? (
-                                  <span className="text-xs text-slate-500 block text-center px-1">{parseFloat(item.sgstPercent) || 0}%</span>
-                                ) : (
-                                  <input
-                                    type="number"
-                                    value={item.sgstPercent}
-                                    onChange={(e) => handleItemChange(index, 'sgstPercent', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
-                                  />
-                                )}
-                              </td>
-                              <td className="p-1 text-center align-middle">
-                                {formMode === 'VIEW' ? (
-                                  <span className="text-xs text-slate-500 block text-center px-1">{parseFloat(item.igstPercent) || 0}%</span>
-                                ) : (
-                                  <input
-                                    type="number"
-                                    value={item.igstPercent}
-                                    onChange={(e) => handleItemChange(index, 'igstPercent', e.target.value)}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
-                                  />
-                                )}
-                              </td>
-                              <td className="p-1 text-right pr-6">
-                                <span className="text-xs   text-slate-900">{formatCurrency(total)}</span>
-                              </td>
-                              <td className="p-1 text-center">
-                                {formMode !== 'VIEW' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveItem(index)}
-                                    className="p-1 bg-slate-50 border border-slate-200 rounded  text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 transition-all active:scale-90"
-                                    title="Remove Item"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          );
-
-                          if (item.sub_assemblies && item.sub_assemblies.length > 0) {
-                            item.sub_assemblies.forEach((sa, saIdx) => {
-                              const parentQty = (item.quantity === '' || item.quantity === undefined || item.quantity === null || isNaN(parseFloat(item.quantity))) ? 1 : (parseFloat(item.quantity) || 0);
-                              const saQty = (parseFloat(sa.quantity || 0) * parentQty);
-                              const saRate = parseFloat(sa.rate || 0);
-                              const saTotal = saQty * saRate;
-                              rows.push(
-                                <tr key={`item-${index}-sa-${saIdx}`} className="bg-slate-50/40">
-                                  <td className="py-1 px-1.5 border-b border-slate-100">
-                                    <div className="flex items-center gap-2 pl-3">
-                                      <GitBranch size={12} className="text-blue-400 rotate-180" />
-                                      <span className="text-[9px] text-slate-500 font-mono ">{(sa.drawingNo || '').toUpperCase()}</span>
+                                    <div className="flex items-center gap-4 text-xs font-medium">
+                                      <span className="text-slate-600">Qty: <strong className="text-slate-900">{saQty.toFixed(3)}</strong> {sa.unit || 'Nos'}</span>
+                                      <span className="text-slate-600">Rate: <strong className="text-slate-900">{formatCurrency(saRate)}</strong></span>
+                                      <span className="text-indigo-600 font-bold">Total: {formatCurrency(saTotal)}</span>
                                     </div>
-                                  </td>
-                                  <td className="py-1 px-1.5 border-b border-slate-100">
-                                    <div className="flex flex-col pl-3">
-                                      <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
-                                      {(() => {
-                                        const saGroup = (sa.item_group || sa.drawing_type || '').toUpperCase();
-                                        const isSaPart = saGroup.includes('PART') || (saGroup !== 'ASM' && saGroup !== 'ASSEMBLY' && !saGroup.includes('ASSEMBLY') && !sa.is_assembly);
-                                        const displaySaGroup = isSaPart ? 'PART' : 'ASM';
-                                        return (
-                                          <div className="flex items-center gap-2 mt-0.5">
-                                            <span className={`px-1 py-0.5 rounded-[3px] text-[8px] font-semibold ${isSaPart
-                                              ? 'bg-blue-50 text-blue-600 border border-blue-100/50'
-                                              : 'bg-indigo-50 text-indigo-600 border border-indigo-100/50'
-                                              }`}>
-                                              {displaySaGroup}
-                                            </span>
-                                          </div>
-                                        );
-                                      })()}
-                                    </div>
-                                  </td>
-                                  <td className="py-1 px-1.5 border-b border-slate-100 text-center text-[10px] text-slate-500 ">
-                                    {sa.hsnCode || '—'}
-                                  </td>
-                                  <td className="py-1 px-1.5 border-b border-slate-100 text-center text-[10px] text-slate-500 ">
-                                    {sa.deliveryDate ? new Date(sa.deliveryDate).toLocaleDateString('en-GB') : '—'}
-                                  </td>
-                                  <td className="py-1 px-1.5 border-b border-slate-100 text-center text-[11px] text-slate-600 ">
-                                    {saQty.toFixed(3)}
-                                  </td>
-                                  <td className="py-1 px-1.5 border-b border-slate-100"></td>
-                                  <td className="py-1 px-1.5 border-b border-slate-100 text-center text-[11px] text-slate-400 ">
-                                    {sa.unit || 'Nos'}
-                                  </td>
-                                  <td className="py-1 px-1.5 border-b border-slate-100 text-center text-[11px] text-slate-700 ">
-                                    {formatCurrency(saRate)}
-                                  </td>
-                                  <td colSpan="3" className="py-1 px-1.5 border-b border-slate-100"></td>
-                                  <td className="py-1 px-1.5 border-b border-slate-100 text-right pr-6 text-[11px] text-slate-900 ">
-                                    {formatCurrency(saTotal)}
-                                  </td>
-                                  <td className="py-1 px-1.5 border-b border-slate-100"></td>
-                                </tr>
-                              );
-                            });
-                          }
-                          return rows;
-                        })}
-                      </tbody>
-                      <tfoot className="bg-slate-50/50">
-                        <tr>
-                          <td colSpan="11" className="px-4 p-2 text-right text-xs  text-slate-400  ">Grand Total (Incl. Taxes)</td>
-                          <td className="px-4 p-2 text-right pr-6">
-                            <span className="text-sm  text-indigo-600">
-                              {formatCurrency(poForm.items.reduce((sum, item) => {
-                                const sub = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
-                                const tax = sub * ((parseFloat(item.cgstPercent) || 0) + (parseFloat(item.sgstPercent) || 0) + (parseFloat(item.igstPercent) || 0)) / 100;
-                                return sum + sub + tax;
-                              }, 0))}
-                            </span>
-                          </td>
-                          <td></td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <div className="bg-slate-50/80 p-3 border-t border-slate-200 flex justify-between items-center text-xs font-bold text-slate-700">
+                      <span>Grand Total (Incl. Taxes)</span>
+                      <span className="text-sm font-black text-indigo-600">
+                        {formatCurrency(poForm.items.reduce((sum, item) => {
+                          const sub = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
+                          const tax = sub * ((parseFloat(item.cgstPercent) || 0) + (parseFloat(item.sgstPercent) || 0) + (parseFloat(item.igstPercent) || 0)) / 100;
+                          return sum + sub + tax;
+                        }, 0))}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

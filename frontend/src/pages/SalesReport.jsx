@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { Card, DataTable, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
+import { Card, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
+import DataTable from '../components/DataTable.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, Cell, PieChart, Pie
@@ -86,6 +87,106 @@ const SalesReport = () => {
     if (!stats?.salesOrders) return [];
     return stats.salesOrders;
   }, [stats?.salesOrders]);
+
+  const columns = useMemo(() => [
+    {
+      label: 'Order Details',
+      key: 'id',
+      sortable: true,
+      render: (val, order) => (
+        <button 
+          onClick={() => navigate(`/sales-report-details/${order.public_id || order.id_val}`)}
+          className="text-left group/id"
+        >
+          <p className="text-xs text-indigo-600 group-hover/id:underline font-bold">{order.id}</p>
+          <p className="text-[9px] text-slate-400 mt-0.5">Sales Order</p>
+        </button>
+      )
+    },
+    {
+      label: 'Client Name',
+      key: 'customer',
+      sortable: true,
+      render: (val, order) => (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
+            {order.initials}
+          </div>
+          <span className="text-xs font-bold text-slate-900">{order.customer || '—'}</span>
+        </div>
+      )
+    },
+    {
+      label: 'Project Name',
+      key: 'sub',
+      sortable: true,
+      render: (val) => (
+        <span className="text-xs text-slate-600 font-medium italic">{val || 'General Project'}</span>
+      )
+    },
+    {
+      label: 'Order Date',
+      key: 'date',
+      sortable: true,
+      render: (val) => (
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <Calendar className="w-3.5 h-3.5 text-slate-300" />
+          {val}
+        </div>
+      )
+    },
+    {
+      label: 'Delivery',
+      key: 'delivery',
+      sortable: true,
+      render: (val, order) => (
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <div className={`w-2 h-2 rounded ${order.status === 'Paid' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+          {val}
+        </div>
+      )
+    },
+    {
+      label: 'Grand Total',
+      key: 'total',
+      sortable: true,
+      className: 'text-right',
+      render: (val) => (
+        <div className="text-right">
+          <p className="text-xs font-bold text-slate-900">₹{parseFloat(val || 0).toLocaleString('en-IN')}</p>
+          <p className="text-[9px] text-emerald-600 flex items-center justify-end gap-1 mt-0.5">
+             <CheckCircle2 className="w-2.5 h-2.5" /> Inclusive of Tax
+          </p>
+        </div>
+      )
+    },
+    {
+      label: 'Status',
+      key: 'status',
+      sortable: true,
+      className: 'text-center',
+      render: (val) => <StatusBadge status={val} />
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, order) => (
+        <div className="flex items-center justify-end gap-1">
+           <button 
+             onClick={() => navigate(`/sales-report-details/${order.public_id || order.id_val}`)}
+             className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all border border-transparent hover:border-slate-200"
+             title="View Order Details"
+           >
+             <Eye className="w-3.5 h-3.5" />
+           </button>
+           <button className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all border border-transparent hover:border-slate-200">
+             <Printer className="w-3.5 h-3.5" />
+           </button>
+        </div>
+      )
+    }
+  ], [navigate]);
 
   const paginatedOrders = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -531,129 +632,19 @@ const SalesReport = () => {
       </div>
 
       {/* Sales Orders Detailed Table */}
-      <div className="">
+      <div className="space-y-2">
         <div className="p-2 border-b border-slate-50 flex items-center justify-between">
            <div>
-             <h3 className="text-sm text-slate-900   ">Sales Orders</h3>
+             <h3 className="text-sm text-slate-900 font-bold">Sales Orders</h3>
            </div>
         </div>
-        <div className="p-0 overflow-x-auto">
-          <table className="w-full bg-white text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/50 text-xs text-slate-400    border-b border-slate-100">
-                <th className="p-2">Order Details</th>
-                <th className="p-2">Customer</th>
-                <th className="p-2">Order Date</th>
-                <th className="p-2">Delivery</th>
-                <th className="p-2 text-right">Grand Total</th>
-                <th className="p-2 text-center">Status</th>
-                <th className="p-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {paginatedOrders.map((order, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="p-2">
-                    <button 
-                      onClick={() => navigate(`/sales-report-details/${order.public_id || order.id_val}`)}
-                      className="text-left group/id"
-                    >
-                      <p className="text-xs  text-indigo-600 group-hover/id:underline font-bold">{order.id}</p>
-                      <p className="text-[9px] text-slate-400   mt-0.5">Sales Order</p>
-                    </button>
-                  </td>
-                  <td className="p-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-xs  text-slate-500">
-                        {order.initials}
-                      </div>
-                      <div>
-                        <p className="text-xs  text-slate-900 ">{order.customer}</p>
-                        <p className="text-[9px] text-slate-400   er">{order.sub}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="p-2">
-                    <div className="flex items-center gap-2 text-xs  text-slate-600">
-                      <Calendar className="w-3.5 h-3.5 text-slate-300" />
-                      {order.date}
-                    </div>
-                  </td>
-                  <td className="p-2">
-                    <div className="flex items-center gap-2 text-xs  text-slate-600">
-                      <div className={`w-2 h-2 rounded ${order.status === 'Paid' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                      {order.delivery}
-                    </div>
-                  </td>
-                  <td className="p-2 text-right">
-                    <p className="text-xs  text-slate-900">₹{parseFloat(order.total).toLocaleString('en-IN')}</p>
-                    <p className="text-[9px] text-emerald-600  flex items-center justify-end gap-1 mt-0.5">
-                       <CheckCircle2 className="w-2.5 h-2.5" /> Inclusive of Tax
-                    </p>
-                  </td>
-                  <td className="p-2 text-center">
-                    <StatusBadge status={order.status} />
-                  </td>
-                  <td className="p-2 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                       <button 
-                         onClick={() => navigate(`/sales-report-details/${order.public_id || order.id_val}`)}
-                         className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all border border-transparent hover:border-slate-200"
-                         title="View Order Details"
-                       >
-                         <Eye className="w-3.5 h-3.5" />
-                       </button>
-                       <button className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all border border-transparent hover:border-slate-200">
-                         <Printer className="w-3.5 h-3.5" />
-                       </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {paginatedOrders.length === 0 && (
-                <tr>
-                  <td colSpan="7" className="px-6 py-12 text-center text-slate-400 text-xs   ">
-                    No sales orders found for selected period
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        {totalPages > 1 && (
-          <div className="p-2 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
-             <p className="text-xs  text-slate-400  ">
-               Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredOrders.length)} of {filteredOrders.length} entries
-             </p>
-             <div className="flex items-center gap-1">
-               <button 
-                 disabled={currentPage === 1}
-                 onClick={() => setCurrentPage(prev => prev - 1)}
-                 className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
-               >
-                 <ChevronRight className="w-4 h-4 rotate-180" />
-               </button>
-               {[...Array(totalPages)].map((_, i) => (
-                 <button 
-                   key={i}
-                   onClick={() => setCurrentPage(i + 1)}
-                   className={`w-8 h-8 flex items-center justify-center rounded  text-xs transition-all ${
-                     currentPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
-                   }`}
-                 >
-                   {i + 1}
-                 </button>
-               ))}
-               <button 
-                 disabled={currentPage === totalPages}
-                 onClick={() => setCurrentPage(prev => prev + 1)}
-                 className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
-               >
-                 <ChevronRight className="w-4 h-4" />
-               </button>
-             </div>
-          </div>
-        )}
+        <DataTable
+          columns={columns}
+          data={filteredOrders}
+          loading={loading}
+          pageSize={10}
+          emptyMessage="No sales orders found for selected period"
+        />
       </div>
     </div>
   );

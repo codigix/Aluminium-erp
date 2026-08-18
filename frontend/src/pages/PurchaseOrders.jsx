@@ -4,7 +4,8 @@ import {
   Plus, Search, RefreshCw, Package, Clock, CheckCircle2,
   AlertCircle, Truck, FileText, LayoutGrid, List, Filter, GitMerge
 } from 'lucide-react';
-import { Card, DataTable, SearchableSelect, Button, Tabs } from '../components/ui.jsx';
+import { Card, SearchableSelect, Button, Tabs } from '../components/ui.jsx';
+import DataTable from '../components/DataTable.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -1337,6 +1338,50 @@ const PurchaseOrders = () => {
 
   const columns = [
     {
+      label: 'Client Name',
+      key: 'company_name',
+      sortable: true,
+      render: (val, row) => (
+        <span className="font-bold text-slate-900 text-xs">
+          {row.company_name || '—'}
+        </span>
+      )
+    },
+    {
+      label: 'Project Name',
+      key: 'project_name',
+      sortable: true,
+      render: (val, row) => {
+        if (row.project_count > 1) {
+          return (
+            <div className="flex flex-col py-1 min-w-[200px] max-w-[300px]">
+              <span className="text-slate-900 font-semibold text-xs leading-tight">
+                {row.project_count} Projects
+              </span>
+              <span className="text-[10px] text-slate-500 italic mt-0.5 break-words" title={row.merged_project_names}>
+                {row.merged_project_names}
+              </span>
+            </div>
+          );
+        }
+        const projVal = row.project_name || val;
+        if (!projVal) return '—';
+        const parts = projVal.split(/\s+for\s+/i);
+        return (
+          <div className="flex flex-col py-1 min-w-[200px] max-w-[300px]">
+            <span className="text-slate-600 text-xs font-medium italic break-words">
+              {parts[0]}
+            </span>
+            {parts.length > 1 && (
+              <span className="text-[10px] text-slate-400 mt-0.5 break-words">
+                for {parts.slice(1).join(' for ')}
+              </span>
+            )}
+          </div>
+        );
+      }
+    },
+    {
       label: 'PO Details',
       key: 'po_number',
       sortable: true,
@@ -1387,54 +1432,6 @@ const PurchaseOrders = () => {
           )}
         </div>
       )
-    },
-    {
-      label: 'Project / Customer',
-      key: 'project_name',
-      sortable: true,
-      render: (val, row) => {
-        if (row.project_count > 1) {
-          return (
-            <div className="flex flex-col py-1 min-w-[260px] max-w-[380px]">
-              <div className="flex flex-col">
-                <span className="text-slate-900 font-semibold text-[13px] leading-tight">
-                  {row.project_count} Projects
-                </span>
-                <span className="text-[11px] text-slate-500 italic mt-0.5 break-words" title={row.merged_project_names}>
-                  {row.merged_project_names}
-                </span>
-              </div>
-            </div>
-          );
-        }
-        if (!val) return '—';
-        // Intelligent split: break at " for " to keep drawing numbers on top line
-        const parts = val.split(/\s+for\s+/i);
-        return (
-          <div className="flex flex-col py-1 min-w-[260px] max-w-[380px]">
-            <div className="flex flex-col">
-              <span className="text-slate-900  text-[13px] leading-tight break-words">
-                {parts[0]}
-              </span>
-              {parts.length > 1 && (
-                <span className="text-[11px] text-slate-600  leading-relaxed mt-0.5 break-words">
-                  for {parts.slice(1).join(' for ')}
-                </span>
-              )}
-            </div>
-            {row.company_name && (
-              <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-100/80">
-                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px]  rounded border border-indigo-100 shrink-0 uppercase tracking-wider">
-                  Client
-                </span>
-                <span className="text-[11px] text-slate-500  italic truncate" title={row.company_name}>
-                  {row.company_name}
-                </span>
-              </div>
-            )}
-          </div>
-        );
-      }
     },
     {
       label: 'Order -- Expected',

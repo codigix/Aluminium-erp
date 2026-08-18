@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Card, StatusBadge, DataTable, SearchableSelect, Tabs, Button, FormControl } from '../components/ui.jsx';
-import { Plus, Search, RefreshCw, Package, Layers, Trash2, Edit2, Copy, AlertTriangle } from 'lucide-react';
+import { Card, StatusBadge, SearchableSelect, Tabs, Button, FormControl } from '../components/ui.jsx';
+import DataTable from '../components/DataTable.jsx';
+import { Plus, Search, RefreshCw, Package, Layers, Trash2, Edit2, Copy, AlertTriangle, ChevronDown, Download, MoreHorizontal } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
 import { formatDimensions, calculateWeight, validateShapeDimensions } from '../utils/formatters';
@@ -19,6 +20,9 @@ const ItemsMaster = () => {
   };
   const deptPrefix = getDeptPrefix();
   const [activeTab, setActiveTab] = useState('items'); // 'items' or 'groups'
+  const [dataTableTab, setDataTableTab] = useState('all');
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [activeFilters, setActiveFilters] = useState([{ id: 'status', label: 'Status', value: 'Active' }]);
   const [itemsList, setItemsList] = useState([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemGroups, setItemGroups] = useState([]);
@@ -505,6 +509,38 @@ const ItemsMaster = () => {
     }
   }, [fetchItemsList]);
 
+  const handleBulkDelete = useCallback(async (ids) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: `You are about to delete ${ids.length} items. You won't be able to revert this!`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, delete them!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        await Promise.all(ids.map(id => 
+           fetch(`${API_BASE}/stock/items/${id}`, {
+             method: 'DELETE',
+             headers: { 'Authorization': `Bearer ${token}` }
+           }).then(res => {
+              if (!res.ok) throw new Error(`Failed to delete item ${id}`);
+           })
+        ));
+
+        successToast(`${ids.length} items have been deleted.`);
+        setSelectedRows([]);
+        fetchItemsList();
+      } catch (error) {
+        errorToast('Failed to delete some items: ' + error.message);
+      }
+    }
+  }, [fetchItemsList]);
+
   const handleGroupSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -676,6 +712,18 @@ const ItemsMaster = () => {
     });
   }, [fetchItemGroups]);
 
+  const getGroupColor = (groupName) => {
+    if (!groupName) return 'text-slate-600';
+    const name = groupName.toUpperCase();
+    if (name.includes('BOUGHT_OUT')) return 'text-blue-600';
+    if (name.includes('RAW_MATERIAL') || name.includes('RAW MATERIAL') || name === 'RM') return 'text-amber-600';
+    if (name.includes('PART')) return 'text-teal-600';
+    if (name.includes('ASSEMBLY') || name === 'SA') return 'text-purple-600';
+    if (name.includes('FINISHED') || name === 'FG') return 'text-emerald-600';
+    if (name.includes('CONSUMABLE') || name.includes('HARDWARE')) return 'text-rose-600';
+    return 'text-slate-600';
+  };
+
   const itemColumns = useMemo(() => [
     { label: 'Item Code', key: 'item_code', sortable: true, className: ' text-indigo-600' },
     { 
@@ -703,7 +751,12 @@ const ItemsMaster = () => {
         );
       }
     },
-    { label: 'Group', key: 'material_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">{val}</span> },
+    { 
+      label: 'Group', 
+      key: 'material_type', 
+      sortable: true, 
+      render: (val) => <span className={`text-xs font-bold tracking-wide ${getGroupColor(val)}`}>{val}</span> 
+    },
     { 
       label: 'HSN Code', 
       key: 'hsn_code', 
@@ -876,6 +929,17 @@ const ItemsMaster = () => {
   const isFormPath = isAddPath || isEditPath || isCopyPath;
   const isFormReady = showItemForm && (!isEditPath && !isCopyPath || editingItemId !== null);
 
+  // Helper to categorize item material_type
+  const getCategory = (type) => {
+     if (!type) return 'other';
+     const t = type.toLowerCase();
+     if (t.includes('raw') || t === 'rm') return 'raw';
+     if (t.includes('sub') || t.includes('assembly') || t === 'sa') return 'sub';
+     if (t.includes('finish') || t === 'fg' || t === 'finished good') return 'finished';
+     if (t.includes('consumable') || t.includes('hardware') || t.includes('packing')) return 'consumables';
+     return 'other';
+  };
+
   return (
     <div className=" space-y-2  animate-in fade-in duration-500">
       {/* Header */}
@@ -896,45 +960,72 @@ const ItemsMaster = () => {
       </div>
 
       {activeTab === 'items' && !isFormPath && (
-        <Card className="overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input 
-                type="text"
-                placeholder="Search items by code, name, or drawing..."
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="secondary"
-                onClick={fetchItemsList}
-                title="Refresh"
-                icon={RefreshCw}
-                className={itemsLoading ? 'animate-spin' : ''}
-              />
-              <Button 
-                variant="rosey"
-                onClick={() => navigate(`${deptPrefix}/item-master/add-items`)}
-                icon={Plus}
-              >
-                Add New Item
-              </Button>
-            </div>
+        <Card className="overflow-hidden border-0 shadow-none bg-transparent">
+          <div className="flex justify-end mb-4 gap-2">
+             <Button variant="secondary" onClick={fetchItemsList} title="Refresh" icon={RefreshCw} className={itemsLoading ? 'animate-spin' : ''} />
+             <Button variant="rosey" onClick={() => navigate(`${deptPrefix}/item-master/add-items`)} icon={Plus}>Add New Item</Button>
           </div>
-          <div className="p-0">
-            <DataTable 
-              columns={itemColumns}
-              data={filteredItems}
-              loading={itemsLoading}
-              pageSize={10}
-              hideHeader={false}
-              hideSearch={true}
-            />
-          </div>
+          <DataTable 
+            columns={itemColumns}
+            data={filteredItems.filter(item => {
+               if (dataTableTab === 'all') return true;
+               return getCategory(item.material_type) === dataTableTab;
+            })}
+            loading={itemsLoading}
+            initialPageSize={25}
+            searchPlaceholder="Search by code, name, material, drawing no, etc..."
+            tabs={[
+               { id: 'all', label: 'All Items', count: itemsList.length },
+               { id: 'raw', label: 'Raw Materials', count: itemsList.filter(i => getCategory(i.material_type) === 'raw').length },
+               { id: 'sub', label: 'Sub Assemblies', count: itemsList.filter(i => getCategory(i.material_type) === 'sub').length },
+               { id: 'finished', label: 'Finished Goods', count: itemsList.filter(i => getCategory(i.material_type) === 'finished').length },
+               { id: 'consumables', label: 'Consumables', count: itemsList.filter(i => getCategory(i.material_type) === 'consumables').length }
+            ]}
+            activeTab={dataTableTab}
+            onTabChange={setDataTableTab}
+            activeFilters={activeFilters}
+            onFilterRemove={(id) => setActiveFilters(activeFilters.filter(f => f.id !== id))}
+            onClearFilters={() => setActiveFilters([])}
+            selectable={true}
+            selectedRows={selectedRows}
+            onSelectionChange={setSelectedRows}
+            bulkActions={[
+               { label: 'Edit', icon: Edit2, onClick: (ids) => {
+                  if (ids.length !== 1) {
+                     errorToast('Please select exactly one item to edit.');
+                     return;
+                  }
+                  const item = itemsList.find(i => i.id === ids[0] || i.public_id === ids[0]);
+                  if (item) handleEditItem(item);
+               } },
+               { label: 'Change Status', icon: ChevronDown, onClick: () => infoToast('Bulk status change coming soon!') },
+               { label: 'Export', icon: Download, onClick: () => infoToast('Export feature coming soon!') },
+               { label: 'Delete', icon: Trash2, className: 'text-rose-600 bg-rose-50 border border-rose-100 hover:bg-rose-100 hover:text-rose-700', onClick: (ids) => handleBulkDelete(ids) },
+               { label: 'More', icon: MoreHorizontal, onClick: () => {} }
+            ]}
+            advancedFilters={
+               <div className="space-y-4">
+                  <div className="space-y-1.5">
+                     <label className="text-xs font-bold text-slate-700">Item Group</label>
+                     <select className="w-full border border-slate-200 rounded-md p-2 text-sm text-slate-700 outline-none focus:border-indigo-500">
+                        <option>Select Item Group</option>
+                     </select>
+                  </div>
+                  <div className="space-y-1.5">
+                     <label className="text-xs font-bold text-slate-700">Material</label>
+                     <select className="w-full border border-slate-200 rounded-md p-2 text-sm text-slate-700 outline-none focus:border-indigo-500">
+                        <option>Select Material</option>
+                     </select>
+                  </div>
+                  <div className="space-y-1.5">
+                     <label className="text-xs font-bold text-slate-700">Shape / Type</label>
+                     <select className="w-full border border-slate-200 rounded-md p-2 text-sm text-slate-700 outline-none focus:border-indigo-500">
+                        <option>Select Shape</option>
+                     </select>
+                  </div>
+               </div>
+            }
+          />
         </Card>
       )}
 
