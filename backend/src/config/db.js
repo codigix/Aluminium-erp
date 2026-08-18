@@ -3013,6 +3013,24 @@ const ensureWorkstationColumns = async () => {
   }
 };
 
+const ensureStockIdentityIndex = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [indexes] = await connection.query("SHOW INDEX FROM stock_balance WHERE Key_name = 'idx_stock_identity'");
+    if (indexes.length === 0) {
+      await connection.query("CREATE INDEX idx_stock_identity ON stock_balance (item_code, warehouse(50), shape_type(20), length, width, thickness, diameter, outer_diameter)");
+      console.log('Stock identity index synchronized');
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Stock identity index sync failed:', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureWorkstationColumns();
@@ -3067,6 +3085,7 @@ const bootstrapDatabase = async () => {
   await ensureDeliveryChallansTable();
   await ensureOutwardChallanTables();
   await ensureReturnsTable();
+  await ensureStockIdentityIndex();
 };
 
 bootstrapDatabase();

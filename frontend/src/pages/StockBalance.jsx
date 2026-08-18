@@ -376,7 +376,8 @@ const StockBalance = () => {
       label: 'Dimension',
       key: 'length',
       render: (_, row) => {
-        return <span className="text-slate-500 text-xs">{formatDimensions(row) || '—'}</span>;
+        const shapeName = row.shape_type || (shapes.find(s => String(s.id) === String(row.shape_id))?.name) || '';
+        return <span className="text-slate-500 text-xs">{formatDimensions({ ...row, shape_type: shapeName }) || '—'}</span>;
       }
     },
     {

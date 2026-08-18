@@ -211,9 +211,10 @@ const mergePurchaseOrders = async (req, res, next) => {
 const forwardToAccounts = async (req, res, next) => {
   try {
     const poId = req.params.poId;
-    const result = await purchaseOrderService.forwardToAccounts(poId);
+    const receiptId = req.query.receiptId || req.body?.receiptId || null;
+    const result = await purchaseOrderService.forwardToAccounts(poId, receiptId);
     res.json({
-      message: 'Purchase Order has been forwarded to Accounts successfully.',
+      message: 'Forwarded to Accounts successfully.',
       data: result
     });
   } catch (error) {

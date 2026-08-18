@@ -249,8 +249,10 @@ export const calculateWeight = ({
   threadPitch = 0,
   thread_pitch = 0
 }) => {
-  const dDensity = parseFloat(density) || 0;
-  if (dDensity <= 0) return 0;
+  let dDensity = parseFloat(density) || 0;
+  if (dDensity <= 0) {
+    dDensity = 2.70; // Standard default density for Aluminium (g/cm³)
+  }
 
   // Run geometric validation check
   const validation = validateShapeDimensions({

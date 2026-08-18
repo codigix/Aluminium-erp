@@ -105,7 +105,21 @@ const createMaterialIssue = async (data, userId) => {
           issueId,
           issueNumber,
           `Issued for Work Order ${workOrderId}`,
-          userId
+          userId,
+          {
+            connection,
+            warehouse: item.warehouse,
+            materialName: item.materialName,
+            materialType: item.materialType,
+            unit: item.uom,
+            shape_type: item.shape_type || item.shapeType || item.shape_name,
+            length: item.length !== undefined && item.length !== null ? parseFloat(item.length) : undefined,
+            width: item.width !== undefined && item.width !== null ? parseFloat(item.width) : undefined,
+            thickness: item.thickness !== undefined && item.thickness !== null ? parseFloat(item.thickness) : undefined,
+            diameter: item.diameter !== undefined && item.diameter !== null ? parseFloat(item.diameter) : undefined,
+            outer_diameter: item.outer_diameter !== undefined && item.outer_diameter !== null ? parseFloat(item.outer_diameter) : (item.outerDiameter !== undefined && item.outerDiameter !== null ? parseFloat(item.outerDiameter) : undefined),
+            density: item.density !== undefined && item.density !== null ? parseFloat(item.density) : undefined
+          }
         );
       }
     }

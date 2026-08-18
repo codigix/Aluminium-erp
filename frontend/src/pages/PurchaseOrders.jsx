@@ -1469,18 +1469,35 @@ const PurchaseOrders = () => {
       label: 'Fulfillment',
       key: 'total_quantity',
       render: (_, row) => {
-        const total = parseFloat(row.total_quantity) || 0;
-        const accepted = parseFloat(row.accepted_quantity) || 0;
-        const percent = total > 0 ? Math.min(100, Math.round((accepted / total) * 100)) : 0;
+        const items = row.items || [];
+        let totalOrderedQty = 0;
+        let totalReceivedQty = 0;
+
+        if (items.length > 0) {
+          items.forEach(it => {
+            const desQty = parseFloat(it.design_qty || 0);
+            const ordQty = desQty > 0 ? desQty : parseFloat(it.quantity || 0);
+            const recQty = parseFloat(it.received_qty || 0);
+            totalOrderedQty += ordQty;
+            totalReceivedQty += recQty;
+          });
+        } else {
+          totalOrderedQty = parseFloat(row.accepted_quantity > 0 ? (row.items_count || 0) : (row.total_quantity || 0));
+          totalReceivedQty = parseFloat(row.accepted_quantity || 0);
+        }
+
+        const percent = totalOrderedQty > 0 ? Math.min(100, Math.round((totalReceivedQty / totalOrderedQty) * 100)) : 0;
+        const formatNum = (v) => (v % 1 === 0 ? v.toFixed(0) : v.toFixed(2));
+
         return (
           <div className="w-48">
-            <div className="flex justify-between items-end text-xs mb-1.5">
-              <span className="text-slate-500 ">{accepted}/{total}</span>
-              <span className={` ${percent === 100 ? 'text-emerald-500' : 'text-emerald-500'}`}>{percent}%</span>
+            <div className="flex justify-between items-end text-xs mb-1.5 font-mono">
+              <span className="text-slate-600 font-medium">{formatNum(totalReceivedQty)} / {formatNum(totalOrderedQty)} NOS</span>
+              <span className={`font-semibold ${percent === 100 ? 'text-emerald-600' : 'text-emerald-600'}`}>{percent}%</span>
             </div>
-            <div className="w-full bg-slate-100 rounded h-1 overflow-hidden  border border-slate-50">
+            <div className="w-full bg-slate-100 rounded h-1.5 overflow-hidden border border-slate-100">
               <div
-                className={`h-full transition-all duration-700 ease-out  bg-emerald-500`}
+                className="h-full transition-all duration-700 ease-out bg-emerald-500 rounded"
                 style={{ width: `${percent}%` }}
               ></div>
             </div>

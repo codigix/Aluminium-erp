@@ -1,6 +1,6 @@
 const pool = require('../config/db');
 
-const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, connection = null, dimensions = null) => {
+const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, connection = null, dimensions = null, shapeType = null, materialType = null) => {
   const executor = connection || pool;
   let query = `
     SELECT 
@@ -20,6 +20,11 @@ const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, con
     params.push(warehouse);
   } else if (warehouse === null || warehouse === '') {
     query += ` AND (warehouse IS NULL OR warehouse = '') `;
+  }
+
+  if (shapeType) {
+    query += ` AND (LOWER(TRIM(COALESCE(shape_type, ''))) = LOWER(TRIM(?)) OR shape_type IS NULL OR shape_type = '') `;
+    params.push(shapeType);
   }
 
   if (dimensions && typeof dimensions === 'object') {
@@ -155,6 +160,8 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
     sl.balance_after,
     sl.remarks,
     sl.created_at,
+    sl.warehouse,
+    COALESCE(sl.shape_type, grn.shape_type, s.name, sb.shape_type) as shape_type,
     sb.shape_id as shape_id,
     COALESCE(sl.length, grn.length, sb.length) as length,
     COALESCE(sl.width, grn.width, sb.width) as width,
@@ -165,19 +172,16 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
     grn.shape_type as grn_shape_type
   FROM stock_ledger sl
   LEFT JOIN grn_items grn ON sl.grn_item_id = grn.id
-  LEFT JOIN (
-    SELECT 
-      item_code, 
-      MAX(shape_id) as shape_id, 
-      MAX(length) as length, 
-      MAX(width) as width, 
-      MAX(thickness) as thickness, 
-      MAX(diameter) as diameter, 
-      MAX(outer_diameter) as outer_diameter,
-      MAX(material_grade) as material_grade
-    FROM stock_balance
-    GROUP BY item_code
-  ) sb ON sl.item_code = sb.item_code`;
+  LEFT JOIN stock_balance sb ON (
+    sl.item_code = sb.item_code 
+    AND (sl.warehouse = sb.warehouse OR (sl.warehouse IS NULL AND sb.warehouse IS NULL))
+    AND (ABS(COALESCE(sl.length, 0) - COALESCE(sb.length, 0)) < 0.0001)
+    AND (ABS(COALESCE(sl.width, 0) - COALESCE(sb.width, 0)) < 0.0001)
+    AND (ABS(COALESCE(sl.thickness, 0) - COALESCE(sb.thickness, 0)) < 0.0001)
+    AND (ABS(COALESCE(sl.diameter, 0) - COALESCE(sb.diameter, 0)) < 0.0001)
+    AND (ABS(COALESCE(sl.outer_diameter, 0) - COALESCE(sb.outer_diameter, 0)) < 0.0001)
+  )
+  LEFT JOIN shapes s ON sb.shape_id = s.id`;
 
   const conditions = [];
   const params = [];
@@ -341,7 +345,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
         sb.item_code,
         MAX(sb.item_description) as item_description,
         MAX(sb.material_name) as material_name,
-        MAX(sb.material_type) as material_type,
+        COALESCE(MAX(CASE WHEN sb.material_type != 'RAW_MATERIAL' THEN sb.material_type END), MAX(sb.material_type)) as material_type,
         MAX(sb.unit) as unit,
         MAX(sb.valuation_rate) as valuation_rate,
         MAX(sb.selling_rate) as selling_rate,
@@ -354,8 +358,8 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
         MAX(sb.material_grade) as material_grade,
         MAX(sb.material_id) as material_id,
         MAX(sb.shape_id) as shape_id,
-        MAX(s.name) as shape_type,
-        MAX(s.name) as shape_name,
+        MAX(COALESCE(sb.shape_type, s.name)) as shape_type,
+        MAX(COALESCE(sb.shape_type, s.name)) as shape_name,
         MAX(sb.length) as length,
         MAX(sb.width) as width,
         MAX(sb.thickness) as thickness,
@@ -415,7 +419,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       query += " WHERE " + conditions.join(" AND ");
     }
 
-    query += ` GROUP BY sb.item_code, sb.warehouse, COALESCE(sb.length, 0), COALESCE(sb.width, 0), COALESCE(sb.thickness, 0), COALESCE(sb.diameter, 0), COALESCE(sb.outer_diameter, 0) ORDER BY sb.item_code, MAX(sb.id) DESC `;
+    query += ` GROUP BY sb.item_code, sb.warehouse, COALESCE(sb.shape_id, sb.shape_type, ''), COALESCE(sb.length, 0), COALESCE(sb.width, 0), COALESCE(sb.thickness, 0), COALESCE(sb.diameter, 0), COALESCE(sb.outer_diameter, 0) ORDER BY sb.item_code, MAX(sb.id) DESC `;
 
     const [balances] = await pool.query(query, params);
 
@@ -536,14 +540,19 @@ const getStockBalanceByItem = async (itemCode) => {
   };
 };
 
-const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, connection = null, dimensions = null) => {
+const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, connection = null, dimensions = null, shapeType = null, materialType = null, shapeId = null) => {
   const executor = connection || pool;
   const wh = warehouse || '';
   let query = `
     SELECT * FROM stock_balance 
-    WHERE item_code = ? AND (warehouse = ? OR (warehouse IS NULL AND (? IS NULL OR ? = '')))
+    WHERE item_code = ? AND (warehouse = ? OR warehouse IS NULL OR warehouse = '' OR ? IS NULL OR ? = '')
   `;
   const params = [itemCode, wh, wh, wh];
+
+  if (shapeId || shapeType) {
+    query += ` AND (shape_id = ? OR LOWER(TRIM(COALESCE(shape_type, ''))) = LOWER(TRIM(?)) OR shape_id IS NULL OR shape_type IS NULL OR shape_type = '') `;
+    params.push(shapeId || 0, shapeType || '');
+  }
 
   if (dimensions && typeof dimensions === 'object') {
     const length = parseFloat(dimensions.length || 0);
@@ -552,15 +561,14 @@ const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, con
     const diameter = parseFloat(dimensions.diameter || 0);
     const outerDiameter = parseFloat(dimensions.outer_diameter || dimensions.outerDiameter || 0);
 
-    // Only filter on dimensions that are actually specified (non-zero)
-    if (length > 0) { query += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; params.push(length); }
-    if (width > 0) { query += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; params.push(width); }
-    if (thickness > 0) { query += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; params.push(thickness); }
-    if (diameter > 0) { query += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; params.push(diameter); }
-    if (outerDiameter > 0) { query += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; params.push(outerDiameter); }
+    query += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; params.push(length);
+    query += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; params.push(width);
+    query += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; params.push(thickness);
+    query += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; params.push(diameter);
+    query += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; params.push(outerDiameter);
   }
 
-  query += ` ORDER BY current_balance DESC `;
+  query += ` ORDER BY (shape_type IS NOT NULL AND shape_type != '') DESC, (material_type IS NOT NULL AND material_type != 'RAW_MATERIAL') DESC, current_balance DESC, id ASC `;
 
   const [balance] = await executor.query(query, params);
 
@@ -608,8 +616,38 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     const outerDiameter = options.outer_diameter !== undefined ? options.outer_diameter : (options.outerDiameter !== undefined ? options.outerDiameter : null);
     const density = options.density !== undefined ? options.density : null;
 
+    let shapeType = options.shape_type || options.shapeType || options.shape_name || options.shapeName || null;
+    let shapeId = options.shape_id !== undefined ? options.shape_id : (options.shapeId !== undefined ? options.shapeId : null);
+    const materialId = options.material_id !== undefined ? options.material_id : (options.materialId !== undefined ? options.materialId : null);
+
+    if (!shapeId && shapeType) {
+      const [shapeRows] = await useConnection.query(
+        'SELECT id, name FROM shapes WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1',
+        [shapeType]
+      );
+      if (shapeRows.length > 0) {
+        shapeId = shapeRows[0].id;
+        shapeType = shapeRows[0].name;
+      }
+    } else if (shapeId && !shapeType) {
+      const [shapeRows] = await useConnection.query(
+        'SELECT name FROM shapes WHERE id = ? LIMIT 1',
+        [shapeId]
+      );
+      if (shapeRows.length > 0) {
+        shapeType = shapeRows[0].name;
+      }
+    }
+
+    let matType = options.materialType || null;
+    if (!matType && itemCode && String(itemCode).toUpperCase().startsWith('BO-')) {
+      matType = 'BOUGHT_OUT';
+    }
+    if (matType) {
+      matType = matType.toUpperCase().trim().replace(/ /g, '_');
+    }
+
     // Only apply dimension filter if at least one dimension is non-zero
-    // (avoids filtering out BOUGHT_OUT/NOS items that have no dims on the MR but may have dims stored on stock_balance)
     const lenV = parseFloat(length || 0);
     const widV = parseFloat(width || 0);
     const thkV = parseFloat(thickness || 0);
@@ -618,10 +656,10 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     const hasDimsForLookup = lenV > 0 || widV > 0 || thkV > 0 || diaV > 0 || odV > 0;
     const dimsObj = hasDimsForLookup ? { length, width, thickness, diameter, outer_diameter: outerDiameter, density } : null;
 
-    // Get existing balance for this item, warehouse and dimensions
-    let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, useConnection, dimsObj);
+    // Get existing balance for this item, warehouse, shape, materialType and dimensions
+    let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, useConnection, dimsObj, shapeType, matType, shapeId);
 
-    // If not found for this specific warehouse, check if any balance entry exists for this item_code with matching dimensions
+    // Fallback search: only match if shape, materialType and dimensions match!
     if (!existingBalance) {
       const lenVal = parseFloat(length || 0);
       const widVal = parseFloat(width || 0);
@@ -632,6 +670,15 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
       let fallbackQuery = `SELECT * FROM stock_balance WHERE item_code = ?`;
       const fallbackParams = [itemCode];
+
+      if (shapeId || shapeType) {
+        fallbackQuery += ` AND (shape_id = ? OR LOWER(TRIM(COALESCE(shape_type, ''))) = LOWER(TRIM(?)))`;
+        fallbackParams.push(shapeId || 0, shapeType || '');
+      }
+      if (matType) {
+        fallbackQuery += ` AND (LOWER(TRIM(COALESCE(material_type, ''))) = LOWER(TRIM(?)))`;
+        fallbackParams.push(matType);
+      }
       if (hasDimsForFallback) {
         fallbackQuery += `
            AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
@@ -653,6 +700,11 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
           );
         }
       }
+    }
+
+    if (existingBalance) {
+      if (!shapeId && existingBalance.shape_id) shapeId = existingBalance.shape_id;
+      if (!shapeType && existingBalance.shape_type) shapeType = existingBalance.shape_type;
     }
 
     let currentBalance = existingBalance ? parseFloat(existingBalance.current_balance) || 0 : 0;
@@ -678,16 +730,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     }
 
     let matName = options.materialName || existingBalance?.material_name || null;
-    let matType = options.materialType || existingBalance?.material_type || null;
-
-    if (!matType && itemCode && String(itemCode).toUpperCase().startsWith('BO-')) {
-      matType = 'BOUGHT_OUT';
-    }
-
-    // Normalize materialType to UPPER_CASE_WITH_UNDERSCORE
-    if (matType) {
-      matType = matType.toUpperCase().trim().replace(/ /g, '_');
-    }
+    if (!matType) matType = existingBalance?.material_type || null;
 
     // Try to fetch name if still null
     if (!matName) {
@@ -700,7 +743,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
       if (nameRows.length > 0) {
         matName = nameRows[0].material_name;
-        matType = nameRows[0].material_type;
+        if (!matType) matType = nameRows[0].material_type;
       } else {
         const [poRows] = await useConnection.query(`
           SELECT material_name, material_type 
@@ -711,7 +754,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
         if (poRows.length > 0) {
           matName = poRows[0].material_name;
-          matType = poRows[0].material_type;
+          if (!matType) matType = poRows[0].material_type;
         }
       }
     }
@@ -733,24 +776,24 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
       weightIn = Math.abs(weight);
     }
 
-    // Insert into stock_ledger
+    // Insert into stock_ledger with shape_type preserved!
     await useConnection.execute(`
       INSERT INTO stock_ledger 
-      (item_code, material_name, material_type, transaction_type, transaction_date, quantity, qty_in, qty_out, weight_in, weight_out, weight_after, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate, qc_id, grn_item_id, length, width, thickness, diameter, outer_diameter, density)
-      VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [itemCode, matName, matType, transactionType, quantity, qtyIn, qtyOut, weightIn, weightOut, refDocType, refDocId, refDocNumber, 0, remarks, userId, warehouse, valuationRate, qcId, grnItemId, length, width, thickness, diameter, outerDiameter, density]);
+      (item_code, material_name, material_type, transaction_type, transaction_date, quantity, qty_in, qty_out, weight_in, weight_out, weight_after, reference_doc_type, reference_doc_id, reference_doc_number, balance_after, remarks, created_by, warehouse, valuation_rate, qc_id, grn_item_id, length, width, thickness, diameter, outer_diameter, density, shape_type)
+      VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [itemCode, matName, matType, transactionType, quantity, qtyIn, qtyOut, weightIn, weightOut, refDocType, refDocId, refDocNumber, 0, remarks, userId, warehouse, valuationRate, qcId, grnItemId, length, width, thickness, diameter, outerDiameter, density, shapeType]);
 
     const ledgerId = (await useConnection.query('SELECT LAST_INSERT_ID() as id'))[0][0].id;
 
     // Recalculate balances for accuracy
-    const globalDetails = await calculateBalanceDetailsFromLedger(itemCode, 'ALL', useConnection, dimsObj);
+    const globalDetails = await calculateBalanceDetailsFromLedger(itemCode, 'ALL', useConnection, dimsObj, shapeType, matType);
     const globalBalance = globalDetails.current_balance;
     const globalWeight = globalDetails.current_weight;
 
     let warehouseBalance = globalBalance;
     let warehouseWeight = globalWeight;
     if (warehouse && warehouse !== 'ALL') {
-      const whDetails = await calculateBalanceDetailsFromLedger(itemCode, warehouse, useConnection, dimsObj);
+      const whDetails = await calculateBalanceDetailsFromLedger(itemCode, warehouse, useConnection, dimsObj, shapeType, matType);
       warehouseBalance = whDetails.current_balance;
       warehouseWeight = whDetails.current_weight;
     }
@@ -760,20 +803,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
     // Ensure we have a warehouse string for the query
     const whName = warehouse || '';
-
     const weightPerUnit = options.weight_per_unit !== undefined ? options.weight_per_unit : (options.weightPerUnit !== undefined ? options.weightPerUnit : (existingBalance?.weight_per_unit || null));
-    let shapeId = options.shape_id !== undefined ? options.shape_id : (options.shapeId !== undefined ? options.shapeId : (existingBalance?.shape_id || null));
-    if (!shapeId && (options.shape_type || options.shapeType)) {
-      const shapeName = options.shape_type || options.shapeType;
-      const [shapeRows] = await useConnection.query(
-        'SELECT id FROM shapes WHERE name = ? LIMIT 1',
-        [shapeName]
-      );
-      if (shapeRows.length > 0) {
-        shapeId = shapeRows[0].id;
-      }
-    }
-    const materialId = options.material_id !== undefined ? options.material_id : (options.materialId !== undefined ? options.materialId : (existingBalance?.material_id || null));
 
     if (existingBalance) {
       await useConnection.execute(`
@@ -791,6 +821,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
           density = COALESCE(?, density),
           weight_per_unit = COALESCE(?, weight_per_unit),
           shape_id = COALESCE(?, shape_id),
+          shape_type = COALESCE(?, shape_type),
           material_id = COALESCE(?, material_id),
           last_updated = CURRENT_TIMESTAMP
         WHERE id = ?
@@ -809,6 +840,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
         density,
         weightPerUnit,
         shapeId,
+        shapeType,
         materialId,
         existingBalance.id
       ]);
@@ -816,8 +848,8 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
       await useConnection.execute(`
         INSERT INTO stock_balance 
         (item_code, material_name, material_type, warehouse, unit, current_balance, current_weight, valuation_rate, item_description,
-         length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_id, material_id, last_updated)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_id, shape_type, material_id, last_updated)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `, [
         itemCode,
         matName,
@@ -836,6 +868,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
         density,
         weightPerUnit,
         shapeId,
+        shapeType,
         materialId
       ]);
     }
