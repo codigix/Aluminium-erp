@@ -291,8 +291,8 @@ const calculateItemStockAndAvailability = async (connection, item, mrStatus = ''
   // Weight/Unit = Required Weight ÷ Design Qty
   const weightPerUnit = requiredQty > 0 ? (requiredWeight / requiredQty) : 0;
 
-  // Available Qty = FLOOR(Available Weight ÷ Weight/Unit)
-  const computedAvailableQty = weightPerUnit > 0 ? Math.floor(totalWeight / weightPerUnit) : 0;
+  // Available Qty: Use totalStock from stock_balance directly if available, or compute rounded piece count
+  const computedAvailableQty = totalStock > 0 ? totalStock : (weightPerUnit > 0 ? Math.round((totalWeight + 0.0001) / weightPerUnit) : 0);
   const finalTotalStock = computedAvailableQty;
 
   const remainingQty = Math.max(0, Math.round((requiredQty - releasedQty) * 1000) / 1000);
@@ -539,8 +539,8 @@ const calculateItemStockAndAvailabilityInMemory = (sbRows, item, mrStatus = '') 
   // Weight/Unit = Required Weight ÷ Design Qty
   const weightPerUnit = requiredQty > 0 ? (requiredWeight / requiredQty) : 0;
 
-  // Available Qty = FLOOR(Available Weight ÷ Weight/Unit)
-  const computedAvailableQty = weightPerUnit > 0 ? Math.floor(totalWeight / weightPerUnit) : 0;
+  // Available Qty: Use totalStock from stock_balance directly if available, or compute rounded piece count
+  const computedAvailableQty = totalStock > 0 ? totalStock : (weightPerUnit > 0 ? Math.round((totalWeight + 0.0001) / weightPerUnit) : 0);
   const finalTotalStock = computedAvailableQty;
 
   const remainingQty = Math.max(0, Math.round((requiredQty - releasedQty) * 1000) / 1000);
@@ -1038,17 +1038,15 @@ const materialRequestController = {
                     issueWeight = 0;
                     issueQtyForStock = issueQty;
                   } else {
+                    const actualBalance = parseFloat(stockRow.current_balance || 0);
                     const availableWeightInWh = parseFloat(stockRow.current_weight || 0);
-                    availableInWh = weightPerUnit > 0 ? Math.floor(availableWeightInWh / weightPerUnit) : 0;
+
+                    availableInWh = actualBalance > 0 ? actualBalance : (weightPerUnit > 0 ? Math.round((availableWeightInWh + 0.0001) / weightPerUnit) : 0);
                     if (availableInWh <= 0) continue;
 
                     issueQty = Math.min(amountToDeduct, availableInWh);
-                    issueWeight = issueQty * weightPerUnit;
-
-                    const actualBalance = parseFloat(stockRow.current_balance || 0);
-                    const actualWeight = parseFloat(stockRow.current_weight || 0);
-                    const weightPerPieceInStock = actualBalance > 0 ? (actualWeight / actualBalance) : weightPerUnit;
-                    issueQtyForStock = weightPerPieceInStock > 0 ? (issueWeight / weightPerPieceInStock) : issueQty;
+                    issueWeight = actualBalance > 0 ? Math.min(availableWeightInWh, issueQty * (availableWeightInWh / actualBalance)) : (issueQty * weightPerUnit);
+                    issueQtyForStock = issueQty;
                   }
 
                   if (issueQty <= 0 || issueQtyForStock <= 0) continue;
@@ -1181,18 +1179,24 @@ const materialRequestController = {
           const _odV2  = parseFloat(item.outer_diameter || 0);
           const _hasDim2 = _lenV2 > 0 || _widV2 > 0 || _thkV2 > 0 || _diaV2 > 0 || _odV2 > 0;
 
-          let _stockQ2 = `SELECT id, item_code, warehouse, current_balance, COALESCE(current_weight, 0) as current_weight, length, width, thickness, diameter, outer_diameter, shape_type, weight_per_unit FROM stock_balance WHERE item_code = ? AND current_balance > 0`;
-          const _stockP2 = [resolvedItemCode || item.item_code];
-          // Only filter on non-zero dimensions (zero means "not applicable for this shape")
-          if (_lenV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; _stockP2.push(_lenV2); }
-          if (_widV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; _stockP2.push(_widV2); }
-          if (_thkV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; _stockP2.push(_thkV2); }
-          if (_diaV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; _stockP2.push(_diaV2); }
-          if (_odV2  > 0) { _stockQ2 += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; _stockP2.push(_odV2); }
-          _stockQ2 += ' ORDER BY current_balance DESC';
+          let stockRows = [];
+          const candidateCodes = Array.from(new Set([resolvedItemCode, item.item_code].filter(Boolean)));
+          for (const code of candidateCodes) {
+            let _stockQ2 = `SELECT id, item_code, warehouse, current_balance, COALESCE(current_weight, 0) as current_weight, length, width, thickness, diameter, outer_diameter, shape_type, weight_per_unit FROM stock_balance WHERE item_code = ? AND current_balance > 0`;
+            const _stockP2 = [code];
+            if (_lenV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; _stockP2.push(_lenV2); }
+            if (_widV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; _stockP2.push(_widV2); }
+            if (_thkV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; _stockP2.push(_thkV2); }
+            if (_diaV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; _stockP2.push(_diaV2); }
+            if (_odV2  > 0) { _stockQ2 += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; _stockP2.push(_odV2); }
+            _stockQ2 += ' ORDER BY current_balance DESC';
 
-          // Get total stock available across all warehouses for this item+dimension
-          const [stockRows] = await connection.query(_stockQ2, _stockP2);
+            const [rowsByCode] = await connection.query(_stockQ2, _stockP2);
+            if (rowsByCode.length > 0) {
+              stockRows = rowsByCode;
+              break;
+            }
+          }
 
           const totalStock = stockRows.reduce((sum, row) => sum + parseFloat(row.current_balance), 0);
           const isWeightUom = (uom) => {
@@ -1236,17 +1240,15 @@ const materialRequestController = {
               issueWeight = 0;
               issueQtyForStock = issueQty;
             } else {
+              const actualBalance = parseFloat(stockRow.current_balance || 0);
               const availableWeightInWarehouse = parseFloat(stockRow.current_weight || 0);
-              availableInWarehouse = weightPerUnit > 0 ? Math.floor(availableWeightInWarehouse / weightPerUnit) : 0;
+
+              availableInWarehouse = actualBalance > 0 ? actualBalance : (weightPerUnit > 0 ? Math.round((availableWeightInWarehouse + 0.0001) / weightPerUnit) : 0);
               if (availableInWarehouse <= 0) continue;
 
               issueQty = Math.min(amountToDeduct, availableInWarehouse);
-              issueWeight = issueQty * weightPerUnit;
-
-              const actualBalance = parseFloat(stockRow.current_balance || 0);
-              const actualWeight = parseFloat(stockRow.current_weight || 0);
-              const weightPerPieceInStock = actualBalance > 0 ? (actualWeight / actualBalance) : weightPerUnit;
-              issueQtyForStock = weightPerPieceInStock > 0 ? (issueWeight / weightPerPieceInStock) : issueQty;
+              issueWeight = actualBalance > 0 ? Math.min(availableWeightInWarehouse, issueQty * (availableWeightInWarehouse / actualBalance)) : (issueQty * weightPerUnit);
+              issueQtyForStock = issueQty;
             }
 
             if (issueQty <= 0 || issueQtyForStock <= 0) continue;
