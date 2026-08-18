@@ -6,7 +6,8 @@ import {
   User, Phone, Mail, MapPin, Briefcase,
   FileText, CheckCircle2, TrendingUp, Layers
 } from 'lucide-react';
-import { Button, Card, DataTable } from '../components/ui.jsx';
+import { Button, Card } from '../components/ui.jsx';
+import DataTable from '../components/DataTable.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -168,16 +169,16 @@ const ActiveClients = () => {
 
   const columns = [
     {
-      label: 'Project Name',
-      key: 'project_name',
-      sortable: true,
-      render: (val) => <span className="font-bold text-slate-900 text-[11px]">{val}</span>
-    },
-    {
       label: 'Client Name',
       key: 'client_name',
       sortable: true,
-      render: (val) => <span className="text-slate-600 text-[11px]">{val}</span>
+      render: (val) => <span className="font-bold text-slate-900 text-xs">{val || '—'}</span>
+    },
+    {
+      label: 'Project Name',
+      key: 'project_name',
+      sortable: true,
+      render: (val) => <span className="text-slate-600 text-xs italic font-medium">{val || 'General'}</span>
     },
     {
       label: 'Contact Person',

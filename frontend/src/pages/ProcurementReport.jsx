@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { Card, DataTable, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
+import { Card, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
+import DataTable from '../components/DataTable.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -27,8 +28,6 @@ const ProcurementReport = () => {
     end: new Date().toISOString().split('T')[0]
   });
   const [selectedSupplier, setSelectedSupplier] = useState('All');
-  const [summaryPage, setSummaryPage] = useState(1);
-  const [vendorsPage, setVendorsPage] = useState(1);
   const [activityPage, setActivityPage] = useState(1);
   const [uploadingPoId, setUploadingPoId] = useState(null);
   const [selectedPODetail, setSelectedPODetail] = useState(null);
@@ -38,8 +37,6 @@ const ProcurementReport = () => {
 
   useEffect(() => {
     fetchProcurementReport();
-    setSummaryPage(1);
-    setVendorsPage(1);
     setActivityPage(1);
   }, [dateRange, selectedSupplier]);
 
@@ -153,21 +150,167 @@ const ProcurementReport = () => {
     }
   };
 
-  const paginatedSummary = useMemo(() => {
-    if (!stats?.poGrnSummary) return [];
-    const startIndex = (summaryPage - 1) * itemsPerPage;
-    return stats.poGrnSummary.slice(startIndex, startIndex + itemsPerPage);
-  }, [stats?.poGrnSummary, summaryPage]);
+  const vendorColumns = [
+    {
+      key: 'supplier',
+      label: 'Supplier',
+      width: '30%',
+      render: (val) => <span className="text-xs text-slate-900 font-medium">{val}</span>
+    },
+    {
+      key: 'totalOrders',
+      label: 'Total Orders',
+      className: 'text-center',
+      width: '15%',
+      render: (val) => <span className="text-xs text-slate-600 font-medium">{val}</span>
+    },
+    {
+      key: 'fulfillment',
+      label: 'Fulfillment %',
+      width: '25%',
+      render: (val) => (
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-1.5 bg-slate-100 rounded overflow-hidden">
+            <div className="h-full bg-emerald-500 rounded" style={{ width: val }} />
+          </div>
+          <span className="text-xs text-slate-500">{val}</span>
+        </div>
+      )
+    },
+    {
+      key: 'avgRating',
+      label: 'Avg Rating',
+      className: 'text-center',
+      width: '20%',
+      render: (val) => (
+        <div className="flex items-center justify-center gap-1">
+          {[1,2,3,4,5].map(s => (
+            <span key={s} className={`text-xs ${s <= Math.floor(parseFloat(val) || 0) ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
+          ))}
+          <span className="text-xs text-slate-400 ml-1">{val}</span>
+        </div>
+      )
+    },
+    {
+      key: 'delay',
+      label: 'Delay %',
+      className: 'text-right',
+      width: '10%',
+      render: (val) => <span className="text-xs text-rose-500 font-medium">{val}</span>
+    }
+  ];
 
-  const totalSummaryPages = Math.ceil((stats?.poGrnSummary?.length || 0) / itemsPerPage);
-
-  const paginatedVendors = useMemo(() => {
-    if (!stats?.vendorPerformance) return [];
-    const startIndex = (vendorsPage - 1) * itemsPerSmallPage;
-    return stats.vendorPerformance.slice(startIndex, startIndex + itemsPerSmallPage);
-  }, [stats?.vendorPerformance, vendorsPage]);
-
-  const totalVendorsPages = Math.ceil((stats?.vendorPerformance?.length || 0) / itemsPerSmallPage);
+  const summaryColumns = [
+    {
+      key: 'poNumber',
+      label: 'PO Number',
+      width: '12%',
+      render: (val) => <span className="text-xs text-indigo-600 font-semibold whitespace-nowrap">{val}</span>
+    },
+    {
+      key: 'supplier',
+      label: 'Supplier',
+      width: '20%',
+      render: (val) => (
+        <div>
+          <p className="text-xs text-slate-900 font-medium truncate max-w-[150px]" title={val}>{val}</p>
+          <p className="text-[8px] text-blue-600 mt-0.5 font-semibold">Active Vendor</p>
+        </div>
+      )
+    },
+    {
+      key: 'project',
+      label: 'Project / Customer',
+      width: '23%',
+      render: (val) => <p className="text-xs text-slate-600 truncate max-w-[200px]" title={val}>{val}</p>
+    },
+    {
+      key: 'poDate',
+      label: 'PO Date',
+      width: '10%',
+      render: (val) => <span className="text-xs text-slate-500 whitespace-nowrap">{val}</span>
+    },
+    {
+      key: 'poAmount',
+      label: 'PO Amount',
+      className: 'text-right',
+      width: '12%',
+      render: (val) => (
+        <div>
+          <p className="text-xs text-slate-900 font-medium whitespace-nowrap">₹{parseFloat(val).toLocaleString('en-IN')}</p>
+          <p className="text-[8px] text-slate-400 mt-0.5">Net Value</p>
+        </div>
+      )
+    },
+    {
+      key: 'grnStatus',
+      label: 'GRN Status',
+      className: 'text-center',
+      width: '10%',
+      render: (val) => (
+        <span className={`px-1.5 py-0.5 rounded text-[8px] font-semibold ${
+          val ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+        }`}>
+          {val || 'Pending'}
+        </span>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      className: 'text-center',
+      width: '5%',
+      render: (val) => <StatusBadge status={val} />
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      className: 'text-right',
+      width: '8%',
+      render: (val, row) => (
+        <div className="flex items-center justify-end gap-1">
+          <button 
+            onClick={() => handleViewPO(row.id)}
+            className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+            title="View Order"
+          >
+            <Eye className="w-3 h-3" />
+          </button>
+          <button 
+            onClick={() => handleViewPDF(row.id)}
+            className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+            title="View PO PDF"
+          >
+            <FileText className="w-3 h-3" />
+          </button>
+          <button 
+            onClick={() => handleDownloadPDF(row.id, row.poNumber)}
+            className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+            title="Download PDF"
+          >
+            <Download className="w-3 h-3" />
+          </button>
+          <button 
+            onClick={() => handlePrintPO(row.id)}
+            className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+            title="Print PO"
+          >
+            <Printer className="w-3 h-3" />
+          </button>
+          <button 
+            onClick={() => {
+              setUploadingPoId(row.id);
+              invoiceInputRef.current?.click();
+            }}
+            className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+            title="Upload Invoice"
+          >
+            <MoreVertical className="w-3 h-3" />
+          </button>
+        </div>
+      )
+    }
+  ];
 
   const paginatedActivity = useMemo(() => {
     if (!stats?.recentActivity) return [];
@@ -427,67 +570,16 @@ const ProcurementReport = () => {
               View all vendors <ChevronRight className="w-3 h-3" />
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-xs text-slate-400    border-b border-slate-50">
-                  <th className="pb-3 pr-2">Supplier</th>
-                  <th className="pb-3 pr-2 text-center">Total Orders</th>
-                  <th className="pb-3 pr-2">Fulfillment %</th>
-                  <th className="pb-3 pr-2 text-center">Avg Rating</th>
-                  <th className="pb-3 text-right">Delay %</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {paginatedVendors.map((vendor, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                    <td className="py-4 text-xs  text-slate-900">{vendor.supplier}</td>
-                    <td className="py-4 text-xs  text-slate-600 text-center">{vendor.totalOrders}</td>
-                    <td className="py-4 text-xs">
-                       <div className="flex items-center gap-2">
-                         <div className="flex-1 h-1.5 bg-slate-100 rounded overflow-hidden">
-                           <div className="h-full bg-emerald-500 rounded" style={{ width: vendor.fulfillment }} />
-                         </div>
-                         <span className="text-xs  text-slate-500">{vendor.fulfillment}</span>
-                       </div>
-                    </td>
-                    <td className="py-4 text-center">
-                       <div className="flex items-center justify-center gap-1">
-                          {[1,2,3,4,5].map(s => (
-                            <span key={s} className={`text-xs ${s <= Math.floor(vendor.avgRating) ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
-                          ))}
-                          <span className="text-xs  text-slate-400 ml-1">{vendor.avgRating}</span>
-                       </div>
-                    </td>
-                    <td className="py-4 text-right text-xs  text-rose-500">{vendor.delay}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="overflow-x-auto border border-slate-100 rounded-lg">
+            <DataTable
+              columns={vendorColumns}
+              data={stats?.vendorPerformance || []}
+              loading={isDataLoading}
+              hideHeader={true}
+              pageSize={5}
+              className="border-none shadow-none rounded-none"
+            />
           </div>
-          {totalVendorsPages > 1 && (
-            <div className="mt-4 flex items-center justify-between">
-              <p className="text-[9px]  text-slate-400  ">
-                Page {vendorsPage} of {totalVendorsPages}
-              </p>
-              <div className="flex items-center gap-1">
-                <button 
-                  disabled={vendorsPage === 1}
-                  onClick={() => setVendorsPage(prev => prev - 1)}
-                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
-                >
-                  <ChevronRight className="w-3 h-3 rotate-180" />
-                </button>
-                <button 
-                  disabled={vendorsPage === totalVendorsPages}
-                  onClick={() => setVendorsPage(prev => prev + 1)}
-                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
-                >
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Recent Activity */}
@@ -551,127 +643,15 @@ const ProcurementReport = () => {
         <div className="p-6 border-b border-slate-50">
            <h3 className="text-sm text-slate-900   ">Purchase Orders & Goods Receipts Summary</h3>
         </div>
-        <div className="p-0 overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/50 text-[9px] text-slate-400    border-b border-slate-100">
-                <th className="p-2">PO Number</th>
-                <th className="p-2">Supplier</th>
-                <th className="p-2">Project / Customer</th>
-                <th className="p-2">PO Date</th>
-                <th className="p-2 text-right">PO Amount</th>
-                <th className="p-2 text-center">GRN Status</th>
-                <th className="p-2 text-center">Status</th>
-                <th className="p-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {paginatedSummary.map((row, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
-                  <td className="p-2  text-indigo-600 whitespace-nowrap">{row.poNumber}</td>
-                  <td className="p-2">
-                    <p className=" text-slate-900 truncate max-w-[150px]" title={row.supplier}>{row.supplier}</p>
-                    <p className="text-[8px] text-blue-600   mt-0.5">Active Vendor</p>
-                  </td>
-                  <td className="p-2">
-                    <p className=" text-slate-600 truncate max-w-[200px]" title={row.project}>{row.project}</p>
-                  </td>
-                  <td className="p-2  text-slate-500 whitespace-nowrap">{row.poDate}</td>
-                  <td className="p-2 text-right">
-                    <p className=" text-slate-900 whitespace-nowrap">₹{parseFloat(row.poAmount).toLocaleString('en-IN')}</p>
-                    <p className="text-[8px] text-slate-400  mt-0.5">Net Value</p>
-                  </td>
-                  <td className="p-2 text-center">
-                    <span className={`px-1.5 py-0.5 rounded text-[8px]   er ${
-                      row.grnStatus ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
-                    }`}>
-                      {row.grnStatus || 'Pending'}
-                    </span>
-                  </td>
-                  <td className="p-2 text-center scale-90">
-                    <StatusBadge status={row.status} />
-                  </td>
-                  <td className="p-2 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                       <button 
-                         onClick={() => handleViewPO(row.id)}
-                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
-                         title="View Order"
-                       >
-                         <Eye className="w-3 h-3" />
-                       </button>
-                       <button 
-                         onClick={() => handleViewPDF(row.id)}
-                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
-                         title="View PO PDF"
-                       >
-                         <FileText className="w-3 h-3" />
-                       </button>
-                       <button 
-                         onClick={() => handleDownloadPDF(row.id, row.poNumber)}
-                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
-                         title="Download PDF"
-                       >
-                         <Download className="w-3 h-3" />
-                       </button>
-                       <button 
-                         onClick={() => handlePrintPO(row.id)}
-                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
-                         title="Print PO"
-                       >
-                         <Printer className="w-3 h-3" />
-                       </button>
-                       <button 
-                         onClick={() => {
-                           setUploadingPoId(row.id);
-                           invoiceInputRef.current?.click();
-                         }}
-                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
-                         title="Upload Invoice"
-                       >
-                         <MoreVertical className="w-3 h-3" />
-                       </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="p-0 overflow-x-auto border-t border-slate-100">
+          <DataTable
+            columns={summaryColumns}
+            data={stats?.poGrnSummary || []}
+            loading={isDataLoading}
+            pageSize={10}
+            className="border-none shadow-none rounded-none"
+          />
         </div>
-        {totalSummaryPages > 1 && (
-          <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
-             <p className="text-xs  text-slate-400  ">
-               Showing {(summaryPage - 1) * itemsPerPage + 1} to {Math.min(summaryPage * itemsPerPage, stats?.poGrnSummary?.length || 0)} of {stats?.poGrnSummary?.length || 0} entries
-             </p>
-             <div className="flex items-center gap-1">
-               <button 
-                 disabled={summaryPage === 1}
-                 onClick={() => setSummaryPage(prev => prev - 1)}
-                 className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
-               >
-                 <ChevronRight className="w-4 h-4 rotate-180" />
-               </button>
-               {[...Array(totalSummaryPages)].map((_, i) => (
-                 <button 
-                   key={i}
-                   onClick={() => setSummaryPage(i + 1)}
-                   className={`w-8 h-8 flex items-center justify-center rounded  text-xs transition-all ${
-                     summaryPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
-                   }`}
-                 >
-                   {i + 1}
-                 </button>
-               ))}
-               <button 
-                 disabled={summaryPage === totalSummaryPages}
-                 onClick={() => setSummaryPage(prev => prev + 1)}
-                 className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
-               >
-                 <ChevronRight className="w-4 h-4" />
-               </button>
-             </div>
-          </div>
-        )}
       </div>
       <input
         type="file"

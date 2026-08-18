@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Card, Modal, FormControl, DataTable } from '../components/ui.jsx';
+import { Card, Modal, FormControl } from '../components/ui.jsx';
+import DataTable from '../components/DataTable.jsx';
 import { 
   Plus, 
   Users, 
