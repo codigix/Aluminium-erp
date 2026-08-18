@@ -660,11 +660,22 @@ const updateQC = async (qcId, updates) => {
         if (item.id) {
           await connection.execute(
             `UPDATE qc_inspection_items 
-             SET accepted_qty = ?, rejected_qty = ?, status = ?, remarks = ? 
+             SET qc_inspection_qty = ?,
+                 qc_inspection_weight = ?,
+                 accepted_qty = ?, 
+                 rejected_qty = ?, 
+                 accepted_weight = ?,
+                 rejected_weight = ?,
+                 status = ?, 
+                 remarks = ? 
              WHERE id = ?`,
             [
-              item.accepted_qty || 0,
-              item.rejected_qty || 0,
+              item.qc_inspection_qty !== undefined && item.qc_inspection_qty !== null ? item.qc_inspection_qty : null,
+              item.qc_inspection_weight !== undefined && item.qc_inspection_weight !== null ? item.qc_inspection_weight : null,
+              item.accepted_qty !== undefined && item.accepted_qty !== null ? item.accepted_qty : 0,
+              item.rejected_qty !== undefined && item.rejected_qty !== null ? item.rejected_qty : 0,
+              item.accepted_weight !== undefined && item.accepted_weight !== null ? item.accepted_weight : 0,
+              item.rejected_weight !== undefined && item.rejected_weight !== null ? item.rejected_weight : 0,
               item.status || status || 'PENDING',
               item.remarks || null,
               item.id
@@ -726,21 +737,25 @@ const updateQC = async (qcId, updates) => {
         'UPDATE grns SET received_quantity = ?, status = ? WHERE id = ?',
         [totalAcceptedQty, grnStatus, grnId]
       );
-      if (currentStatus === 'PASSED' || currentStatus === 'ACCEPTED') {
+      if (['PASSED', 'ACCEPTED', 'IN_PROGRESS', 'SHORTAGE', 'OVERAGE'].includes(currentStatus)) {
         for (const item of grnItems) {
           await connection.execute(
             'UPDATE grn_items SET status = ? WHERE id = ?',
-            ['APPROVED', item.id]
+            [currentStatus === 'FAILED' ? 'REJECTED' : 'APPROVED', item.id]
           );
 
-          // Trigger stock ledger IN entry for approved QC item
+          // Trigger stock ledger IN entry for approved/accepted QC item using accepted_qty and accepted_weight
           const [qciData] = await connection.query(
             'SELECT accepted_qty, accepted_weight, item_code FROM qc_inspection_items WHERE qc_inspection_id = ? AND grn_item_id = ? LIMIT 1',
             [qcId, item.id]
           );
 
-          const passQty = qciData.length > 0 ? parseFloat(qciData[0].accepted_qty || 0) : parseFloat(item.accepted_qty || 0);
-          const passWeight = qciData.length > 0 ? parseFloat(qciData[0].accepted_weight || 0) : 0;
+          const passQty = (qciData.length > 0 && qciData[0].accepted_qty !== null && qciData[0].accepted_qty !== undefined)
+            ? parseFloat(qciData[0].accepted_qty)
+            : parseFloat(item.accepted_qty || 0);
+          const passWeight = (qciData.length > 0 && qciData[0].accepted_weight !== null && qciData[0].accepted_weight !== undefined)
+            ? parseFloat(qciData[0].accepted_weight)
+            : 0;
           const itemCode = qciData.length > 0 ? qciData[0].item_code : null;
 
           if (passQty > 0 && itemCode) {
@@ -1377,16 +1392,8 @@ const getRejectedItems = async (filters = {}) => {
       (SELECT 
         CONCAT('GRN-', qci.id) as id,
         qci.item_code,
-        CASE 
-          WHEN COALESCE(qci.accepted_qty, 0) > COALESCE(qci.po_qty, 0) THEN qci.accepted_qty - qci.po_qty
-          ELSE GREATEST(COALESCE(qci.rejected_qty, 0), CASE WHEN COALESCE(qci.po_qty, 0) > COALESCE(qci.accepted_qty, 0) THEN qci.po_qty - qci.accepted_qty ELSE 0 END)
-        END as rejected_qty,
-        CASE 
-          WHEN qci.status != 'PENDING' AND qci.status IS NOT NULL THEN qci.status
-          WHEN COALESCE(qci.accepted_qty, 0) > COALESCE(qci.po_qty, 0) THEN 'OVERAGE'
-          WHEN COALESCE(qci.po_qty, 0) > COALESCE(qci.accepted_qty, 0) THEN 'SHORTAGE'
-          ELSE 'REJECTED'
-        END as item_status,
+        qci.rejected_qty as rejected_qty,
+        'REJECTED' as item_status,
         qci.remarks as item_remarks,
         qc.inspection_date as date,
         g.po_number as po_number,
@@ -1402,7 +1409,7 @@ const getRejectedItems = async (filters = {}) => {
       LEFT JOIN vendors v ON po.vendor_id = v.id
       LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
       LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
-      WHERE COALESCE(qci.rejected_qty, 0) > 0 OR COALESCE(qci.po_qty, 0) > COALESCE(qci.accepted_qty, 0) OR COALESCE(qci.accepted_qty, 0) > COALESCE(qci.po_qty, 0))
+      WHERE COALESCE(qci.rejected_qty, 0) > 0)
       
       UNION ALL
       

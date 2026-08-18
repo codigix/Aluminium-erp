@@ -95,55 +95,35 @@ const generateQcPdf = async (data) => {
       totalItems: items.length,
       availableItems: items.filter(i => i.status === 'AVAILABLE' || i.accepted_qty > 0).length,
       items: items.map((item, idx) => {
-        const shortage = Math.max(0, parseFloat(item.ordered_qty || 0) - parseFloat(item.accepted_qty || 0));
-        const overage = Math.max(0, parseFloat(item.accepted_qty || 0) - parseFloat(item.ordered_qty || 0));
+        const recQty = parseFloat(item.received_qty || 0);
+        const recWt = parseFloat(item.received_weight !== undefined && item.received_weight !== null ? item.received_weight : recQty);
+        const inspQty = parseFloat(item.qc_inspection_qty !== undefined && item.qc_inspection_qty !== null ? item.qc_inspection_qty : recQty);
+        const inspWt = parseFloat(item.qc_inspection_weight !== undefined && item.qc_inspection_weight !== null ? item.qc_inspection_weight : recWt);
+        const accQty = parseFloat(item.accepted_qty !== undefined && item.accepted_qty !== null ? item.accepted_qty : inspQty);
+        const rejQty = parseFloat(item.rejected_qty || 0);
+        
+        const accWt = parseFloat(item.accepted_weight !== undefined && item.accepted_weight !== null 
+          ? item.accepted_weight 
+          : (recQty > 0 ? (accQty / recQty) * recWt : inspWt));
+        const rejWt = parseFloat(item.rejected_weight !== undefined && item.rejected_weight !== null 
+          ? item.rejected_weight 
+          : Math.max(0, recWt - accWt));
 
-        let itemStatus = 'AVAILABLE';
+        let itemStatus = 'ACCEPTED';
         let statusColor = '#16a34a'; // Emerald
 
-        if (shortage > 0) {
-          itemStatus = 'SHORTAGE';
+        if (rejQty > 0 || rejWt > 0.0005) {
+          itemStatus = 'REJECTED';
           statusColor = '#dc2626'; // Red
-        } else if (overage > 0) {
-          itemStatus = 'OVERAGE';
-          statusColor = '#2563eb'; // Blue
+        } else if (accQty < recQty) {
+          itemStatus = 'SHORTAGE';
+          statusColor = '#f59e0b'; // Amber
         }
 
-        const getReason = (itm, q) => {
-          const status = (itm.status || q.status || 'PENDING').toUpperCase().trim();
-          if (status === 'PASSED' || status === 'ACCEPTED') {
-            return 'Accepted';
-          }
-          if (status === 'FAILED' || status === 'REJECTED') {
-            return 'Rejected';
-          }
-          if (status === 'REWORK' || status === 'REWORK_REQUIRED') {
-            return 'Rework Required';
-          }
-          if (status === 'HOLD') {
-            return 'Hold';
-          }
-          if (status === 'DEVIATION' || status === 'DEVIATION_ACCEPTED') {
-            return 'Deviation Accepted';
-          }
-          if (status === 'PENDING') {
-            return 'Hold';
-          }
-
-          if (parseFloat(itm.rejected_qty || 0) > 0 && parseFloat(itm.accepted_qty || 0) === 0) {
-            return 'Rejected';
-          }
-          if (parseFloat(itm.accepted_qty || 0) > 0 && parseFloat(itm.rejected_qty || 0) === 0) {
-            return 'Accepted';
-          }
-
-          if (status.includes('REWORK')) return 'Rework Required';
-          if (status.includes('DEVIATION')) return 'Deviation Accepted';
-          if (status.includes('HOLD') || status.includes('WAITING') || status.includes('PENDING')) return 'Hold';
-          if (status.includes('PASS') || status.includes('ACCEPT')) return 'Accepted';
-          if (status.includes('FAIL') || status.includes('REJECT')) return 'Rejected';
-
-          return 'Hold';
+        const getReason = () => {
+          if (rejQty > 0 || rejWt > 0.0005) return 'Rejected';
+          if (accQty >= recQty) return 'Accepted';
+          return 'Accepted';
         };
 
         return {
@@ -154,14 +134,16 @@ const generateQcPdf = async (data) => {
           description: item.material_name || item.description || '—',
           itemCode: item.item_code || '—',
           uom: item.uom || 'Nos',
-          designQty: parseFloat(item.design_qty || 0).toFixed(3),
-          requiredQty: parseFloat(item.ordered_qty || 0).toFixed(3),
-          receivedQty: parseFloat(item.received_qty || 0).toFixed(3),
-          shortage: shortage.toFixed(3),
-          overage: overage.toFixed(3),
+          receivedQty: recQty.toFixed(0),
+          inspectionQty: inspQty.toFixed(0),
+          acceptedQty: accQty.toFixed(0),
+          acceptedWeight: accWt.toFixed(3),
+          rejectedQty: rejQty.toFixed(0),
+          rejectedWeight: rejWt.toFixed(3),
+          hasRejected: rejQty > 0 || rejWt > 0.0005,
           itemStatus: itemStatus,
           statusColor: statusColor,
-          reason: getReason(item, qc)
+          reason: getReason()
         };
       })
     };

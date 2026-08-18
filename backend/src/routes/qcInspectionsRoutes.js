@@ -174,7 +174,8 @@ router.post('/:qcId/stock-entry', authenticate, authorize(['QC_EDIT']), async (r
     // Fetch GRN items with actual dimensions from grn_items (NOT poi) and qc_inspection_items item_code
     const [grnItems] = await connection.query(
       `SELECT gi.id as grn_item_id,
-              COALESCE(gi.received_qty, gi.accepted_qty, 0) as qty,
+              COALESCE(qci.accepted_qty, gi.accepted_qty, 0) as qty,
+              COALESCE(qci.accepted_weight, gi.received_weight, 0) as pass_weight,
               COALESCE(qci.item_code, poi.item_code) as resolved_item_code,
               COALESCE(poi.material_name, gi.uom) as material_name,
               poi.material_type,
@@ -234,11 +235,13 @@ router.post('/:qcId/stock-entry', authenticate, authorize(['QC_EDIT']), async (r
 
       const weightPerUnit = parseFloat(item.weight_per_unit || 0);
       const isKg = (item.uom || '').toLowerCase() === 'kg' || (item.uom || '').toLowerCase() === 'kgs' || (item.uom || '').toLowerCase() === 'kilogram';
-      let passWeight = 0;
-      if (weightPerUnit > 0) {
-        passWeight = weightPerUnit * qty;
-      } else if (isKg) {
-        passWeight = qty;
+      let passWeight = parseFloat(item.pass_weight || 0);
+      if (passWeight <= 0) {
+        if (weightPerUnit > 0) {
+          passWeight = weightPerUnit * qty;
+        } else if (isKg) {
+          passWeight = qty;
+        }
       }
 
       // Use the same createQCStockLedgerEntry that Final QC uses
