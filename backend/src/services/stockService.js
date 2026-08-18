@@ -540,8 +540,13 @@ const getStockBalanceByItem = async (itemCode) => {
   };
 };
 
-const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, connection = null, dimensions = null, shapeType = null, materialType = null, shapeId = null) => {
+const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, connection = null, dimensions = null, shapeType = null, materialType = null, shapeId = null, stockBalanceId = null) => {
   const executor = connection || pool;
+  if (stockBalanceId) {
+    const [byDbId] = await executor.query('SELECT * FROM stock_balance WHERE id = ?', [stockBalanceId]);
+    if (byDbId.length > 0) return byDbId[0];
+  }
+
   const wh = warehouse || '';
   let query = `
     SELECT * FROM stock_balance 
@@ -561,11 +566,11 @@ const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, con
     const diameter = parseFloat(dimensions.diameter || 0);
     const outerDiameter = parseFloat(dimensions.outer_diameter || dimensions.outerDiameter || 0);
 
-    query += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; params.push(length);
-    query += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; params.push(width);
-    query += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; params.push(thickness);
-    query += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; params.push(diameter);
-    query += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; params.push(outerDiameter);
+    if (length > 0) { query += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; params.push(length); }
+    if (width > 0) { query += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; params.push(width); }
+    if (thickness > 0) { query += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; params.push(thickness); }
+    if (diameter > 0) { query += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; params.push(diameter); }
+    if (outerDiameter > 0) { query += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; params.push(outerDiameter); }
   }
 
   query += ` ORDER BY (shape_type IS NOT NULL AND shape_type != '') DESC, (material_type IS NOT NULL AND material_type != 'RAW_MATERIAL') DESC, current_balance DESC, id ASC `;
@@ -656,8 +661,10 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     const hasDimsForLookup = lenV > 0 || widV > 0 || thkV > 0 || diaV > 0 || odV > 0;
     const dimsObj = hasDimsForLookup ? { length, width, thickness, diameter, outer_diameter: outerDiameter, density } : null;
 
+    const stockBalanceId = options.stockBalanceId || options.stock_balance_id || options.stockId || options.stock_id || null;
+
     // Get existing balance for this item, warehouse, shape, materialType and dimensions
-    let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, useConnection, dimsObj, shapeType, matType, shapeId);
+    let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, useConnection, dimsObj, shapeType, matType, shapeId, stockBalanceId);
 
     // Fallback search: only match if shape, materialType and dimensions match!
     if (!existingBalance) {
@@ -680,13 +687,11 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
         fallbackParams.push(matType);
       }
       if (hasDimsForFallback) {
-        fallbackQuery += `
-           AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
-           AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
-           AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
-           AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
-           AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)`;
-        fallbackParams.push(lenVal, widVal, thkVal, diaVal, odiaVal);
+        if (lenVal > 0) { fallbackQuery += ` AND (ABS(COALESCE(length, 0) - ?) < 0.0001)`; fallbackParams.push(lenVal); }
+        if (widVal > 0) { fallbackQuery += ` AND (ABS(COALESCE(width, 0) - ?) < 0.0001)`; fallbackParams.push(widVal); }
+        if (thkVal > 0) { fallbackQuery += ` AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)`; fallbackParams.push(thkVal); }
+        if (diaVal > 0) { fallbackQuery += ` AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)`; fallbackParams.push(diaVal); }
+        if (odiaVal > 0) { fallbackQuery += ` AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)`; fallbackParams.push(odiaVal); }
       }
       fallbackQuery += ' ORDER BY current_balance DESC LIMIT 1';
 

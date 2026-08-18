@@ -998,7 +998,7 @@ const materialRequestController = {
               const _hasDim = _lenV > 0 || _widV > 0 || _thkV > 0 || _diaV > 0 || _odV > 0;
 
               const _buildStockQuery = (code) => {
-                let q = `SELECT item_code, warehouse, current_balance, COALESCE(current_weight, 0) as current_weight FROM stock_balance WHERE item_code = ? AND current_balance > 0`;
+                let q = `SELECT id, item_code, warehouse, current_balance, COALESCE(current_weight, 0) as current_weight, length, width, thickness, diameter, outer_diameter, shape_type, weight_per_unit FROM stock_balance WHERE item_code = ? AND current_balance > 0`;
                 const p = [code];
                 // Only filter on non-zero dimensions (zero means "not applicable for this shape")
                 if (_lenV > 0) { q += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; p.push(_lenV); }
@@ -1051,8 +1051,10 @@ const materialRequestController = {
                     issueQtyForStock = weightPerPieceInStock > 0 ? (issueWeight / weightPerPieceInStock) : issueQty;
                   }
 
+                  if (issueQty <= 0 || issueQtyForStock <= 0) continue;
+
                   await stockService.addStockLedgerEntry(
-                    stockRow.item_code,
+                    stockRow.item_code || resolvedItemCode,
                     'OUT',
                     issueQtyForStock,
                     'Material Request',
@@ -1062,18 +1064,19 @@ const materialRequestController = {
                       remarks: `Material released for MR: ${mr.mr_number}`,
                       userId: req.user?.id || 1,
                       warehouse: stockRow.warehouse,
+                      stockBalanceId: stockRow.id,
                       weight: issueWeight,
                       materialName: item.item_name,
                       materialType: item.item_type,
                       unit: item.uom,
-                      length: item.length,
-                      width: item.width,
-                      thickness: item.thickness,
-                      diameter: item.diameter,
-                      outer_diameter: item.outer_diameter,
+                      length: stockRow.length || item.length,
+                      width: stockRow.width || item.width,
+                      thickness: stockRow.thickness || item.thickness,
+                      diameter: stockRow.diameter || item.diameter,
+                      outer_diameter: stockRow.outer_diameter || item.outer_diameter,
                       density: item.density,
-                      weight_per_unit: item.weight_per_unit,
-                      shape_type: item.shape_type
+                      weight_per_unit: stockRow.weight_per_unit || item.weight_per_unit,
+                      shape_type: stockRow.shape_type || item.shape_type
                     },
                     connection
                   );
@@ -1178,8 +1181,8 @@ const materialRequestController = {
           const _odV2  = parseFloat(item.outer_diameter || 0);
           const _hasDim2 = _lenV2 > 0 || _widV2 > 0 || _thkV2 > 0 || _diaV2 > 0 || _odV2 > 0;
 
-          let _stockQ2 = `SELECT warehouse, current_balance, COALESCE(current_weight, 0) as current_weight FROM stock_balance WHERE item_code = ? AND current_balance > 0`;
-          const _stockP2 = [resolvedItemCode];
+          let _stockQ2 = `SELECT id, item_code, warehouse, current_balance, COALESCE(current_weight, 0) as current_weight, length, width, thickness, diameter, outer_diameter, shape_type, weight_per_unit FROM stock_balance WHERE item_code = ? AND current_balance > 0`;
+          const _stockP2 = [resolvedItemCode || item.item_code];
           // Only filter on non-zero dimensions (zero means "not applicable for this shape")
           if (_lenV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; _stockP2.push(_lenV2); }
           if (_widV2 > 0) { _stockQ2 += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; _stockP2.push(_widV2); }
@@ -1246,53 +1249,56 @@ const materialRequestController = {
               issueQtyForStock = weightPerPieceInStock > 0 ? (issueWeight / weightPerPieceInStock) : issueQty;
             }
 
-              // If we have a work_order and issueId, insert into material_issue_items
-              if (issueId) {
-                await connection.execute(
-                  `INSERT INTO material_issue_items (issue_id, material_name, material_type, item_code, quantity, uom, warehouse)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                  [issueId, item.item_name, item.item_type, resolvedItemCode, issueQty, item.uom, stockRow.warehouse]
-                );
-              }
+            if (issueQty <= 0 || issueQtyForStock <= 0) continue;
 
-              // Deduct from stock ledger
-              await stockService.addStockLedgerEntry(
-                resolvedItemCode,
-                'OUT',
-                issueQtyForStock,
-                issueId ? 'MATERIAL_ISSUE' : 'Material Request',
-                issueId || mr.id,
-                issueId ? issueNumber : mr.mr_number,
-                {
-                  remarks: `Partial release for MR: ${mr.mr_number}`,
-                  userId: req.user?.id || 1,
-                  warehouse: stockRow.warehouse,
-                  weight: issueWeight,
-                  materialName: item.item_name,
-                  materialType: item.item_type,
-                  unit: item.uom,
-                  length: item.length,
-                  width: item.width,
-                  thickness: item.thickness,
-                  diameter: item.diameter,
-                  outer_diameter: item.outer_diameter,
-                  density: item.density,
-                  weight_per_unit: item.weight_per_unit,
-                  shape_type: item.shape_type
-                },
-                connection
-              );
-
-              // Update allocated_quantity and allocated_weight in material_request_items
+            // If we have a work_order and issueId, insert into material_issue_items
+            if (issueId) {
               await connection.execute(
-                `UPDATE material_request_items SET 
-                  allocated_quantity = COALESCE(allocated_quantity, 0) + ?,
-                  allocated_weight = COALESCE(allocated_weight, 0) + ?
-                 WHERE id = ?`,
-                [issueQty, issueWeight, item.id]
+                `INSERT INTO material_issue_items (issue_id, material_name, material_type, item_code, quantity, uom, warehouse)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [issueId, item.item_name, item.item_type, stockRow.item_code || resolvedItemCode || item.item_code, issueQty, item.uom, stockRow.warehouse]
               );
+            }
 
-              amountToDeduct -= issueQty;
+            // Deduct from stock ledger
+            await stockService.addStockLedgerEntry(
+              stockRow.item_code || resolvedItemCode || item.item_code,
+              'OUT',
+              issueQtyForStock,
+              issueId ? 'MATERIAL_ISSUE' : 'Material Request',
+              issueId || mr.id,
+              issueId ? issueNumber : mr.mr_number,
+              {
+                remarks: `Partial release for MR: ${mr.mr_number}`,
+                userId: req.user?.id || 1,
+                warehouse: stockRow.warehouse,
+                stockBalanceId: stockRow.id,
+                weight: issueWeight,
+                materialName: item.item_name,
+                materialType: item.item_type,
+                unit: item.uom,
+                length: stockRow.length || item.length,
+                width: stockRow.width || item.width,
+                thickness: stockRow.thickness || item.thickness,
+                diameter: stockRow.diameter || item.diameter,
+                outer_diameter: stockRow.outer_diameter || item.outer_diameter,
+                density: item.density,
+                weight_per_unit: stockRow.weight_per_unit || item.weight_per_unit,
+                shape_type: stockRow.shape_type || item.shape_type
+              },
+              connection
+            );
+
+            // Update allocated_quantity and allocated_weight in material_request_items
+            await connection.execute(
+              `UPDATE material_request_items SET 
+                allocated_quantity = COALESCE(allocated_quantity, 0) + ?,
+                allocated_weight = COALESCE(allocated_weight, 0) + ?
+               WHERE id = ?`,
+              [issueQty, issueWeight, item.id]
+            );
+
+            amountToDeduct -= issueQty;
           }
         }
 
