@@ -454,6 +454,43 @@ const StockBalance = () => {
     }
   ];
 
+  const customStockFilter = (row, term) => {
+    if (!term) return true;
+    const shapeName = row.shape_type || (shapes.find(s => String(s.id) === String(row.shape_id))?.name) || '';
+    const formattedDim = formatDimensions({ ...row, shape_type: shapeName }) || '';
+
+    // Build one unified string combining all fields and dimensions
+    const combinedString = [
+      row.item_code,
+      row.material_name,
+      row.material_type,
+      row.material_grade,
+      row.shape_type,
+      row.shape_name,
+      row.drawing_no,
+      row.warehouse,
+      formattedDim,
+      row.length ? `${row.length}` : '',
+      row.width ? `${row.width}` : '',
+      row.thickness ? `${row.thickness}` : '',
+      row.diameter ? `${row.diameter}` : '',
+      row.outer_diameter ? `${row.outer_diameter}` : ''
+    ].filter(Boolean).join(' ');
+
+    const normalize = (str) =>
+      String(str || '')
+        .toLowerCase()
+        .replace(/[×xX*]/g, ' ')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ');
+
+    const normalizedCombined = normalize(combinedString);
+    const searchTokens = normalize(term).split(' ').filter(Boolean);
+
+    // Row matches if EVERY search token exists in the combined normalized string
+    return searchTokens.every(token => normalizedCombined.includes(token));
+  };
+
   return (
     <div className="space-y-2 animate-in fade-in duration-500">
       {stats && (
@@ -509,7 +546,9 @@ const StockBalance = () => {
         data={balances}
         loading={loading}
         pageSize={5}
-        searchPlaceholder="Search by item code or description..."
+        rowIdKey="id"
+        customFilter={customStockFilter}
+        searchPlaceholder="Search by item code, material name, or dimension (e.g. SQT 300 × 130)..."
         emptyMessage="No stock items found"
         className="bg-white rounded border border-slate-200 overflow-hidden shadow-sm"
       />

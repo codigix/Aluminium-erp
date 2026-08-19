@@ -104,9 +104,9 @@ const deleteStockBalance = async (id) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Get the item_code of the stock balance record
+    // 1. Get the stock balance record by primary key id
     const [balanceRows] = await connection.query(
-      'SELECT item_code FROM stock_balance WHERE id = ?',
+      'SELECT * FROM stock_balance WHERE id = ?',
       [id]
     );
 
@@ -116,18 +116,30 @@ const deleteStockBalance = async (id) => {
       throw error;
     }
 
-    const itemCode = balanceRows[0].item_code;
+    const targetRow = balanceRows[0];
 
-    // 2. Delete all related stock ledger entries for this item_code
-    await connection.execute(
-      'DELETE FROM stock_ledger WHERE item_code = ?',
-      [itemCode]
-    );
+    // 2. Delete related stock ledger entries matching item_code, warehouse, and non-zero dimensions of this specific row
+    let ledgerDeleteQuery = `DELETE FROM stock_ledger WHERE item_code = ? AND (warehouse = ? OR (warehouse IS NULL AND ? IS NULL))`;
+    const ledgerDeleteParams = [targetRow.item_code, targetRow.warehouse, targetRow.warehouse];
 
-    // 3. Delete all stock balance records for this item_code
+    const len = parseFloat(targetRow.length || 0);
+    const wid = parseFloat(targetRow.width || 0);
+    const thk = parseFloat(targetRow.thickness || 0);
+    const dia = parseFloat(targetRow.diameter || 0);
+    const od  = parseFloat(targetRow.outer_diameter || 0);
+
+    if (len > 0) { ledgerDeleteQuery += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; ledgerDeleteParams.push(len); }
+    if (wid > 0) { ledgerDeleteQuery += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; ledgerDeleteParams.push(wid); }
+    if (thk > 0) { ledgerDeleteQuery += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; ledgerDeleteParams.push(thk); }
+    if (dia > 0) { ledgerDeleteQuery += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; ledgerDeleteParams.push(dia); }
+    if (od > 0)  { ledgerDeleteQuery += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; ledgerDeleteParams.push(od); }
+
+    await connection.execute(ledgerDeleteQuery, ledgerDeleteParams);
+
+    // 3. Delete ONLY this specific stock balance record by primary key id
     await connection.execute(
-      'DELETE FROM stock_balance WHERE item_code = ?',
-      [itemCode]
+      'DELETE FROM stock_balance WHERE id = ?',
+      [id]
     );
 
     await connection.commit();
@@ -946,23 +958,33 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
         [passQty, parseFloat(passWeight) || 0, itemCode, ledgerId]
       );
 
-      const [totals] = await useConnection.query(
-        `SELECT 
-           SUM(COALESCE(qty_in, 0)) - SUM(COALESCE(qty_out, 0)) as current_qty,
-           SUM(COALESCE(weight_in, 0)) - SUM(COALESCE(weight_out, 0)) as current_weight
-         FROM stock_ledger 
-         WHERE item_code = ?`,
-        [itemCode]
-      );
-      const newQty = totals.length > 0 ? parseFloat(totals[0].current_qty || 0) : passQty;
-      const newWeight = totals.length > 0 ? parseFloat(totals[0].current_weight || 0) : (parseFloat(passWeight) || 0);
+      const dimsObj = {
+        length: itemDims.length,
+        width: itemDims.width,
+        thickness: itemDims.thickness,
+        diameter: itemDims.diameter,
+        outer_diameter: itemDims.outer_diameter
+      };
+      const details = await calculateBalanceDetailsFromLedger(itemCode, 'RM-HOLD', useConnection, dimsObj, itemDims.shape_type, itemDims.material_type);
+      const newQty = details.current_balance;
+      const newWeight = details.current_weight;
 
-      await useConnection.query(
-        `UPDATE stock_balance 
-         SET current_balance = ?, current_weight = ?, accepted_qty = ?
-         WHERE item_code = ?`,
-        [newQty, newWeight, newQty, itemCode]
-      );
+      let sbMatchQuery = `SELECT id FROM stock_balance WHERE item_code = ? AND (warehouse = 'RM-HOLD' OR warehouse IS NULL OR warehouse = '')`;
+      const sbMatchParams = [itemCode];
+      if (parseFloat(itemDims.length || 0) > 0) { sbMatchQuery += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; sbMatchParams.push(parseFloat(itemDims.length)); }
+      if (parseFloat(itemDims.width || 0) > 0) { sbMatchQuery += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; sbMatchParams.push(parseFloat(itemDims.width)); }
+      if (parseFloat(itemDims.thickness || 0) > 0) { sbMatchQuery += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; sbMatchParams.push(parseFloat(itemDims.thickness)); }
+      if (parseFloat(itemDims.diameter || 0) > 0) { sbMatchQuery += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; sbMatchParams.push(parseFloat(itemDims.diameter)); }
+      if (parseFloat(itemDims.outer_diameter || 0) > 0) { sbMatchQuery += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; sbMatchParams.push(parseFloat(itemDims.outer_diameter)); }
+      sbMatchQuery += ' LIMIT 1';
+
+      const [sbRows] = await useConnection.query(sbMatchQuery, sbMatchParams);
+      if (sbRows.length > 0) {
+        await useConnection.query(
+          `UPDATE stock_balance SET current_balance = ?, current_weight = ? WHERE id = ?`,
+          [newQty, newWeight, sbRows[0].id]
+        );
+      }
 
       if (!connection) {
         await useConnection.commit();
