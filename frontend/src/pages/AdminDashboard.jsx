@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Card, DataTable, StatusBadge, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
-import { 
+import {
   ShoppingCart, Users, Clock, RefreshCw, FileText, Factory, Palette, Package, Truck,
-  IndianRupee, CheckCircle, TrendingUp, TrendingDown, ShieldCheck, BarChart3, Monitor, 
+  IndianRupee, CheckCircle, TrendingUp, TrendingDown, ShieldCheck, BarChart3, Monitor,
   Activity, Bell, Settings, Search, ChevronRight, AlertTriangle, PlayCircle, ClipboardList, Plus
 } from 'lucide-react';
-import { 
+import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line
 } from 'recharts';
 
@@ -22,7 +22,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     const storedUser = localStorage.getItem('authUser');
     if (storedUser) setUser(JSON.parse(storedUser));
-    
+
     // Simulate loading data since we are focusing on UI
     setTimeout(() => {
       setStats({
@@ -72,7 +72,7 @@ const AdminDashboard = () => {
         </div>
         <div className="text-3xl font-bold text-slate-800 tracking-tight">{count}</div>
       </div>
-      
+
       <div className="mt-2">
         {!noTrend ? (
           <div className={`flex items-center text-xs font-bold ${trend > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -81,7 +81,7 @@ const AdminDashboard = () => {
           </div>
         ) : (
           <div className="flex items-center text-xs font-medium text-slate-400">
-             <span className="w-3 h-0.5 bg-slate-300 mr-2 rounded-full"></span> No change
+            <span className="w-3 h-0.5 bg-slate-300 mr-2 rounded-full"></span> No change
           </div>
         )}
       </div>
@@ -98,17 +98,17 @@ const AdminDashboard = () => {
 
   const MiniStatCard = ({ title, count, trend, icon: Icon, iconBg, iconColor }) => (
     <div className="bg-white rounded-xl p-4 border border-slate-100 flex items-center justify-between hover:shadow-sm transition-shadow">
-       <div>
-         <p className="text-xs text-slate-500 font-semibold mb-1">{title}</p>
-         <div className="text-xl font-bold text-slate-800">{count}</div>
-         <div className={`flex items-center text-xs font-bold mt-1 ${trend > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-            {trend > 0 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
-            {Math.abs(trend)}%
-          </div>
-       </div>
-       <div className={`p-3 rounded-lg ${iconBg} ${iconColor}`}>
-          <Icon className="w-5 h-5" />
-       </div>
+      <div>
+        <p className="text-xs text-slate-500 font-semibold mb-1">{title}</p>
+        <div className="text-xl font-bold text-slate-800">{count}</div>
+        <div className={`flex items-center text-xs font-bold mt-1 ${trend > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+          {trend > 0 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+          {Math.abs(trend)}%
+        </div>
+      </div>
+      <div className={`p-3 rounded-lg ${iconBg} ${iconColor}`}>
+        <Icon className="w-5 h-5" />
+      </div>
     </div>
   );
 
@@ -129,7 +129,7 @@ const AdminDashboard = () => {
       <div className="space-y-6 pb-12">
         <div className="h-20 bg-slate-100 animate-pulse rounded-xl"></div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[1,2,3,4].map(i => <SkeletonCard key={i} />)}
+          {[1, 2, 3, 4].map(i => <SkeletonCard key={i} />)}
         </div>
       </div>
     );
@@ -151,7 +151,7 @@ const AdminDashboard = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <button className="flex items-center gap-2 px-4 py-2 bg-[#6366f1] text-white rounded-lg text-sm font-semibold hover:bg-indigo-600 transition-all shadow-sm">
             <BarChart3 className="w-4 h-4" />
@@ -204,37 +204,37 @@ const AdminDashboard = () => {
               <option>This Month</option>
             </select>
           </div>
-          
+
           <div className="h-72 w-full mb-6">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={stats.velocityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 600}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 600}} dx={-10} domain={[0, 4]} />
-                <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                <Area type="monotone" dataKey="val" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" dot={{r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff'}} activeDot={{r: 6}} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }} dx={-10} domain={[0, 4]} />
+                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                <Area type="monotone" dataKey="val" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-auto">
-             <MiniStatCard title="Total Orders" count={156} trend={18.2} icon={ClipboardList} iconBg="bg-purple-50" iconColor="text-purple-600" />
-             <MiniStatCard title="Completed" count={89} trend={22.4} icon={CheckCircle} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
-             <MiniStatCard title="In Progress" count={42} trend={-6.3} icon={Clock} iconBg="bg-amber-50" iconColor="text-amber-600" />
-             <MiniStatCard title="Pending" count={25} trend={-2.1} icon={AlertTriangle} iconBg="bg-rose-50" iconColor="text-rose-600" />
+            <MiniStatCard title="Total Orders" count={156} trend={18.2} icon={ClipboardList} iconBg="bg-purple-50" iconColor="text-purple-600" />
+            <MiniStatCard title="Completed" count={89} trend={22.4} icon={CheckCircle} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
+            <MiniStatCard title="In Progress" count={42} trend={-6.3} icon={Clock} iconBg="bg-amber-50" iconColor="text-amber-600" />
+            <MiniStatCard title="Pending" count={25} trend={-2.1} icon={AlertTriangle} iconBg="bg-rose-50" iconColor="text-rose-600" />
           </div>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col">
           <h3 className="text-lg text-slate-900 font-bold mb-1">Ecosystem Health</h3>
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-8">OPERATIONAL PERFORMANCE</p>
-          
+
           <div className="space-y-8 flex-1">
             {stats.health.map((item, idx) => (
               <div key={idx} className="space-y-2.5">
@@ -250,16 +250,16 @@ const AdminDashboard = () => {
           </div>
 
           <div className="mt-8 bg-slate-50/50 rounded-xl p-5 flex items-center gap-4 border border-slate-100">
-             <div className="p-3.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100">
-                <ShieldCheck className="w-7 h-7" />
-             </div>
-             <div className="flex-1">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Overall Health Score</p>
-                <div className="flex items-center gap-3 mt-1">
-                   <span className="text-3xl font-bold text-slate-900">68%</span>
-                   <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-md text-xs font-bold">Good</span>
-                </div>
-             </div>
+            <div className="p-3.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100">
+              <ShieldCheck className="w-7 h-7" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Overall Health Score</p>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-3xl font-bold text-slate-900">68%</span>
+                <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-md text-xs font-bold">Good</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -278,9 +278,9 @@ const AdminDashboard = () => {
 
         <DataTable
           columns={[
-            { 
-              header: 'Department', 
-              key: 'department', 
+            {
+              header: 'Department',
+              key: 'department',
               render: (val, row) => (
                 <div className="flex items-center gap-3 font-semibold text-slate-800">
                   <div className={`p-2 rounded-lg ${row.badgeBg} ${row.badgeText}`}>{row.icon}</div>
@@ -290,27 +290,26 @@ const AdminDashboard = () => {
             },
             { header: 'Key Activity', key: 'metric', render: (val) => <span className="text-slate-600 font-medium">{val}</span> },
             { header: 'Count', key: 'count', render: (val) => <span className="font-bold text-slate-900">{val}</span> },
-            { 
-              header: 'Status', 
-              key: 'status', 
+            {
+              header: 'Status',
+              key: 'status',
               render: (val) => (
-                <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${
-                  val === 'Active' ? 'bg-emerald-50 text-emerald-600' :
-                  val === 'In Progress' ? 'bg-blue-50 text-blue-600' :
-                  val === 'Running' ? 'bg-amber-50 text-amber-600' :
-                  val === 'Pending' ? 'bg-orange-50 text-orange-600' :
-                  'bg-teal-50 text-teal-600'
-                }`}>
+                <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${val === 'Active' ? 'bg-emerald-50 text-emerald-600' :
+                    val === 'In Progress' ? 'bg-blue-50 text-blue-600' :
+                      val === 'Running' ? 'bg-amber-50 text-amber-600' :
+                        val === 'Pending' ? 'bg-orange-50 text-orange-600' :
+                          'bg-teal-50 text-teal-600'
+                  }`}>
                   {val} ▾
                 </span>
               )
             },
-            { 
-              header: 'Trend', 
+            {
+              header: 'Trend',
               key: 'trend',
               render: (val) => (
                 <span className="flex items-center text-sm font-bold text-emerald-500">
-                   <TrendingUp className="w-4 h-4 mr-1" /> {val}
+                  <TrendingUp className="w-4 h-4 mr-1" /> {val}
                 </span>
               )
             }
@@ -329,101 +328,101 @@ const AdminDashboard = () => {
 
       {/* Bottom Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         {/* Quick Actions */}
-         <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
-            <h3 className="text-md font-bold text-slate-900 mb-5 flex items-center gap-2">
-              <Settings className="w-4 h-4 text-indigo-500" /> Quick Actions
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-               <QuickActionButton icon={ShoppingCart} title="New Sales Order" iconBg="bg-purple-50" iconColor="text-purple-600" />
-               <QuickActionButton icon={Package} title="Create PO" iconBg="bg-orange-50" iconColor="text-orange-600" />
-               <QuickActionButton icon={FileText} title="New Work Order" iconBg="bg-emerald-50" iconColor="text-emerald-600" />
-               <QuickActionButton icon={Plus} title="Add Item" iconBg="bg-amber-50" iconColor="text-amber-600" />
-               <QuickActionButton icon={ClipboardList} title="Production Plan" iconBg="bg-blue-50" iconColor="text-blue-600" />
-               <QuickActionButton icon={BarChart3} title="View Reports" iconBg="bg-indigo-50" iconColor="text-indigo-600" />
-            </div>
-         </div>
+        {/* Quick Actions */}
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+          <h3 className="text-md font-bold text-slate-900 mb-5 flex items-center gap-2">
+            <Settings className="w-4 h-4 text-indigo-500" /> Quick Actions
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <QuickActionButton icon={ShoppingCart} title="New Sales Order" iconBg="bg-purple-50" iconColor="text-purple-600" />
+            <QuickActionButton icon={Package} title="Create PO" iconBg="bg-orange-50" iconColor="text-orange-600" />
+            <QuickActionButton icon={FileText} title="New Work Order" iconBg="bg-emerald-50" iconColor="text-emerald-600" />
+            <QuickActionButton icon={Plus} title="Add Item" iconBg="bg-amber-50" iconColor="text-amber-600" />
+            <QuickActionButton icon={ClipboardList} title="Production Plan" iconBg="bg-blue-50" iconColor="text-blue-600" />
+            <QuickActionButton icon={BarChart3} title="View Reports" iconBg="bg-indigo-50" iconColor="text-indigo-600" />
+          </div>
+        </div>
 
-         {/* Critical Alerts */}
-         <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-md font-bold text-slate-900 flex items-center gap-2">
-                <Bell className="w-4 h-4 text-rose-500" /> Critical Alerts
-                <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-full text-xs font-bold border border-rose-100">3</span>
-              </h3>
-            </div>
-            
-            <div className="space-y-5 flex-1">
-               <div className="flex gap-3">
-                 <div className="p-2.5 bg-rose-50 text-rose-500 rounded-lg h-fit"><AlertTriangle className="w-4 h-4" /></div>
-                 <div>
-                    <h4 className="text-sm font-bold text-slate-800">Low Stock Alert</h4>
-                    <p className="text-xs text-slate-500 mt-1">8 items are below minimum stock level.</p>
-                    <p className="text-xs text-slate-400 mt-1.5 font-medium">10 min ago</p>
-                 </div>
-               </div>
-               <div className="flex gap-3">
-                 <div className="p-2.5 bg-amber-50 text-amber-500 rounded-lg h-fit"><AlertTriangle className="w-4 h-4" /></div>
-                 <div>
-                    <h4 className="text-sm font-bold text-slate-800">Machine Downtime</h4>
-                    <p className="text-xs text-slate-500 mt-1">CNC-02 is down for 45 minutes.</p>
-                    <p className="text-xs text-slate-400 mt-1.5 font-medium">25 min ago</p>
-                 </div>
-               </div>
-               <div className="flex gap-3">
-                 <div className="p-2.5 bg-rose-50 text-rose-500 rounded-lg h-fit"><FileText className="w-4 h-4" /></div>
-                 <div>
-                    <h4 className="text-sm font-bold text-slate-800">Overdue Purchase Orders</h4>
-                    <p className="text-xs text-slate-500 mt-1">12 POs are past due date.</p>
-                    <p className="text-xs text-slate-400 mt-1.5 font-medium">1 hr ago</p>
-                 </div>
-               </div>
-            </div>
-            <button className="mt-5 text-sm font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-               View all alerts <ChevronRight className="w-4 h-4" />
-            </button>
-         </div>
-
-         {/* Recent Activities */}
-         <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col">
-            <h3 className="text-md font-bold text-slate-900 mb-5 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-slate-500" /> Recent Activities
+        {/* Critical Alerts */}
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="text-md font-bold text-slate-900 flex items-center gap-2">
+              <Bell className="w-4 h-4 text-rose-500" /> Critical Alerts
+              <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-full text-xs font-bold border border-rose-100">3</span>
             </h3>
-            
-            <div className="space-y-5 flex-1">
-               <div className="flex gap-3">
-                 <div className="p-2 bg-emerald-50 text-emerald-500 rounded-full h-fit"><CheckCircle className="w-4 h-4" /></div>
-                 <div>
-                    <h4 className="text-sm font-bold text-slate-800">PO #PO-2024-0156 approved</h4>
-                    <p className="text-xs text-slate-500 mt-1 font-medium">By Admin • 10:15 AM</p>
-                 </div>
-               </div>
-               <div className="flex gap-3">
-                 <div className="p-2 bg-blue-50 text-blue-500 rounded-full h-fit"><FileText className="w-4 h-4" /></div>
-                 <div>
-                    <h4 className="text-sm font-bold text-slate-800">New Work Order #WO-2458 created</h4>
-                    <p className="text-xs text-slate-500 mt-1 font-medium">By Production • 09:45 AM</p>
-                 </div>
-               </div>
-               <div className="flex gap-3">
-                 <div className="p-2 bg-emerald-50 text-emerald-500 rounded-full h-fit"><Package className="w-4 h-4" /></div>
-                 <div>
-                    <h4 className="text-sm font-bold text-slate-800">GRN #GRN-1045 received</h4>
-                    <p className="text-xs text-slate-500 mt-1 font-medium">By Store • 09:30 AM</p>
-                 </div>
-               </div>
-               <div className="flex gap-3">
-                 <div className="p-2 bg-purple-50 text-purple-500 rounded-full h-fit"><ShieldCheck className="w-4 h-4" /></div>
-                 <div>
-                    <h4 className="text-sm font-bold text-slate-800">Quality Inspection completed</h4>
-                    <p className="text-xs text-slate-500 mt-1 font-medium">By Quality • 09:10 AM</p>
-                 </div>
-               </div>
+          </div>
+
+          <div className=" flex-1">
+            <div className="flex gap-3">
+              <div className="p-2.5 bg-rose-50 text-rose-500 rounded-lg h-fit"><AlertTriangle className="w-4 h-4" /></div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">Low Stock Alert</h4>
+                <p className="text-xs text-slate-500 mt-1">8 items are below minimum stock level.</p>
+                <p className="text-xs text-slate-400 mt-1.5 font-medium">10 min ago</p>
+              </div>
             </div>
-            <button className="mt-5 text-sm font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-               View all activities <ChevronRight className="w-4 h-4" />
-            </button>
-         </div>
+            <div className="flex gap-3">
+              <div className="p-2.5 bg-amber-50 text-amber-500 rounded-lg h-fit"><AlertTriangle className="w-4 h-4" /></div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">Machine Downtime</h4>
+                <p className="text-xs text-slate-500 mt-1">CNC-02 is down for 45 minutes.</p>
+                <p className="text-xs text-slate-400 mt-1.5 font-medium">25 min ago</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="p-2.5 bg-rose-50 text-rose-500 rounded-lg h-fit"><FileText className="w-4 h-4" /></div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">Overdue Purchase Orders</h4>
+                <p className="text-xs text-slate-500 mt-1">12 POs are past due date.</p>
+                <p className="text-xs text-slate-400 mt-1.5 font-medium">1 hr ago</p>
+              </div>
+            </div>
+          </div>
+          <button className="mt-5 text-sm font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+            View all alerts <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Recent Activities */}
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="text-md font-bold text-slate-900 mb-5 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-slate-500" /> Recent Activities
+          </h3>
+
+          <div className=" flex-1">
+            <div className="flex gap-3">
+              <div className="p-2 bg-emerald-50 text-emerald-500 rounded-full h-fit"><CheckCircle className="w-4 h-4" /></div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">PO #PO-2024-0156 approved</h4>
+                <p className="text-xs text-slate-500 mt-1 font-medium">By Admin • 10:15 AM</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="p-2 bg-blue-50 text-blue-500 rounded-full h-fit"><FileText className="w-4 h-4" /></div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">New Work Order #WO-2458 created</h4>
+                <p className="text-xs text-slate-500 mt-1 font-medium">By Production • 09:45 AM</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="p-2 bg-emerald-50 text-emerald-500 rounded-full h-fit"><Package className="w-4 h-4" /></div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">GRN #GRN-1045 received</h4>
+                <p className="text-xs text-slate-500 mt-1 font-medium">By Store • 09:30 AM</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="p-2 bg-purple-50 text-purple-500 rounded-full h-fit"><ShieldCheck className="w-4 h-4" /></div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">Quality Inspection completed</h4>
+                <p className="text-xs text-slate-500 mt-1 font-medium">By Quality • 09:10 AM</p>
+              </div>
+            </div>
+          </div>
+          <button className="mt-5 text-sm font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+            View all activities <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -119,7 +119,7 @@ const POMaterialRequest = () => {
     try {
       const token = localStorage.getItem('authToken');
       const headers = { 'Authorization': `Bearer ${token}` };
-      
+
       const [deptRes, userRes, itemRes, warehouseRes] = await Promise.all([
         fetch(`${API_BASE}/departments`, { headers }),
         fetch(`${API_BASE}/users`, { headers }),
@@ -243,27 +243,27 @@ const POMaterialRequest = () => {
 
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      
+
       const itemsToRequest = (mr.items || []).filter(item => {
         const type = (item.material_type || '').toUpperCase();
         const isNotFG = type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
-        
-        const remainingQty = item.remaining_qty !== undefined 
+
+        const remainingQty = item.remaining_qty !== undefined
           ? parseFloat(item.remaining_qty || 0)
           : Math.max(0, parseFloat(item.quantity || 0) - parseFloat(item.allocated_quantity || 0));
-        
+
         return isNotFG && remainingQty > 0;
       }).map(item => {
-        const remainingQty = item.remaining_qty !== undefined 
+        const remainingQty = item.remaining_qty !== undefined
           ? parseFloat(item.remaining_qty || 0)
           : Math.max(0, parseFloat(item.quantity || 0) - parseFloat(item.allocated_quantity || 0));
-        
+
         const remainingWeight = item.remaining_weight !== undefined
           ? parseFloat(item.remaining_weight || 0)
           : Math.max(0, parseFloat(item.required_weight || 0) - parseFloat(item.allocated_weight || 0));
-        
+
         const isKg = (item.uom || '').toLowerCase() === 'kg' || (item.uom || '').toLowerCase() === 'kgs' || (item.uom || '').toLowerCase() === 'kilogram';
-        
+
         return {
           ...item,
           material_name: item.name || item.material_name,
@@ -693,7 +693,7 @@ const POMaterialRequest = () => {
       label: 'Actions',
       render: (_, row) => (
         <div className="flex items-center gap-2 ">
-          <button 
+          <button
             onClick={() => handleViewRequest(row.id)}
             className="p-1 hover:bg-slate-100 rounded text-slate-400"
           >
@@ -702,7 +702,7 @@ const POMaterialRequest = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
           </button>
-          <button 
+          <button
             onClick={() => handleDeleteRequest(row.id)}
             className="p-1 hover:bg-rose-50 rounded text-rose-400"
             title="Delete Request"
@@ -722,9 +722,9 @@ const POMaterialRequest = () => {
     setFormData({
       ...formData,
       items: [
-        ...formData.items, 
-        { 
-          ...currentItem, 
+        ...formData.items,
+        {
+          ...currentItem,
           design_qty: currentItem.quantity, // Set design_qty same as quantity initially
           item_name: selectedItem?.name || currentItem.item_code,
           item_type: selectedItem?.material_type || 'Raw Material'
@@ -758,7 +758,7 @@ const POMaterialRequest = () => {
       });
 
       if (!response.ok) throw new Error('Failed to create material request');
-      
+
       successToast("Material Request submitted successfully");
       setShowModal(false);
       fetchRequests();
@@ -898,7 +898,7 @@ const POMaterialRequest = () => {
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                     Department <span className="text-rose-500">*</span>
                   </label>
-                  <select 
+                  <select
                     value={formData.department}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs outline-none focus:ring-2 focus:ring-indigo-100"
@@ -913,7 +913,7 @@ const POMaterialRequest = () => {
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                     Requested By (Optional)
                   </label>
-                  <select 
+                  <select
                     value={formData.requested_by}
                     onChange={(e) => setFormData({ ...formData, requested_by: e.target.value })}
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs outline-none focus:ring-2 focus:ring-indigo-100"
@@ -932,7 +932,7 @@ const POMaterialRequest = () => {
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                     Required By <span className="text-rose-500">*</span>
                   </label>
-                  <input 
+                  <input
                     type="date"
                     value={formData.required_by}
                     onChange={(e) => setFormData({ ...formData, required_by: e.target.value })}
@@ -948,19 +948,17 @@ const POMaterialRequest = () => {
                       { id: 'Internal Transfer', icon: '🏢', color: 'slate' },
                       { id: 'Material Issue', icon: '➡️', color: 'orange' }
                     ].map(p => (
-                      <button 
+                      <button
                         key={p.id}
                         type="button"
                         onClick={() => setFormData({ ...formData, purpose: p.id })}
-                        className={`w-full p-2  rounded  border text-left flex items-center gap-2 transition-all ${
-                          formData.purpose === p.id 
-                            ? `border-${p.color}-200 bg-${p.color}-50/50 text-${p.color}-900  shadow-${p.color}-100` 
+                        className={`w-full p-2  rounded  border text-left flex items-center gap-2 transition-all ${formData.purpose === p.id
+                            ? `border-${p.color}-200 bg-${p.color}-50/50 text-${p.color}-900  shadow-${p.color}-100`
                             : 'border-slate-100 bg-white text-slate-600 hover:bg-slate-50'
-                        }`}
+                          }`}
                       >
-                        <div className={`w-8 h-8 rounded  flex items-center justify-center ${
-                          formData.purpose === p.id ? `bg-${p.color}-100` : 'bg-slate-100'
-                        }`}>
+                        <div className={`w-8 h-8 rounded  flex items-center justify-center ${formData.purpose === p.id ? `bg-${p.color}-100` : 'bg-slate-100'
+                          }`}>
                           {p.icon}
                         </div>
                         <span className="text-xs ">{p.id}</span>
@@ -982,7 +980,7 @@ const POMaterialRequest = () => {
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                       Source Warehouse <span className="text-rose-500">*</span>
                     </label>
-                    <select 
+                    <select
                       value={formData.source_warehouse}
                       onChange={(e) => setFormData({ ...formData, source_warehouse: e.target.value })}
                       className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs outline-none focus:ring-2 focus:ring-indigo-100"
@@ -999,7 +997,7 @@ const POMaterialRequest = () => {
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                       Target Warehouse <span className="text-rose-500">*</span>
                     </label>
-                    <select 
+                    <select
                       value={formData.target_warehouse}
                       onChange={(e) => setFormData({ ...formData, target_warehouse: e.target.value })}
                       className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs outline-none focus:ring-2 focus:ring-indigo-100"
@@ -1036,13 +1034,13 @@ const POMaterialRequest = () => {
                 <div className="grid grid-cols-12 gap-2 items-end">
                   <div className="col-span-6">
                     <label className="block text-xs  text-slate-400  mb-1">Item <span className="text-rose-500">*</span></label>
-                    <SearchableSelect 
+                    <SearchableSelect
                       options={items}
                       value={currentItem.item_code}
                       onChange={(e) => {
                         const selected = items.find(i => i.item_code === e.target.value);
-                        setCurrentItem({ 
-                          ...currentItem, 
+                        setCurrentItem({
+                          ...currentItem,
                           item_code: e.target.value,
                           name: selected?.name || '',
                           uom: selected?.uom || 'pcs',
@@ -1057,7 +1055,7 @@ const POMaterialRequest = () => {
                   </div>
                   <div className="col-span-3">
                     <label className="block text-xs  text-slate-400  mb-1">Quantity <span className="text-rose-500">*</span></label>
-                    <input 
+                    <input
                       type="number"
                       value={currentItem.quantity}
                       onChange={(e) => setCurrentItem({ ...currentItem, quantity: e.target.value })}
@@ -1066,7 +1064,7 @@ const POMaterialRequest = () => {
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs  text-slate-400  mb-1">UOM</label>
-                    <input 
+                    <input
                       type="text"
                       value={currentItem.uom}
                       readOnly
@@ -1074,7 +1072,7 @@ const POMaterialRequest = () => {
                     />
                   </div>
                   <div className="col-span-1">
-                    <button 
+                    <button
                       onClick={handleAddItem}
                       className="w-10 h-9 bg-blue-600 text-white rounded  flex items-center justify-center hover:bg-blue-700 transition-colors  shadow-blue-200"
                     >
@@ -1126,7 +1124,7 @@ const POMaterialRequest = () => {
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
                     Notes & Special Instructions
                   </label>
-                  <textarea 
+                  <textarea
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                     placeholder="Add any additional notes for this material request..."
@@ -1147,21 +1145,21 @@ const POMaterialRequest = () => {
           </div>
 
           <div className="mt-8 pt-6 border-t border-slate-100 flex justify-between items-center">
-            <button 
+            <button
               onClick={() => navigate(`${deptPrefix}/po-material-request`)}
               className="p-2 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all"
             >
               Cancel
             </button>
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={handleSubmit}
                 className="p-2 bg-emerald-50 text-emerald-600 rounded  text-xs  hover:bg-emerald-100 flex items-center gap-2  transition-all"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
                 Save as Draft
               </button>
-              <button 
+              <button
                 onClick={handleSubmit}
                 className="p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 flex items-center gap-2  transition-all"
               >
@@ -1204,683 +1202,682 @@ const POMaterialRequest = () => {
 
           {/* Header Stats */}
           {(() => {
-             const filteredItems = selectedRequest?.items?.filter(item => {
-               const type = (item.material_type || '').toUpperCase();
-               return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
-             }) || [];
-             
-             const isWeightBased = (uom) => {
-               const u = (uom || '').toLowerCase();
-               return u === 'kg' || u === 'kg.' || u === 'kilogram' || u === 'litre' || u === 'ltr' || u === 'meter' || u === 'mtr';
-             };
+            const filteredItems = selectedRequest?.items?.filter(item => {
+              const type = (item.material_type || '').toUpperCase();
+              return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+            }) || [];
 
-             const allAvailable = filteredItems.length > 0 && filteredItems.every(item => {
-               const rem = parseFloat(item.remaining_qty || 0);
-               const remW = parseFloat(item.remaining_weight || 0);
-               const stockVal = parseFloat(item.total_stock || 0);
-               const stockWeight = parseFloat(item.total_weight || 0);
-               return (rem === 0 || (stockVal + 0.0001) >= rem) &&
-                      (remW === 0 || (stockWeight + 0.0001) >= remW);
-             });
-             
-             const releasedMaterialsCount = filteredItems.filter(item => parseFloat(item.allocated_quantity || 0) > 0).length;
-             const pendingMaterialsCount = filteredItems.filter(item => parseFloat(item.allocated_quantity || 0) === 0).length;
+            const isWeightBased = (uom) => {
+              const u = (uom || '').toLowerCase();
+              return u === 'kg' || u === 'kg.' || u === 'kilogram' || u === 'litre' || u === 'ltr' || u === 'meter' || u === 'mtr';
+            };
 
-             return (
-          <>
-          <div className="grid grid-cols-5 gap-2 mb-8">
-            <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
-              <div className="w-5 h-5 rounded  bg-orange-50 flex items-center justify-center text-orange-500  shadow-orange-100/50">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-              </div>
-              <div>
-                <p className="text-xs  text-slate-400   mb-1.5">Status</p>
-                <div className="flex flex-col gap-1 items-start">
-                  <StatusBadge status={selectedRequest?.status} />
-                  {selectedRequest?.status?.toUpperCase() === 'PARTIALLY_RELEASED' && (
-                    <div className="text-[10px] text-slate-500 font-medium mt-1 leading-tight">
-                      <div className="text-emerald-600 font-semibold">{releasedMaterialsCount} of {filteredItems.length} Materials Released</div>
-                      <div className="text-amber-600 font-semibold">{pendingMaterialsCount} Material{pendingMaterialsCount !== 1 ? 's' : ''} Pending Procurement</div>
+            const allAvailable = filteredItems.length > 0 && filteredItems.every(item => {
+              const rem = parseFloat(item.remaining_qty || 0);
+              const remW = parseFloat(item.remaining_weight || 0);
+              const stockVal = parseFloat(item.total_stock || 0);
+              const stockWeight = parseFloat(item.total_weight || 0);
+              return (rem === 0 || (stockVal + 0.0001) >= rem) &&
+                (remW === 0 || (stockWeight + 0.0001) >= remW);
+            });
+
+            const releasedMaterialsCount = filteredItems.filter(item => parseFloat(item.allocated_quantity || 0) > 0).length;
+            const pendingMaterialsCount = filteredItems.filter(item => parseFloat(item.allocated_quantity || 0) === 0).length;
+
+            return (
+              <>
+                <div className="grid grid-cols-5 gap-2 mb-8">
+                  <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
+                    <div className="w-5 h-5 rounded  bg-orange-50 flex items-center justify-center text-orange-500  shadow-orange-100/50">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                     </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
-              <div className="w-5 h-5 rounded  bg-blue-50 flex items-center justify-center text-blue-500  shadow-blue-100/50">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-              </div>
-              <div>
-                <p className="text-xs  text-slate-400   mb-1.5">Purpose</p>
-                <p className="text-sm  text-slate-700">{selectedRequest?.purpose}</p>
-              </div>
-            </div>
-            <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
-              <div className="w-5 h-5 rounded  bg-purple-50 flex items-center justify-center text-purple-500  shadow-purple-100/50">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-              </div>
-              <div>
-                <p className="text-xs  text-slate-400   mb-1.5">Department</p>
-                <p className="text-sm  text-slate-700">{selectedRequest?.department}</p>
-              </div>
-            </div>
-            <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
-              <div className="w-5 h-5 rounded  bg-emerald-50 flex items-center justify-center text-emerald-500  shadow-emerald-100/50">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-              </div>
-              <div>
-                <p className="text-xs  text-slate-400   mb-1.5">Requested By</p>
-                <p className="text-sm  text-slate-700">{selectedRequest?.requester_name || 'System'}</p>
-              </div>
-            </div>
-            <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
-              <div className="w-5 h-5 rounded  bg-indigo-50 flex items-center justify-center text-indigo-500  shadow-indigo-100/50">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-              </div>
-              <div className="overflow-hidden">
-                <p className="text-xs  text-slate-400   mb-1.5">Linked PO</p>
-                <div className="flex flex-col">
-                  <p className="text-xs  text-indigo-600 truncate">
-                    {selectedRequest?.linked_po_number ? `#${selectedRequest.linked_po_number}` : (selectedRequest?.linked_po ? `#${selectedRequest.linked_po}` : '#N/A')}
-                  </p>
-                  {(selectedRequest?.linked_po_number || selectedRequest?.linked_po) && (
-                    <span className="text-xs  text-emerald-500  mt-0.5">ORDERED</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-8">
-            {/* Left Side - Line Items */}
-            <div className="flex-1 bg-white rounded border border-slate-100  overflow-visible flex flex-col">
-              <div className="p-5 border-b border-slate-50 bg-white flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded  bg-slate-900 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 11m8 4V5" /></svg>
+                    <div>
+                      <p className="text-xs  text-slate-400   mb-1.5">Status</p>
+                      <div className="flex flex-col gap-1 items-start">
+                        <StatusBadge status={selectedRequest?.status} />
+                        {selectedRequest?.status?.toUpperCase() === 'PARTIALLY_RELEASED' && (
+                          <div className="text-[10px] text-slate-500 font-medium mt-1 leading-tight">
+                            <div className="text-emerald-600 font-semibold">{releasedMaterialsCount} of {filteredItems.length} Materials Released</div>
+                            <div className="text-amber-600 font-semibold">{pendingMaterialsCount} Material{pendingMaterialsCount !== 1 ? 's' : ''} Pending Procurement</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <h4 className="text-xs  text-slate-900">Line Items</h4>
+                  <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
+                    <div className="w-5 h-5 rounded  bg-blue-50 flex items-center justify-center text-blue-500  shadow-blue-100/50">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                    </div>
+                    <div>
+                      <p className="text-xs  text-slate-400   mb-1.5">Purpose</p>
+                      <p className="text-sm  text-slate-700">{selectedRequest?.purpose}</p>
+                    </div>
+                  </div>
+                  <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
+                    <div className="w-5 h-5 rounded  bg-purple-50 flex items-center justify-center text-purple-500  shadow-purple-100/50">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                    </div>
+                    <div>
+                      <p className="text-xs  text-slate-400   mb-1.5">Department</p>
+                      <p className="text-sm  text-slate-700">{selectedRequest?.department}</p>
+                    </div>
+                  </div>
+                  <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
+                    <div className="w-5 h-5 rounded  bg-emerald-50 flex items-center justify-center text-emerald-500  shadow-emerald-100/50">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    </div>
+                    <div>
+                      <p className="text-xs  text-slate-400   mb-1.5">Requested By</p>
+                      <p className="text-sm  text-slate-700">{selectedRequest?.requester_name || 'System'}</p>
+                    </div>
+                  </div>
+                  <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
+                    <div className="w-5 h-5 rounded  bg-indigo-50 flex items-center justify-center text-indigo-500  shadow-indigo-100/50">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    </div>
+                    <div className="overflow-hidden">
+                      <p className="text-xs  text-slate-400   mb-1.5">Linked PO</p>
+                      <div className="flex flex-col">
+                        <p className="text-xs  text-indigo-600 truncate">
+                          {selectedRequest?.linked_po_number ? `#${selectedRequest.linked_po_number}` : (selectedRequest?.linked_po ? `#${selectedRequest.linked_po}` : '#N/A')}
+                        </p>
+                        {(selectedRequest?.linked_po_number || selectedRequest?.linked_po) && (
+                          <span className="text-xs  text-emerald-500  mt-0.5">ORDERED</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  {/* <button 
+
+                <div className="flex gap-8">
+                  {/* Left Side - Line Items */}
+                  <div className="flex-1 bg-white rounded border border-slate-100  overflow-visible flex flex-col">
+                    <div className="p-5 border-b border-slate-50 bg-white flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded  bg-slate-900 flex items-center justify-center">
+                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 11m8 4V5" /></svg>
+                        </div>
+                        <h4 className="text-xs  text-slate-900">Line Items</h4>
+                      </div>
+                      <div className="flex gap-2">
+                        {/* <button 
                     onClick={() => setIsAddingViewItem(!isAddingViewItem)}
                     className="p-2 bg-emerald-50 text-emerald-600 rounded text-xs flex items-center gap-2 hover:bg-emerald-100 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     {isAddingViewItem ? 'Close Form' : 'Add Item'}
                   </button> */}
-                  <button 
-                    onClick={() => fulfillmentWarehouse && handleWarehouseChange(fulfillmentWarehouse)}
-                    className="p-2 bg-indigo-50 text-indigo-600 rounded text-xs flex items-center gap-2 hover:bg-indigo-100 transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    Refresh Stock
-                  </button>
-                </div>
-              </div>
+                        <button
+                          onClick={() => fulfillmentWarehouse && handleWarehouseChange(fulfillmentWarehouse)}
+                          className="p-2 bg-indigo-50 text-indigo-600 rounded text-xs flex items-center gap-2 hover:bg-indigo-100 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                          Refresh Stock
+                        </button>
+                      </div>
+                    </div>
 
-              {isAddingViewItem && (
-                <div className="p-4 bg-slate-50 border-b border-slate-100 space-y-4">
-                  <div className="grid grid-cols-12 gap-3 items-end">
-                    <div className="col-span-6">
-                      <label className="block text-[10px] font-semibold text-slate-500 mb-1">Select Material / Item <span className="text-rose-500">*</span></label>
-                      <SearchableSelect 
-                        options={items}
-                        value={viewItemForm.item_code}
-                        onChange={(e) => {
-                          const selected = items.find(i => i.item_code === e.target.value);
-                          setViewItemForm({ 
-                            ...viewItemForm, 
-                            item_code: e.target.value,
-                            name: selected?.name || '',
-                            uom: selected?.uom || 'pcs'
-                          });
-                        }}
-                        placeholder="Select Item"
-                        labelField="name"
-                        valueField="item_code"
-                        subLabelField="material_type"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-[10px] font-semibold text-slate-500 mb-1">Unit</label>
-                      <input 
-                        type="text"
-                        value={viewItemForm.uom || ''}
-                        readOnly
-                        className="w-full p-2 bg-slate-100 border border-slate-200 rounded text-xs text-slate-500 outline-none"
-                      />
-                    </div>
-                    <div className="col-span-4">
-                      <label className="block text-[10px] font-semibold text-slate-500 mb-1">Required Qty <span className="text-rose-500">*</span></label>
-                      <input 
-                        type="number"
-                        min="0.001"
-                        step="any"
-                        value={viewItemForm.quantity}
-                        onChange={(e) => setViewItemForm({ ...viewItemForm, quantity: e.target.value })}
-                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-2 focus:ring-blue-100"
-                        placeholder="Required Qty"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-12 gap-3 items-end">
-                    <div className="col-span-4">
-                      <label className="block text-[10px] font-semibold text-slate-500 mb-1">Design Qty (Optional)</label>
-                      <input 
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={viewItemForm.design_qty}
-                        onChange={(e) => setViewItemForm({ ...viewItemForm, design_qty: e.target.value })}
-                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-2 focus:ring-blue-100"
-                        placeholder="Enter design qty or leave empty"
-                      />
-                    </div>
-                    <div className="col-span-6">
-                      <label className="block text-[10px] font-semibold text-slate-500 mb-1">Remarks (Optional)</label>
-                      <input 
-                        type="text"
-                        value={viewItemForm.remarks || ''}
-                        onChange={(e) => setViewItemForm({ ...viewItemForm, remarks: e.target.value })}
-                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-2 focus:ring-blue-100"
-                        placeholder="Add manual addition remarks..."
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <button 
-                        onClick={handleSaveViewItem}
-                        className="w-full py-2 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-md active:scale-95"
-                      >
-                        Save Item
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-slate-50/50 border-b border-slate-100">
-                      <th className="p-2  text-left text-xs   text-slate-400  ">Item</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Design Qty</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Required Weight</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Available Qty</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Available Weight</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Released Qty</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Released Weight</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Remaining Qty</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Remaining Weight</th>
-                      <th className="p-2  text-right text-xs   text-slate-400  ">Status</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {selectedRequest?.items?.filter(item => {
-                      const type = (item.material_type || '').toUpperCase();
-                      return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
-                    }).map((item, idx) => {
-                      const matType = (item.material_type || item.item_type || '').toUpperCase().trim();
-                      const uomClean = (item.uom || item.unit || '').toUpperCase().trim();
-                      const isKgUom = uomClean === 'KG' || uomClean === 'KGS' || uomClean === 'KILOGRAM';
-                      const isBoughtOut = matType.includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-')) || !isKgUom;
-                      return (
-                        <tr key={idx} className="hover:bg-slate-50/30 transition-colors group">
-                          <td className="px-6 py-5">
-                            <div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-xs font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.item_code}</p>
-                                {selectedRequest?.drawing_no && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-medium whitespace-nowrap">
-                                    {selectedRequest.drawing_no}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-sm  text-slate-600 mt-0.5">{item.name}</p>
-                              {formatDimensions(item) && (
-                                <div className="mt-1 text-xs text-slate-400 font-mono">
-                                  {formatDimensions(item)}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 text-center">
-                            <div className="flex flex-col items-center">
-                              <span className="text-xs text-slate-800 font-medium">
-                                {item.design_qty !== null && item.design_qty !== undefined ? Number(item.design_qty).toFixed(0) : '-'}
-                              </span>
-                              <span className="text-xs  text-slate-400 ">Nos</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 text-center">
-                            {isBoughtOut ? (
-                              <span className="text-xs text-slate-400 font-medium">—</span>
-                            ) : (
-                              <div className="flex flex-col items-center">
-                                <span className="text-xs text-slate-800 font-medium font-semibold text-indigo-600">
-                                  {Number(item.required_weight || 0).toFixed(3)}
-                                </span>
-                                <span className="text-xs  text-slate-400 ">KG</span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-5 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span className={`w-2 h-2 rounded-full ${parseFloat(item.total_stock || 0) > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-                              <span className={`text-xs font-semibold ${parseFloat(item.total_stock || 0) > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                                {Number(item.total_stock || 0).toFixed(0)} Nos
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 text-center">
-                            {isBoughtOut ? (
-                              <span className="text-xs text-slate-400 font-medium">—</span>
-                            ) : (
-                              <div className="flex items-center justify-center gap-1.5">
-                                <span className={`w-2 h-2 rounded-full ${parseFloat(item.total_weight || 0) > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-                                <span className={`text-xs font-semibold ${parseFloat(item.total_weight || 0) > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                                  {Number(item.total_weight || 0).toFixed(3)} KG
-                                </span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-5 text-center">
-                            <div className="flex flex-col items-center">
-                              <span className="text-xs text-slate-800 font-medium">
-                                {Number(item.allocated_quantity || 0).toFixed(0)}
-                              </span>
-                              <span className="text-xs  text-slate-400 ">Nos</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 text-center">
-                            {isBoughtOut ? (
-                              <span className="text-xs text-slate-400 font-medium">—</span>
-                            ) : (
-                              <div className="flex flex-col items-center">
-                                <span className="text-xs text-slate-800 font-medium">
-                                  {Number(item.allocated_weight || 0).toFixed(3)}
-                                </span>
-                                <span className="text-xs  text-slate-400 ">KG</span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-5 text-center">
-                            <div className="flex flex-col items-center">
-                              <span className="text-xs text-slate-800 font-medium">
-                                {Number(item.remaining_qty || 0).toFixed(0)}
-                              </span>
-                              <span className="text-xs  text-slate-400 ">Nos</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 text-center">
-                            {isBoughtOut ? (
-                              <span className="text-xs text-slate-400 font-medium">—</span>
-                            ) : (
-                              <div className="flex flex-col items-center">
-                                <span className="text-xs text-slate-800 font-medium">
-                                  {Number(item.remaining_weight || 0).toFixed(3)}
-                                </span>
-                                <span className="text-xs  text-slate-400 ">KG</span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-5 text-right">
-                            <div className="flex flex-col items-end gap-1.5">
-                              {(() => {
-                                const rel = parseFloat(item.allocated_quantity || 0);
-                                const relW = parseFloat(item.allocated_weight || 0);
-                                const rem = parseFloat(item.remaining_qty || 0);
-                                const remW = parseFloat(item.remaining_weight || 0);
-                                
-                                if (rel <= 0 && relW <= 0) {
-                                  return (
-                                    <span className="px-2.5 py-1 rounded text-xs border bg-slate-50 text-slate-600 border-slate-100">
-                                      Awaiting Release
-                                    </span>
-                                  );
-                                } else if (rem > 0 || remW > 0) {
-                                  return (
-                                    <span className="px-2.5 py-1 rounded text-xs border bg-amber-50 text-amber-600 border-amber-100 font-semibold">
-                                      Partially Released
-                                    </span>
-                                  );
-                                } else {
-                                  return (
-                                    <span className="px-2.5 py-1 rounded text-xs border bg-emerald-50 text-emerald-600 border-emerald-100">
-                                      Released
-                                    </span>
-                                  );
-                                }
-                              })()}
-                              {(() => {
-                                const rem = parseFloat(item.remaining_qty || 0);
-                                const remW = parseFloat(item.remaining_weight || 0);
-                                const stockVal = parseFloat(item.total_stock || 0);
-                                const stockWeight = parseFloat(item.total_weight || 0);
-
-                                if (rem <= 0 && remW <= 0) return null;
-                                const isStockAvailable = (stockVal + 0.0001) >= rem && (stockWeight + 0.0001) >= remW;
-                                return (
-                                  <span className={`px-2 py-0.5 rounded text-[10px] border ${
-                                    isStockAvailable 
-                                      ? 'bg-emerald-50/50 text-emerald-500 border-emerald-100/50' 
-                                      : 'bg-rose-50/50 text-rose-500 border-rose-100/50'
-                                  }`}>
-                                    {isStockAvailable ? 'in stock' : 'out of stock'}
-                                  </span>
-                                );
-                              })()}
-                            </div>
-                          </td>
-                          <td className="px-6 py-5 text-center">
-                            <button
-                              onClick={() => handleDeleteItem(item.id)}
-                              className="p-1.5 text-rose-600 hover:text-rose-900 rounded hover:bg-rose-50 transition-colors"
-                              title="Delete Item"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Right Side - Fulfillment & Summary */}
-            <div className="w-96 space-y-2">
-              {/* Sent Requests (RFQ) */}
-              <div className="bg-white rounded border border-slate-100  overflow-hidden flex flex-col">
-                <div className="p-5 border-b border-slate-50 bg-indigo-600 flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded  bg-white/20 flex items-center justify-center">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                    </div>
-                    <h4 className="text-xs  text-white  ">SENT REQUESTS (RFQ)</h4>
-                  </div>
-                  <span className="p-1  bg-white/20 text-white rounded text-xs   ">
-                    {rfqs.length} REQUESTS
-                  </span>
-                </div>
-                <div className="p-2 space-y-2 max-h-[300px] overflow-y-auto">
-                  {rfqs.length === 0 ? (
-                    <div className="text-center py-6">
-                      <p className="text-xs text-slate-400">No RFQs generated yet</p>
-                    </div>
-                  ) : (
-                    rfqs.map((rfq, ridx) => (
-                        <div key={ridx} className="p-3 border border-slate-100 rounded  hover:bg-slate-50 transition-all shadow-sm">
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <p className="text-xs   text-slate-900">{rfq.rfq_number}</p>
-                              <p className="text-xs  text-slate-400 mt-0.5 uppercase tracking-wider">{formatDate(rfq.created_at)}</p>
-                            </div>
-                            <StatusBadge status={rfq.status} />
+                    {isAddingViewItem && (
+                      <div className="p-4 bg-slate-50 border-b border-slate-100 space-y-4">
+                        <div className="grid grid-cols-12 gap-3 items-end">
+                          <div className="col-span-6">
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Select Material / Item <span className="text-rose-500">*</span></label>
+                            <SearchableSelect
+                              options={items}
+                              value={viewItemForm.item_code}
+                              onChange={(e) => {
+                                const selected = items.find(i => i.item_code === e.target.value);
+                                setViewItemForm({
+                                  ...viewItemForm,
+                                  item_code: e.target.value,
+                                  name: selected?.name || '',
+                                  uom: selected?.uom || 'pcs'
+                                });
+                              }}
+                              placeholder="Select Item"
+                              labelField="name"
+                              valueField="item_code"
+                              subLabelField="material_type"
+                            />
                           </div>
+                          <div className="col-span-2">
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Unit</label>
+                            <input
+                              type="text"
+                              value={viewItemForm.uom || ''}
+                              readOnly
+                              className="w-full p-2 bg-slate-100 border border-slate-200 rounded text-xs text-slate-500 outline-none"
+                            />
+                          </div>
+                          <div className="col-span-4">
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Required Qty <span className="text-rose-500">*</span></label>
+                            <input
+                              type="number"
+                              min="0.001"
+                              step="any"
+                              value={viewItemForm.quantity}
+                              onChange={(e) => setViewItemForm({ ...viewItemForm, quantity: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-2 focus:ring-blue-100"
+                              placeholder="Required Qty"
+                            />
+                          </div>
+                        </div>
 
-                          {rfq.items && rfq.items.length > 0 && selectedRequest?.items && (
-                            <div className="mb-4 space-y-2 border-b border-slate-50 pb-3">
-                              {rfq.items.filter(it => selectedRequest.items.some(si => si.item_code === it.item_code)).map((it, iidx) => (
-                                <div key={iidx} className="flex justify-between items-start text-xs">
-                                  <div className="flex-1 min-w-0 pr-2">
-                                    <p className="text-slate-700 truncate">{it.material_name || it.item_code}</p>
-                                    {formatDimensions(it) && (
-                                      <p className="text-[9px] text-slate-400 font-mono">
-                                        {formatDimensions(it)}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <div className="flex flex-col items-end shrink-0">
-                                    <div className="flex flex-col items-end">
-                                      <span className=" text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
-                                        {Number(it.quantity || 0).toFixed(3)} {it.uom}
-                                      </span>
-                                      <span className="text-[9px] text-slate-400 mt-0.5 uppercase er">Required</span>
-                                    </div>
-                                    
-                                    {Number(it.planned_qty || 0) > 0 && (
-                                      <div className="flex flex-col items-end mt-1.5 pt-1.5 border-t border-slate-50 w-full">
-                                        <span className="text-xs  font-semibold text-slate-700">
-                                          {Number(it.planned_qty).toFixed(0)} Nos
+                        <div className="grid grid-cols-12 gap-3 items-end">
+                          <div className="col-span-4">
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Design Qty (Optional)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={viewItemForm.design_qty}
+                              onChange={(e) => setViewItemForm({ ...viewItemForm, design_qty: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-2 focus:ring-blue-100"
+                              placeholder="Enter design qty or leave empty"
+                            />
+                          </div>
+                          <div className="col-span-6">
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Remarks (Optional)</label>
+                            <input
+                              type="text"
+                              value={viewItemForm.remarks || ''}
+                              onChange={(e) => setViewItemForm({ ...viewItemForm, remarks: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-2 focus:ring-blue-100"
+                              placeholder="Add manual addition remarks..."
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <button
+                              onClick={handleSaveViewItem}
+                              className="w-full py-2 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-md active:scale-95"
+                            >
+                              Save Item
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-slate-50/50 border-b border-slate-100">
+                            <th className="p-2  text-left text-xs   text-slate-400  ">Item</th>
+                            <th className="p-2  text-center text-xs   text-slate-400  ">Design Qty</th>
+                            <th className="p-2  text-center text-xs   text-slate-400  ">Required Weight</th>
+                            <th className="p-2  text-center text-xs   text-slate-400  ">Available Qty</th>
+                            <th className="p-2  text-center text-xs   text-slate-400  ">Available Weight</th>
+                            <th className="p-2  text-center text-xs   text-slate-400  ">Released Qty</th>
+                            <th className="p-2  text-center text-xs   text-slate-400  ">Released Weight</th>
+                            <th className="p-2  text-center text-xs   text-slate-400  ">Remaining Qty</th>
+                            <th className="p-2  text-center text-xs   text-slate-400  ">Remaining Weight</th>
+                            <th className="p-2  text-right text-xs   text-slate-400  ">Status</th>
+                            <th className="p-2  text-center text-xs   text-slate-400  ">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {selectedRequest?.items?.filter(item => {
+                            const type = (item.material_type || '').toUpperCase();
+                            return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+                          }).map((item, idx) => {
+                            const matType = (item.material_type || item.item_type || '').toUpperCase().trim();
+                            const uomClean = (item.uom || item.unit || '').toUpperCase().trim();
+                            const isKgUom = uomClean === 'KG' || uomClean === 'KGS' || uomClean === 'KILOGRAM';
+                            const isBoughtOut = matType.includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-')) || !isKgUom;
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50/30 transition-colors group">
+                                <td className="px-6 py-5">
+                                  <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <p className="text-xs font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.item_code}</p>
+                                      {selectedRequest?.drawing_no && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-medium whitespace-nowrap">
+                                          {selectedRequest.drawing_no}
                                         </span>
-                                        <span className="text-[8px] text-slate-400 uppercase er">Design Qty</span>
+                                      )}
+                                    </div>
+                                    <p className="text-sm  text-slate-600 mt-0.5">{item.name}</p>
+                                    {formatDimensions(item) && (
+                                      <div className="mt-1 text-xs text-slate-400 font-mono">
+                                        {formatDimensions(item)}
                                       </div>
                                     )}
                                   </div>
+                                </td>
+                                <td className="px-6 py-5 text-center">
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-xs text-slate-800 font-medium">
+                                      {item.design_qty !== null && item.design_qty !== undefined ? Number(item.design_qty).toFixed(0) : '-'}
+                                    </span>
+                                    <span className="text-xs  text-slate-400 ">Nos</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-5 text-center">
+                                  {isBoughtOut ? (
+                                    <span className="text-xs text-slate-400 font-medium">—</span>
+                                  ) : (
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-xs text-slate-800 font-medium font-semibold text-indigo-600">
+                                        {Number(item.required_weight || 0).toFixed(3)}
+                                      </span>
+                                      <span className="text-xs  text-slate-400 ">KG</span>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-6 py-5 text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <span className={`w-2 h-2 rounded-full ${parseFloat(item.total_stock || 0) > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                                    <span className={`text-xs font-semibold ${parseFloat(item.total_stock || 0) > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                                      {Number(item.total_stock || 0).toFixed(0)} Nos
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-5 text-center">
+                                  {isBoughtOut ? (
+                                    <span className="text-xs text-slate-400 font-medium">—</span>
+                                  ) : (
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <span className={`w-2 h-2 rounded-full ${parseFloat(item.total_weight || 0) > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                                      <span className={`text-xs font-semibold ${parseFloat(item.total_weight || 0) > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                                        {Number(item.total_weight || 0).toFixed(3)} KG
+                                      </span>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-6 py-5 text-center">
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-xs text-slate-800 font-medium">
+                                      {Number(item.allocated_quantity || 0).toFixed(0)}
+                                    </span>
+                                    <span className="text-xs  text-slate-400 ">Nos</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-5 text-center">
+                                  {isBoughtOut ? (
+                                    <span className="text-xs text-slate-400 font-medium">—</span>
+                                  ) : (
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-xs text-slate-800 font-medium">
+                                        {Number(item.allocated_weight || 0).toFixed(3)}
+                                      </span>
+                                      <span className="text-xs  text-slate-400 ">KG</span>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-6 py-5 text-center">
+                                  <div className="flex flex-col items-center">
+                                    <span className="text-xs text-slate-800 font-medium">
+                                      {Number(item.remaining_qty || 0).toFixed(0)}
+                                    </span>
+                                    <span className="text-xs  text-slate-400 ">Nos</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-5 text-center">
+                                  {isBoughtOut ? (
+                                    <span className="text-xs text-slate-400 font-medium">—</span>
+                                  ) : (
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-xs text-slate-800 font-medium">
+                                        {Number(item.remaining_weight || 0).toFixed(3)}
+                                      </span>
+                                      <span className="text-xs  text-slate-400 ">KG</span>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-6 py-5 text-right">
+                                  <div className="flex flex-col items-end gap-1.5">
+                                    {(() => {
+                                      const rel = parseFloat(item.allocated_quantity || 0);
+                                      const relW = parseFloat(item.allocated_weight || 0);
+                                      const rem = parseFloat(item.remaining_qty || 0);
+                                      const remW = parseFloat(item.remaining_weight || 0);
+
+                                      if (rel <= 0 && relW <= 0) {
+                                        return (
+                                          <span className="px-2.5 py-1 rounded text-xs border bg-slate-50 text-slate-600 border-slate-100">
+                                            Awaiting Release
+                                          </span>
+                                        );
+                                      } else if (rem > 0 || remW > 0) {
+                                        return (
+                                          <span className="px-2.5 py-1 rounded text-xs border bg-amber-50 text-amber-600 border-amber-100 font-semibold">
+                                            Partially Released
+                                          </span>
+                                        );
+                                      } else {
+                                        return (
+                                          <span className="px-2.5 py-1 rounded text-xs border bg-emerald-50 text-emerald-600 border-emerald-100">
+                                            Released
+                                          </span>
+                                        );
+                                      }
+                                    })()}
+                                    {(() => {
+                                      const rem = parseFloat(item.remaining_qty || 0);
+                                      const remW = parseFloat(item.remaining_weight || 0);
+                                      const stockVal = parseFloat(item.total_stock || 0);
+                                      const stockWeight = parseFloat(item.total_weight || 0);
+
+                                      if (rem <= 0 && remW <= 0) return null;
+                                      const isStockAvailable = (stockVal + 0.0001) >= rem && (stockWeight + 0.0001) >= remW;
+                                      return (
+                                        <span className={`px-2 py-0.5 rounded text-[10px] border ${isStockAvailable
+                                            ? 'bg-emerald-50/50 text-emerald-500 border-emerald-100/50'
+                                            : 'bg-rose-50/50 text-rose-500 border-rose-100/50'
+                                          }`}>
+                                          {isStockAvailable ? 'in stock' : 'out of stock'}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-5 text-center">
+                                  <button
+                                    onClick={() => handleDeleteItem(item.id)}
+                                    className="p-1.5 text-rose-600 hover:text-rose-900 rounded hover:bg-rose-50 transition-colors"
+                                    title="Delete Item"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Right Side - Fulfillment & Summary */}
+                  <div className="w-96 space-y-2">
+                    {/* Sent Requests (RFQ) */}
+                    <div className="bg-white rounded border border-slate-100  overflow-hidden flex flex-col">
+                      <div className="p-5 border-b border-slate-50 bg-indigo-600 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded  bg-white/20 flex items-center justify-center">
+                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                          </div>
+                          <h4 className="text-xs  text-white  ">SENT REQUESTS (RFQ)</h4>
+                        </div>
+                        <span className="p-1  bg-white/20 text-white rounded text-xs   ">
+                          {rfqs.length} REQUESTS
+                        </span>
+                      </div>
+                      <div className="p-2 space-y-2 max-h-[300px] overflow-y-auto">
+                        {rfqs.length === 0 ? (
+                          <div className="text-center py-6">
+                            <p className="text-xs text-slate-400">No RFQs generated yet</p>
+                          </div>
+                        ) : (
+                          rfqs.map((rfq, ridx) => (
+                            <div key={ridx} className="p-3 border border-slate-100 rounded  hover:bg-slate-50 transition-all shadow-sm">
+                              <div className="flex justify-between items-start mb-3">
+                                <div>
+                                  <p className="text-xs   text-slate-900">{rfq.rfq_number}</p>
+                                  <p className="text-xs  text-slate-400 mt-0.5 uppercase tracking-wider">{formatDate(rfq.created_at)}</p>
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                          
-                          {rfq.quotations && rfq.quotations.length > 0 ? (
-                            <div className="space-y-2">
-                              <p className="text-xs    text-slate-400 uppercase ">RECEIVED QUOTES</p>
-                              {rfq.quotations.map((q, qidx) => (
-                                <div key={qidx} className="flex justify-between items-center bg-slate-50/50 p-1.5 rounded border border-slate-100/50">
-                                  <span className="text-xs  text-slate-600 truncate max-w-[120px]">{q.vendor_name}</span>
-                                  <span className="text-xs    text-indigo-600">{q.quote_number}</span>
+                                <StatusBadge status={rfq.status} />
+                              </div>
+
+                              {rfq.items && rfq.items.length > 0 && selectedRequest?.items && (
+                                <div className="mb-4 space-y-2 border-b border-slate-50 pb-3">
+                                  {rfq.items.filter(it => selectedRequest.items.some(si => si.item_code === it.item_code)).map((it, iidx) => (
+                                    <div key={iidx} className="flex justify-between items-start text-xs">
+                                      <div className="flex-1 min-w-0 pr-2">
+                                        <p className="text-slate-700 truncate">{it.material_name || it.item_code}</p>
+                                        {formatDimensions(it) && (
+                                          <p className="text-[9px] text-slate-400 font-mono">
+                                            {formatDimensions(it)}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-col items-end shrink-0">
+                                        <div className="flex flex-col items-end">
+                                          <span className=" text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                                            {Number(it.quantity || 0).toFixed(3)} {it.uom}
+                                          </span>
+                                          <span className="text-[9px] text-slate-400 mt-0.5 uppercase er">Required</span>
+                                        </div>
+
+                                        {Number(it.planned_qty || 0) > 0 && (
+                                          <div className="flex flex-col items-end mt-1.5 pt-1.5 border-t border-slate-50 w-full">
+                                            <span className="text-xs  font-semibold text-slate-700">
+                                              {Number(it.planned_qty).toFixed(0)} Nos
+                                            </span>
+                                            <span className="text-[8px] text-slate-400 uppercase er">Design Qty</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
+                              )}
+
+                              {rfq.quotations && rfq.quotations.length > 0 ? (
+                                <div className="space-y-2">
+                                  <p className="text-xs    text-slate-400 uppercase ">RECEIVED QUOTES</p>
+                                  {rfq.quotations.map((q, qidx) => (
+                                    <div key={qidx} className="flex justify-between items-center bg-slate-50/50 p-1.5 rounded border border-slate-100/50">
+                                      <span className="text-xs  text-slate-600 truncate max-w-[120px]">{q.vendor_name}</span>
+                                      <span className="text-xs    text-indigo-600">{q.quote_number}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 text-amber-500 bg-amber-50/50 p-2 rounded border border-amber-100/50">
+                                  <svg className="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                  <p className="text-xs   italic">Waiting for responses...</p>
+                                </div>
+                              )}
+
+                              <div className="mt-4 flex gap-2">
+                                <button
+                                  onClick={() => navigate(`/quotations?rfq=${rfq.id}`)}
+                                  className="flex-1 py-2 bg-indigo-600 text-white rounded text-xs font-semibold  hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95"
+                                >
+                                  View/Process Quotes
+                                </button>
+                              </div>
                             </div>
-                          ) : (
-                            <div className="flex items-center gap-2 text-amber-500 bg-amber-50/50 p-2 rounded border border-amber-100/50">
-                              <svg className="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                              <p className="text-xs   italic">Waiting for responses...</p>
-                            </div>
-                          )}
-                          
-                          <div className="mt-4 flex gap-2">
-                            <button 
-                              onClick={() => navigate(`/quotations?rfq=${rfq.id}`)}
-                              className="flex-1 py-2 bg-indigo-600 text-white rounded text-xs font-semibold  hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95"
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Fulfillment Summary */}
+                    <div className="bg-white rounded border border-slate-100  overflow-hidden flex flex-col">
+                      <div className={`p-5 border-b border-slate-50 flex justify-between items-center transition-colors ${allAvailable ? 'bg-emerald-500' : 'bg-amber-500'}`}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded  bg-white/20 flex items-center justify-center">
+                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                          </div>
+                          <h4 className="text-xs  text-white  ">FULFILLMENT SOURCE</h4>
+                        </div>
+                        <span className="p-1  bg-white/20 text-white rounded text-xs   ">
+                          {allAvailable ? 'STOCK AVAILABLE' : 'ACTION REQUIRED'}
+                        </span>
+                      </div>
+                      <div className="p-6 ">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <label className="text-xs  text-slate-500  ">Select Warehouse</label>
+                            <span className={`flex items-center gap-1.5text-xs   ${allAvailable ? 'text-emerald-500' : 'text-amber-500'} `}>
+                              {allAvailable ? (
+                                <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>Stock Available</>
+                              ) : (
+                                <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>Partial Stock</>
+                              )}
+                            </span>
+                          </div>
+                          <div className="relative group">
+                            <select
+                              value={fulfillmentWarehouse}
+                              onChange={(e) => handleWarehouseChange(e.target.value)}
+                              className={`w-full p-2  bg-white border-2 border-slate-100 rounded  text-sm  text-slate-700 outline-none focus:border-${allAvailable ? 'emerald' : 'amber'}-400 transition-all appearance-none group-hover:border-slate-200`}
                             >
-                              View/Process Quotes
-                            </button>
+                              <option value="">Select Warehouse...</option>
+                              {warehouses.map(wh => (
+                                <option key={wh.id} value={wh.warehouse_name}>{wh.warehouse_name}</option>
+                              ))}
+                            </select>
+                            <div className={`absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-${allAvailable ? 'emerald' : 'amber'}-500 transition-colors`}>
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                            </div>
                           </div>
                         </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Fulfillment Summary */}
-              <div className="bg-white rounded border border-slate-100  overflow-hidden flex flex-col">
-                    <div className={`p-5 border-b border-slate-50 flex justify-between items-center transition-colors ${allAvailable ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded  bg-white/20 flex items-center justify-center">
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                        <div className={`${allAvailable ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'} rounded  p-2 border flex gap-2 transition-colors`}>
+                          <div className={`w-8 h-8 rounded  flex items-center justify-center shrink-0  ${allAvailable ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+                            <svg className={`w-4 h-4 ${allAvailable ? 'text-emerald-600' : 'text-amber-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <p className={`text-xs   leading-relaxed ${allAvailable ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {allAvailable
+                              ? 'Full stock is available across warehouses. You can fulfill this request directly.'
+                              : 'Stock is insufficient globally. A Purchase Order may be required for some items.'}
+                          </p>
                         </div>
-                        <h4 className="text-xs  text-white  ">FULFILLMENT SOURCE</h4>
                       </div>
-                      <span className="p-1  bg-white/20 text-white rounded text-xs   ">
-                        {allAvailable ? 'STOCK AVAILABLE' : 'ACTION REQUIRED'}
-                      </span>
                     </div>
-                    <div className="p-6 space-y-5">
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <label className="text-xs  text-slate-500  ">Select Warehouse</label>
-                          <span className={`flex items-center gap-1.5text-xs   ${allAvailable ? 'text-emerald-500' : 'text-amber-500'} `}>
-                            {allAvailable ? (
-                              <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>Stock Available</>
-                            ) : (
-                              <><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>Partial Stock</>
-                            )}
-                          </span>
-                        </div>
-                        <div className="relative group">
-                          <select 
-                            value={fulfillmentWarehouse}
-                            onChange={(e) => handleWarehouseChange(e.target.value)}
-                            className={`w-full p-2  bg-white border-2 border-slate-100 rounded  text-sm  text-slate-700 outline-none focus:border-${allAvailable ? 'emerald' : 'amber'}-400 transition-all appearance-none group-hover:border-slate-200`}
-                          >
-                            <option value="">Select Warehouse...</option>
-                            {warehouses.map(wh => (
-                              <option key={wh.id} value={wh.warehouse_name}>{wh.warehouse_name}</option>
-                            ))}
-                          </select>
-                          <div className={`absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-${allAvailable ? 'emerald' : 'amber'}-500 transition-colors`}>
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+
+                    {/* Request Summary */}
+                    <div className="bg-white rounded border border-slate-100  overflow-hidden flex flex-col">
+                      <div className="p-5 border-b border-slate-50 bg-slate-50/30 flex items-center gap-2">
+                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        <h4 className="text-xs  text-slate-400  ">Request Summary</h4>
+                      </div>
+                      <div className="p-2 space-y-2">
+                        <div className="bg-indigo-50/50 rounded  p-2 border border-indigo-100 group hover:bg-indigo-50 transition-colors">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-8 h-8 rounded  bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                            </div>
+                            <p className="text-xs   text-indigo-900  ">Linked Purchase Order:</p>
+                          </div>
+                          <p className="text-sm  text-indigo-600 mb-2 truncate group-hover:text-indigo-700 transition-colors">
+                            {selectedRequest?.linked_po_number ? `#${selectedRequest.linked_po_number}` : (selectedRequest?.linked_po ? `#${selectedRequest.linked_po}` : 'No Linked PO')}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs  text-slate-400 ">Status:</span>
+                            <StatusBadge status={(selectedRequest?.linked_po_number || selectedRequest?.linked_po) ? "ORDERED" : "none"} />
                           </div>
                         </div>
-                      </div>
-                      <div className={`${allAvailable ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'} rounded  p-2 border flex gap-2 transition-colors`}>
-                        <div className={`w-8 h-8 rounded  flex items-center justify-center shrink-0  ${allAvailable ? 'bg-emerald-100' : 'bg-amber-100'}`}>
-                          <svg className={`w-4 h-4 ${allAvailable ? 'text-emerald-600' : 'text-amber-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
+
+                        <div className="space-y-2 px-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs   text-slate-400  ">Required By</span>
+                            <div className="flex items-center gap-2  p-2  bg-slate-50 rounded  border border-slate-100 text-slate-700">
+                              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                              <span className="text-xs   ">{formatDate(selectedRequest?.required_by)}</span>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs   text-slate-400  ">Created On</span>
+                            <span className="text-xs   text-slate-700 ">{formatDate(selectedRequest?.created_at)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs   text-slate-400  ">Items Total</span>
+                            <span className="text-xs  text-indigo-600  ">
+                              {selectedRequest?.items?.filter(item => {
+                                const type = (item.material_type || '').toUpperCase();
+                                return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+                              }).length} Unique Items
+                            </span>
+                          </div>
                         </div>
-                        <p className={`text-xs   leading-relaxed ${allAvailable ? 'text-emerald-700' : 'text-amber-700'}`}>
-                          {allAvailable 
-                            ? 'Full stock is available across warehouses. You can fulfill this request directly.' 
-                            : 'Stock is insufficient globally. A Purchase Order may be required for some items.'}
-                        </p>
+
+                        <button className="w-full py-4 px-4 bg-white border-2 border-slate-100 rounded  text-xs   text-slate-500 hover:border-slate-300 hover:text-slate-700 hover:bg-slate-50 transition-all flex items-center justify-center gap-2  active:scale-[0.98]">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                          Print Document
+                        </button>
                       </div>
                     </div>
                   </div>
-
-              {/* Request Summary */}
-              <div className="bg-white rounded border border-slate-100  overflow-hidden flex flex-col">
-                <div className="p-5 border-b border-slate-50 bg-slate-50/30 flex items-center gap-2">
-                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                  <h4 className="text-xs  text-slate-400  ">Request Summary</h4>
                 </div>
-                <div className="p-2 space-y-2">
-                  <div className="bg-indigo-50/50 rounded  p-2 border border-indigo-100 group hover:bg-indigo-50 transition-colors">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 rounded  bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                      </div>
-                      <p className="text-xs   text-indigo-900  ">Linked Purchase Order:</p>
-                    </div>
-                    <p className="text-sm  text-indigo-600 mb-2 truncate group-hover:text-indigo-700 transition-colors">
-                      {selectedRequest?.linked_po_number ? `#${selectedRequest.linked_po_number}` : (selectedRequest?.linked_po ? `#${selectedRequest.linked_po}` : 'No Linked PO')}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs  text-slate-400 ">Status:</span>
-                      <StatusBadge status={(selectedRequest?.linked_po_number || selectedRequest?.linked_po) ? "ORDERED" : "none"} />
-                    </div>
-                  </div>
 
-                  <div className="space-y-2 px-1">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs   text-slate-400  ">Required By</span>
-                      <div className="flex items-center gap-2  p-2  bg-slate-50 rounded  border border-slate-100 text-slate-700">
-                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                        <span className="text-xs   ">{formatDate(selectedRequest?.required_by)}</span>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs   text-slate-400  ">Created On</span>
-                      <span className="text-xs   text-slate-700 ">{formatDate(selectedRequest?.created_at)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs   text-slate-400  ">Items Total</span>
-                      <span className="text-xs  text-indigo-600  ">
-                        {selectedRequest?.items?.filter(item => {
-                          const type = (item.material_type || '').toUpperCase();
-                          return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
-                        }).length} Unique Items
-                      </span>
-                    </div>
-                  </div>
-
-                  <button className="w-full py-4 px-4 bg-white border-2 border-slate-100 rounded  text-xs   text-slate-500 hover:border-slate-300 hover:text-slate-700 hover:bg-slate-50 transition-all flex items-center justify-center gap-2  active:scale-[0.98]">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                    Print Document
+                <div className="mt-10 pt-6 border-t border-slate-100 flex justify-end items-center gap-2">
+                  <button
+                    onClick={() => navigate(`${deptPrefix}/po-material-request`)}
+                    className="p-2  text-slate-400 text-xs  hover:text-slate-600 transition-colors   active:scale-95"
+                  >
+                    Cancel
                   </button>
+                  {(() => {
+                    const filteredItems = selectedRequest?.items?.filter(item => {
+                      const type = (item.material_type || '').toUpperCase();
+                      return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+                    }) || [];
+
+                    const allAvailable = filteredItems.length > 0 && filteredItems.every(item => {
+                      const rem = parseFloat(item.remaining_qty || 0);
+                      const remW = parseFloat(item.remaining_weight || 0);
+                      const stockVal = parseFloat(item.total_stock || 0);
+                      const stockWeight = parseFloat(item.total_weight || 0);
+                      return (rem === 0 || (stockVal + 0.0001) >= rem) &&
+                        (remW === 0 || (stockWeight + 0.0001) >= remW);
+                    });
+
+                    const hasInsufficientStock = !allAvailable;
+
+                    const anyAvailableStock = filteredItems.some(item => {
+                      const rem = parseFloat(item.remaining_qty || 0);
+                      const remW = parseFloat(item.remaining_weight || 0);
+                      const stockVal = parseFloat(item.total_stock || 0);
+                      const stockWeight = parseFloat(item.total_weight || 0);
+                      return (rem > 0 && stockVal > 0) ||
+                        (remW > 0 && stockWeight > 0);
+                    });
+
+                    const currentStatus = (selectedRequest?.status || '').toUpperCase().trim();
+                    const isFinalStatus = ['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED'].includes(currentStatus);
+                    const hasReleasedItems = filteredItems.some(item => parseFloat(item.allocated_quantity || 0) > 0);
+
+                    return (
+                      <>
+                        {hasInsufficientStock && !selectedRequest?.linked_po_id && !isFinalStatus &&
+                          (!rfqs || rfqs.length === 0) &&
+                          !['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED', 'RFQ_CREATED', 'PO_CREATED'].includes(currentStatus) && (
+                            <button
+                              onClick={() => handleRequestQuote(selectedRequest)}
+                              className="p-2  bg-indigo-500 text-white rounded  text-xs  hover:bg-indigo-600 flex items-center gap-2 shadow-xl shadow-indigo-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                            >
+                              Create RFQ
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                            </button>
+                          )}
+                        {hasInsufficientStock && anyAvailableStock && !isFinalStatus && (
+                          <button
+                            onClick={() => handleReleasePartialStock(selectedRequest?.id)}
+                            className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                          >
+                            Release Partial Stock
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                          </button>
+                        )}
+                        {allAvailable && !isFinalStatus && !hasReleasedItems && (
+                          <button
+                            onClick={() => handleReleaseMaterial(selectedRequest?.id)}
+                            className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                          >
+                            Release Material
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                          </button>
+                        )}
+                        {allAvailable && !isFinalStatus && hasReleasedItems && (
+                          <button
+                            onClick={() => handleReleaseMaterial(selectedRequest?.id)}
+                            className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                          >
+                            Release Remaining Stock
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-10 pt-6 border-t border-slate-100 flex justify-end items-center gap-2">
-            <button 
-              onClick={() => navigate(`${deptPrefix}/po-material-request`)}
-              className="p-2  text-slate-400 text-xs  hover:text-slate-600 transition-colors   active:scale-95"
-            >
-              Cancel
-            </button>
-            {(() => {
-              const filteredItems = selectedRequest?.items?.filter(item => {
-                const type = (item.material_type || '').toUpperCase();
-                return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
-              }) || [];
-
-              const allAvailable = filteredItems.length > 0 && filteredItems.every(item => {
-                const rem = parseFloat(item.remaining_qty || 0);
-                const remW = parseFloat(item.remaining_weight || 0);
-                const stockVal = parseFloat(item.total_stock || 0);
-                const stockWeight = parseFloat(item.total_weight || 0);
-                return (rem === 0 || (stockVal + 0.0001) >= rem) &&
-                       (remW === 0 || (stockWeight + 0.0001) >= remW);
-              });
-
-              const hasInsufficientStock = !allAvailable;
-
-              const anyAvailableStock = filteredItems.some(item => {
-                const rem = parseFloat(item.remaining_qty || 0);
-                const remW = parseFloat(item.remaining_weight || 0);
-                const stockVal = parseFloat(item.total_stock || 0);
-                const stockWeight = parseFloat(item.total_weight || 0);
-                return (rem > 0 && stockVal > 0) ||
-                       (remW > 0 && stockWeight > 0);
-              });
-
-              const currentStatus = (selectedRequest?.status || '').toUpperCase().trim();
-                const isFinalStatus = ['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED'].includes(currentStatus);
-                const hasReleasedItems = filteredItems.some(item => parseFloat(item.allocated_quantity || 0) > 0);
-                
-                return (
-                  <>
-                    {hasInsufficientStock && !selectedRequest?.linked_po_id && !isFinalStatus && 
-                      (!rfqs || rfqs.length === 0) &&
-                      !['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED', 'RFQ_CREATED', 'PO_CREATED'].includes(currentStatus) && (
-                      <button 
-                        onClick={() => handleRequestQuote(selectedRequest)}
-                        className="p-2  bg-indigo-500 text-white rounded  text-xs  hover:bg-indigo-600 flex items-center gap-2 shadow-xl shadow-indigo-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                      >
-                        Create RFQ
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                      </button>
-                    )}
-                    {hasInsufficientStock && anyAvailableStock && !isFinalStatus && (
-                      <button 
-                        onClick={() => handleReleasePartialStock(selectedRequest?.id)}
-                        className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                      >
-                        Release Partial Stock
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-                      </button>
-                    )}
-                    {allAvailable && !isFinalStatus && !hasReleasedItems && (
-                      <button 
-                        onClick={() => handleReleaseMaterial(selectedRequest?.id)}
-                        className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                      >
-                        Release Material
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-                      </button>
-                    )}
-                    {allAvailable && !isFinalStatus && hasReleasedItems && (
-                      <button 
-                        onClick={() => handleReleaseMaterial(selectedRequest?.id)}
-                        className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                      >
-                        Release Remaining Stock
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-                      </button>
-                    )}
-                  </>
-                );
-              })()}
-          </div>
-          </>
-             );
+              </>
+            );
           })()}
         </div>
       </Modal>

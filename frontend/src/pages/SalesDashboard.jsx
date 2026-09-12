@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, StatusBadge, DataTable, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
-import { 
-  TrendingUp, 
-  Users, 
-  Clock, 
-  RefreshCw, 
-  FileText, 
-  Package, 
+import {
+  TrendingUp,
+  Users,
+  Clock,
+  RefreshCw,
+  FileText,
+  Package,
   Truck,
   IndianRupee,
   CheckCircle,
@@ -28,9 +28,9 @@ import {
   Award,
   ArrowRight
 } from 'lucide-react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  LineChart, Line, AreaChart, Area, PieChart, Pie, Cell 
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -41,7 +41,7 @@ const SalesDashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
-  
+
   const [dateRange, setDateRange] = useState({
     start: '2026-04-01',
     end: new Date().toISOString().split('T')[0]
@@ -60,7 +60,7 @@ const SalesDashboard = () => {
       if (selectedCustomer !== 'All') url += `&customer=${selectedCustomer}`;
 
       const response = await fetch(url, {
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'X-ERP-Request': 'true'
@@ -87,7 +87,7 @@ const SalesDashboard = () => {
   const StatCard = ({ title, count, subtitle, color, icon: Icon, trend, badgeBg }) => (
     <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs hover:shadow-md transition-all duration-300 group relative overflow-hidden flex flex-col justify-between min-h-[115px]">
       <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-[0.04] rounded-full -mr-8 -mt-8 transition-transform duration-500 group-hover:scale-125`} />
-      
+
       <div className="flex items-start justify-between relative z-10">
         <div className="space-y-1">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{title}</p>
@@ -113,8 +113,8 @@ const SalesDashboard = () => {
   const isDataLoading = loading || !stats;
 
   return (
-    <div className="space-y-5 pb-12">
-      
+    <div className=" pb-12">
+
       {/* Top Filter & Command Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200/90 shadow-xs">
         <div className="flex items-center gap-3">
@@ -140,16 +140,16 @@ const SalesDashboard = () => {
           {/* Date Picker */}
           <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 hover:border-indigo-300 transition-colors">
             <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-            <input 
-              type="date" 
-              value={dateRange.start} 
+            <input
+              type="date"
+              value={dateRange.start}
               onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
               className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-800"
             />
             <span className="text-slate-300 font-bold mx-0.5">—</span>
-            <input 
-              type="date" 
-              value={dateRange.end} 
+            <input
+              type="date"
+              value={dateRange.end}
               onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
               className="bg-transparent border-none outline-none font-bold cursor-pointer text-slate-800"
             />
@@ -158,7 +158,7 @@ const SalesDashboard = () => {
           {/* Customer Dropdown */}
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 hover:border-indigo-300 transition-colors">
             <Filter className="w-3.5 h-3.5 text-indigo-600" />
-            <select 
+            <select
               value={selectedCustomer}
               onChange={(e) => setSelectedCustomer(e.target.value)}
               className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer pr-1"
@@ -170,7 +170,7 @@ const SalesDashboard = () => {
             </select>
           </div>
 
-          <button 
+          <button
             onClick={fetchDashboardData}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-100 hover:shadow-lg active:scale-95 disabled:opacity-60"
@@ -192,40 +192,40 @@ const SalesDashboard = () => {
           </>
         ) : (
           <>
-            <StatCard 
-              title="Total Revenue" 
-              count={`₹${totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`} 
-              subtitle="YTD Costing Value" 
-              color="bg-indigo-500" 
+            <StatCard
+              title="Total Revenue"
+              count={`₹${totalRevenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+              subtitle="YTD Costing Value"
+              color="bg-indigo-500"
               badgeBg="bg-indigo-50 text-indigo-600"
-              icon={IndianRupee} 
-              trend={15} 
+              icon={IndianRupee}
+              trend={15}
             />
-            <StatCard 
-              title="Sales Orders" 
-              count={stats.kpis?.totalSalesOrders || stats.salesOrders?.length || 0} 
-              subtitle="Total Created Orders" 
-              color="bg-emerald-500" 
+            <StatCard
+              title="Sales Orders"
+              count={stats.kpis?.totalSalesOrders || stats.salesOrders?.length || 0}
+              subtitle="Total Created Orders"
+              color="bg-emerald-500"
               badgeBg="bg-emerald-50 text-emerald-600"
-              icon={Package} 
+              icon={Package}
             />
-            <StatCard 
-              title="Approved Quotations" 
-              count={stats.kpis?.approvedQuotes || 0} 
-              subtitle="Contracts Ready" 
-              color="bg-purple-500" 
+            <StatCard
+              title="Approved Quotations"
+              count={stats.kpis?.approvedQuotes || 0}
+              subtitle="Contracts Ready"
+              color="bg-purple-500"
               badgeBg="bg-purple-50 text-purple-600"
-              icon={CheckCircle} 
-              trend={12} 
+              icon={CheckCircle}
+              trend={12}
             />
-            <StatCard 
-              title="Win Rate (Funnel)" 
-              count={`${stats.kpis?.conversionRate || 0}%`} 
-              subtitle="Quote Conversion" 
-              color="bg-blue-500" 
+            <StatCard
+              title="Win Rate (Funnel)"
+              count={`${stats.kpis?.conversionRate || 0}%`}
+              subtitle="Quote Conversion"
+              color="bg-blue-500"
               badgeBg="bg-blue-50 text-blue-600"
-              icon={Target} 
-              trend={5} 
+              icon={Target}
+              trend={5}
             />
           </>
         )}
@@ -233,7 +233,7 @@ const SalesDashboard = () => {
 
       {/* Analytics Graph Panels */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        
+
         {/* Sales Trend Chart */}
         <div className="xl:col-span-2 bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-5">
@@ -259,25 +259,25 @@ const SalesDashboard = () => {
                 <AreaChart data={stats?.chartData || []}>
                   <defs>
                     <linearGradient id="colorSalesVal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.18}/>
-                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.18} />
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{fill: '#64748b', fontSize: 10, fontWeight: 700}} 
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
                   />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{fill: '#64748b', fontSize: 10, fontWeight: 700}}
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
                     tickFormatter={(val) => `₹${val >= 100000 ? (val / 100000).toFixed(0) + 'L' : val}`}
                   />
-                  <Tooltip 
-                    contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)'}}
+                  <Tooltip
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}
                     formatter={(val) => [`₹${parseFloat(val).toLocaleString('en-IN')}`, 'Revenue']}
                   />
                   <Area type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorSalesVal)" />
@@ -315,12 +315,12 @@ const SalesDashboard = () => {
                     <span className="font-extrabold text-slate-900">{item.value}</span>
                   </div>
                   <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
-                    <div 
-                      className="h-full rounded-full transition-all duration-1000 shadow-2xs" 
-                      style={{ 
+                    <div
+                      className="h-full rounded-full transition-all duration-1000 shadow-2xs"
+                      style={{
                         width: `${(parseFloat(item.value) / (parseFloat(stats?.funnelData?.[0]?.value) || 1)) * 100}%`,
                         backgroundColor: item.color
-                      }} 
+                      }}
                     />
                   </div>
                 </div>
@@ -339,7 +339,7 @@ const SalesDashboard = () => {
 
       {/* Main Tables Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        
+
         {/* Sales Orders List Summary */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200/90 shadow-xs overflow-hidden flex flex-col justify-between">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -351,7 +351,7 @@ const SalesDashboard = () => {
                 Recent Sales Orders
               </h3>
             </div>
-            <button 
+            <button
               onClick={() => navigate('/sales/sales-report')}
               className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors px-2.5 py-1 rounded-lg hover:bg-indigo-50"
             >
@@ -377,7 +377,7 @@ const SalesDashboard = () => {
                   {(stats?.salesOrders || []).slice(0, 5).map((order, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/70 transition-colors group">
                       <td className="px-4 py-3.5">
-                        <button 
+                        <button
                           onClick={() => navigate(`/sales-report-details/${order.public_id || order.id_val}`)}
                           className="text-left"
                         >
@@ -436,11 +436,10 @@ const SalesDashboard = () => {
                 {(stats?.activeClients || []).slice(0, 5).map((client, idx) => (
                   <div key={idx} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors border border-slate-100 shadow-2xs">
                     <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shadow-xs ${
-                        idx === 0 ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white' : 
-                        idx === 1 ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white' : 
-                        'bg-slate-100 text-slate-700'
-                      }`}>
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shadow-xs ${idx === 0 ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white' :
+                          idx === 1 ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white' :
+                            'bg-slate-100 text-slate-700'
+                        }`}>
                         {client.initials}
                       </div>
                       <div>

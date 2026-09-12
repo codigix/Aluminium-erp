@@ -50,7 +50,7 @@ const CompanyMaster = ({
         </div>
         <div className="px-8 pb-8 pt-6 space-y-3">
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded  border border-slate-200/70 p-5 space-y-5">
+            <div className="rounded  border border-slate-200/70 p-5 ">
               <div>
                 <p className="text-[0.6rem]  tracking-[0.35em] text-slate-400 ">General</p>
                 <h3 className="text-md text-slate-900 text-xs">Company Profile</h3>
@@ -77,7 +77,7 @@ const CompanyMaster = ({
                 </div>
               </div>
             </div>
-            <div className="rounded  border border-slate-200/70 p-5 space-y-5">
+            <div className="rounded  border border-slate-200/70 p-5 ">
               <div>
                 <p className="text-[0.6rem]  tracking-[0.35em] text-slate-400 ">Compliance</p>
                 <h3 className="text-md text-slate-900 text-xs">Registration Numbers</h3>
@@ -97,7 +97,7 @@ const CompanyMaster = ({
               </div>
             </div>
           </div>
-          <div className="rounded  border border-slate-200/70 p-5 space-y-5">
+          <div className="rounded  border border-slate-200/70 p-5 ">
             <div>
               <p className="text-[0.6rem]  tracking-[0.35em] text-slate-400 ">Commercial</p>
               <h3 className="text-md text-slate-900 text-xs">Terms & Policies</h3>

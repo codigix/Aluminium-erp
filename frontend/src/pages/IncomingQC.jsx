@@ -170,7 +170,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     if (!location.pathname.includes('/edit')) {
       navigate(`${tabPath}/edit?id=${qcId}`);
     }
-    
+
     let qc = typeof qcOrId === 'object' ? qcOrId : qcInspections.find(q => q.id === qcId);
     try {
       const token = localStorage.getItem('authToken');
@@ -192,7 +192,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     const items = (qc.items_detail || []).map(item => {
       const recQty = parseFloat(item.received_qty) || 0;
       const recWt = parseFloat(item.received_weight) || 0;
-      
+
       const inspQty = (item.qc_inspection_qty !== undefined && item.qc_inspection_qty !== null && parseFloat(item.qc_inspection_qty) > 0)
         ? parseFloat(item.qc_inspection_qty)
         : recQty;
@@ -323,12 +323,12 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     const newItems = [...editFormData.items];
     const qty = parseFloat(value) || 0;
     newItems[idx].accepted_qty = value;
-    
+
     // Auto-calculate rejected quantity (Discrepancy with Invoice)
     const received = parseFloat(newItems[idx].received_qty) || 0;
     const poQty = parseFloat(newItems[idx].ordered_qty || 0);
     newItems[idx].rejected_qty = Math.max(0, received - qty);
-    
+
     // Update item status based on qty
     if (qty < poQty - 0.001) {
       newItems[idx].status = 'SHORTAGE';
@@ -337,17 +337,17 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     } else {
       newItems[idx].status = 'AVAILABLE';
     }
-    
+
     // Calculate Overall Status based on Items - ONLY if we want to auto-flip
     // If it's already IN_PROGRESS or PASSED, we might want to keep auto-calculation
     // but the user complained about it resetting to PASSED when they want it IN_PROGRESS
-    
+
     let hasShortageOverage = false;
 
     newItems.forEach(item => {
       const ordQty = parseFloat(item.ordered_qty || 0);
       const accQty = parseFloat(item.accepted_qty || 0);
-      
+
       const discrepancy = Math.abs(ordQty - accQty);
 
       if (discrepancy > 0.001) {
@@ -360,7 +360,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     if (['PENDING', 'IN_PROGRESS', 'SHORTAGE', 'OVERAGE'].includes(editFormData.status)) {
       overallStatus = hasShortageOverage ? 'IN_PROGRESS' : 'PASSED';
     }
-    
+
     const totalAccepted = newItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
     const totalRejected = newItems.reduce((sum, item) => sum + (parseFloat(item.rejected_qty) || 0), 0);
 
@@ -423,7 +423,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       inspWt = parseFloat(((recWt / recQty) * inspQty).toFixed(3));
     }
     newItems[idx].qc_inspection_weight = inspWt;
-    
+
     const accQty = newItems[idx].accepted_qty !== undefined && newItems[idx].accepted_qty !== null ? parseFloat(newItems[idx].accepted_qty) : inspQty;
     const rejQty = Math.max(0, recQty - accQty);
 
@@ -499,7 +499,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     newItems[idx].qc_inspection_weight = valNum;
     const inspWt = typeof valNum === 'number' ? Math.max(0, valNum) : 0;
     const inspQty = parseFloat(newItems[idx].qc_inspection_qty !== undefined ? newItems[idx].qc_inspection_qty : (newItems[idx].received_qty || 0));
-    
+
     let rejQty = parseFloat(newItems[idx].rejected_qty || 0);
     let accQty = parseFloat(newItems[idx].accepted_qty !== undefined ? newItems[idx].accepted_qty : (inspQty - rejQty));
 
@@ -519,7 +519,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     const valNum = value === '' ? '' : (parseFloat(value) || 0);
     const recWt = parseFloat(newItems[idx].received_weight !== undefined && newItems[idx].received_weight !== null ? newItems[idx].received_weight : (newItems[idx].received_qty || 0));
     const inspWt = parseFloat(newItems[idx].qc_inspection_weight !== undefined ? newItems[idx].qc_inspection_weight : recWt);
-    
+
     let accWt = typeof valNum === 'number' ? Math.max(0, Math.min(inspWt, valNum)) : 0;
     let rejWt = Math.max(0, parseFloat((inspWt - accWt).toFixed(3)));
 
@@ -535,7 +535,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     const valNum = value === '' ? '' : (parseFloat(value) || 0);
     const recWt = parseFloat(newItems[idx].received_weight !== undefined && newItems[idx].received_weight !== null ? newItems[idx].received_weight : (newItems[idx].received_qty || 0));
     const inspWt = parseFloat(newItems[idx].qc_inspection_weight !== undefined ? newItems[idx].qc_inspection_weight : recWt);
-    
+
     let rejWt = typeof valNum === 'number' ? Math.max(0, Math.min(inspWt, valNum)) : 0;
     let accWt = Math.max(0, parseFloat((inspWt - rejWt).toFixed(3)));
 
@@ -616,9 +616,9 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       setSelectedQC(qc);
       const shortageItems = (qc.items_detail || []).filter(item => (parseFloat(item.received_qty) || 0) > (parseFloat(item.accepted_qty) || 0));
       const overageItems = (qc.items_detail || []).filter(item => (parseFloat(item.accepted_qty) || 0) > (parseFloat(item.received_qty) || 0));
-      
+
       let message = `Dear ${qc.vendor_name || 'Vendor'},\n\nThis is a notification regarding the Quality Control Inspection for GRN-${String(qc.grn_id).padStart(4, '0')} (PO: ${qc.po_number || 'N/A'}).\n\n`;
-      
+
       if (shortageItems.length > 0) {
         message += `Shortage detected in the following items:\n`;
         shortageItems.forEach(item => {
@@ -627,7 +627,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         });
         message += `\n`;
       }
-      
+
       if (overageItems.length > 0) {
         message += `Overage detected in the following items:\n`;
         overageItems.forEach(item => {
@@ -754,20 +754,20 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      
+
       // Fetch the latest full details for this QC to ensure we have all item details
       const detailsRes = await fetch(`${API_BASE}/qc-inspections/${qc.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       if (!detailsRes.ok) throw new Error('Failed to fetch inspection details');
       const fullQC = await detailsRes.json();
       const items = fullQC.items_detail || fullQC.items || [];
 
-      const rejectedItems = items.filter(item => 
+      const rejectedItems = items.filter(item =>
         parseFloat(item.rejected_qty || 0) > 0 || parseFloat(item.shortage || 0) > 0
       );
-      
+
       if (rejectedItems.length === 0) {
         errorToast('No rejected items or shortages found to create a new PO.');
         return;
@@ -795,10 +795,10 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           vendorId: fullQC.vendor_id,
           notes: `Auto-generated from QC Inspection (GRN-${String(fullQC.grn_id).padStart(4, '0')}) - Replacement/Shortage Fulfillment`,
           items: rejectedItems.map(item => {
-            const reorderQty = parseFloat(item.rejected_qty || 0) > 0 
-              ? parseFloat(item.rejected_qty) 
+            const reorderQty = parseFloat(item.rejected_qty || 0) > 0
+              ? parseFloat(item.rejected_qty)
               : parseFloat(item.shortage);
-              
+
             return {
               item_code: item.item_code,
               description: item.description || item.material_name,
@@ -851,7 +851,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
 
   const handleBulkDownload = async (inspections) => {
     if (!inspections.length) return;
-    
+
     const result = await Swal.fire({
       title: 'Generate Bulk Reports?',
       text: `This will download ${inspections.length} QC reports.`,
@@ -972,8 +972,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             {qcStatusColors[val]?.label || val}
           </span>
           {row.stock_entry_no && (
-            <span 
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[8px] border border-emerald-100 rounded" 
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[8px] border border-emerald-100 rounded"
               title={`Stock Entry No: ${row.stock_entry_no}`}
             >
               <Database className="w-2 h-2" /> SE Created
@@ -997,46 +997,46 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           </button>
           {activeTab === 'in-process' && (
             <>
-              <button 
-                onClick={(e) => { 
-                  e.stopPropagation(); 
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (row.invoice_url) {
                     window.open(`${API_BASE}/${row.invoice_url}`, '_blank');
                   } else {
                     setUploadingQcId(row.id);
                     invoiceInputRef.current?.click();
                   }
-                }} 
+                }}
                 className={`p-1.5 rounded  transition-colors bg-white border border-slate-100 ${row.invoice_url ? 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
                 title={row.invoice_url ? "View Invoice" : "Upload Invoice"}
               >
                 <Paperclip className="w-3.5 h-3.5" />
               </button>
-              <button 
-                onClick={(e) => { e.stopPropagation(); openEmailModal(row); }} 
+              <button
+                onClick={(e) => { e.stopPropagation(); openEmailModal(row); }}
                 className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-colors bg-white border border-slate-100"
                 title="Send Notification"
               >
                 <Send className="w-3.5 h-3.5" />
               </button>
-              <button 
-                onClick={(e) => { e.stopPropagation(); handleCreatePO(row); }} 
+              <button
+                onClick={(e) => { e.stopPropagation(); handleCreatePO(row); }}
                 className="p-1.5 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded  transition-colors bg-white border border-slate-100"
                 title="Create PO"
               >
                 <ShoppingCart className="w-3.5 h-3.5" />
               </button>
               {!row.stock_entry_no && (
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }}
                   className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors bg-white border border-slate-100"
                   title="Create Stock Entry"
                 >
                   <Database className="w-3.5 h-3.5" />
                 </button>
               )}
-              <button 
-                onClick={(e) => { e.stopPropagation(); handleDownloadPdf(row); }} 
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDownloadPdf(row); }}
                 className="px-2 py-1 text-[10px] text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
               >
                 QC Report
@@ -1044,8 +1044,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             </>
           )}
           {['PASSED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && activeTab !== 'in-process' && !row.stock_entry_no && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
+            <button
+              onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }}
               className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors bg-white border border-slate-100"
               title="Create Stock Entry"
             >
@@ -1053,8 +1053,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             </button>
           )}
           {['PASSED', 'FAILED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && activeTab === 'final' && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); handleDownloadPdf(row); }} 
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDownloadPdf(row); }}
               className="px-2 py-1 text-[10px]  text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
             >
               QC Report
@@ -1177,11 +1177,11 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       className: 'text-center',
       render: (val, item) => {
         if (selectedQC?.status === 'PENDING') return <span className="text-xs text-slate-400">Pending</span>;
-        const accQty = (val !== undefined && val !== null) 
-          ? parseFloat(val) 
-          : ((item.accepted_qty !== undefined && item.accepted_qty !== null) 
-              ? parseFloat(item.accepted_qty) 
-              : Math.max(0, parseFloat(item.qc_inspection_qty || item.received_qty || 0) - parseFloat(item.rejected_qty || 0)));
+        const accQty = (val !== undefined && val !== null)
+          ? parseFloat(val)
+          : ((item.accepted_qty !== undefined && item.accepted_qty !== null)
+            ? parseFloat(item.accepted_qty)
+            : Math.max(0, parseFloat(item.qc_inspection_qty || item.received_qty || 0) - parseFloat(item.rejected_qty || 0)));
         return (
           <span className="text-xs text-emerald-600 font-bold">
             {accQty.toFixed(0)} <span className="text-[9px] text-emerald-400">NOS</span>
@@ -1200,8 +1200,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         const accWt = (val !== undefined && val !== null)
           ? parseFloat(val)
           : ((item.accepted_weight !== undefined && item.accepted_weight !== null)
-              ? parseFloat(item.accepted_weight)
-              : Math.max(0, inspWt - parseFloat(item.rejected_weight || 0)));
+            ? parseFloat(item.accepted_weight)
+            : Math.max(0, inspWt - parseFloat(item.rejected_weight || 0)));
         return (
           <span className="text-xs text-emerald-600 font-bold">
             {accWt.toFixed(3)} <span className="text-[9px] text-emerald-400">KG</span>
@@ -1619,15 +1619,15 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
 
             <Card>
               <div className="flex items-center justify-between mb-4">
-                 <h3 className="text-xs  text-slate-900">Inward Inspection Queue</h3>
-                <button 
+                <h3 className="text-xs  text-slate-900">Inward Inspection Queue</h3>
+                <button
                   onClick={() => { fetchQCInspections(); fetchStats(); }}
                   className="p-2 text-slate-500 hover:text-indigo-600 rounded  hover:bg-slate-50 transition-all"
                 >
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </button>
               </div>
-              
+
               <DataTable
                 columns={columns}
                 data={pendingInspections}
@@ -1652,14 +1652,14 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           <div className="space-y-2">
             <Card title="Partially Quality Control" subtitle="Real-time production quality monitoring and line inspections">
               <div className="flex justify-end items-center gap-2 mb-4">
-                <button 
+                <button
                   onClick={() => handleBulkDownload(inProgressInspections)}
                   className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded text-[10px]  hover:bg-orange-700 transition-all active:scale-95 shadow-lg shadow-orange-100 uppercase tracking-wider"
                 >
                   <FileText className="w-3 h-3" />
                   Generate QC Reports
                 </button>
-                <button 
+                <button
                   onClick={() => { fetchQCInspections(); }}
                   className="p-2 text-slate-500 hover:text-indigo-600 rounded  hover:bg-slate-50 transition-all"
                 >
@@ -1689,19 +1689,19 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         return (
           <div className="space-y-2">
             {finalInspections.length > 0 && (
-              <Card 
-                title="Completed Inward Inspections" 
+              <Card
+                title="Completed Inward Inspections"
                 subtitle="Recent raw material and component inspection results"
               >
                 <div className="flex justify-end items-center gap-2 mb-4">
-                  <button 
+                  <button
                     onClick={() => handleBulkDownload(finalInspections)}
                     className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded text-[10px]  hover:bg-orange-700 transition-all active:scale-95 shadow-lg shadow-orange-100 uppercase tracking-wider"
                   >
                     <FileText className="w-3 h-3" />
                     Generate QC Reports
                   </button>
-                  <button 
+                  <button
                     onClick={() => { fetchQCInspections(); }}
                     className="p-2 text-slate-500 hover:text-indigo-600 rounded  hover:bg-slate-50 transition-all"
                   >
@@ -1764,43 +1764,43 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           <div className="space-y-2 p-2">
             <div className="bg-slate-50/50 p-2.5 rounded border border-slate-100 flex items-center justify-between">
               <div className="flex flex-wrap items-center gap-6">
-                 <div className="flex flex-col">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">GRN No.</span>
-                    <span className="text-xs font-semibold text-indigo-600">GRN-{String(selectedQC?.grn_id).padStart(4, '0')}</span>
-                 </div>
-                 <div className="h-8 w-px bg-slate-200"></div>
-                 <div className="flex flex-col">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">PO No.</span>
-                    <span className="text-xs font-semibold text-slate-700">{selectedQC?.po_number || '—'}</span>
-                 </div>
-                 <div className="h-8 w-px bg-slate-200"></div>
-                 <div className="flex flex-col">
-                    <span className="text-[10px] text-slate-500 font-medium">Drawing No.</span>
-                    <span className="text-xs font-bold text-slate-900">{selectedQC?.drawing_no || '—'}</span>
-                 </div>
-                 <div className="h-8 w-px bg-slate-200"></div>
-                 <div className="flex flex-col">
-                    <span className="text-[10px] text-slate-500 font-medium">Finished Good</span>
-                    <span className="text-xs font-medium text-slate-800">{selectedQC?.finished_good || '—'}</span>
-                 </div>
-                 {selectedQC?.host_company_name && (
-                   <>
-                     <div className="h-8 w-px bg-slate-200"></div>
-                     <div className="flex flex-col">
-                        <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Host Company</span>
-                        <span className="text-xs font-semibold text-slate-800">{selectedQC.host_company_name}</span>
-                     </div>
-                   </>
-                 )}
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">GRN No.</span>
+                  <span className="text-xs font-semibold text-indigo-600">GRN-{String(selectedQC?.grn_id).padStart(4, '0')}</span>
+                </div>
+                <div className="h-8 w-px bg-slate-200"></div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">PO No.</span>
+                  <span className="text-xs font-semibold text-slate-700">{selectedQC?.po_number || '—'}</span>
+                </div>
+                <div className="h-8 w-px bg-slate-200"></div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-500 font-medium">Drawing No.</span>
+                  <span className="text-xs font-bold text-slate-900">{selectedQC?.drawing_no || '—'}</span>
+                </div>
+                <div className="h-8 w-px bg-slate-200"></div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-500 font-medium">Finished Good</span>
+                  <span className="text-xs font-medium text-slate-800">{selectedQC?.finished_good || '—'}</span>
+                </div>
+                {selectedQC?.host_company_name && (
+                  <>
+                    <div className="h-8 w-px bg-slate-200"></div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Host Company</span>
+                      <span className="text-xs font-semibold text-slate-800">{selectedQC.host_company_name}</span>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                 <div className="w-5 h-5 bg-white rounded flex items-center justify-center text-slate-400 border border-slate-100 ">
-                    <Clock className="w-5 h-5" />
-                 </div>
-                 <div className="text-right">
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Inspection Date</p>
-                    <p className="text-xs font-semibold text-slate-950">{new Date(selectedQC?.inspection_date || new Date()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                 </div>
+                <div className="w-5 h-5 bg-white rounded flex items-center justify-center text-slate-400 border border-slate-100 ">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Inspection Date</p>
+                  <p className="text-xs font-semibold text-slate-950">{new Date(selectedQC?.inspection_date || new Date()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                </div>
               </div>
             </div>
 
@@ -1838,7 +1838,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                     <p className="text-[8px] text-slate-400  ">Item wise quality check results</p>
                   </div>
                 </div>
-                
+
                 <div className="bg-white rounded border border-slate-100 overflow-hidden ">
                   <DataTable
                     columns={inspectionViewColumns}
@@ -1926,43 +1926,43 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           {/* Top Info */}
           <div className="bg-slate-50/50 p-2.5 rounded border border-slate-100 flex items-center justify-between">
             <div className="flex flex-wrap items-center gap-6">
-               <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">GRN No.</span>
-                  <span className="text-xs font-semibold text-indigo-600">GRN-{String(selectedQC?.grn_id).padStart(4, '0')}</span>
-               </div>
-               <div className="h-8 w-px bg-slate-200"></div>
-               <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">PO No.</span>
-                  <span className="text-xs font-semibold text-slate-700">{selectedQC?.po_number || '—'}</span>
-               </div>
-               <div className="h-8 w-px bg-slate-200"></div>
-               <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-500 font-medium">Drawing No.</span>
-                  <span className="text-xs font-bold text-slate-900">{selectedQC?.drawing_no || '—'}</span>
-               </div>
-               <div className="h-8 w-px bg-slate-200"></div>
-               <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-500 font-medium">Finished Good</span>
-                  <span className="text-xs font-medium text-slate-800">{selectedQC?.finished_good || '—'}</span>
-               </div>
-               {selectedQC?.host_company_name && (
-                 <>
-                   <div className="h-8 w-px bg-slate-200"></div>
-                   <div className="flex flex-col">
-                      <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Host Company</span>
-                      <span className="text-xs font-semibold text-slate-800">{selectedQC.host_company_name}</span>
-                   </div>
-                 </>
-               )}
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">GRN No.</span>
+                <span className="text-xs font-semibold text-indigo-600">GRN-{String(selectedQC?.grn_id).padStart(4, '0')}</span>
+              </div>
+              <div className="h-8 w-px bg-slate-200"></div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">PO No.</span>
+                <span className="text-xs font-semibold text-slate-700">{selectedQC?.po_number || '—'}</span>
+              </div>
+              <div className="h-8 w-px bg-slate-200"></div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-500 font-medium">Drawing No.</span>
+                <span className="text-xs font-bold text-slate-900">{selectedQC?.drawing_no || '—'}</span>
+              </div>
+              <div className="h-8 w-px bg-slate-200"></div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-500 font-medium">Finished Good</span>
+                <span className="text-xs font-medium text-slate-800">{selectedQC?.finished_good || '—'}</span>
+              </div>
+              {selectedQC?.host_company_name && (
+                <>
+                  <div className="h-8 w-px bg-slate-200"></div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Host Company</span>
+                    <span className="text-xs font-semibold text-slate-800">{selectedQC.host_company_name}</span>
+                  </div>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-               <div className="w-5 h-5 bg-white rounded flex items-center justify-center text-slate-400 border border-slate-100 ">
-                  <Clock className="w-5 h-5" />
-               </div>
-               <div className="text-right">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Inspection Date</p>
-                  <p className="text-xs font-semibold text-slate-950">{new Date(selectedQC?.inspection_date || new Date()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-               </div>
+              <div className="w-5 h-5 bg-white rounded flex items-center justify-center text-slate-400 border border-slate-100 ">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Inspection Date</p>
+                <p className="text-xs font-semibold text-slate-950">{new Date(selectedQC?.inspection_date || new Date()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+              </div>
             </div>
           </div>
 
@@ -1995,13 +1995,13 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           </div>
 
           <div className="space-y-2">
-             <div className="bg-white rounded border border-slate-100 overflow-hidden ">
-                <DataTable
-                  columns={inspectionEditColumns}
-                  data={editFormData.items || []}
-                  emptyMessage="No items to inspect."
-                />
-             </div>
+            <div className="bg-white rounded border border-slate-100 overflow-hidden ">
+              <DataTable
+                columns={inspectionEditColumns}
+                data={editFormData.items || []}
+                emptyMessage="No items to inspect."
+              />
+            </div>
           </div>
 
           {/* Attachments Section */}
@@ -2103,7 +2103,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                   <p className="text-xs text-slate-400   ">GRN-{String(selectedQC.grn_id).padStart(4, '0')} • {selectedQC.vendor_name || 'Vendor'}</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => navigate(activeTab === 'incoming' ? `${deptPrefix}/incoming-qc` : `${deptPrefix}/incoming-qc/${activeTab}`)}
                 className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-400"
               >
@@ -2111,13 +2111,13 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               </button>
             </div>
 
-            <form onSubmit={handleSendEmail} className="p-6 space-y-5">
+            <form onSubmit={handleSendEmail} className="p-6 ">
               <div className="space-y-2">
                 <FormControl label="Recipient Email *">
                   <input
                     type="email"
                     value={emailData.to}
-                    onChange={(e) => setEmailData({...emailData, to: e.target.value})}
+                    onChange={(e) => setEmailData({ ...emailData, to: e.target.value })}
                     placeholder="vendor@example.com"
                     className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     required
@@ -2128,7 +2128,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                   <input
                     type="text"
                     value={emailData.subject}
-                    onChange={(e) => setEmailData({...emailData, subject: e.target.value})}
+                    onChange={(e) => setEmailData({ ...emailData, subject: e.target.value })}
                     className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-sm  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     required
                   />
@@ -2137,7 +2137,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 <FormControl label="Message">
                   <textarea
                     value={emailData.message}
-                    onChange={(e) => setEmailData({...emailData, message: e.target.value})}
+                    onChange={(e) => setEmailData({ ...emailData, message: e.target.value })}
                     rows="8"
                     className="w-full p-2  bg-slate-50 border border-slate-200 rounded  text-sm  text-slate-600 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all resize-none"
                     required
@@ -2157,7 +2157,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                       type="checkbox"
                       id="attachPDF"
                       checked={emailData.attachPDF}
-                      onChange={(e) => setEmailData({...emailData, attachPDF: e.target.checked})}
+                      onChange={(e) => setEmailData({ ...emailData, attachPDF: e.target.checked })}
                       className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
                     />
                     <label htmlFor="attachPDF" className="text-xs  text-slate-500  ">Include</label>

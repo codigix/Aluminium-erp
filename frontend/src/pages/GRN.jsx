@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, DataTable } from '../components/ui.jsx';
-import { 
-  Plus, 
-  FileText, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  Eye, 
-  FileEdit, 
+import {
+  Plus,
+  FileText,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Eye,
+  FileEdit,
   Trash2,
   X,
   ClipboardList
@@ -22,7 +22,7 @@ const grnStatusColors = {
   PENDING: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', badge: 'bg-amber-100 text-amber-700', label: 'Pending' },
   RECEIVED: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', badge: 'bg-cyan-100 text-cyan-700', label: 'Received' },
   INSPECTED: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', label: 'Inspected' },
-  Approved : { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700', label: 'Approved' },
+  Approved: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-100 text-emerald-700', label: 'Approved' },
   REJECTED: { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-600', badge: 'bg-rose-100 text-rose-700', label: 'Rejected' }
 };
 
@@ -34,7 +34,7 @@ const StatMiniCard = ({ title, count, color, icon }) => {
     emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
     rose: 'bg-rose-50 text-rose-600 border-rose-100'
   };
-  
+
   return (
     <div className={`p-2 rounded  border ${colorMap[color]} flex flex-col items-center text-center transition-all hover:`}>
       <div className="p-2 bg-white rounded  mb-2 shadow-sm">{icon}</div>
@@ -345,22 +345,22 @@ const GRN = () => {
       className: 'text-right',
       render: (_, grn) => (
         <div className="flex justify-end gap-2">
-          <button 
-            onClick={() => navigate(`/grns?id=${grn.id}`)} 
+          <button
+            onClick={() => navigate(`/grns?id=${grn.id}`)}
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all"
             title="View Details"
           >
             <Eye size={15} />
           </button>
-          <button 
-            onClick={() => handleEditGRN(grn)} 
+          <button
+            onClick={() => handleEditGRN(grn)}
             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-all"
             title="Edit GRN"
           >
             <FileEdit size={15} />
           </button>
-          <button 
-            onClick={() => handleDeleteGRN(grn.id)} 
+          <button
+            onClick={() => handleDeleteGRN(grn.id)}
             className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all"
             title="Delete GRN"
           >
@@ -392,7 +392,7 @@ const GRN = () => {
         </button>
       </div>
 
-      <DataTable 
+      <DataTable
         columns={columns}
         data={grns}
         loading={loading}
@@ -419,22 +419,22 @@ const GRN = () => {
                 <h3 className="text-base  text-slate-900">Create Goods Received Note</h3>
                 <p className="text-xs text-slate-500 tracking-wide mt-0.5">Record incoming material from vendor</p>
               </div>
-              <button 
-                onClick={() => navigate('/inventory/grn')} 
+              <button
+                onClick={() => navigate('/inventory/grn')}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded  transition-all border border-transparent hover:border-slate-200"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateGRN} className="p-6 space-y-5">
+            <form onSubmit={handleCreateGRN} className="p-6 ">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
                   <label className="blocktext-xs   text-slate-500   mb-1.5 ml-1">PO Number *</label>
                   <input
                     type="text"
                     value={formData.poNumber}
-                    onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, poNumber: e.target.value })}
                     placeholder="Enter PO number"
                     className="w-full p-2 .5 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-white"
                     required
@@ -446,7 +446,7 @@ const GRN = () => {
                   <input
                     type="date"
                     value={formData.grnDate}
-                    onChange={(e) => setFormData({...formData, grnDate: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, grnDate: e.target.value })}
                     className="w-full p-2 .5 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-white"
                     required
                   />
@@ -458,7 +458,7 @@ const GRN = () => {
                 <input
                   type="number"
                   value={formData.receivedQuantity}
-                  onChange={(e) => setFormData({...formData, receivedQuantity: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, receivedQuantity: e.target.value })}
                   placeholder="0"
                   className="w-full p-2 .5 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-white"
                   required
@@ -470,7 +470,7 @@ const GRN = () => {
                 <label className="blocktext-xs   text-slate-500   mb-1.5 ml-1">Notes (Optional)</label>
                 <textarea
                   value={formData.notes}
-                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="Add any notes about the receipt"
                   className="w-full p-2 .5 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-white"
                   rows="3"
@@ -505,8 +505,8 @@ const GRN = () => {
                 <h3 className="text-xs  text-slate-900  ">GRN Details</h3>
                 <p className="text-xs text-slate-500  tracking-wide mt-0.5">Goods Received Note Information</p>
               </div>
-              <button 
-                onClick={() => navigate('/inventory/grn')} 
+              <button
+                onClick={() => navigate('/inventory/grn')}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded  transition-all border border-transparent hover:border-slate-200"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -569,8 +569,8 @@ const GRN = () => {
                 <h3 className="text-xs  text-slate-900  ">Update GRN Status</h3>
                 <p className="text-xs text-slate-500  tracking-wide mt-0.5">Modify progress of Goods Received Note</p>
               </div>
-              <button 
-                onClick={() => setShowEditModal(false)} 
+              <button
+                onClick={() => setShowEditModal(false)}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded  transition-all border border-transparent hover:border-slate-200"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -599,7 +599,7 @@ const GRN = () => {
                 <label className="blocktext-xs   text-slate-500   mb-1.5 ml-1">Update Status *</label>
                 <select
                   value={editFormData.status}
-                  onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
+                  onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
                   className="w-full p-2 .5 border border-slate-200 rounded  text-sm  focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-white"
                   required
                 >

@@ -137,17 +137,17 @@ export const SearchableSelect = ({
       return String(opt[valueField]) === String(localValue);
     }
     return String(getLabel(opt) || '').toLowerCase().includes(safeSearchTerm) ||
-           String(opt[valueField] || '').toLowerCase().includes(safeSearchTerm) ||
-           String(getSublabel(opt) || '').toLowerCase().includes(safeSearchTerm) ||
-           String(opt.partNo || '').toLowerCase().includes(safeSearchTerm) ||
-           String(opt.part_no || '').toLowerCase().includes(safeSearchTerm) ||
-           String(opt.drawingNoSearch || '').toLowerCase().includes(safeSearchTerm) ||
-           String(opt.drawingNo || '').toLowerCase().includes(safeSearchTerm) ||
-           String(opt.drawing_no || '').toLowerCase().includes(safeSearchTerm) ||
-           String(opt.itemCode || '').toLowerCase().includes(safeSearchTerm) ||
-           String(opt.item_code || '').toLowerCase().includes(safeSearchTerm) ||
-           String(opt.description || '').toLowerCase().includes(safeSearchTerm) ||
-           String(opt.material_name || '').toLowerCase().includes(safeSearchTerm);
+      String(opt[valueField] || '').toLowerCase().includes(safeSearchTerm) ||
+      String(getSublabel(opt) || '').toLowerCase().includes(safeSearchTerm) ||
+      String(opt.partNo || '').toLowerCase().includes(safeSearchTerm) ||
+      String(opt.part_no || '').toLowerCase().includes(safeSearchTerm) ||
+      String(opt.drawingNoSearch || '').toLowerCase().includes(safeSearchTerm) ||
+      String(opt.drawingNo || '').toLowerCase().includes(safeSearchTerm) ||
+      String(opt.drawing_no || '').toLowerCase().includes(safeSearchTerm) ||
+      String(opt.itemCode || '').toLowerCase().includes(safeSearchTerm) ||
+      String(opt.item_code || '').toLowerCase().includes(safeSearchTerm) ||
+      String(opt.description || '').toLowerCase().includes(safeSearchTerm) ||
+      String(opt.material_name || '').toLowerCase().includes(safeSearchTerm);
   });
 
   useEffect(() => {
@@ -203,7 +203,7 @@ export const SearchableSelect = ({
 
       {isOpen && !disabled && (
         <div className={`absolute z-[100] w-full min-w-full md:min-w-[320px] lg:min-w-[400px] bg-white border border-slate-200 rounded shadow-xl max-h-60 flex flex-col overflow-hidden ${openUpwards || dropdownDirection === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
-          <div className="overflow-y-auto flex-1">
+          <div className="overflow-y-auto flex-1 p-2">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, idx) => (
                 <div
@@ -318,8 +318,8 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
                   const val = String(opt[valueField]);
                   const isDisabled = disabledValues.map(String).includes(val);
                   return (
-                    <span 
-                      key={val} 
+                    <span
+                      key={val}
                       className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 shrink-0 ${isDisabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}
                     >
                       {opt[labelField]}
@@ -384,7 +384,7 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
               />
             </div>
           </div>
-          <div className="overflow-y-auto flex-1">
+          <div className="overflow-y-auto flex-1 p-2">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, idx) => {
                 const isSelected = selectedValues.includes(String(opt[valueField]));
@@ -668,7 +668,7 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', size =
   const isFull = size === 'full';
 
   return (
-    <div className={`fixed inset-0 flex flex-col items-center justify-start bg-black/60 backdrop-blur-sm overflow-y-auto py-4 sm:py-8 ${overlayClassName}`} onClick={onClose}>
+    <div className={`fixed inset-0 flex top-0 flex-col items-center justify-start bg-black/60 backdrop-blur-sm overflow-y-auto py-4 sm:py-8 ${overlayClassName}`} onClick={onClose}>
       <div className={`rounded  shadow-2xl ${maxWidth} w-full ${isFull ? 'min-h-full mx-0 rounded-none !my-0' : 'mx-4 max-h-[90vh] flex flex-col'} border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} ${className}`} onClick={(e) => e.stopPropagation()}>
         <div className={`sticky top-0 z-10 border-b p-2 flex items-center justify-between flex-shrink-0 ${isDark ? 'bg-slate-900/95 border-slate-800 text-white' : 'bg-white/95 border-slate-100 text-slate-900 '}`}>
           <h2 className="text-lg  ">{title}</h2>
@@ -676,7 +676,7 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', size =
             <X className="w-3 h-3" />
           </button>
         </div>
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-y-auto flex-1 p-2">
           {children}
         </div>
       </div>
@@ -850,7 +850,7 @@ export const DataTable = ({
     return sortedData.filter(item => {
       if (hideHeader || hideSearch) return true;
       const searchLower = String(searchTerm || '').toLowerCase();
-      
+
       if (customFilter && customFilter(item, searchLower)) {
         return true;
       }

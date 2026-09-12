@@ -649,7 +649,7 @@ const CustomerDrawing = () => {
       // Hide duplicate child orders/rows for the same project
       const groupedList = Object.values(grouped);
       const projectGroups = {};
-      
+
       groupedList.forEach(req => {
         const projName = req.project_name || 'General';
         if (!projectGroups[projName]) {
@@ -670,17 +670,17 @@ const CustomerDrawing = () => {
             const bStatus = (b.status || '').toUpperCase().trim();
             const aIsCreated = aStatus === 'CREATED' || aStatus === 'PENDING';
             const bIsCreated = bStatus === 'CREATED' || bStatus === 'PENDING';
-            
+
             if (aIsCreated !== bIsCreated) {
               return aIsCreated ? 1 : -1; // Prefer status that is not CREATED
             }
-            
+
             const aQty = a.drawing_count || 0;
             const bQty = b.drawing_count || 0;
             if (aQty !== bQty) {
               return bQty - aQty; // Prefer highest drawing count
             }
-            
+
             return b.id - a.id; // Prefer highest id
           });
           finalFiltered.push(group[0]); // Only keep the primary parent project row
@@ -1199,7 +1199,7 @@ const CustomerDrawing = () => {
             // ── Helper to find original drawing item for an existing row ───────
             const getOriginalDrawing = (row) => {
               if (!row || !editingRequirementData?.original_items) return null;
-              return editingRequirementData.original_items.find(d => 
+              return editingRequirementData.original_items.find(d =>
                 (row.id && String(d.id) === String(row.id)) ||
                 (row.drawing_id && String(d.drawing_id) === String(row.drawing_id)) ||
                 (row.drawing_id && String(d.id) === String(row.drawing_id)) ||
@@ -2098,7 +2098,7 @@ const CustomerDrawing = () => {
 
   const handleBulkSendToDesign = async () => {
     const selectedReqObjects = requirements.filter(r => selectedRequirements.has(r.id));
-    
+
     if (selectedReqObjects.length === 0) {
       Swal.fire({
         title: 'Please select at least one Client Requirement to send to the Design Department.',
@@ -2380,7 +2380,7 @@ const CustomerDrawing = () => {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200/90 shadow-xs">
         <div className="flex items-center gap-3">
@@ -3571,13 +3571,13 @@ const CustomerDrawing = () => {
         onOpenAttachments={(dwg) => {
           const dwgMasterId = dwg.drawing_master_id || dwg.id || dwg.drawing_id;
           const dwgNo = dwg.drawing_no;
-          
+
           // Find in manualDrawings by master ID or drawing number
-          const matched = formik.values.manualDrawings.find(d => 
+          const matched = formik.values.manualDrawings.find(d =>
             (dwgMasterId && (d.drawing_id === dwgMasterId || d.id === dwgMasterId)) ||
             (dwgNo && d.drawing_no === dwgNo)
           );
-          
+
           if (matched) {
             setActiveDrawingIdForFiles(matched.id);
           } else {

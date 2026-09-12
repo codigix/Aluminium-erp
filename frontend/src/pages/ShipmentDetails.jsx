@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  FileText, ShieldCheck, Inbox, CheckCircle2, Package, Truck, 
-  ArrowLeft, Printer, Download, Search, AlertCircle, Eye, 
+import {
+  FileText, ShieldCheck, Inbox, CheckCircle2, Package, Truck,
+  ArrowLeft, Printer, Download, Search, AlertCircle, Eye,
   CheckCircle, XCircle, Clock, ChevronRight, Filter, RotateCcw,
   User, Users, Box, ClipboardList, Info, FileSpreadsheet, Paperclip,
   MapPin, Calendar, CreditCard, Activity, ArrowRight, Share2, MoreVertical
@@ -16,11 +16,11 @@ const ShipmentDetails = () => {
   const { shipmentId: paramShipmentId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   // Extract ID from URL if not available in params
   const segments = location.pathname.split('/').filter(Boolean);
   const shipmentId = paramShipmentId || segments[segments.length - 1];
-  
+
   const [loading, setLoading] = useState(true);
   const [shipmentData, setShipmentData] = useState(null);
   const [challanData, setChallanData] = useState(null);
@@ -325,13 +325,13 @@ const ShipmentDetails = () => {
   const formatDateTime = (dateStr) => {
     if (!dateStr) return '—';
     const date = new Date(dateStr);
-    return date.toLocaleString('en-IN', { 
-        day: '2-digit', 
-        month: 'short', 
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
+    return date.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
     });
   };
 
@@ -347,7 +347,7 @@ const ShipmentDetails = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={() => navigate(-1)}
             className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all"
           >
@@ -382,7 +382,7 @@ const ShipmentDetails = () => {
 
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Main Info Column */}
-        <div className="lg:col-span-3 space-y-5">
+        <div className="lg:col-span-3 ">
           {/* Summary Card */}
           <Card className="p-0 overflow-hidden border-slate-200 shadow-sm">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 divide-y md:divide-y-0 md:divide-x divide-slate-100">
@@ -467,7 +467,7 @@ const ShipmentDetails = () => {
               <div className="flex items-center justify-between max-w-5xl mx-auto relative">
                 {/* Connection Line */}
                 <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-100 -translate-y-1/2 z-0" />
-                
+
                 {statusSteps.map((step, idx) => (
                   <div key={idx} className="relative z-10 flex flex-col items-center gap-3">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center border-4 border-white shadow-sm transition-all
@@ -487,9 +487,9 @@ const ShipmentDetails = () => {
                     </div>
                     {idx < statusSteps.length - 1 && (
                       <div className="absolute top-1/2 left-[120%] w-[160%] h-0.5 -translate-y-1/2 hidden md:block">
-                        <div className={`h-full transition-all duration-500 ${step.status === 'completed' && statusSteps[idx+1].status === 'completed' ? 'bg-emerald-500' : 'bg-slate-100'}`} />
+                        <div className={`h-full transition-all duration-500 ${step.status === 'completed' && statusSteps[idx + 1].status === 'completed' ? 'bg-emerald-500' : 'bg-slate-100'}`} />
                         <ChevronRight className={`absolute top-1/2 right-0 -translate-y-1/2 w-4 h-4 
-                          ${step.status === 'completed' && statusSteps[idx+1].status === 'completed' ? 'text-emerald-500' : 'text-slate-200'}`} 
+                          ${step.status === 'completed' && statusSteps[idx + 1].status === 'completed' ? 'text-emerald-500' : 'text-slate-200'}`}
                         />
                       </div>
                     )}
@@ -581,7 +581,7 @@ const ShipmentDetails = () => {
             </div>
 
             {/* Side Column */}
-            <div className="space-y-5">
+            <div className="">
               {/* Transport Details */}
               <Card className="p-0 border-slate-200 shadow-sm overflow-hidden">
                 <div className="p-3 border-b border-slate-100 bg-emerald-50/30 flex items-center gap-3">
@@ -625,7 +625,7 @@ const ShipmentDetails = () => {
                   <h3 className="text-sm font-bold text-slate-900">Attachments</h3>
                 </div>
                 <div className="p-4 space-y-3">
-                  <div 
+                  <div
                     onClick={handlePrintChallan}
                     className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 group hover:border-blue-200 transition-all cursor-pointer"
                   >
