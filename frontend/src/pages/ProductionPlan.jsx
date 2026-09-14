@@ -935,14 +935,16 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               String(r.drawing_no || '').trim() === String(itemInReady.drawing_no || '').trim() &&
               String(r.sales_order_id || r.order_id) === String(itemInReady.sales_order_id || itemInReady.order_id)
             );
-            const resolvedItem = matchingReadyItem || itemInReady;
-            const salesOrderItemId = resolvedItem.id || resolvedItem.sales_order_item_id || resolvedItem.order_item_id;
+            const resolvedItem = itemInReady || matchingReadyItem;
+            const salesOrderItemId = itemInReady.sales_order_item_id || itemInReady.id || matchingReadyItem?.sales_order_item_id || matchingReadyItem?.id || itemInReady.order_item_id;
             const orderNo = itemInReady.order_no || data.order_no;
             const projectName = itemInReady.project_name || data.project_name;
 
             let bomDetails = { materials: [], components: [], operations: [] };
             try {
-              const bomResp = await fetch(`${API_BASE}/production-plans/item-bom/${salesOrderItemId}`, {
+              const drawingParam = encodeURIComponent(itemInReady.drawing_no || '');
+              const itemCodeParam = encodeURIComponent(itemInReady.item_code || '');
+              const bomResp = await fetch(`${API_BASE}/production-plans/item-bom/${salesOrderItemId}?drawing_no=${drawingParam}&item_code=${itemCodeParam}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
               if (bomResp.ok) {
@@ -1065,9 +1067,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         String(r.drawing_no || '').trim() === String(itemInReady.drawing_no || '').trim() &&
         String(r.sales_order_id || r.order_id) === String(itemInReady.sales_order_id || itemInReady.order_id)
       );
-      const resolvedItem = matchingReadyItem || itemInReady;
+      const resolvedItem = itemInReady || matchingReadyItem;
       // Clear existing items and only add this one
-      const salesOrderItemId = resolvedItem.id || resolvedItem.sales_order_item_id || resolvedItem.order_item_id;
+      const salesOrderItemId = itemInReady.sales_order_item_id || itemInReady.id || matchingReadyItem?.sales_order_item_id || matchingReadyItem?.id || itemInReady.order_item_id;
       const orderNo = itemInReady.order_no || selectedOrderDetails?.order_no;
       const projectName = itemInReady.project_name || selectedOrderDetails?.project_name;
 
@@ -1075,7 +1077,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         let bomDetails = { materials: [], components: [], operations: [] };
         try {
           const token = localStorage.getItem('authToken');
-          const response = await fetch(`${API_BASE}/production-plans/item-bom/${salesOrderItemId}`, {
+          const drawingParam = encodeURIComponent(itemInReady.drawing_no || '');
+          const itemCodeParam = encodeURIComponent(itemInReady.item_code || '');
+          const response = await fetch(`${API_BASE}/production-plans/item-bom/${salesOrderItemId}?drawing_no=${drawingParam}&item_code=${itemCodeParam}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (response.ok) {
@@ -1132,7 +1136,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       let bomDetails = { materials: [], components: [], operations: [] };
       try {
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/production-plans/item-bom/${salesOrderItemId}`, {
+        const drawingParam = encodeURIComponent(item.drawing_no || '');
+        const itemCodeParam = encodeURIComponent(item.item_code || '');
+        const response = await fetch(`${API_BASE}/production-plans/item-bom/${salesOrderItemId}?drawing_no=${drawingParam}&item_code=${itemCodeParam}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {

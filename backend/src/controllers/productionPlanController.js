@@ -76,7 +76,11 @@ const getNextPlanCode = async (req, res, next) => {
 
 const getItemBOMDetails = async (req, res, next) => {
   try {
-    const bomDetails = await productionPlanService.getItemBOMDetails(req.params.salesOrderItemId);
+    const bomDetails = await productionPlanService.getItemBOMDetails(
+      req.params.salesOrderItemId,
+      req.query.drawing_no,
+      req.query.item_code
+    );
     if (!bomDetails) return res.status(404).json({ message: 'BOM details not found' });
     res.json(bomDetails);
   } catch (error) {
