@@ -1442,7 +1442,7 @@ function App() {
               <h1 className="text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
                 SPTECHPIONEER
               </h1>
-              <p className="text-xs font-bold text-indigo-600 tracking-wider uppercase">
+              <p className="text-xs font-bold text-indigo-600 tracking-wider uppercase bg-red-500">
                 Sales & Operations Enterprise Platform
               </p>
             </div>
@@ -1505,8 +1505,8 @@ function App() {
                   type="button"
                   onClick={() => setAuthMode('login')}
                   className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 ${authMode === 'login'
-                      ? 'bg-white text-indigo-600 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-900'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900'
                     }`}
                 >
                   <LogIn className="w-3.5 h-3.5" />
@@ -1516,8 +1516,8 @@ function App() {
                   type="button"
                   onClick={() => { setAuthMode('signup'); loadDepartmentsAndRoles() }}
                   className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 ${authMode === 'signup'
-                      ? 'bg-white text-indigo-600 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-900'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900'
                     }`}
                 >
                   <Users className="w-3.5 h-3.5" />
@@ -1684,8 +1684,8 @@ function App() {
               {/* Toast Notification */}
               {toast && (
                 <div className={`mt-4 p-3 rounded-xl border text-xs font-semibold ${toast.includes('success') || toast.includes('Welcome')
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                    : 'bg-rose-50 border-rose-200 text-rose-700'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-rose-50 border-rose-200 text-rose-700'
                   }`}>
                   {toast}
                 </div>
@@ -1840,8 +1840,8 @@ function App() {
                         }))
                       }}
                       className={`flex items-center gap-3 w-full p-2 rounded text-xs transition-all duration-200 group relative ${hasActiveChild
-                          ? 'text-rose-600 bg-rose-50/10 font-medium'
-                          : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
+                        ? 'text-rose-600 bg-rose-50/10 font-medium'
+                        : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
                         }`}
                     >
                       {iconMap[item.icon] && (() => {
@@ -1882,10 +1882,10 @@ function App() {
                                 }
                               }}
                               className={`flex items-center gap-3 w-full p-2 rounded text-xs transition-all duration-200 group relative ${isChildActive
-                                  ? 'bg-rose-50 text-rose-600 shadow-sm'
-                                  : isChildDisabled
-                                    ? 'text-slate-300 cursor-not-allowed'
-                                    : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
+                                ? 'bg-rose-50 text-rose-600 shadow-sm'
+                                : isChildDisabled
+                                  ? 'text-slate-300 cursor-not-allowed'
+                                  : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
                                 }`}
                               disabled={isChildDisabled}
                             >
@@ -1931,10 +1931,10 @@ function App() {
                     }
                   }}
                   className={`flex items-center gap-3 w-full p-2 rounded text-xs  transition-all duration-200 group relative ${isActive
-                      ? 'bg-rose-50 text-rose-600 shadow-sm'
-                      : isDisabled
-                        ? 'text-slate-300 cursor-not-allowed'
-                        : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
+                    ? 'bg-rose-50 text-rose-600 shadow-sm'
+                    : isDisabled
+                      ? 'text-slate-300 cursor-not-allowed'
+                      : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
                     }`}
                   disabled={isDisabled}
                 >

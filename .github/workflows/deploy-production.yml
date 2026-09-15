@@ -3,7 +3,7 @@ name: Deploy Aluminium ERP Prod
 on:
   push:
     branches:
-      - production_branch
+      - main
   workflow_dispatch:
 
 jobs:
