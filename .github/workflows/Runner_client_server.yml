@@ -9,7 +9,10 @@ on:
 
 jobs:
   deploy:
-    runs-on: sp-techpioneer-Precision-Tower-3420
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
 
     env:
       PUPPETEER_SKIP_DOWNLOAD: "true"
