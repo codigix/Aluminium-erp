@@ -1442,7 +1442,7 @@ function App() {
               <h1 className="text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
                 SPTECHPIONEER
               </h1>
-              <p className="text-xs font-bold text-indigo-600 tracking-wider uppercase bg-red-500">
+              <p className="text-xs font-bold text-indigo-600 tracking-wider uppercase bg-green-500">
                 Sales & Operations Enterprise Platform
               </p>
             </div>
