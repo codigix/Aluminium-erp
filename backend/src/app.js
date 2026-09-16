@@ -55,6 +55,8 @@ const secureIdRoutes = require('./routes/secureIdRoutes');
 const oeeAnalysisRoutes = require('./routes/oeeAnalysisRoutes');
 const machineAnalysisRoutes = require('./routes/machineAnalysisRoutes');
 const adminCompanyMasterRoutes = require('./routes/adminCompanyMasterRoutes');
+const backupRoutes = require('./routes/backupRoutes');
+const { startScheduler } = require('./utils/backupScheduler');
 const emailReceiver = require('./utils/realEmailReceiver');
 const grnService = require('./services/grnService');
 const qcService = require('./services/qcInspectionsService');
@@ -173,6 +175,10 @@ privateRouter.use('/project-analysis', projectAnalysisRoutes);
 privateRouter.use('/oee-analysis', oeeAnalysisRoutes);
 privateRouter.use('/machine-analysis', machineAnalysisRoutes);
 privateRouter.use('/admin-company-master', adminCompanyMasterRoutes);
+privateRouter.use('/backups', backupRoutes);
+
+// Start the daily backup scheduler
+startScheduler();
 
 const apiRouter = express.Router();
 apiRouter.use(publicRouter);
