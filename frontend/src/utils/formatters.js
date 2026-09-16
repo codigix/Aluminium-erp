@@ -7,13 +7,13 @@
  */
 export const cleanProjectName = (name, clientName = '') => {
   if (!name) return clientName || 'Internal';
-  
+
   // Replace "Design Review - Drawing" with "Project"
   let cleaned = name.replace(/Design Review - Drawing\s+/i, 'Project ');
-  
+
   // Remove "for [Client]" part
   cleaned = cleaned.split(/\s+for\s+/i)[0];
-  
+
   return cleaned;
 };
 
@@ -44,7 +44,7 @@ export const formatDimensions = (item) => {
   // Determine shape
   let shape = (
     explicitShape ? explicitShape :
-    (isPlateMaterial ? matNameStr : (matNameStr || item.item_code || ''))
+      (isPlateMaterial ? matNameStr : (matNameStr || item.item_code || ''))
   ).toLowerCase();
 
   let matchedShape = '';

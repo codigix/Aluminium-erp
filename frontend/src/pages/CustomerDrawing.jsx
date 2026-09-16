@@ -18,8 +18,19 @@ const toast = {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
+const generateRowId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 const getEmptyDrawingRow = () => ({
-  id: crypto.randomUUID(),
+  id: generateRowId(),
   drawing_no: '',
   revision: '',
   qty: 1,
@@ -844,7 +855,7 @@ const CustomerDrawing = () => {
         const pathVal = item.file_path || item.drawing_pdf || '';
         const existingFiles = pathVal.split(',').filter(Boolean);
         return {
-          id: item.id || crypto.randomUUID(),
+          id: item.id || generateRowId(),
           drawing_id: item.drawing_id || item.drawing_master_id,
           drawing_no: item.drawing_no || '',
           revision: item.revision || item.revision_no || '',
