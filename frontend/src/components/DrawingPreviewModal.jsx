@@ -127,10 +127,14 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing, onOpenAttachments }) =>
     </div>
   );
 
-  // PDF Viewer URL (Google Docs viewer for better compatibility)
-  const pdfViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(previewFile.url)}&embedded=true`;
-
-  // CAD Viewer (ShareCAD.org free viewer)
+  // CAD Viewer (ShareCAD.org free viewer for public domains only)
+  const isLocalOrPrivateHost = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    /^192\.168\./.test(window.location.hostname) ||
+    /^10\./.test(window.location.hostname) ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(window.location.hostname)
+  );
   const cadViewerUrl = `https://sharecad.org/cadframe/load?url=${encodeURIComponent(previewFile.url)}`;
 
   return (
@@ -267,38 +271,55 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing, onOpenAttachments }) =>
               </div>
             ) : previewFile.type === 'pdf' ? (
               <div className="w-full h-full relative">
-                <object
-                  data={previewFile.url}
-                  type="application/pdf"
+                <iframe
+                  src={`${previewFile.url}#toolbar=1`}
+                  key={previewFile.url}
+                  title={previewFile.name}
                   className="w-full h-full border-0 bg-white"
-                >
-                  <iframe
-                    src={pdfViewerUrl}
-                    key={previewFile.url}
-                    title={previewFile.name}
-                    className="w-full h-full border-0 bg-white"
-                    loading="lazy"
-                  />
-                </object>
-                <div className="absolute inset-0 pointer-events-none  group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
-                  <div className="bg-white/90 backdrop-blur p-1.5 rounded  shadow-lg border border-slate-200 pointer-events-auto">
-                    <p className="text-xs  text-slate-500">PDF issue? <a href={previewFile.url} target="_blank" rel="noreferrer" className="text-indigo-600 underline">Open directly</a></p>
+                />
+                <div className="absolute inset-0 pointer-events-none group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
+                  <div className="bg-white/90 backdrop-blur p-1.5 rounded shadow-lg border border-slate-200 pointer-events-auto">
+                    <p className="text-xs text-slate-500">PDF issue? <a href={previewFile.url} target="_blank" rel="noreferrer" className="text-indigo-600 underline font-semibold">Open directly</a></p>
                   </div>
                 </div>
               </div>
             ) : previewFile.type === 'cad' ? (
               <div className="w-full h-full relative">
-                <iframe
-                  src={cadViewerUrl}
-                  title={previewFile.name}
-                  className="w-full h-full border-0 bg-white"
-                  loading="lazy"
-                />
-                <div className="absolute inset-0 pointer-events-none  group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
-                  <div className="bg-white/90 backdrop-blur p-1.5 rounded  shadow-lg border border-slate-200 pointer-events-auto">
-                    <p className="text-xs  text-slate-500">CAD Preview by ShareCAD. <a href={previewFile.url} download className="text-indigo-600 underline">Download File</a></p>
+                {isLocalOrPrivateHost ? (
+                  <div className="w-full h-full flex items-center justify-center p-6 text-center">
+                    <div className="max-w-md p-6 bg-white rounded border border-slate-200 shadow-sm">
+                      <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <FileText className="w-6 h-6 text-indigo-600" />
+                      </div>
+                      <h3 className="text-slate-900 font-bold text-sm mb-2">CAD File (DWG)</h3>
+                      <p className="text-slate-600 text-xs mb-6 leading-relaxed">
+                        DWG files cannot be rendered directly inside the browser on a local office network. Please download the file to open in AutoCAD or your CAD software.
+                      </p>
+                      <a
+                        href={previewFile.url}
+                        download
+                        className="inline-flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+                      >
+                        <Download size={14} />
+                        Download DWG File
+                      </a>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    <iframe
+                      src={cadViewerUrl}
+                      title={previewFile.name}
+                      className="w-full h-full border-0 bg-white"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 pointer-events-none group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
+                      <div className="bg-white/90 backdrop-blur p-1.5 rounded shadow-lg border border-slate-200 pointer-events-auto">
+                        <p className="text-xs text-slate-500">CAD Preview by ShareCAD. <a href={previewFile.url} download className="text-indigo-600 underline">Download File</a></p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ) : previewFile.type === 'nonPreviewableCad' ? (
               <div className="w-full h-full flex items-center justify-center p-6 text-center">
