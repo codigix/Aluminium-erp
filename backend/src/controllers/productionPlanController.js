@@ -133,6 +133,24 @@ const removeManualMaterial = async (req, res, next) => {
   }
 };
 
+const getBulkCreationPreview = async (req, res, next) => {
+  try {
+    const preview = await productionPlanService.getBulkCreationPreview(req.params.id);
+    res.json(preview);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const bulkCreateProductionPlans = async (req, res, next) => {
+  try {
+    const result = await productionPlanService.bulkCreateProductionPlans(req.body, req.user.id);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listProductionPlans,
   getProductionPlanById,
@@ -147,5 +165,7 @@ module.exports = {
   createMaterialRequestFromPlan,
   getMaterialRequestItemsForPlan,
   addManualMaterial,
-  removeManualMaterial
+  removeManualMaterial,
+  getBulkCreationPreview,
+  bulkCreateProductionPlans
 };

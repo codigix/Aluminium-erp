@@ -10,8 +10,10 @@ router.get('/next-code', authorize(['PROD_VIEW']), productionPlanController.getN
 router.get('/ready-items', authorize(['PROD_VIEW']), productionPlanController.getReadySalesOrderItems);
 router.get('/ready-orders', authorize(['PROD_VIEW']), productionPlanController.getProductionReadySalesOrders);
 router.get('/sales-order/:id', authorize(['PROD_VIEW']), productionPlanController.getSalesOrderFullDetails);
+router.get('/sales-order/:id/bulk-preview', authorize(['PROD_VIEW']), productionPlanController.getBulkCreationPreview);
 router.get('/item-bom/:salesOrderItemId', authorize(['PROD_VIEW']), productionPlanController.getItemBOMDetails);
 router.get('/:id', authorize(['PROD_VIEW']), productionPlanController.getProductionPlanById);
+router.post('/bulk', authorize(['PROD_MANAGE']), productionPlanController.bulkCreateProductionPlans);
 router.post('/', authorize(['PROD_MANAGE']), productionPlanController.createProductionPlan);
 router.put('/:id', authorize(['PROD_MANAGE']), productionPlanController.updateProductionPlan);
 router.post('/transmit-mr/:id', authorize(['PROD_MANAGE']), productionPlanController.createMaterialRequestFromPlan);

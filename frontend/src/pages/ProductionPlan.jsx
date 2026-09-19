@@ -79,6 +79,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const [newItemShapeId, setNewItemShapeId] = useState('');
   const [newItemDensity, setNewItemDensity] = useState(0);
 
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkPreviewData, setBulkPreviewData] = useState(null);
+  const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
+  const [bulkCreatingLoading, setBulkCreatingLoading] = useState(false);
+
   const [newPlan, setNewPlan] = useState({
     planCode: '',
     planDate: new Date().toISOString().split('T')[0],
@@ -1876,13 +1881,25 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               {isViewing ? 'Close' : 'Discard'}
             </Button>
             {!isViewing && (
-              <Button
-                variant="primary"
-                onClick={handleSubmit}
-                icon={Save}
-              >
-                Save Strategy
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="primary"
+                  onClick={handleSubmit}
+                  icon={Save}
+                  title="Create one Production Plan for the selected Drawing"
+                >
+                  Create Production Plan
+                </Button>
+                <button
+                  type="button"
+                  onClick={handleBulkCreateClick}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
+                  title="Automatically fetch all Drawings of this Sales Order and create separate Production Plans in bulk"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Bulk Create Production Plans</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -2033,6 +2050,29 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <p className="text-xs text-indigo-600 mt-1 ">Quantity fetched from Design Order</p>
                   </FormControl>
                 </div>
+
+                {!isViewing && (
+                  <div className="flex flex-wrap items-center gap-3 mt-4 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={handleSubmit}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
+                      title="Create one Production Plan for the selected Drawing"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Create Production Plan</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBulkCreateClick}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-indigo-100 transition-all active:scale-95 cursor-pointer"
+                      title="Automatically fetch all Drawings of this Sales Order and create separate Production Plans in bulk"
+                    >
+                      <Layers className="w-4 h-4" />
+                      <span>Bulk Create Production Plans</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </Card>
 
@@ -2453,16 +2493,31 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               Transmit MR
             </button>
             {!isViewing && (
-              <button
-                onClick={handleSubmit}
-                className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded hover:bg-slate-800 text-xs  transition-all shadow-lg shadow-slate-200"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                {newPlan.id ? 'Update Strategic Plan' : 'Commit Strategy'}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleSubmit}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded hover:bg-slate-800 text-xs transition-all shadow-md shadow-slate-200 font-semibold active:scale-95 cursor-pointer"
+                  title="Create one Production Plan for the selected Drawing"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  {newPlan.id ? 'Update Production Plan' : 'Create Production Plan'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkCreateClick}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded hover:from-indigo-700 hover:to-blue-700 text-xs transition-all shadow-md shadow-indigo-100 font-semibold active:scale-95 cursor-pointer"
+                  title="Automatically fetch all Drawings of this Sales Order and create separate Production Plans in bulk"
+                >
+                  <Layers className="w-4 h-4" />
+                  <span>Bulk Create Production Plans</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
+
+        {/* Bulk Production Plan Creation Review Modal */}
+        {renderBulkModal()}
       </div>
     );
   };
@@ -2579,6 +2634,327 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       errorToast('An unexpected error occurred');
     }
   };
+
+  const handleBulkCreateClick = async () => {
+    console.log("Bulk Create clicked");
+    console.log("Selected Sales Order ID:", selectedOrderId);
+    console.log("Selected Sales Order:", selectedOrderDetails);
+
+    if (!selectedOrderId) {
+      errorToast("Please select a Source Sales Order first.");
+      return;
+    }
+
+    setBulkModalOpen(true);
+    setBulkPreviewLoading(true);
+    setBulkPreviewData(null);
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/production-plans/sales-order/${selectedOrderId}/bulk-preview`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      let previewData = null;
+      if (response.ok) {
+        previewData = await response.json();
+      } else {
+        const rawBoms = availableBoms.length > 0 ? availableBoms : (selectedOrderDetails?.items || []);
+        const drawings = rawBoms.map(bom => {
+          const dwgNo = (bom.drawing_no || bom.bom_no || bom.item_code || '').trim();
+          const existing = plans.find(p =>
+            String(p.sales_order_id) === String(selectedOrderId) &&
+            String(p.bom_no).trim().toLowerCase() === String(dwgNo).trim().toLowerCase()
+          );
+          return {
+            salesOrderItemId: bom.id || bom.sales_order_item_id || bom.order_item_id,
+            drawingNo: dwgNo,
+            itemCode: bom.item_code,
+            description: bom.description,
+            targetQty: parseFloat(bom.quantity || bom.total_qty || bom.design_qty || 1),
+            existingPlanCode: existing ? existing.plan_code : null,
+            status: existing ? 'ALREADY_EXISTS' : 'READY',
+            statusText: existing ? `Already Exists (${existing.plan_code})` : 'Ready for Creation'
+          };
+        });
+        previewData = {
+          orderNo: selectedOrderDetails?.order_no || 'Selected Order',
+          companyName: selectedOrderDetails?.company_name || selectedOrderDetails?.client_name || '',
+          totalCount: drawings.length,
+          readyCount: drawings.filter(d => d.status === 'READY').length,
+          alreadyExistsCount: drawings.filter(d => d.status === 'ALREADY_EXISTS').length,
+          missingBomCount: 0,
+          drawings
+        };
+      }
+
+      console.log("Sales Order Items:", previewData?.drawings || []);
+      console.log("Bulk Preview:", previewData);
+
+      if (!previewData?.drawings || previewData.drawings.length === 0) {
+        errorToast("No drawings found for this Sales Order.");
+      }
+      setBulkPreviewData(previewData);
+    } catch (err) {
+      console.error('Error fetching bulk preview:', err);
+      errorToast('Failed to load drawings for bulk preview');
+    } finally {
+      setBulkPreviewLoading(false);
+    }
+  };
+
+  const handleConfirmBulkCreate = async () => {
+    if (!selectedOrderId) return;
+    setBulkCreatingLoading(true);
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const today = new Date().toISOString().split('T')[0];
+      const payload = {
+        salesOrderId: selectedOrderId,
+        planDate: newPlan.planDate || today,
+        namingSeries: newPlan.namingSeries || 'PP'
+      };
+
+      const response = await fetch(`${API_BASE}/production-plans/bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.message || 'Failed to bulk create production plans');
+      }
+
+      setBulkModalOpen(false);
+
+      const createdCount = resData.summary?.created ?? resData.created?.length ?? 0;
+      const alreadyExistsCount = resData.summary?.alreadyExists ?? resData.alreadyExists?.length ?? 0;
+      const failedCount = resData.summary?.failed ?? resData.failed?.length ?? 0;
+
+      await Swal.fire({
+        icon: createdCount > 0 ? 'success' : (failedCount > 0 ? 'warning' : 'info'),
+        title: 'Bulk Creation Completed',
+        html: `
+          <div style="text-align: left; font-size: 13px; line-height: 1.5;">
+            <div style="padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 12px;">
+              <p style="font-weight: 700; color: #1e293b; margin: 0 0 8px 0;">
+                Order: ${bulkPreviewData?.orderNo || selectedOrderDetails?.order_no || 'Selected Sales Order'}
+              </p>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center;">
+                <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 8px;">
+                  <div style="font-size: 18px; font-weight: 700; color: #047857;">${createdCount}</div>
+                  <div style="font-size: 11px; color: #065f46; font-weight: 600;">Created</div>
+                </div>
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 8px;">
+                  <div style="font-size: 18px; font-weight: 700; color: #1d4ed8;">${alreadyExistsCount}</div>
+                  <div style="font-size: 11px; color: #1e40af; font-weight: 600;">Already Exists</div>
+                </div>
+                <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 8px;">
+                  <div style="font-size: 18px; font-weight: 700; color: #be123c;">${failedCount}</div>
+                  <div style="font-size: 11px; color: #9f1239; font-weight: 600;">Failed</div>
+                </div>
+              </div>
+            </div>
+            ${resData.created?.length > 0 ? `
+              <div style="margin-bottom: 10px;">
+                <p style="font-size: 11px; font-weight: 700; color: #047857; text-transform: uppercase; margin: 0 0 4px 0;">Newly Created Plans:</p>
+                <div style="max-height: 100px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; background: #fff;">
+                  ${resData.created.map(c => `<div style="padding: 4px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;"><span><strong>${c.planCode}</strong>: ${c.drawingNo}</span><span style="color: #64748b;">Qty: ${c.targetQty}</span></div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            ${resData.alreadyExists?.length > 0 ? `
+              <div style="margin-bottom: 10px;">
+                <p style="font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase; margin: 0 0 4px 0;">Already Existed (Skipped):</p>
+                <div style="max-height: 90px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; background: #fff;">
+                  ${resData.alreadyExists.map(a => `<div style="padding: 3px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;"><span>${a.drawingNo}</span><span style="color: #1d4ed8; font-family: monospace;">${a.existingPlanCode || 'Existing'}</span></div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            ${resData.failed?.length > 0 ? `
+              <div>
+                <p style="font-size: 11px; font-weight: 700; color: #be123c; text-transform: uppercase; margin: 0 0 4px 0;">Failed / Missing BOM:</p>
+                <div style="max-height: 90px; overflow-y: auto; border: 1px solid #fecdd3; border-radius: 6px; padding: 4px 8px; background: #fff5f5;">
+                  ${resData.failed.map(f => `<div style="padding: 3px 0; color: #9f1239;"><strong>${f.drawingNo}</strong>: ${f.reason}</div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `,
+        confirmButtonText: 'View Production Plans',
+        confirmButtonColor: '#4f46e5'
+      });
+
+      navigate(`${deptPrefix}/production-plan`);
+      fetchPlans();
+    } catch (err) {
+      console.error('Bulk create error:', err);
+      errorToast(err.message || 'Error occurred during bulk creation');
+    } finally {
+      setBulkCreatingLoading(false);
+    }
+  };
+
+  const renderBulkModal = () => (
+    <Modal
+      isOpen={bulkModalOpen}
+      onClose={() => !bulkCreatingLoading && setBulkModalOpen(false)}
+      title={
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100">
+            <Layers className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Bulk Create Production Plans</h2>
+            <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+              <span>Sales Order: <strong className="text-slate-800 font-semibold">{bulkPreviewData?.orderNo || selectedOrderDetails?.order_no || 'Selected Order'}</strong></span>
+              {(bulkPreviewData?.companyName || selectedOrderDetails?.company_name || selectedOrderDetails?.client_name) && (
+                <>
+                  <span>•</span>
+                  <span>Customer: <strong className="text-slate-700">{bulkPreviewData?.companyName || selectedOrderDetails?.company_name || selectedOrderDetails?.client_name}</strong></span>
+                </>
+              )}
+              <span>•</span>
+              <span>Total Drawings: <strong className="text-slate-800 font-semibold">{bulkPreviewData?.totalCount ?? 0}</strong></span>
+            </div>
+          </div>
+        </div>
+      }
+      size="4xl"
+    >
+      <div className="space-y-4 py-1">
+        {bulkPreviewLoading ? (
+          <div className="py-16 text-center text-slate-500 space-y-2">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto text-indigo-600" />
+            <p className="text-xs font-medium">Fetching all drawings and validating BOM readiness...</p>
+          </div>
+        ) : (
+          <>
+            {/* Summary Statistics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                <span className="text-slate-500 block text-[11px]">Total Drawings</span>
+                <span className="text-base font-bold text-slate-800">{bulkPreviewData?.totalCount || 0}</span>
+              </div>
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <span className="text-emerald-700 block text-[11px] font-semibold">Ready for Creation</span>
+                <span className="text-base font-bold text-emerald-800">{bulkPreviewData?.readyCount || 0}</span>
+              </div>
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+                <span className="text-blue-700 block text-[11px] font-semibold">Already Exists</span>
+                <span className="text-base font-bold text-blue-800">{bulkPreviewData?.alreadyExistsCount || 0}</span>
+              </div>
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                <span className="text-amber-700 block text-[11px] font-semibold">Missing BOM</span>
+                <span className="text-base font-bold text-amber-800">{bulkPreviewData?.missingBomCount || 0}</span>
+              </div>
+            </div>
+
+            {/* Drawings Review Table */}
+            <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[50vh] overflow-y-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-semibold border-b border-slate-200 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 w-12 text-center">No</th>
+                    <th className="px-3 py-2">Drawing No.</th>
+                    <th className="px-3 py-2">Description</th>
+                    <th className="px-3 py-2 text-center w-28">Qty</th>
+                    <th className="px-3 py-2 text-center w-40">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {bulkPreviewData?.drawings?.length > 0 ? (
+                    bulkPreviewData.drawings.map((dwg, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-3 py-2.5 text-center text-slate-400 font-mono">{idx + 1}</td>
+                        <td className="px-3 py-2.5">
+                          <span className="font-mono font-bold text-slate-800">{dwg.drawingNo}</span>
+                          {dwg.itemCode && dwg.itemCode !== dwg.drawingNo && (
+                            <span className="block text-[11px] text-slate-400 font-normal">{dwg.itemCode}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-600 max-w-[240px] truncate" title={dwg.description}>
+                          {dwg.description || '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-center font-bold text-slate-700">
+                          {dwg.targetQty} <span className="text-[10px] text-slate-400 font-normal">{dwg.unit || 'Nos'}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          {dwg.status === 'READY' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              ✓ Ready
+                            </span>
+                          )}
+                          {dwg.status === 'ALREADY_EXISTS' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200" title={`Already planned in ${dwg.existingPlanCode}`}>
+                              ℹ️ Already Exists ({dwg.existingPlanCode || 'Exists'})
+                            </span>
+                          )}
+                          {dwg.status === 'MISSING_BOM' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title="BOM is missing or has no materials/operations">
+                              ⚠️ Missing BOM
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="px-3 py-8 text-center text-slate-400">
+                        No drawings found for this Sales Order.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Informational Guidance */}
+            <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg text-xs text-slate-600 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+              <div className="text-[11px] leading-relaxed">
+                Clicking <strong>Confirm & Bulk Create Production Plans</strong> will automatically generate individual, standalone Production Plan records (e.g. <code className="font-mono text-indigo-700">PP-XXXX</code>) for all <strong className="text-emerald-700">{bulkPreviewData?.readyCount || 0} ready drawings</strong>. Drawings that already have plans will be skipped safely without duplicates.
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button
+                variant="secondary"
+                onClick={() => setBulkModalOpen(false)}
+                disabled={bulkCreatingLoading}
+              >
+                Cancel
+              </Button>
+              <button
+                type="button"
+                onClick={handleConfirmBulkCreate}
+                disabled={bulkCreatingLoading || (bulkPreviewData?.readyCount === 0)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {bulkCreatingLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Creating Production Plans...</span>
+                  </>
+                ) : (
+                  <>
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Confirm & Bulk Create Production Plans ({bulkPreviewData?.readyCount || 0})</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
 
   const filteredPlans = plans.filter(plan =>
     plan.plan_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -3876,6 +4252,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           </div>
         </div>
       </Modal>
+
+      {/* Bulk Production Plan Creation Review Modal */}
+      {renderBulkModal()}
     </div>
   );
 };

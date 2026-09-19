@@ -351,12 +351,25 @@ const createProductionPlan = async (planData, createdBy) => {
       const relatedIds = relatedIdsRows.map(r => r.id);
 
       if (relatedIds.length > 0) {
-        const [existing] = await connection.query(
-          'SELECT id FROM production_plans WHERE sales_order_id IN (?) AND TRIM(LOWER(bom_no)) = TRIM(LOWER(?))',
-          [relatedIds, finalBomNo]
-        );
-        if (existing.length > 0) {
-          throw new Error('Production Plan already exists for the selected Sales Order and Drawing. Duplicate Production Plans are not allowed.');
+        const targetSoiId = finishedGoods?.[0]?.salesOrderItemId;
+        if (targetSoiId) {
+          const [existing] = await connection.query(
+            `SELECT ppi.id FROM production_plan_items ppi
+             JOIN production_plans pp ON ppi.plan_id = pp.id
+             WHERE pp.sales_order_id IN (?) AND ppi.sales_order_item_id = ?`,
+            [relatedIds, targetSoiId]
+          );
+          if (existing.length > 0) {
+            throw new Error('Production Plan already exists for this Sales Order item. Duplicate Production Plans are not allowed.');
+          }
+        } else if (finalBomNo) {
+          const [existing] = await connection.query(
+            'SELECT id FROM production_plans WHERE sales_order_id IN (?) AND TRIM(LOWER(bom_no)) = TRIM(LOWER(?))',
+            [relatedIds, finalBomNo]
+          );
+          if (existing.length > 0) {
+            throw new Error('Production Plan already exists for the selected Sales Order and Drawing. Duplicate Production Plans are not allowed.');
+          }
         }
       }
     }
@@ -915,7 +928,7 @@ const getSalesOrderFullDetails = async (id) => {
                 soi.created_at,
                 soi.parent_bom_id as parent_bom_id,
                 COALESCE(planned.already_planned_qty, 0) as already_planned_qty,
-                ROW_NUMBER() OVER (PARTITION BY TRIM(oi.drawing_no), TRIM(oi.item_code) ORDER BY soi.bom_cost DESC, soi.id DESC) as rn
+                ROW_NUMBER() OVER (PARTITION BY oi.id ORDER BY soi.bom_cost DESC, soi.id DESC) as rn
          FROM order_items oi
          LEFT JOIN sales_order_items soi ON (
            TRIM(oi.drawing_no) = TRIM(soi.drawing_no) 
@@ -1005,7 +1018,7 @@ const getSalesOrderFullDetails = async (id) => {
               soi.rejection_reason,
               soi.parent_bom_id as parent_bom_id,
               COALESCE(planned.already_planned_qty, 0) as already_planned_qty,
-              ROW_NUMBER() OVER (PARTITION BY TRIM(soi.drawing_no), TRIM(soi.item_code) ORDER BY soi.bom_cost DESC, soi.id DESC) as rn
+              ROW_NUMBER() OVER (PARTITION BY soi.id ORDER BY soi.bom_cost DESC) as rn
        FROM sales_order_items soi
        LEFT JOIN (
          SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
@@ -2848,6 +2861,340 @@ const deleteProductionPlan = async (id) => {
   }
 };
 
+const getBulkCreationPreview = async (salesOrderId) => {
+  const soDetails = await getSalesOrderFullDetails(salesOrderId);
+  if (!soDetails) {
+    throw new Error(`Sales Order with ID ${salesOrderId} not found.`);
+  }
+
+  const [relatedIdsRows] = await pool.query(
+    `SELECT DISTINCT id FROM (
+      SELECT ? as id
+      UNION
+      SELECT so.id FROM sales_orders so
+      JOIN orders o ON (
+        (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+        (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+      )
+      WHERE o.id = ?
+      UNION
+      SELECT o.id FROM orders o
+      JOIN sales_orders so ON (
+        (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+        (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+      )
+      WHERE so.id = ?
+    ) as tmp WHERE id IS NOT NULL`,
+    [salesOrderId, salesOrderId, salesOrderId]
+  );
+  const relatedIds = relatedIdsRows.map(r => r.id);
+
+  // Check existing production plan items for this sales order by sales_order_item_id and bom_no
+  const [existingPlanItems] = await pool.query(
+    `SELECT ppi.sales_order_item_id, ppi.bom_no, ppi.item_code, pp.id as plan_id, pp.plan_code
+     FROM production_plans pp
+     LEFT JOIN production_plan_items ppi ON ppi.plan_id = pp.id
+     WHERE pp.sales_order_id IN (?)`,
+    [relatedIds.length > 0 ? relatedIds : [salesOrderId]]
+  );
+
+  const existingItemIdMap = new Map();
+  const existingBomsMap = new Map();
+  existingPlanItems.forEach(p => {
+    if (p.sales_order_item_id) {
+      existingItemIdMap.set(String(p.sales_order_item_id), p.plan_code);
+    }
+    if (p.bom_no) {
+      existingBomsMap.set(String(p.bom_no).trim().toLowerCase(), p.plan_code);
+    }
+  });
+
+  const rawItems = soDetails.items || [];
+  const drawings = [];
+
+  for (const item of rawItems) {
+    if (!item) continue;
+    if (item.parent_bom_id !== null && item.parent_bom_id !== undefined) continue;
+
+    const code = (item.item_code || '').toUpperCase().trim();
+    const desc = (item.description || '').toUpperCase().trim();
+    const drawingNo = (item.drawing_no || item.bom_no || item.item_code || '').trim();
+
+    if (!code || code === 'XXX' || code === 'NO CODE' || code.includes('NO CODE') || desc.includes('NO CODE') || code.startsWith('XXX-') || code.includes('NO_CODE')) {
+      continue;
+    }
+    if (!drawingNo) continue;
+
+    // Line items can have duplicate Drawing Nos. Every Sales Order line item must remain!
+    const itemId = item.sales_order_item_id || item.id || item.order_item_id;
+
+    // Check duplicate by sales_order_item_id first; fallback to bom_no only if no item id
+    let existingCode = null;
+    if (itemId && existingItemIdMap.has(String(itemId))) {
+      existingCode = existingItemIdMap.get(String(itemId));
+    } else if (!itemId && existingBomsMap.has(drawingNo.toLowerCase())) {
+      existingCode = existingBomsMap.get(drawingNo.toLowerCase());
+    }
+
+    let hasBomData = false;
+    try {
+      const bomDetails = await getItemBOMDetails(itemId, drawingNo, item.item_code);
+      if (bomDetails && ((bomDetails.materials && bomDetails.materials.length > 0) || (bomDetails.components && bomDetails.components.length > 0) || (bomDetails.operations && bomDetails.operations.length > 0))) {
+        hasBomData = true;
+      }
+    } catch {
+      hasBomData = false;
+    }
+
+    let status = 'READY';
+    let statusText = 'Ready for Creation';
+    if (existingCode) {
+      status = 'ALREADY_EXISTS';
+      statusText = `Already Exists (${existingCode})`;
+    } else if (!hasBomData) {
+      status = 'MISSING_BOM';
+      statusText = 'Missing BOM / Operations';
+    }
+
+    drawings.push({
+      salesOrderItemId: itemId,
+      drawingNo,
+      itemCode: item.item_code,
+      description: item.description,
+      targetQty: parseFloat(item.quantity || item.design_qty || 1),
+      unit: item.unit || 'Nos',
+      existingPlanCode: existingCode || null,
+      hasBomData,
+      status,
+      statusText
+    });
+  }
+
+  return {
+    orderNo: soDetails.order_no || soDetails.orderNo,
+    companyName: soDetails.company_name || soDetails.client_name,
+    projectName: soDetails.project_name,
+    totalCount: drawings.length,
+    readyCount: drawings.filter(d => d.status === 'READY').length,
+    alreadyExistsCount: drawings.filter(d => d.status === 'ALREADY_EXISTS').length,
+    missingBomCount: drawings.filter(d => d.status === 'MISSING_BOM').length,
+    drawings
+  };
+};
+
+const bulkCreateProductionPlans = async (payload, createdBy) => {
+  const { salesOrderId, planDate, namingSeries } = payload;
+  if (!salesOrderId) {
+    throw new Error('Sales Order ID is required for bulk creation');
+  }
+
+  const soDetails = await getSalesOrderFullDetails(salesOrderId);
+  if (!soDetails) {
+    throw new Error(`Sales Order with ID ${salesOrderId} not found.`);
+  }
+
+  const [relatedIdsRows] = await pool.query(
+    `SELECT DISTINCT id FROM (
+      SELECT ? as id
+      UNION
+      SELECT so.id FROM sales_orders so
+      JOIN orders o ON (
+        (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+        (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+      )
+      WHERE o.id = ?
+      UNION
+      SELECT o.id FROM orders o
+      JOIN sales_orders so ON (
+        (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+        (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+      )
+      WHERE so.id = ?
+    ) as tmp WHERE id IS NOT NULL`,
+    [salesOrderId, salesOrderId, salesOrderId]
+  );
+  const relatedIds = relatedIdsRows.map(r => r.id);
+
+  // Check existing production plan items for this sales order by sales_order_item_id and bom_no
+  const [existingPlanItems] = await pool.query(
+    `SELECT ppi.sales_order_item_id, ppi.bom_no, ppi.item_code, pp.id as plan_id, pp.plan_code
+     FROM production_plans pp
+     LEFT JOIN production_plan_items ppi ON ppi.plan_id = pp.id
+     WHERE pp.sales_order_id IN (?)`,
+    [relatedIds.length > 0 ? relatedIds : [salesOrderId]]
+  );
+
+  const existingItemIdMap = new Map();
+  const existingBomsMap = new Map();
+  existingPlanItems.forEach(p => {
+    if (p.sales_order_item_id) {
+      existingItemIdMap.set(String(p.sales_order_item_id), p.plan_code);
+    }
+    if (p.bom_no) {
+      existingBomsMap.set(String(p.bom_no).trim().toLowerCase(), p.plan_code);
+    }
+  });
+
+  const rawItems = soDetails.items || [];
+  const candidateDrawings = [];
+
+  for (const item of rawItems) {
+    if (!item) continue;
+    if (item.parent_bom_id !== null && item.parent_bom_id !== undefined) continue;
+
+    const code = (item.item_code || '').toUpperCase().trim();
+    const desc = (item.description || '').toUpperCase().trim();
+    const drawingNo = (item.drawing_no || item.bom_no || item.item_code || '').trim();
+
+    if (!code || code === 'XXX' || code === 'NO CODE' || code.includes('NO CODE') || desc.includes('NO CODE') || code.startsWith('XXX-') || code.includes('NO_CODE')) {
+      continue;
+    }
+    if (!drawingNo) continue;
+
+    // Do NOT remove duplicates based on Drawing No - keep every line item
+    candidateDrawings.push(item);
+  }
+
+  const created = [];
+  const alreadyExists = [];
+  const failed = [];
+  const today = new Date().toISOString().split('T')[0];
+
+  for (const item of candidateDrawings) {
+    const drawingNo = (item.drawing_no || item.bom_no || item.item_code || '').trim();
+    const targetQuantity = parseFloat(item.quantity || item.design_qty || 1);
+    const itemId = item.sales_order_item_id || item.id || item.order_item_id;
+
+    // 1. Check duplicate for THIS specific sales order line item
+    let existingCode = null;
+    if (itemId && existingItemIdMap.has(String(itemId))) {
+      existingCode = existingItemIdMap.get(String(itemId));
+    } else if (!itemId && existingBomsMap.has(drawingNo.toLowerCase())) {
+      existingCode = existingBomsMap.get(drawingNo.toLowerCase());
+    }
+
+    if (existingCode) {
+      alreadyExists.push({
+        drawingNo,
+        itemCode: item.item_code,
+        description: item.description,
+        targetQty: targetQuantity,
+        existingPlanCode: existingCode,
+        reason: `Already exists in Production Plan ${existingCode}`
+      });
+      continue;
+    }
+
+    // 2. Fetch BOM
+    let bomDetails = null;
+    try {
+      bomDetails = await getItemBOMDetails(item.id || item.sales_order_item_id || item.order_item_id, drawingNo, item.item_code);
+    } catch (bomErr) {
+      console.warn(`[Bulk Plan] BOM fetch error for ${drawingNo}:`, bomErr.message);
+    }
+
+    const materials = bomDetails?.materials || [];
+    const components = bomDetails?.components || [];
+    const operations = bomDetails?.operations || [];
+
+    if (materials.length === 0 && components.length === 0 && operations.length === 0) {
+      failed.push({
+        drawingNo,
+        itemCode: item.item_code,
+        description: item.description,
+        targetQty: targetQuantity,
+        reason: 'BOM is missing or not configured with materials/operations'
+      });
+      continue;
+    }
+
+    // 3. Create Production Plan
+    try {
+      const planCode = await generatePlanCode();
+      const singlePayload = {
+        planCode,
+        planDate: planDate || today,
+        namingSeries: namingSeries || 'PP',
+        salesOrderId,
+        bomNo: drawingNo,
+        targetQty: targetQuantity,
+        targetQuantity: targetQuantity,
+        finishedGoods: [{
+          salesOrderId,
+          salesOrderItemId: item.id || item.sales_order_item_id || item.order_item_id,
+          itemCode: item.item_code,
+          description: item.description,
+          bomNo: drawingNo,
+          designQty: targetQuantity,
+          plannedQty: targetQuantity,
+          uom: item.unit || 'Nos',
+          plannedStartDate: today
+        }],
+        subAssemblies: components.map(sa => ({
+          itemCode: sa.itemCode || sa.subAssemblyItemCode || sa.item_code || null,
+          description: sa.description || sa.item_description || sa.name || null,
+          designQty: targetQuantity,
+          requiredQty: parseFloat(sa.quantity || 1) * targetQuantity,
+          bomNo: sa.bomNo || sa.bom_no || null,
+          scheduledDate: today
+        })),
+        materials: materials.map(m => ({
+          itemCode: m.material_code || m.item_code || m.item || null,
+          materialName: m.material_name || m.item || 'Unknown Material',
+          designQty: m.totalDesignQty ?? m.design_qty ?? targetQuantity,
+          requiredQty: m.totalPlannedQty || (parseFloat(m.quantity || 1) * targetQuantity),
+          bomRef: m.bom_ref || m.bom_no || drawingNo,
+          category: m.material_category || null,
+          uom: m.unit || m.uom || 'Nos'
+        })),
+        operations: operations.map((op, idx) => ({
+          step: (idx + 1).toString().padStart(2, '0'),
+          operationName: op.operation_name || null,
+          processType: op.operation_type || 'In-House',
+          workstation: op.workstation || null,
+          baseTime: op.base_time || op.base_hour || 0,
+          cycle_time_min: op.cycle_time_min || 0,
+          setup_time_min: op.setup_time_min || 0
+        }))
+      };
+
+      const planId = await createProductionPlan(singlePayload, createdBy);
+      created.push({
+        planId,
+        planCode,
+        drawingNo,
+        itemCode: item.item_code,
+        description: item.description,
+        targetQty: targetQuantity
+      });
+      if (itemId) existingItemIdMap.set(String(itemId), planCode);
+      existingBomsMap.set(drawingNo.toLowerCase(), planCode);
+    } catch (createErr) {
+      console.error(`[Bulk Plan] Error creating plan for ${drawingNo}:`, createErr);
+      failed.push({
+        drawingNo,
+        itemCode: item.item_code,
+        description: item.description,
+        targetQty: targetQuantity,
+        reason: createErr.message || 'Failed to create plan record'
+      });
+    }
+  }
+
+  return {
+    message: 'Bulk Creation Completed',
+    summary: {
+      total: candidateDrawings.length,
+      created: created.length,
+      alreadyExists: alreadyExists.length,
+      failed: failed.length
+    },
+    created,
+    alreadyExists,
+    failed
+  };
+};
+
 module.exports = {
   listProductionPlans,
   getProductionPlanById,
@@ -2862,5 +3209,7 @@ module.exports = {
   createMaterialRequestFromPlan,
   getMaterialRequestItemsForPlan,
   addManualMaterialToPlan,
-  removeManualMaterialFromPlan
+  removeManualMaterialFromPlan,
+  getBulkCreationPreview,
+  bulkCreateProductionPlans
 };
