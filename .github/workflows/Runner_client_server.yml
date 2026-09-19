@@ -1,0 +1,41 @@
+name: Deploy Aluminium ERP Private Server
+
+on:
+  push:
+    branches:
+      - production_branch
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+
+    steps:
+      - name: Deploy ERP
+        run: |
+          set -e
+
+          cd /var/www/Aluminium-erp
+
+          git fetch origin production_branch
+          git reset --hard origin/production_branch
+
+          cd frontend
+          npm install --legacy-peer-deps
+          npm run build
+
+          cd ../backend
+          npm install --legacy-peer-deps
+
+          npx prisma migrate deploy --schema=prisma/schema.prisma
+
+          pm2 reload Sptech-backend
+
+          echo "Deployment successful!"

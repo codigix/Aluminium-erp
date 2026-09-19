@@ -94,7 +94,7 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
               <p className="text-xs text-slate-400   ">{subTitle}</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
           >
@@ -102,14 +102,14 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-2 space-y-5">
+        <form onSubmit={handleSubmit} className="p-2 ">
           <div className="space-y-2">
             <div className="space-y-1.5">
               <label className="text-xs  text-slate-400   ml-1">Recipient Email *</label>
               <input
                 type="email"
                 value={emailData.to}
-                onChange={(e) => setEmailData({...emailData, to: e.target.value})}
+                onChange={(e) => setEmailData({ ...emailData, to: e.target.value })}
                 placeholder="recipient@example.com"
                 className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                 required
@@ -121,7 +121,7 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
               <input
                 type="text"
                 value={emailData.cc}
-                onChange={(e) => setEmailData({...emailData, cc: e.target.value})}
+                onChange={(e) => setEmailData({ ...emailData, cc: e.target.value })}
                 placeholder="cc@example.com"
                 className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
               />
@@ -132,7 +132,7 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
               <input
                 type="text"
                 value={emailData.bcc}
-                onChange={(e) => setEmailData({...emailData, bcc: e.target.value})}
+                onChange={(e) => setEmailData({ ...emailData, bcc: e.target.value })}
                 placeholder="bcc@example.com"
                 className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
               />
@@ -143,7 +143,7 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
               <input
                 type="text"
                 value={emailData.subject}
-                onChange={(e) => setEmailData({...emailData, subject: e.target.value})}
+                onChange={(e) => setEmailData({ ...emailData, subject: e.target.value })}
                 className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                 required
               />
@@ -153,7 +153,7 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
               <label className="text-xs  text-slate-400   ml-1">Message</label>
               <textarea
                 value={emailData.message}
-                onChange={(e) => setEmailData({...emailData, message: e.target.value})}
+                onChange={(e) => setEmailData({ ...emailData, message: e.target.value })}
                 rows="5"
                 className="w-full px-4 p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all resize-none"
                 required
@@ -174,7 +174,7 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
                     type="checkbox"
                     id="attachPDF"
                     checked={emailData.attachPDF}
-                    onChange={(e) => setEmailData({...emailData, attachPDF: e.target.checked})}
+                    onChange={(e) => setEmailData({ ...emailData, attachPDF: e.target.checked })}
                     className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
                   />
                   <label htmlFor="attachPDF" className="text-xs  text-slate-500  ">Include</label>

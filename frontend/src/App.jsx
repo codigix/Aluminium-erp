@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Swal from 'sweetalert2'
-import { 
-  Building2, ClipboardList, FileText, Package, Palette, PencilLine, Factory, 
-  Settings, BarChart3, CheckCircle, Handshake, MessageSquare, ShoppingCart, 
+import {
+  Building2, ClipboardList, FileText, Package, Palette, PencilLine, Factory,
+  Settings, BarChart3, CheckCircle, Handshake, MessageSquare, ShoppingCart,
   Inbox, Book, Scale, TrendingUp, Search, Check, XCircle, Files, RotateCw, LogOut, Truck,
-  LayoutDashboard, Users, FileSearch, FileCheck, Layers, Box, ListTree, Settings2, 
-  FileSpreadsheet, PackageSearch, Calendar, Wrench, FileSignature, Cpu, Activity, 
-  FileQuestion, ShoppingBag, ClipboardPlus, ClipboardCheck, Move, BookOpen, Warehouse, 
+  LayoutDashboard, Users, FileSearch, FileCheck, Layers, Box, ListTree, Settings2,
+  FileSpreadsheet, PackageSearch, Calendar, Wrench, FileSignature, Cpu, Activity,
+  FileQuestion, ShoppingBag, ClipboardPlus, ClipboardCheck, Move, BookOpen, Warehouse,
   ShieldCheck, LogIn, FileBarChart, Receipt, CreditCard, History, CheckCircle2, Contact2,
   Menu, Monitor, ChevronDown, ChevronRight
 } from 'lucide-react'
@@ -96,12 +96,13 @@ import TransactionDetails from "./pages/TransactionDetails";
 import StockDetails from "./pages/StockDetails";
 import ApprovedQuotations from "./pages/ApprovedQuotations";
 import ActiveClients from "./pages/ActiveClients";
+import DatabaseBackup from "./pages/DatabaseBackup";
 import { FormControl, StatusBadge, Button } from "./components/ui.jsx";
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'po-receipt-details', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details', 'admin-company-master']
+const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'po-receipt-details', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details', 'admin-company-master', 'database-backup']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -224,23 +225,23 @@ const DEPARTMENT_PREFIXES = {
 function App() {
   const navigate = useNavigate()
   const location = useLocation()
-  
+
   const getActiveModuleFromPath = () => {
     const path = location.pathname.replace(/\/$/, '') || '/'
     if (path === '/') return 'dashboard'
-    
+
     // Split the path and handle segments
     const segments = path.split('/').filter(Boolean)
     let firstSegment = segments[0]
     let secondSegment = segments[1]
-    
+
     // Handle ERP module routing structure /*/module-id
     const prefixEntry = Object.entries(DEPARTMENT_PREFIXES).find(([_, prefix]) => prefix === firstSegment)
     if (prefixEntry) {
       const [deptCode] = prefixEntry
       const storedUser = localStorage.getItem('authUser');
       const currentUser = storedUser ? JSON.parse(storedUser) : null;
-      
+
       // Admin bypasses all departmental restrictions
       if (currentUser?.department_code !== deptCode && currentUser?.department_code !== 'ADMIN') {
         return 'unauthorized';
@@ -307,12 +308,12 @@ function App() {
       }
       return firstSegment
     }
-    
+
     return DEFAULT_MODULE
   }
-  
+
   const activeModule = getActiveModuleFromPath()
-  
+
 
   const [token, setToken] = useState(() => {
     try {
@@ -328,7 +329,7 @@ function App() {
       return null
     }
   })
-  
+
   const [user, setUser] = useState(() => {
     try {
       const stored = localStorage.getItem('authUser')
@@ -365,7 +366,7 @@ function App() {
     } else {
       modules = user?.department_code ? (DEPARTMENT_MODULES[user.department_code] || []) : []
     }
-    
+
     // Ensure auxiliary pages are always included if the main module is present
     if ((modules.includes('client-quotations') || modules.includes('approved-quotations')) && !modules.includes('quotation-form')) {
       modules.push('quotation-form')
@@ -406,7 +407,7 @@ function App() {
     if ((modules.includes('inventory-report') || modules.includes('stock-balance') || modules.includes('stock-ledger')) && !modules.includes('stock-details')) {
       modules.push('stock-details')
     }
-    
+
     return modules
   }, [user?.department_code, accessRules])
 
@@ -477,13 +478,13 @@ function App() {
   }, [])
 
   const apiRequest = useCallback(async (path, { method = 'GET', body } = {}) => {
-    const config = { 
-      method, 
-      headers: { 
+    const config = {
+      method,
+      headers: {
         'Content-Type': 'application/json',
         'X-ERP-Request': 'true',
         ...(token && { 'Authorization': `Bearer ${token}` })
-      } 
+      }
     }
     if (body) {
       config.body = JSON.stringify(body)
@@ -534,7 +535,7 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'X-ERP-Request': 'true'
         },
@@ -552,11 +553,11 @@ function App() {
       setLoginEmail('')
       setLoginPassword('')
       showToast(`Welcome, ${data.user.first_name || data.user.username}!`)
-      
+
       // Redirect to first allowed module based on department with prefix
       const userAllowed = DEPARTMENT_MODULES[data.user.department_code] || []
       const prefix = DEPARTMENT_PREFIXES[data.user.department_code]?.toLowerCase() || ''
-      
+
       if (userAllowed.length > 0) {
         const targetModule = userAllowed[0]
         const targetPath = prefix ? `/${prefix}/${targetModule}` : `/${targetModule}`
@@ -612,7 +613,7 @@ function App() {
     try {
       const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'X-ERP-Request': 'true'
         },
@@ -1217,6 +1218,7 @@ function App() {
     { label: 'Active Clients', moduleId: 'active-clients', icon: 'users', indent: true, deptCode: 'ADMIN', prefix: '/admin' },
     { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'ADMIN', prefix: '/admin' },
     { label: 'Company Master', moduleId: 'admin-company-master', icon: 'building', indent: true, deptCode: 'ADMIN', prefix: '/admin' },
+    { label: 'Database Backup', moduleId: 'database-backup', icon: 'database', indent: true, deptCode: 'ADMIN', prefix: '/admin' },
     { label: 'Company Master', moduleId: 'company-master', icon: 'building', indent: true, prefix: sidebarDept ? `/${DEPARTMENT_PREFIXES[sidebarDept]}` : '' },
     { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'users', indent: true, prefix: sidebarDept ? `/${DEPARTMENT_PREFIXES[sidebarDept]}` : '' },
 
@@ -1300,7 +1302,7 @@ function App() {
   const isGroupAllowedForDept = (groupId, deptCode) => {
     if (groupId === 'general-group') return true
     if (!deptCode) return false
-    
+
     const mapping = {
       SALES: 'sales-group',
       DESIGN_ENG: 'design-group',
@@ -1311,13 +1313,13 @@ function App() {
       ACCOUNTS: 'accounts-main-group',
       SHIPMENT: 'shipment-group'
     }
-    
+
     return mapping[deptCode] === groupId
   }
 
   useEffect(() => {
     if (activeModule) {
-      const parentSubMenu = allNavigationItems.find(item => 
+      const parentSubMenu = allNavigationItems.find(item =>
         item.isSubMenu && item.children?.some(child => child.moduleId === activeModule)
       );
       if (parentSubMenu) {
@@ -1345,8 +1347,8 @@ function App() {
       }
 
       if (parentGroup) {
-        const isGroupAllowed = parentGroup.groupId === 'general-group' || 
-                               (sidebarDept && isGroupAllowedForDept(parentGroup.groupId, sidebarDept))
+        const isGroupAllowed = parentGroup.groupId === 'general-group' ||
+          (sidebarDept && isGroupAllowedForDept(parentGroup.groupId, sidebarDept))
         if (!isGroupAllowed) {
           return null
         }
@@ -1360,10 +1362,10 @@ function App() {
         const filteredChildren = item.children.filter(child => {
           const isAllowedModule = !child.moduleId || allowedModules.includes(child.moduleId)
           let isCorrectDept = !child.deptCode || isAdmin || user?.department_code === child.deptCode
-          
+
           if (isAdmin) {
             if (
-              child.moduleId === 'operation-master' || 
+              child.moduleId === 'operation-master' ||
               child.moduleId === 'payment-history' ||
               child.moduleId === 'customer-payment-history'
             ) {
@@ -1388,10 +1390,10 @@ function App() {
 
       const isAllowedModule = !item.moduleId || allowedModules.includes(item.moduleId)
       let isCorrectDept = !item.deptCode || isAdmin || user?.department_code === item.deptCode
-      
+
       if (isAdmin) {
         if (
-          item.moduleId === 'operation-master' || 
+          item.moduleId === 'operation-master' ||
           item.moduleId === 'payment-history' ||
           item.moduleId === 'customer-payment-history'
         ) {
@@ -1425,12 +1427,12 @@ function App() {
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-200/50 rounded-full blur-3xl pointer-events-none animate-pulse" />
         <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-violet-200/50 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDelay: '1s' }} />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-100/40 rounded-full blur-3xl pointer-events-none" />
-        
+
         {/* Subtle Background Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#cbd5e125_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e125_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
 
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
-          
+
           {/* Left Hero Branding Section (Light Mode) */}
           <div className="lg:col-span-5 space-y-6 text-slate-900 text-center lg:text-left">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 text-xs font-semibold shadow-sm">
@@ -1498,17 +1500,16 @@ function App() {
           {/* Right Auth Card Section (Light Mode) */}
           <div className="lg:col-span-7">
             <div className="bg-white rounded-2xl border border-slate-200/90 p-6 lg:p-8 shadow-xl shadow-slate-200/60">
-              
+
               {/* Tab Selector */}
               <div className="flex bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 mb-6">
                 <button
                   type="button"
                   onClick={() => setAuthMode('login')}
-                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 ${
-                    authMode === 'login'
-                      ? 'bg-white text-indigo-600 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
+                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 ${authMode === 'login'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900'
+                    }`}
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   Sign In
@@ -1516,11 +1517,10 @@ function App() {
                 <button
                   type="button"
                   onClick={() => { setAuthMode('signup'); loadDepartmentsAndRoles() }}
-                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 ${
-                    authMode === 'signup'
-                      ? 'bg-white text-indigo-600 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
+                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 ${authMode === 'signup'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900'
+                    }`}
                 >
                   <Users className="w-3.5 h-3.5" />
                   Create Account
@@ -1685,11 +1685,10 @@ function App() {
 
               {/* Toast Notification */}
               {toast && (
-                <div className={`mt-4 p-3 rounded-xl border text-xs font-semibold ${
-                  toast.includes('success') || toast.includes('Welcome')
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                    : 'bg-rose-50 border-rose-200 text-rose-700'
-                }`}>
+                <div className={`mt-4 p-3 rounded-xl border text-xs font-semibold ${toast.includes('success') || toast.includes('Welcome')
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-rose-50 border-rose-200 text-rose-700'
+                  }`}>
                   {toast}
                 </div>
               )}
@@ -1706,7 +1705,7 @@ function App() {
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
-                    <button 
+                    <button
                       type="button"
                       onClick={() => performLogin('admin@company.com', 'Admin@123')}
                       className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
@@ -1714,7 +1713,7 @@ function App() {
                       <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Admin</p>
                       <p className="text-[10px] text-slate-500 font-medium">Full Access</p>
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => performLogin('sales@company.com', 'Sales@123')}
                       className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
@@ -1722,7 +1721,7 @@ function App() {
                       <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Sales</p>
                       <p className="text-[10px] text-slate-500 font-medium">Sales Module</p>
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => performLogin('design@company.com', 'Design@123')}
                       className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
@@ -1730,7 +1729,7 @@ function App() {
                       <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Design</p>
                       <p className="text-[10px] text-slate-500 font-medium">Orders & Files</p>
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => performLogin('procurement@company.com', 'Procurement@123')}
                       className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
@@ -1738,7 +1737,7 @@ function App() {
                       <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Purchase</p>
                       <p className="text-[10px] text-slate-500 font-medium">PO & Vendors</p>
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => performLogin('production@company.com', 'Production@123')}
                       className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
@@ -1746,7 +1745,7 @@ function App() {
                       <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Production</p>
                       <p className="text-[10px] text-slate-500 font-medium">Inventory & GRN</p>
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => performLogin('quality@company.com', 'Quality@123')}
                       className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
@@ -1754,7 +1753,7 @@ function App() {
                       <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Quality</p>
                       <p className="text-[10px] text-slate-500 font-medium">QC & Inspection</p>
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => performLogin('shipment@company.com', 'Shipment@123')}
                       className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
@@ -1762,7 +1761,7 @@ function App() {
                       <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Shipment</p>
                       <p className="text-[10px] text-slate-500 font-medium">Dispatch</p>
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => performLogin('accounts@company.com', 'Accounts@123')}
                       className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
@@ -1770,7 +1769,7 @@ function App() {
                       <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Accounts</p>
                       <p className="text-[10px] text-slate-500 font-medium">Billing</p>
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => performLogin('inventory@company.com', 'Inventory@123')}
                       className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 transition-all text-left group shadow-2xs"
@@ -1792,191 +1791,184 @@ function App() {
   return (
     <>
       <div className="flex h-screen overflow-hidden bg-gray-50 text-slate-900">
-        <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-600 flex-col transition-all lg:transition-none z-50 border-r border-slate-200/60 shadow-sm ${
-          mobileMenuOpen ? 'flex' : 'hidden'
-        } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
-              <div className="flex items-center gap-3.5 flex-1 overflow-hidden">
-                <div className="h-9 w-9 rounded bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20 flex-shrink-0 transition-transform duration-300">
-                  <Building2 className="h-5 w-5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm  text-slate-900  leading-none">ILLUMIUM</p>
-                  <p className="text-[9px] text-rose-500   tracking-[0.15em] mt-1.5 truncate">{sidebarDept === 'PROCUREMENT' ? 'PURCHASE' : (sidebarDept || 'ERP System')}</p>
-                </div>
+        <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-600 flex-col transition-all lg:transition-none z-50 border-r border-slate-200/60 shadow-sm ${mobileMenuOpen ? 'flex' : 'hidden'
+          } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+            <div className="flex items-center gap-3.5 flex-1 overflow-hidden">
+              <div className="h-9 w-9 rounded bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20 flex-shrink-0 transition-transform duration-300">
+                <Building2 className="h-5 w-5 text-white" />
               </div>
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                className="lg:hidden p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
+              <div className="min-w-0">
+                <p className="text-sm  text-slate-900  leading-none">ILLUMIUM</p>
+                <p className="text-[9px] text-rose-500   tracking-[0.15em] mt-1.5 truncate">{sidebarDept === 'PROCUREMENT' ? 'PURCHASE' : (sidebarDept || 'ERP System')}</p>
+              </div>
             </div>
-            
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1.5 custom-scrollbar">
-              {navigationItems.map((item, index) => {
-                if (item.isGroup) {
-                  return (
-                    <div key={`group-${item.groupId || item.label}-${index}`} className="p-2">
-                      <p className="text-xs   text-slate-400  ">{item.label}</p>
-                    </div>
-                  )
-                }
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="lg:hidden p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
+            >
+              <XCircle className="w-5 h-5" />
+            </button>
+          </div>
 
-                if (item.isSubMenu) {
-                  const isOpen = !!openSubMenus[item.label]
-                  const hasActiveChild = item.children?.some(child => {
-                    return activeModule === child.moduleId || 
-                           (child.moduleId === 'bom-creation' && activeModule === 'bom-form') || 
-                           (child.moduleId === 'client-quotations' && activeModule === 'quotation-form') ||
-                           (child.moduleId === 'production-report' && activeModule === 'work-order-details')
-                  })
-                  
-                  return (
-                    <div key={`submenu-${item.label}-${index}`} className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpenSubMenus(prev => ({
-                            ...prev,
-                            [item.label]: !prev[item.label]
-                          }))
-                        }}
-                        className={`flex items-center gap-3 w-full p-2 rounded text-xs transition-all duration-200 group relative ${
-                          hasActiveChild 
-                            ? 'text-rose-600 bg-rose-50/10 font-medium' 
-                            : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
-                        }`}
-                      >
-                        {iconMap[item.icon] && (() => {
-                          const IconComponent = iconMap[item.icon]
-                          return (
-                            <IconComponent 
-                              className={`w-[18px] h-[18px] flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${
-                                hasActiveChild ? 'text-rose-600' : 'text-slate-400 group-hover:text-rose-500'
-                              }`} 
-                            />
-                          )
-                        })()}
-                        <span className="flex-1 text-left truncate">{item.label}</span>
-                        {isOpen ? (
-                          <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />
-                        )}
-                      </button>
-                      
-                      {isOpen && (
-                        <div className="pl-6 space-y-1 border-l border-slate-100 ml-4">
-                          {item.children.map((child, childIdx) => {
-                            const isChildActive = activeModule === child.moduleId || 
-                                                  (child.moduleId === 'bom-creation' && activeModule === 'bom-form') || 
-                                                  (child.moduleId === 'client-quotations' && activeModule === 'quotation-form') ||
-                                                  (child.moduleId === 'production-report' && activeModule === 'work-order-details')
-                            const isChildDisabled = !child.moduleId
-                            
-                            return (
-                              <button
-                                key={`subchild-${child.moduleId || 'item'}-${childIdx}`}
-                                type="button"
-                                onClick={() => {
-                                  if (child.moduleId) {
-                                    const pathPrefix = child.prefix || ''
-                                    navigate(`${pathPrefix}/${child.moduleId}`)
-                                    setMobileMenuOpen(false)
-                                  }
-                                }}
-                                className={`flex items-center gap-3 w-full p-2 rounded text-xs transition-all duration-200 group relative ${
-                                  isChildActive 
-                                    ? 'bg-rose-50 text-rose-600 shadow-sm' 
-                                    : isChildDisabled 
-                                    ? 'text-slate-300 cursor-not-allowed' 
-                                    : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
-                                }`}
-                                disabled={isChildDisabled}
-                              >
-                                {iconMap[child.icon] && (() => {
-                                  const IconComponent = iconMap[child.icon]
-                                  return (
-                                    <IconComponent 
-                                      className={`w-[16px] h-[16px] flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${
-                                        isChildActive ? 'text-rose-600' : 'text-slate-400 group-hover:text-rose-500'
-                                      }`} 
-                                    />
-                                  )
-                                })()}
-                                <span className="flex-1 text-left truncate">{child.label}</span>
-                                {isChildActive && (
-                                  <div className="absolute right-2 w-1.5 h-1.5 rounded bg-rose-500" />
-                                )}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )
-                }
-
-                const isActive = item.moduleId ? (
-                  activeModule === item.moduleId || 
-                  (item.moduleId === 'bom-creation' && activeModule === 'bom-form') || 
-                  (item.moduleId === 'client-quotations' && activeModule === 'quotation-form') ||
-                  (item.moduleId === 'production-report' && activeModule === 'work-order-details')
-                ) : Boolean(item.active)
-                const isDisabled = item.isGroup || !item.moduleId
-                
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1.5 custom-scrollbar">
+            {navigationItems.map((item, index) => {
+              if (item.isGroup) {
                 return (
-                  <button
-                    key={`${item.moduleId || 'item'}-${item.label}-${index}`}
-                    type="button"
-                    onClick={() => {
-                      if (item.moduleId) {
-                        const pathPrefix = item.prefix || ''
-                        navigate(`${pathPrefix}/${item.moduleId}`)
-                        setMobileMenuOpen(false)
-                      }
-                    }}
-                    className={`flex items-center gap-3 w-full p-2 rounded text-xs  transition-all duration-200 group relative ${
-                      isActive 
-                        ? 'bg-rose-50 text-rose-600 shadow-sm' 
-                        : isDisabled 
-                        ? 'text-slate-300 cursor-not-allowed' 
-                        : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
-                    }`}
-                    disabled={isDisabled}
-                  >
-                    {iconMap[item.icon] && (() => {
-                      const IconComponent = iconMap[item.icon]
-                      return (
-                        <IconComponent 
-                          className={`w-[18px] h-[18px] flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${
-                            isActive ? 'text-rose-600' : 'text-slate-400 group-hover:text-rose-500'
-                          }`} 
-                        />
-                      )
-                    })()}
-                    <span className="flex-1 text-left truncate">{item.label}</span>
-                    {isActive && (
-                      <div className="absolute right-2 w-1.5 h-1.5 rounded bg-rose-500" />
-                    )}
-                  </button>
+                  <div key={`group-${item.groupId || item.label}-${index}`} className="p-2">
+                    <p className="text-xs   text-slate-400  ">{item.label}</p>
+                  </div>
                 )
-              })}
-            </div>
+              }
 
-            <div className="p-2 border-t border-slate-100 bg-slate-50/50">
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex items-center justify-center gap-2 w-full p-2.5 rounded border border-slate-200 bg-white text-slate-500 text-xs  hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all duration-300"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
-              </button>
-            </div>
-          </aside>
+              if (item.isSubMenu) {
+                const isOpen = !!openSubMenus[item.label]
+                const hasActiveChild = item.children?.some(child => {
+                  return activeModule === child.moduleId ||
+                    (child.moduleId === 'bom-creation' && activeModule === 'bom-form') ||
+                    (child.moduleId === 'client-quotations' && activeModule === 'quotation-form') ||
+                    (child.moduleId === 'production-report' && activeModule === 'work-order-details')
+                })
+
+                return (
+                  <div key={`submenu-${item.label}-${index}`} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenSubMenus(prev => ({
+                          ...prev,
+                          [item.label]: !prev[item.label]
+                        }))
+                      }}
+                      className={`flex items-center gap-3 w-full p-2 rounded text-xs transition-all duration-200 group relative ${hasActiveChild
+                        ? 'text-rose-600 bg-rose-50/10 font-medium'
+                        : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
+                        }`}
+                    >
+                      {iconMap[item.icon] && (() => {
+                        const IconComponent = iconMap[item.icon]
+                        return (
+                          <IconComponent
+                            className={`w-[18px] h-[18px] flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${hasActiveChild ? 'text-rose-600' : 'text-slate-400 group-hover:text-rose-500'
+                              }`}
+                          />
+                        )
+                      })()}
+                      <span className="flex-1 text-left truncate">{item.label}</span>
+                      {isOpen ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />
+                      )}
+                    </button>
+
+                    {isOpen && (
+                      <div className="pl-6 space-y-1 border-l border-slate-100 ml-4">
+                        {item.children.map((child, childIdx) => {
+                          const isChildActive = activeModule === child.moduleId ||
+                            (child.moduleId === 'bom-creation' && activeModule === 'bom-form') ||
+                            (child.moduleId === 'client-quotations' && activeModule === 'quotation-form') ||
+                            (child.moduleId === 'production-report' && activeModule === 'work-order-details')
+                          const isChildDisabled = !child.moduleId
+
+                          return (
+                            <button
+                              key={`subchild-${child.moduleId || 'item'}-${childIdx}`}
+                              type="button"
+                              onClick={() => {
+                                if (child.moduleId) {
+                                  const pathPrefix = child.prefix || ''
+                                  navigate(`${pathPrefix}/${child.moduleId}`)
+                                  setMobileMenuOpen(false)
+                                }
+                              }}
+                              className={`flex items-center gap-3 w-full p-2 rounded text-xs transition-all duration-200 group relative ${isChildActive
+                                ? 'bg-rose-50 text-rose-600 shadow-sm'
+                                : isChildDisabled
+                                  ? 'text-slate-300 cursor-not-allowed'
+                                  : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
+                                }`}
+                              disabled={isChildDisabled}
+                            >
+                              {iconMap[child.icon] && (() => {
+                                const IconComponent = iconMap[child.icon]
+                                return (
+                                  <IconComponent
+                                    className={`w-[16px] h-[16px] flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${isChildActive ? 'text-rose-600' : 'text-slate-400 group-hover:text-rose-500'
+                                      }`}
+                                  />
+                                )
+                              })()}
+                              <span className="flex-1 text-left truncate">{child.label}</span>
+                              {isChildActive && (
+                                <div className="absolute right-2 w-1.5 h-1.5 rounded bg-rose-500" />
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              const isActive = item.moduleId ? (
+                activeModule === item.moduleId ||
+                (item.moduleId === 'bom-creation' && activeModule === 'bom-form') ||
+                (item.moduleId === 'client-quotations' && activeModule === 'quotation-form') ||
+                (item.moduleId === 'production-report' && activeModule === 'work-order-details')
+              ) : Boolean(item.active)
+              const isDisabled = item.isGroup || !item.moduleId
+
+              return (
+                <button
+                  key={`${item.moduleId || 'item'}-${item.label}-${index}`}
+                  type="button"
+                  onClick={() => {
+                    if (item.moduleId) {
+                      const pathPrefix = item.prefix || ''
+                      navigate(`${pathPrefix}/${item.moduleId}`)
+                      setMobileMenuOpen(false)
+                    }
+                  }}
+                  className={`flex items-center gap-3 w-full p-2 rounded text-xs  transition-all duration-200 group relative ${isActive
+                    ? 'bg-rose-50 text-rose-600 shadow-sm'
+                    : isDisabled
+                      ? 'text-slate-300 cursor-not-allowed'
+                      : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
+                    }`}
+                  disabled={isDisabled}
+                >
+                  {iconMap[item.icon] && (() => {
+                    const IconComponent = iconMap[item.icon]
+                    return (
+                      <IconComponent
+                        className={`w-[18px] h-[18px] flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-rose-600' : 'text-slate-400 group-hover:text-rose-500'
+                          }`}
+                      />
+                    )
+                  })()}
+                  <span className="flex-1 text-left truncate">{item.label}</span>
+                  {isActive && (
+                    <div className="absolute right-2 w-1.5 h-1.5 rounded bg-rose-500" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="p-2 border-t border-slate-100 bg-slate-50/50">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center justify-center gap-2 w-full p-2.5 rounded border border-slate-200 bg-white text-slate-500 text-xs  hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all duration-300"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
+            </button>
+          </div>
+        </aside>
 
         {mobileMenuOpen && (
           <div
@@ -1987,35 +1979,35 @@ function App() {
 
         <div className={`flex-1 lg:ml-64 flex flex-col bg-slate-50 min-w-0`}>
           <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200 print:hidden no-print">
-              <div className="p-3 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setMobileMenuOpen(true)}
-                  className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded transition-colors"
-                >
-                  <Menu className="w-6 h-6" />
-                </button>
-                
-                <div className="flex items-center gap-4 ml-auto">
-                  <div className="flex items-center gap-3 pr-4 border-r border-slate-200">
-                    <div className="text-right">
-                      <p className="text-xs text-slate-900  leading-none">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
-                      <p className="text-xs  text-slate-500 mt-0.5">{user?.role_name || user?.department_name || 'User'}</p>
-                    </div>
-                    <div className="h-6 w-6 rounded bg-rose-500 flex items-center justify-center text-white text-xs  ">
-                      {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
-                    </div>
+            <div className="p-3 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded transition-colors"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+
+              <div className="flex items-center gap-4 ml-auto">
+                <div className="flex items-center gap-3 pr-4 border-r border-slate-200">
+                  <div className="text-right">
+                    <p className="text-xs text-slate-900  leading-none">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
+                    <p className="text-xs  text-slate-500 mt-0.5">{user?.role_name || user?.department_name || 'User'}</p>
                   </div>
-                  <button
-                    onClick={handleLogout}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all duration-200 group relative"
-                    title="Logout"
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </button>
+                  <div className="h-6 w-6 rounded bg-rose-500 flex items-center justify-center text-white text-xs  ">
+                    {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
+                  </div>
                 </div>
+                <button
+                  onClick={handleLogout}
+                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all duration-200 group relative"
+                  title="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
             </div>
+          </div>
 
           <div className="flex-1 p-4 min-w-0 overflow-y-auto custom-scrollbar">
             {activeModule === 'po-receipt-details' ? (
@@ -2137,6 +2129,10 @@ function App() {
 
                 {activeModule === 'admin-company-master' && (
                   <AdminCompanyMaster />
+                )}
+
+                {activeModule === 'database-backup' && (
+                  <DatabaseBackup />
                 )}
 
                 {activeModule === 'client-contacts' && (
@@ -2320,7 +2316,7 @@ function App() {
                 )}
 
                 {activeModule === 'production-plan' && (
-                  <ProductionPlan 
+                  <ProductionPlan
                     salesOrderId={location.state?.salesOrderId}
                   />
                 )}
@@ -2330,8 +2326,8 @@ function App() {
                 )}
 
                 {activeModule === 'work-order-form' && (
-                  <WorkOrderForm 
-                    workOrderId={location.state?.workOrderId} 
+                  <WorkOrderForm
+                    workOrderId={location.state?.workOrderId}
                     salesOrderId={location.state?.salesOrderId}
                     salesOrderItemId={location.state?.salesOrderItemId}
                     onBack={() => navigate('/production/work-order')}
@@ -2396,8 +2392,8 @@ function App() {
                     <p className="text-slate-500 max-w-md mx-auto mb-6">
                       You do not have permission to access this department. Please contact your administrator if you believe this is an error.
                     </p>
-                    <Button 
-                      variant="primary" 
+                    <Button
+                      variant="primary"
                       onClick={() => {
                         const prefix = DEPARTMENT_PREFIXES[user.department_code]?.toLowerCase() || '';
                         navigate(prefix ? `/${prefix}/dashboard` : '/dashboard');
@@ -2620,7 +2616,7 @@ function App() {
                   </div>
                 )}
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded p-5 space-y-5">
+              <div className="bg-slate-50 border border-slate-200 rounded p-5 ">
                 <div>
                   <p className="text-xs  text-slate-400 ">{editingContactId ? 'Update Contact' : 'Add Contact'}</p>
                   <h4 className="text-xl text-slate-900 text-xs">{editingContactId ? 'Edit Existing Contact' : 'Create New Contact'}</h4>

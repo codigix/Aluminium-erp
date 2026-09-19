@@ -2691,7 +2691,7 @@ const PurchaseOrders = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSendEmail} className="p-6 space-y-5">
+            <form onSubmit={handleSendEmail} className="p-6 ">
               <div className="space-y-2">
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-400   ml-1">Recipient Email *</label>

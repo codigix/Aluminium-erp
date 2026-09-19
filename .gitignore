@@ -19,3 +19,7 @@ ehthumbs.db
 Thumbs.db
 
 /generated/prisma
+
+# Database backups (SQL dumps — never commit these)
+/backups/
+backups/

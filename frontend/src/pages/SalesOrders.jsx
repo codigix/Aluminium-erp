@@ -113,7 +113,7 @@ const SalesOrders = () => {
     if (targetDrawingNo) {
       filteredPos = allCustomerPos.map(po => ({
         ...po,
-        items: po.items.filter(item => 
+        items: po.items.filter(item =>
           String(item.drawing_no || '').trim().toUpperCase() === String(targetDrawingNo).trim().toUpperCase()
         )
       })).filter(po => po.items.length > 0);
@@ -1418,17 +1418,17 @@ const SalesOrders = () => {
     const filteredOrders = orders.filter(order => {
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase().trim();
-      
+
       const soNumber = (order.order_no || `ORD-${String(order.id).padStart(4, '0')}`).toLowerCase();
       const clientName = (order.client || order.company_name || '').toLowerCase();
       const projectName = (order.project_name || order.projectName || '').toLowerCase();
-      
+
       const itemsMatch = (order.items || []).some(item => {
         const drawingNo = (item.drawing_no || '').toLowerCase();
         const drawingName = (item.description || item.drawing_name || '').toLowerCase();
         return drawingNo.includes(q) || drawingName.includes(q);
       });
-      
+
       return soNumber.includes(q) || clientName.includes(q) || projectName.includes(q) || itemsMatch;
     });
 
@@ -1981,7 +1981,7 @@ const SalesOrders = () => {
         <div className="lg:col-span-3 space-y-4 lg:sticky lg:top-6 self-start">
           {/* Order Summary & Controls Card */}
           <Card title="Order Summary & Controls" className='bg-white shadow-sm border border-slate-100 rounded-xl overflow-hidden'>
-            <div className="p-3 space-y-5">
+            <div className="p-3 ">
               {/* Status and Taxes Section */}
               <div className="space-y-3">
                 <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status & Taxes</h3>
@@ -1999,7 +1999,7 @@ const SalesOrders = () => {
                     <option value="Cancelled">Cancelled</option>
                   </select>
                 </FormControl>
-                
+
                 <div className="grid grid-cols-2 gap-2">
                   <FormControl label="CGST Rate (%)">
                     <input
@@ -2025,18 +2025,18 @@ const SalesOrders = () => {
               {/* Price Breakdown Section */}
               <div className="border-t border-slate-100 pt-4 space-y-3">
                 <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Breakdown</h3>
-                
+
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-500">Items Subtotal:</span>
                     <span className="text-slate-900 font-semibold">₹ {(Number(subTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
-                  
+
                   <div className="flex justify-between items-center text-xs text-blue-600">
                     <span>Total Profit:</span>
                     <span className="font-semibold">₹ {(Number(totalProfitVal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
-                  
+
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-500">Tax (GST {cgstRateVal + sgstRateVal}%):</span>
                     <span className="text-slate-900 font-semibold">₹ {(Number(gstAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>

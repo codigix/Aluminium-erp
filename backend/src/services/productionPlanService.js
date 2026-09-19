@@ -748,7 +748,7 @@ const getReadySalesOrderItems = async () => {
              c.company_name as project_name,
              0 as production_priority,
              o.created_at,
-             oi.id as sales_order_item_id,
+             COALESCE(soi.id, oi.id) as sales_order_item_id,
              oi.item_code as item_code,
              oi.type as item_type,
              oi.drawing_no as drawing_no,
@@ -763,14 +763,27 @@ const getReadySalesOrderItems = async () => {
       JOIN companies c ON o.client_id = c.id
       LEFT JOIN sales_order_items soi ON (
         TRIM(oi.drawing_no) = TRIM(soi.drawing_no) 
-        AND soi.sales_order_id = (
-          SELECT DISTINCT so.id FROM sales_orders so
-          JOIN orders ord ON (
-            (ord.source_type = 'DRAWING' AND ord.quotation_id = so.id) OR
-            (ord.source_type = 'DIRECT' AND ord.quotation_id = so.customer_po_id)
+        AND (
+          soi.sales_order_id = (
+            SELECT DISTINCT so.id FROM sales_orders so
+            JOIN orders ord ON (
+              (ord.source_type = 'DRAWING' AND ord.quotation_id = so.id) OR
+              (ord.source_type = 'DIRECT' AND ord.quotation_id = so.customer_po_id)
+            )
+            WHERE ord.id = oi.order_id
+            LIMIT 1
           )
-          WHERE ord.id = oi.order_id
-          LIMIT 1
+          OR (
+            (SELECT DISTINCT so.id FROM sales_orders so
+             JOIN orders ord ON (
+               (ord.source_type = 'DRAWING' AND ord.quotation_id = so.id) OR
+               (ord.source_type = 'DIRECT' AND ord.quotation_id = so.customer_po_id)
+             )
+             WHERE ord.id = oi.order_id
+             LIMIT 1
+            ) IS NULL
+            AND soi.bom_cost > 0
+          )
         )
       )
       LEFT JOIN (
@@ -778,7 +791,7 @@ const getReadySalesOrderItems = async () => {
         FROM production_plan_items 
         WHERE status != 'CANCELLED'
         GROUP BY sales_order_item_id
-      ) planned ON oi.id = planned.sales_order_item_id
+      ) planned ON (planned.sales_order_item_id = oi.id OR (soi.id IS NOT NULL AND planned.sales_order_item_id = soi.id))
       WHERE (
         (SELECT DISTINCT so.id FROM sales_orders so
          JOIN orders ord ON (
@@ -836,25 +849,24 @@ const getProductionReadySalesOrders = async () => {
          ))
          -- 2. Exclude rejected or cancelled sales orders
          AND (o.quotation_id IS NULL OR so.status IS NULL OR so.status NOT IN ('REJECTED', 'CANCELLED'))
-         -- 3. Must have at least one BOM record with cost > 0
-         AND EXISTS (
-           SELECT 1 FROM order_items oi
-           JOIN sales_order_items soi ON TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
-           WHERE oi.order_id = o.id
-             AND soi.bom_cost > 0
-         )
-         -- 4. Exclude if any required drawing has no completed BOM
-         AND NOT EXISTS (
-           SELECT 1 FROM order_items oi
-           WHERE oi.order_id = o.id
-             AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY', 'PART', 'STANDARD') OR oi.drawing_no IS NOT NULL)
-             AND (oi.item_code IS NULL OR (oi.item_code != 'XXX' AND oi.item_code NOT LIKE '%XXX%' AND oi.item_code NOT LIKE '%NO CODE%'))
-             AND NOT EXISTS (
-               SELECT 1 FROM sales_order_items soi
-               WHERE TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
-                 AND soi.bom_cost > 0
-             )
-         )
+         -- 3. Must have at least one BOM record with cost > 0 (or be an active order with items)
+          AND (
+            EXISTS (
+              SELECT 1 FROM order_items oi
+              JOIN sales_order_items soi ON (
+                TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
+                OR TRIM(oi.drawing_no) LIKE CONCAT(TRIM(soi.drawing_no), ' %')
+                OR TRIM(oi.drawing_no) LIKE CONCAT(TRIM(soi.drawing_no), '-%')
+              )
+              WHERE oi.order_id = o.id
+                AND soi.bom_cost > 0
+            )
+            OR EXISTS (
+              SELECT 1 FROM sales_order_items soi 
+              WHERE soi.sales_order_id = so.id 
+              AND soi.bom_cost > 0
+            )
+          )
     ) AS combined
     GROUP BY combined.id, combined.order_no, combined.project_name, combined.po_number, combined.company_name, combined.created_at
     ORDER BY combined.created_at DESC`
@@ -1045,89 +1057,152 @@ const generatePlanCode = async () => {
   return planCode;
 };
 
-const getItemBOMDetails = async (salesOrderItemId) => {
-  // 1. Try to fetch from sales_order_items directly - this is now our primary BOM header
-  let [items] = await pool.query(
-    'SELECT id, item_code, drawing_no, sales_order_id FROM sales_order_items WHERE id = ?',
-    [salesOrderItemId]
-  );
-
+const getItemBOMDetails = async (salesOrderItemId, drawingNoHint = null, itemCodeHint = null) => {
   let soItemIdForLookup = null;
+  let items = [];
 
-  if (items.length > 0) {
-    const item = items[0];
-    soItemIdForLookup = item.id;
+  // Priority 1: If drawingNoHint or itemCodeHint is explicitly provided, find the BOM with data!
+  if (drawingNoHint || itemCodeHint) {
+    const cleanDrawing = (drawingNoHint || '').trim();
+    const cleanItemCode = (itemCodeHint || '').trim();
 
-    // Check if THIS specific ID has any materials or operations. 
-    // If not, try to find another ID in the same order with the same item identity that HAS materials.
-    const [hasData] = await pool.query(
-      `SELECT id FROM sales_order_item_materials WHERE sales_order_item_id = ? 
-       UNION 
-       SELECT id FROM sales_order_item_operations WHERE sales_order_item_id = ? 
+    const [directBom] = await pool.query(
+      `SELECT soi.id, soi.item_code, soi.drawing_no, soi.sales_order_id
+       FROM sales_order_items soi
+       LEFT JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
+       LEFT JOIN sales_order_item_operations soo ON soi.id = soo.sales_order_item_id
+       WHERE (
+         (? != '' AND (TRIM(soi.drawing_no) = ? OR ? LIKE CONCAT('%', TRIM(soi.drawing_no), '%') OR TRIM(soi.drawing_no) LIKE CONCAT(?, '%')))
+         OR (? != '' AND TRIM(soi.item_code) = ?)
+       )
+       GROUP BY soi.id
+       ORDER BY (COUNT(som.id) + COUNT(soo.id)) DESC, soi.bom_cost DESC, soi.id DESC
        LIMIT 1`,
-      [soItemIdForLookup, soItemIdForLookup]
+      [cleanDrawing, cleanDrawing, cleanDrawing, cleanDrawing, cleanItemCode, cleanItemCode]
     );
 
-    if (hasData.length === 0) {
-      console.log(`[getItemBOMDetails] ID ${soItemIdForLookup} has no materials/operations, searching for alternatives in SO ${item.sales_order_id}`);
-      const [altMatch] = await pool.query(
-        `SELECT soi.id 
-         FROM sales_order_items soi
-         LEFT JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
-         LEFT JOIN sales_order_item_operations soo ON soi.id = soo.sales_order_item_id
-         WHERE soi.sales_order_id = ? 
-         AND (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL))
-         GROUP BY soi.id
-         HAVING COUNT(som.id) > 0 OR COUNT(soo.id) > 0
-         ORDER BY (COUNT(som.id) + COUNT(soo.id)) DESC, soi.id DESC`,
-        [item.sales_order_id, item.item_code, item.drawing_no]
+    if (directBom.length > 0) {
+      soItemIdForLookup = directBom[0].id;
+      items = directBom;
+    }
+  }
+
+  // Priority 2: Try sales_order_items directly
+  if (!soItemIdForLookup && salesOrderItemId) {
+    let [soiItems] = await pool.query(
+      'SELECT id, item_code, drawing_no, sales_order_id FROM sales_order_items WHERE id = ?',
+      [salesOrderItemId]
+    );
+
+    if (soiItems.length > 0) {
+      const item = soiItems[0];
+      soItemIdForLookup = item.id;
+      items = soiItems;
+
+      // Check if THIS specific ID has any materials or operations. 
+      // If not, check if salesOrderItemId is actually an order_items ID!
+      const [hasData] = await pool.query(
+        `SELECT id FROM sales_order_item_materials WHERE sales_order_item_id = ? 
+         UNION 
+         SELECT id FROM sales_order_item_operations WHERE sales_order_item_id = ? 
+         LIMIT 1`,
+        [soItemIdForLookup, soItemIdForLookup]
       );
 
-      if (altMatch.length > 0) {
-        console.log(`[getItemBOMDetails] Found ${altMatch.length} alternative SO Item IDs with data, using most recent`);
-        soItemIdForLookup = altMatch[0].id;
-      } else {
-        // Fallback: Try to find any MASTER BOM for this drawing/item code
-        const [masterMatch] = await pool.query(
-          `SELECT soi.id 
-           FROM sales_order_items soi
-           JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
-           WHERE (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL)) AND soi.sales_order_id IS NULL 
-           ORDER BY soi.id DESC LIMIT 1`,
-          [item.item_code, item.drawing_no]
+      if (hasData.length === 0) {
+        const [oiCheck] = await pool.query(
+          'SELECT id, item_code, drawing_no, order_id FROM order_items WHERE id = ?',
+          [salesOrderItemId]
         );
-        if (masterMatch.length > 0) {
-          console.log(`[getItemBOMDetails] Found MASTER Item ID ${masterMatch[0].id} with data`);
-          soItemIdForLookup = masterMatch[0].id;
-        } else {
-          // ULTIMATE FALLBACK: Find the SINGLE matching item with most data
-          const [globalMatches] = await pool.query(
-            `SELECT soi.id 
+
+        if (oiCheck.length > 0) {
+          const oi = oiCheck[0];
+          const [soiMatch] = await pool.query(
+            `SELECT soi.id, soi.item_code, soi.drawing_no, soi.sales_order_id
              FROM sales_order_items soi
              LEFT JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
-             LEFT JOIN sales_order_item_components soc ON soi.id = soc.sales_order_item_id
-             WHERE (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL))
+             LEFT JOIN sales_order_item_operations soo ON soi.id = soo.sales_order_item_id
+             WHERE (
+               (TRIM(soi.drawing_no) = TRIM(?) OR ? LIKE CONCAT('%', TRIM(soi.drawing_no), '%') OR TRIM(soi.drawing_no) LIKE CONCAT(TRIM(?), '%'))
+               OR (? IS NOT NULL AND TRIM(soi.item_code) = TRIM(?))
+             )
              GROUP BY soi.id
-             HAVING (COUNT(som.id) + COUNT(soc.id)) > 0
-             ORDER BY (COUNT(soc.id) * 5 + COUNT(som.id)) DESC, soi.id DESC LIMIT 1`,
-            [item.item_code, item.drawing_no]
+             ORDER BY (COUNT(som.id) + COUNT(soo.id)) DESC, soi.bom_cost DESC, soi.id DESC
+             LIMIT 1`,
+            [oi.drawing_no, oi.drawing_no, oi.drawing_no, oi.item_code, oi.item_code]
           );
 
-          if (globalMatches.length > 0) {
-            console.log(`[getItemBOMDetails] Found global match ID ${globalMatches[0].id}, using its data`);
-            soItemIdForLookup = globalMatches[0].id;
+          if (soiMatch.length > 0) {
+            soItemIdForLookup = soiMatch[0].id;
+            items = soiMatch;
+          }
+        }
+      }
+
+      if (hasData.length === 0 && soItemIdForLookup === item.id) {
+        console.log(`[getItemBOMDetails] ID ${soItemIdForLookup} has no materials/operations, searching for alternatives in SO ${item.sales_order_id}`);
+        const [altMatch] = await pool.query(
+          `SELECT soi.id 
+           FROM sales_order_items soi
+           LEFT JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
+           LEFT JOIN sales_order_item_operations soo ON soi.id = soo.sales_order_item_id
+           WHERE soi.sales_order_id = ? 
+           AND (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL))
+           GROUP BY soi.id
+           HAVING COUNT(som.id) > 0 OR COUNT(soo.id) > 0
+           ORDER BY (COUNT(som.id) + COUNT(soo.id)) DESC, soi.id DESC`,
+          [item.sales_order_id, item.item_code, item.drawing_no]
+        );
+
+        if (altMatch.length > 0) {
+          console.log(`[getItemBOMDetails] Found ${altMatch.length} alternative SO Item IDs with data, using most recent`);
+          soItemIdForLookup = altMatch[0].id;
+        } else {
+          // Fallback: Try to find any MASTER BOM for this drawing/item code
+          const [masterMatch] = await pool.query(
+            `SELECT soi.id 
+             FROM sales_order_items soi
+             JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
+             WHERE (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL)) AND soi.sales_order_id IS NULL 
+             ORDER BY soi.id DESC LIMIT 1`,
+            [item.item_code, item.drawing_no]
+          );
+          if (masterMatch.length > 0) {
+            console.log(`[getItemBOMDetails] Found MASTER Item ID ${masterMatch[0].id} with data`);
+            soItemIdForLookup = masterMatch[0].id;
+          } else {
+            // ULTIMATE FALLBACK: Find the SINGLE matching item with most data
+            const [globalMatches] = await pool.query(
+              `SELECT soi.id 
+               FROM sales_order_items soi
+               LEFT JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
+               LEFT JOIN sales_order_item_components soc ON soi.id = soc.sales_order_item_id
+               WHERE (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL))
+               GROUP BY soi.id
+               HAVING (COUNT(som.id) + COUNT(soc.id)) > 0
+               ORDER BY (COUNT(soc.id) * 5 + COUNT(som.id)) DESC, soi.id DESC LIMIT 1`,
+              [item.item_code, item.drawing_no]
+            );
+
+            if (globalMatches.length > 0) {
+              console.log(`[getItemBOMDetails] Found global match ID ${globalMatches[0].id}, using its data`);
+              soItemIdForLookup = globalMatches[0].id;
+            }
           }
         }
       }
     }
-  } else {
-    // 2. Fallback to order_items (new system)
-    [items] = await pool.query(
+  }
+
+  // Priority 3: Fallback to order_items (new system) if not resolved yet
+  if (!soItemIdForLookup && salesOrderItemId) {
+    let [oiItems] = await pool.query(
       'SELECT id, item_code, drawing_no, order_id FROM order_items WHERE id = ?',
       [salesOrderItemId]
     );
 
-    if (items.length > 0) {
+    if (oiItems.length > 0) {
+      items = oiItems;
       const item = items[0];
 
       // For order_items, we need to find the linked BOM header in sales_order_items
@@ -1397,7 +1472,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         operations = allSoOperations.filter(o => 
           targetSoIds.includes(o.sales_order_item_id) && 
           (
-            (o.item_code && o.item_code.trim().toUpperCase() === itemCode.trim().toUpperCase()) ||
+            (o.item_code && itemCode && o.item_code.trim().toUpperCase() === itemCode.trim().toUpperCase()) ||
             (o.drawing_no && drawingNo && o.drawing_no.trim().toUpperCase() === drawingNo.trim().toUpperCase())
           )
         );
@@ -1406,9 +1481,9 @@ const getItemBOMDetails = async (salesOrderItemId) => {
           SELECT * FROM sales_order_item_operations 
           WHERE sales_order_item_id IN (?) 
           AND (
-            TRIM(UPPER(item_code)) = TRIM(UPPER(?)) 
-            OR (TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) AND drawing_no IS NOT NULL)
-          )`, [targetSoIds, itemCode, drawingNo]);
+            (? IS NOT NULL AND ? != '' AND TRIM(UPPER(item_code)) = TRIM(UPPER(?))) 
+            OR (? IS NOT NULL AND ? != '' AND TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) AND drawing_no IS NOT NULL)
+          )`, [targetSoIds, itemCode, itemCode, itemCode, drawingNo, drawingNo, drawingNo]);
         operations = soO;
       }
     }
