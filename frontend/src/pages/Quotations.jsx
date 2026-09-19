@@ -1961,7 +1961,7 @@ const Quotations = () => {
         key: 'company_name',
         label: 'Client Name',
         sortable: true,
-        render: (val, q) => <span className="font-bold text-slate-900 text-xs">{q.company_name || '—'}</span>
+        render: (val, q) => <span className="font-bold text-slate-900 text-xs">{q.company_name && q.company_name !== '-' && q.company_name !== '—' ? q.company_name : (q.client_name || q.customer_name || '—')}</span>
       },
       {
         key: 'project_name',

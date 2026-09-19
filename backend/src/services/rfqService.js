@@ -128,6 +128,25 @@ const updateRfqItemVendors = async (rfqId, itemVendorMap, targetStatus = null) =
 const _buildRfqQuery = (whereClause) => `
     SELECT r.*, u.username as requester_name, mr.mr_number, 
             COALESCE(
+              c_ord.company_name,
+              c_so.company_name,
+              (
+                SELECT c_soi.company_name
+                FROM production_plan_items ppi_so
+                JOIN sales_order_items soi_so ON ppi_so.sales_order_item_id = soi_so.id
+                JOIN sales_orders so_soi ON soi_so.sales_order_id = so_soi.id
+                JOIN companies c_soi ON so_soi.company_id = c_soi.id
+                WHERE ppi_so.plan_id = pp.id
+                LIMIT 1
+              ),
+              (
+                SELECT c_note.company_name 
+                FROM sales_orders so_note 
+                JOIN companies c_note ON so_note.company_id = c_note.id 
+                WHERE mr.notes LIKE CONCAT('%', so_note.project_name, '%') LIMIT 1
+              )
+            ) as company_name,
+            COALESCE(
               (
                 SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code)
                 FROM production_plan_items ppi_dr
@@ -167,6 +186,10 @@ const _buildRfqQuery = (whereClause) => `
      LEFT JOIN users u ON r.requested_by = u.id 
      LEFT JOIN material_requests mr ON r.mr_id = mr.id 
      LEFT JOIN production_plans pp ON mr.plan_id = pp.id
+     LEFT JOIN orders o ON pp.sales_order_id = o.id
+     LEFT JOIN companies c_ord ON o.client_id = c_ord.id
+     LEFT JOIN sales_orders so ON pp.sales_order_id = so.id
+     LEFT JOIN companies c_so ON so.company_id = c_so.id
      LEFT JOIN (
        SELECT plan_id, description FROM production_plan_items
        WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
