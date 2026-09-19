@@ -3195,6 +3195,277 @@ const bulkCreateProductionPlans = async (payload, createdBy) => {
   };
 };
 
+const getBulkMaterialRequestPreview = async (planIds) => {
+  if (!planIds || !Array.isArray(planIds) || planIds.length === 0) {
+    throw new Error('At least one Production Plan ID is required');
+  }
+
+  const results = [];
+
+  for (const planId of planIds) {
+    try {
+      const [plans] = await pool.query(
+        `SELECT pp.id, pp.plan_code, pp.target_qty, pp.bom_no,
+                COALESCE(
+                  cd_bom.drawing_no,
+                  oi.drawing_no,
+                  soi.drawing_no,
+                  CASE WHEN pp.bom_no NOT REGEXP '^[0-9]+$' THEN pp.bom_no ELSE NULL END
+                ) as drawing_no,
+                COALESCE(ppi.item_code, oi.item_code, soi.item_code) as item_code, 
+                COALESCE(ppi.description, cd_bom.description, oi.description, soi.description) as description
+         FROM production_plans pp
+         LEFT JOIN (
+           SELECT plan_id, item_code, description, sales_order_item_id, sales_order_id
+           FROM production_plan_items 
+           WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+         ) ppi ON pp.id = ppi.plan_id
+         LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+         LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id AND ppi.sales_order_id = soi.sales_order_id
+         LEFT JOIN customer_drawings cd_bom ON (
+           (pp.bom_no REGEXP '^[0-9]+$' AND cd_bom.id = CAST(pp.bom_no AS UNSIGNED)) OR
+           (cd_bom.drawing_no = pp.bom_no)
+         )
+         WHERE pp.id = ?`,
+        [planId]
+      );
+
+      if (plans.length === 0) {
+        results.push({
+          planId,
+          planCode: `PP-${planId}`,
+          drawingNo: '—',
+          description: 'Not found',
+          targetQty: 0,
+          status: 'NOT_FOUND',
+          statusText: 'Plan Not Found',
+          pendingItemsCount: 0,
+          existingMrNumber: null
+        });
+        continue;
+      }
+
+      const plan = plans[0];
+      const drawingNo = plan.drawing_no || plan.item_code || plan.bom_no || '—';
+
+      const [existingMR] = await pool.query(
+        `SELECT id, mr_number, status FROM material_requests 
+         WHERE plan_id = ? AND status != 'CANCELLED' 
+         ORDER BY id DESC LIMIT 1`,
+        [planId]
+      );
+
+      if (existingMR.length > 0) {
+        results.push({
+          planId,
+          planCode: plan.plan_code,
+          drawingNo,
+          description: plan.description || '—',
+          targetQty: plan.target_qty || 1,
+          status: 'ALREADY_REQUESTED',
+          statusText: `Already Requested (${existingMR[0].mr_number})`,
+          pendingItemsCount: 0,
+          existingMrNumber: existingMR[0].mr_number
+        });
+        continue;
+      }
+
+      const mrData = await getMaterialRequestItemsForPlan(planId);
+      const items = (mrData.items || []).filter(item => {
+        const code = (item.item_code || '').toUpperCase().trim();
+        return !code.startsWith('ASSEMBLY');
+      });
+
+      const pendingItems = items.filter(item => !item.request_exists);
+
+      if (items.length === 0 || pendingItems.length === 0) {
+        results.push({
+          planId,
+          planCode: plan.plan_code,
+          drawingNo,
+          description: plan.description || '—',
+          targetQty: plan.target_qty || 1,
+          status: 'NO_PENDING_MATERIALS',
+          statusText: 'No Pending Materials',
+          pendingItemsCount: 0,
+          existingMrNumber: null
+        });
+        continue;
+      }
+
+      results.push({
+        planId,
+        planCode: plan.plan_code,
+        drawingNo,
+        description: plan.description || '—',
+        targetQty: plan.target_qty || 1,
+        status: 'READY',
+        statusText: 'Ready',
+        pendingItemsCount: pendingItems.length,
+        existingMrNumber: null
+      });
+    } catch (err) {
+      console.error(`[Bulk MR Preview] Error evaluating plan ${planId}:`, err);
+      results.push({
+        planId,
+        planCode: `PP-${planId}`,
+        drawingNo: '—',
+        description: 'Error checking plan',
+        targetQty: 0,
+        status: 'ERROR',
+        statusText: err.message || 'Error evaluating plan',
+        pendingItemsCount: 0,
+        existingMrNumber: null
+      });
+    }
+  }
+
+  return {
+    total: results.length,
+    readyCount: results.filter(r => r.status === 'READY').length,
+    alreadyRequestedCount: results.filter(r => r.status === 'ALREADY_REQUESTED').length,
+    noPendingMaterialsCount: results.filter(r => r.status === 'NO_PENDING_MATERIALS').length,
+    plans: results
+  };
+};
+
+const bulkCreateMaterialRequests = async (planIds, userId) => {
+  if (!planIds || !Array.isArray(planIds) || planIds.length === 0) {
+    throw new Error('At least one Production Plan ID is required');
+  }
+
+  const created = [];
+  const alreadyExists = [];
+  const noPendingMaterials = [];
+  const failed = [];
+
+  for (const planId of planIds) {
+    let planCode = `PP-${planId}`;
+    let drawingNo = '—';
+    try {
+      const [plans] = await pool.query(
+        `SELECT pp.id, pp.plan_code, pp.target_qty, pp.bom_no,
+                COALESCE(
+                  cd_bom.drawing_no,
+                  oi.drawing_no,
+                  soi.drawing_no,
+                  CASE WHEN pp.bom_no NOT REGEXP '^[0-9]+$' THEN pp.bom_no ELSE NULL END
+                ) as drawing_no,
+                COALESCE(ppi.description, cd_bom.description, oi.description, soi.description) as description
+         FROM production_plans pp
+         LEFT JOIN (
+           SELECT plan_id, item_code, description, sales_order_item_id, sales_order_id
+           FROM production_plan_items 
+           WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+         ) ppi ON pp.id = ppi.plan_id
+         LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+         LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id AND ppi.sales_order_id = soi.sales_order_id
+         LEFT JOIN customer_drawings cd_bom ON (
+           (pp.bom_no REGEXP '^[0-9]+$' AND cd_bom.id = CAST(pp.bom_no AS UNSIGNED)) OR
+           (cd_bom.drawing_no = pp.bom_no)
+         )
+         WHERE pp.id = ?`,
+        [planId]
+      );
+
+      if (plans.length === 0) {
+        failed.push({
+          planId,
+          planCode,
+          drawingNo,
+          reason: 'Production Plan record not found'
+        });
+        continue;
+      }
+
+      const plan = plans[0];
+      planCode = plan.plan_code || planCode;
+      drawingNo = plan.drawing_no || plan.bom_no || '—';
+
+      const [existingMR] = await pool.query(
+        `SELECT id, mr_number, status FROM material_requests 
+         WHERE plan_id = ? AND status != 'CANCELLED' 
+         ORDER BY id DESC LIMIT 1`,
+        [planId]
+      );
+
+      if (existingMR.length > 0) {
+        alreadyExists.push({
+          planId,
+          planCode,
+          drawingNo,
+          description: plan.description,
+          existingMrNumber: existingMR[0].mr_number,
+          reason: `Already requested in ${existingMR[0].mr_number}`
+        });
+        continue;
+      }
+
+      const mrData = await getMaterialRequestItemsForPlan(planId);
+      const items = (mrData.items || []).filter(item => {
+        const code = (item.item_code || '').toUpperCase().trim();
+        return !code.startsWith('ASSEMBLY');
+      });
+
+      const itemsToRequest = items
+        .filter(item => !item.request_exists)
+        .map(item => ({
+          ...item,
+          quantity: (Number(item.quantity) > 0)
+            ? item.quantity
+            : (Number(item.design_qty) > 0 ? item.design_qty : 1)
+        }));
+
+      if (itemsToRequest.length === 0) {
+        noPendingMaterials.push({
+          planId,
+          planCode,
+          drawingNo,
+          description: plan.description,
+          reason: 'No pending materials found to request'
+        });
+        continue;
+      }
+
+      const result = await createMaterialRequestFromPlan(planId, userId, itemsToRequest);
+      const mrNumbers = (result.mrs || []).map(m => m.mr_number).join(', ');
+
+      created.push({
+        planId,
+        planCode,
+        drawingNo,
+        description: plan.description,
+        mrNumber: mrNumbers || 'MR Created',
+        itemsCount: itemsToRequest.length
+      });
+    } catch (err) {
+      console.error(`[Bulk MR] Error processing plan ${planId}:`, err);
+      failed.push({
+        planId,
+        planCode,
+        drawingNo,
+        reason: err.message || 'Failed to create Material Request'
+      });
+    }
+  }
+
+  return {
+    summary: {
+      total: planIds.length,
+      created: created.length,
+      alreadyExists: alreadyExists.length,
+      noPendingMaterials: noPendingMaterials.length,
+      failed: failed.length
+    },
+    results: {
+      created,
+      alreadyExists,
+      noPendingMaterials,
+      failed
+    }
+  };
+};
+
 module.exports = {
   listProductionPlans,
   getProductionPlanById,
@@ -3211,5 +3482,8 @@ module.exports = {
   addManualMaterialToPlan,
   removeManualMaterialFromPlan,
   getBulkCreationPreview,
-  bulkCreateProductionPlans
+  bulkCreateProductionPlans,
+  getBulkMaterialRequestPreview,
+  bulkCreateMaterialRequests
 };
+

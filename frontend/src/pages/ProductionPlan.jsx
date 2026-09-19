@@ -84,6 +84,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
   const [bulkCreatingLoading, setBulkCreatingLoading] = useState(false);
 
+  const [selectedPlanIds, setSelectedPlanIds] = useState(new Set());
+  const [bulkMrModalOpen, setBulkMrModalOpen] = useState(false);
+  const [bulkMrLoading, setBulkMrLoading] = useState(false);
+  const [bulkMrPreview, setBulkMrPreview] = useState(null);
+  const [bulkMrCreating, setBulkMrCreating] = useState(false);
+
   const [newPlan, setNewPlan] = useState({
     planCode: '',
     planDate: new Date().toISOString().split('T')[0],
@@ -2956,6 +2962,298 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     </Modal>
   );
 
+  const handleOpenBulkMRModal = async () => {
+    const planIdsArray = Array.from(selectedPlanIds);
+    if (planIdsArray.length === 0) {
+      errorToast('Please select at least one Production Plan');
+      return;
+    }
+
+    setBulkMrModalOpen(true);
+    setBulkMrLoading(true);
+    setBulkMrPreview(null);
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/production-plans/bulk-material-request-preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ planIds: planIdsArray })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setBulkMrPreview(data);
+      } else {
+        const err = await response.json();
+        errorToast(err.message || 'Failed to load Bulk Material Request preview');
+      }
+    } catch (error) {
+      console.error('Error fetching Bulk MR preview:', error);
+      errorToast('Failed to load Bulk Material Request preview');
+    } finally {
+      setBulkMrLoading(false);
+    }
+  };
+
+  const handleConfirmBulkMR = async () => {
+    const planIdsArray = Array.from(selectedPlanIds);
+    if (planIdsArray.length === 0) return;
+
+    setBulkMrCreating(true);
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/production-plans/bulk-material-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ planIds: planIdsArray })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.message || 'Failed to create Bulk Material Requests');
+      }
+
+      setBulkMrModalOpen(false);
+      setSelectedPlanIds(new Set());
+      fetchPlans();
+
+      const createdCount = resData.summary?.created ?? 0;
+      const alreadyExistsCount = resData.summary?.alreadyExists ?? 0;
+      const noPendingCount = resData.summary?.noPendingMaterials ?? 0;
+      const failedCount = resData.summary?.failed ?? 0;
+
+      await Swal.fire({
+        icon: createdCount > 0 ? 'success' : (failedCount > 0 ? 'warning' : 'info'),
+        title: 'Bulk Material Request Completed',
+        html: `
+          <div style="text-align: left; font-size: 13px; line-height: 1.5;">
+            <div style="padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 12px;">
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center;">
+                <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 6px;">
+                  <div style="font-size: 16px; font-weight: 700; color: #047857;">${createdCount}</div>
+                  <div style="font-size: 10px; color: #065f46; font-weight: 600;">Created</div>
+                </div>
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px;">
+                  <div style="font-size: 16px; font-weight: 700; color: #1d4ed8;">${alreadyExistsCount}</div>
+                  <div style="font-size: 10px; color: #1e40af; font-weight: 600;">Already Exists</div>
+                </div>
+                <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 6px; padding: 6px;">
+                  <div style="font-size: 16px; font-weight: 700; color: #a16207;">${noPendingCount}</div>
+                  <div style="font-size: 10px; color: #854d0e; font-weight: 600;">No Pending</div>
+                </div>
+                <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 6px;">
+                  <div style="font-size: 16px; font-weight: 700; color: #be123c;">${failedCount}</div>
+                  <div style="font-size: 10px; color: #9f1239; font-weight: 600;">Failed</div>
+                </div>
+              </div>
+            </div>
+            ${resData.results?.created?.length > 0 ? `
+              <div style="margin-bottom: 10px;">
+                <p style="font-size: 11px; font-weight: 700; color: #047857; text-transform: uppercase; margin: 0 0 4px 0;">Newly Created Material Requests:</p>
+                <div style="max-height: 100px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; background: #fff;">
+                  ${resData.results.created.map(c => `<div style="padding: 4px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;"><span><strong>${c.planCode}</strong> → <span style="color: #4f46e5; font-weight: 600;">${c.mrNumber}</span> (${c.drawingNo})</span><span style="color: #64748b;">${c.itemsCount} item(s)</span></div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            ${resData.results?.alreadyExists?.length > 0 ? `
+              <div style="margin-bottom: 10px;">
+                <p style="font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase; margin: 0 0 4px 0;">Already Existed (Skipped):</p>
+                <div style="max-height: 80px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; background: #fff;">
+                  ${resData.results.alreadyExists.map(a => `<div style="padding: 3px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;"><span>${a.planCode} (${a.drawingNo})</span><span style="color: #1d4ed8; font-family: monospace;">${a.existingMrNumber || 'Existing'}</span></div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            ${resData.results?.noPendingMaterials?.length > 0 ? `
+              <div style="margin-bottom: 10px;">
+                <p style="font-size: 11px; font-weight: 700; color: #a16207; text-transform: uppercase; margin: 0 0 4px 0;">No Pending Materials (Skipped):</p>
+                <div style="max-height: 80px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; background: #fff;">
+                  ${resData.results.noPendingMaterials.map(n => `<div style="padding: 3px 0; border-bottom: 1px solid #f1f5f9;"><span>${n.planCode} (${n.drawingNo})</span></div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            ${resData.results?.failed?.length > 0 ? `
+              <div>
+                <p style="font-size: 11px; font-weight: 700; color: #be123c; text-transform: uppercase; margin: 0 0 4px 0;">Failed:</p>
+                <div style="max-height: 80px; overflow-y: auto; border: 1px solid #fecdd3; border-radius: 6px; padding: 4px 8px; background: #fff5f5;">
+                  ${resData.results.failed.map(f => `<div style="padding: 3px 0; color: #9f1239;"><strong>${f.planCode}</strong>: ${f.reason}</div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `,
+        confirmButtonText: 'View Production Plans',
+        confirmButtonColor: '#4f46e5'
+      });
+    } catch (err) {
+      console.error('Bulk MR error:', err);
+      errorToast(err.message || 'Error occurred during bulk Material Request creation');
+    } finally {
+      setBulkMrCreating(false);
+    }
+  };
+
+  const renderBulkMRModal = () => (
+    <Modal
+      isOpen={bulkMrModalOpen}
+      onClose={() => !bulkMrCreating && setBulkMrModalOpen(false)}
+      title={
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100">
+            <Send className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Bulk Material Request</h2>
+            <p className="text-xs text-slate-500">
+              Selected Production Plans: <strong className="text-slate-700">{selectedPlanIds.size}</strong>
+            </p>
+          </div>
+        </div>
+      }
+      size="4xl"
+    >
+      <div className="space-y-4 py-1">
+        {bulkMrLoading ? (
+          <div className="py-16 text-center text-slate-500 space-y-2">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto text-indigo-600" />
+            <p className="text-xs font-medium">Validating materials and evaluating pending quantities...</p>
+          </div>
+        ) : (
+          <>
+            {/* Summary Statistics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                <span className="text-slate-500 block text-[11px]">Total Selected</span>
+                <span className="text-base font-bold text-slate-800">{bulkMrPreview?.total || 0}</span>
+              </div>
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <span className="text-emerald-700 block text-[11px] font-semibold">Ready for Request</span>
+                <span className="text-base font-bold text-emerald-800">{bulkMrPreview?.readyCount || 0}</span>
+              </div>
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+                <span className="text-blue-700 block text-[11px] font-semibold">Already Requested</span>
+                <span className="text-base font-bold text-blue-800">{bulkMrPreview?.alreadyRequestedCount || 0}</span>
+              </div>
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                <span className="text-amber-700 block text-[11px] font-semibold">No Pending Materials</span>
+                <span className="text-base font-bold text-amber-800">{bulkMrPreview?.noPendingMaterialsCount || 0}</span>
+              </div>
+            </div>
+
+            {/* Plans Review Table */}
+            <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[50vh] overflow-y-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] font-semibold border-b border-slate-200 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 w-12 text-center">#</th>
+                    <th className="px-3 py-2">Production Plan</th>
+                    <th className="px-3 py-2">Drawing / Part No.</th>
+                    <th className="px-3 py-2">Description</th>
+                    <th className="px-3 py-2 text-center w-24">Qty</th>
+                    <th className="px-3 py-2 text-center w-48">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {bulkMrPreview?.plans?.length > 0 ? (
+                    bulkMrPreview.plans.map((p, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-3 py-2.5 text-center text-slate-400 font-mono">{idx + 1}</td>
+                        <td className="px-3 py-2.5 font-mono font-bold text-slate-800">
+                          {p.planCode}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className="font-mono font-medium text-indigo-600">{p.drawingNo}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-600 max-w-[220px] truncate" title={p.description}>
+                          {p.description || '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-center font-bold text-slate-700">
+                          {p.targetQty}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          {p.status === 'READY' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              ✓ Ready ({p.pendingItemsCount} items)
+                            </span>
+                          )}
+                          {p.status === 'ALREADY_REQUESTED' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-800 border border-blue-200" title={`Already in ${p.existingMrNumber}`}>
+                              ℹ️ Already Requested
+                            </span>
+                          )}
+                          {p.status === 'NO_PENDING_MATERIALS' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                              ℹ️ No Pending Materials
+                            </span>
+                          )}
+                          {p.status === 'NOT_FOUND' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">
+                              ⚠️ Not Found
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="px-3 py-8 text-center text-slate-400">
+                        No production plans selected.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Informational Guidance */}
+            <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg text-xs text-slate-600 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+              <div className="text-[11px] leading-relaxed">
+                Clicking <strong>Confirm & Create Material Requests</strong> will generate an individual, separate Material Request record for each eligible Production Plan. Each Material Request remains linked to its respective Production Plan and will immediately appear in the <strong>Inventory / Material Request</strong> workflow.
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button
+                variant="secondary"
+                onClick={() => setBulkMrModalOpen(false)}
+                disabled={bulkMrCreating}
+              >
+                Cancel
+              </Button>
+              <button
+                type="button"
+                onClick={handleConfirmBulkMR}
+                disabled={bulkMrCreating || (bulkMrPreview?.readyCount === 0)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {bulkMrCreating ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Creating Material Requests...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Confirm & Create Material Requests ({bulkMrPreview?.readyCount || 0})</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+
   const filteredPlans = plans.filter(plan =>
     plan.plan_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     plan.order_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -3269,6 +3567,17 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {selectedPlanIds.size > 0 && (
+            <button
+              type="button"
+              onClick={handleOpenBulkMRModal}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
+              title="Create Material Requests for all selected Production Plans"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Bulk Material Request ({selectedPlanIds.size})</span>
+            </button>
+          )}
           <Button
             variant="secondary"
             onClick={fetchPlans}
@@ -3290,12 +3599,47 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
       {/* Content Section */}
       <div className="">
+        {/* Bulk Action Banner when 1 or more Production Plans are selected */}
+        {selectedPlanIds.size > 0 && (
+          <div className="mb-2 p-2.5 bg-indigo-50/90 border border-indigo-200 rounded-lg flex items-center justify-between shadow-xs animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center gap-2.5">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold shadow-xs">
+                {selectedPlanIds.size}
+              </span>
+              <span className="text-xs font-semibold text-indigo-950">
+                {selectedPlanIds.size} {selectedPlanIds.size === 1 ? 'Production Plan' : 'Production Plans'} Selected
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedPlanIds(new Set())}
+                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded transition-colors cursor-pointer"
+              >
+                Clear Selection
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenBulkMRModal}
+                className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Bulk Material Request ({selectedPlanIds.size})</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <DataTable
           columns={columns}
           data={filteredPlans}
           loading={loading}
           searchPlaceholder="Search strategic formulations..."
           searchKey="plan_code"
+          selectable={true}
+          selectedRows={selectedPlanIds}
+          onSelectionChange={setSelectedPlanIds}
+          rowId="id"
         />
 
         {/* Summary Footer */}
@@ -4255,6 +4599,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
       {/* Bulk Production Plan Creation Review Modal */}
       {renderBulkModal()}
+
+      {/* Bulk Material Request Review Modal */}
+      {renderBulkMRModal()}
     </div>
   );
 };

@@ -32,6 +32,13 @@ const POMaterialRequest = () => {
   const [users, setUsers] = useState([]);
   const [items, setItems] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const [selectedStatus, setSelectedStatus] = useState('ALL');
+  const [selectedAvailability, setSelectedAvailability] = useState('ALL');
+  const [selectedMrIds, setSelectedMrIds] = useState(new Set());
+  const [bulkRfqModalOpen, setBulkRfqModalOpen] = useState(false);
+  const [bulkRfqLoading, setBulkRfqLoading] = useState(false);
+  const [bulkRfqCreating, setBulkRfqCreating] = useState(false);
+  const [bulkRfqPreview, setBulkRfqPreview] = useState(null);
   const lastFetchedIdRef = useRef(null);
 
   useEffect(() => {
@@ -597,21 +604,200 @@ const POMaterialRequest = () => {
 
   const statusCounts = useMemo(() => {
     const counts = {
-      total: requests.length,
+      all: requests.length,
       draft: 0,
-      approved: 0,
-      processing: 0,
-      po_created: 0,
-      fulfilled: 0,
+      pending: 0,
+      partially_released: 0,
+      released: 0,
+      completed: 0,
       cancelled: 0
     };
     requests.forEach(req => {
-      let status = (req.status || 'DRAFT').toLowerCase();
-      if (status === 'completed') status = 'fulfilled';
-      if (counts[status] !== undefined) counts[status]++;
+      const s = (req.status || 'DRAFT').toUpperCase().trim();
+      if (s === 'DRAFT') counts.draft++;
+      else if (s === 'PROCESSING' || s === 'PENDING') counts.pending++;
+      else if (s === 'PARTIALLY_RELEASED') counts.partially_released++;
+      else if (s === 'COMPLETED') counts.completed++;
+      else if (s === 'RELEASED' || s === 'FULFILLED') counts.released++;
+      else if (s === 'CANCELLED' || s === 'REJECTED') counts.cancelled++;
     });
     return counts;
   }, [requests]);
+
+  const statusFilteredRequests = useMemo(() => {
+    if (!selectedStatus || selectedStatus === 'ALL') return requests;
+    return requests.filter(req => {
+      const s = (req.status || 'DRAFT').toUpperCase().trim();
+      if (selectedStatus === 'DRAFT') return s === 'DRAFT';
+      if (selectedStatus === 'PENDING') return s === 'PROCESSING' || s === 'PENDING';
+      if (selectedStatus === 'PARTIALLY_RELEASED') return s === 'PARTIALLY_RELEASED';
+      if (selectedStatus === 'RELEASED') return (s === 'RELEASED' || s === 'FULFILLED') && s !== 'COMPLETED';
+      if (selectedStatus === 'COMPLETED') return s === 'COMPLETED';
+      if (selectedStatus === 'CANCELLED') return s === 'CANCELLED' || s === 'REJECTED';
+      return s === selectedStatus;
+    });
+  }, [requests, selectedStatus]);
+
+  const availabilityCounts = useMemo(() => {
+    const counts = {
+      all: statusFilteredRequests.length,
+      available: 0,
+      unavailable: 0
+    };
+    statusFilteredRequests.forEach(req => {
+      const avail = (req.availability || 'unavailable').toLowerCase().trim();
+      if (avail === 'available') counts.available++;
+      else counts.unavailable++;
+    });
+    return counts;
+  }, [statusFilteredRequests]);
+
+  const filteredRequests = useMemo(() => {
+    if (!selectedAvailability || selectedAvailability === 'ALL') return statusFilteredRequests;
+    return statusFilteredRequests.filter(req => {
+      const avail = (req.availability || 'unavailable').toLowerCase().trim();
+      if (selectedAvailability === 'AVAILABLE') return avail === 'available';
+      if (selectedAvailability === 'UNAVAILABLE') return avail === 'unavailable';
+      return true;
+    });
+  }, [statusFilteredRequests, selectedAvailability]);
+
+  const handleOpenBulkRfqModal = async () => {
+    const mrIdsArray = Array.from(selectedMrIds);
+    if (mrIdsArray.length === 0) {
+      errorToast('Please select at least one Material Request');
+      return;
+    }
+
+    setBulkRfqModalOpen(true);
+    setBulkRfqLoading(true);
+    setBulkRfqPreview(null);
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/material-requests/bulk-create-rfq-preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ materialRequestIds: mrIdsArray })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setBulkRfqPreview(data);
+      } else {
+        const err = await response.json();
+        errorToast(err.message || 'Failed to load Bulk RFQ preview');
+      }
+    } catch (error) {
+      console.error('Error loading Bulk RFQ preview:', error);
+      errorToast('Failed to load Bulk RFQ preview');
+    } finally {
+      setBulkRfqLoading(false);
+    }
+  };
+
+  const handleConfirmBulkRfq = async () => {
+    const mrIdsArray = Array.from(selectedMrIds);
+    if (mrIdsArray.length === 0) return;
+
+    setBulkRfqCreating(true);
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/material-requests/bulk-create-rfq`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ materialRequestIds: mrIdsArray })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.message || 'Failed to create Bulk RFQ');
+      }
+
+      setBulkRfqModalOpen(false);
+      setSelectedMrIds(new Set());
+      await fetchRequests();
+
+      const createdCount = resData.summary?.created ?? 0;
+      const alreadyExistsCount = resData.summary?.alreadyExists ?? 0;
+      const noPendingCount = resData.summary?.noPendingMaterials ?? 0;
+      const failedCount = resData.summary?.failed ?? 0;
+
+      await Swal.fire({
+        icon: createdCount > 0 ? 'success' : (failedCount > 0 ? 'warning' : 'info'),
+        title: 'Bulk RFQ Completed',
+        html: `
+          <div style="text-align: left; font-size: 13px; line-height: 1.5;">
+            <div style="padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 12px;">
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center;">
+                <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 6px;">
+                  <div style="font-size: 16px; font-weight: 700; color: #047857;">${createdCount}</div>
+                  <div style="font-size: 10px; color: #065f46; font-weight: 600;">Created</div>
+                </div>
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px;">
+                  <div style="font-size: 16px; font-weight: 700; color: #1d4ed8;">${alreadyExistsCount}</div>
+                  <div style="font-size: 10px; color: #1e40af; font-weight: 600;">Already Exists</div>
+                </div>
+                <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 6px; padding: 6px;">
+                  <div style="font-size: 16px; font-weight: 700; color: #a16207;">${noPendingCount}</div>
+                  <div style="font-size: 10px; color: #854d0e; font-weight: 600;">No Pending</div>
+                </div>
+                <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 6px;">
+                  <div style="font-size: 16px; font-weight: 700; color: #be123c;">${failedCount}</div>
+                  <div style="font-size: 10px; color: #9f1239; font-weight: 600;">Failed</div>
+                </div>
+              </div>
+            </div>
+            ${resData.results?.created?.length > 0 ? `
+              <div style="margin-bottom: 10px;">
+                <p style="font-size: 11px; font-weight: 700; color: #047857; text-transform: uppercase; margin: 0 0 4px 0;">Newly Created RFQs:</p>
+                <div style="max-height: 100px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; background: #fff;">
+                  ${resData.results.created.map(c => `<div style="padding: 4px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;"><span><strong>${c.mr_number}</strong> → <span style="color: #4f46e5; font-weight: 600;">${c.rfq_number}</span> (${c.drawing_no || 'Direct Item'})</span><span style="color: #64748b;">${c.itemsCount} item(s)</span></div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            ${resData.results?.alreadyExists?.length > 0 ? `
+              <div style="margin-bottom: 10px;">
+                <p style="font-size: 11px; font-weight: 700; color: #1d4ed8; text-transform: uppercase; margin: 0 0 4px 0;">Already Existed (Skipped):</p>
+                <div style="max-height: 80px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; background: #fff;">
+                  ${resData.results.alreadyExists.map(a => `<div style="padding: 3px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;"><span>${a.mr_number} (${a.drawing_no || 'Direct Item'})</span><span style="color: #1d4ed8; font-family: monospace;">${a.existingRfqNumber || 'Existing RFQ'}</span></div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            ${resData.results?.noPendingMaterials?.length > 0 ? `
+              <div style="margin-bottom: 10px;">
+                <p style="font-size: 11px; font-weight: 700; color: #a16207; text-transform: uppercase; margin: 0 0 4px 0;">No Pending Items (Skipped):</p>
+                <div style="max-height: 80px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; background: #fff;">
+                  ${resData.results.noPendingMaterials.map(n => `<div style="padding: 3px 0; border-bottom: 1px solid #f1f5f9;"><span>${n.mr_number} (${n.drawing_no || 'Direct Item'})</span></div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            ${resData.results?.failed?.length > 0 ? `
+              <div>
+                <p style="font-size: 11px; font-weight: 700; color: #be123c; text-transform: uppercase; margin: 0 0 4px 0;">Failed Requests:</p>
+                <div style="max-height: 80px; overflow-y: auto; border: 1px solid #fecdd3; border-radius: 6px; padding: 4px 8px; background: #fff1f2;">
+                  ${resData.results.failed.map(f => `<div style="padding: 3px 0; border-bottom: 1px solid #fee2e2; color: #9f1239;"><span>${f.mr_number || f.id}: ${f.reason || f.error || 'Failed'}</span></div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `,
+        confirmButtonColor: '#4f46e5'
+      });
+    } catch (error) {
+      console.error('Error creating Bulk RFQs:', error);
+      errorToast(error.message || 'Failed to create Bulk RFQs');
+    } finally {
+      setBulkRfqCreating(false);
+    }
+  };
 
   const formatDate = (dateString) => {
     if (!dateString) return '—';
@@ -814,30 +1000,74 @@ const POMaterialRequest = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-6 gap-2 mb-6">
+        <div className="grid grid-cols-7 gap-2 mb-4">
           {[
-            { label: 'Total Requests', count: statusCounts.total, icon: '📋', color: 'indigo', active: true },
-            { label: 'Draft', count: statusCounts.draft, icon: '📝', color: 'slate' },
-            { label: 'Approved', count: statusCounts.approved, icon: '🛡️', color: 'blue' },
-            { label: 'Processing', count: statusCounts.processing, icon: '⚙️', color: 'purple' },
-            { label: 'Fulfilled', count: statusCounts.fulfilled, icon: '✅', color: 'emerald' },
-            { label: 'Cancelled', count: statusCounts.cancelled, icon: '❌', color: 'rose' }
-          ].map((card, idx) => (
-            <div key={idx} className={`bg-white p-2 rounded  border ${card.active ? 'border-indigo-200 ring-4 ring-indigo-50' : 'border-slate-100 hover:border-slate-200'} transition-all cursor-pointer group`}>
-              <div className="flex justify-between items-start mb-2">
-                <span className="text-xl">{card.icon}</span>
-                <span className={`text-xs  px-1.5 py-0.5 rounded  bg-${card.color}-50 text-${card.color}-600`}>+0%</span>
+            { id: 'ALL', label: 'All Requests', count: statusCounts.all, icon: '📋' },
+            { id: 'DRAFT', label: 'Draft', count: statusCounts.draft, icon: '📝' },
+            { id: 'PENDING', label: 'Pending / Processing', count: statusCounts.pending, icon: '⚙️' },
+            { id: 'PARTIALLY_RELEASED', label: 'Partially Released', count: statusCounts.partially_released, icon: '📦' },
+            { id: 'RELEASED', label: 'Released / Fulfilled', count: statusCounts.released, icon: '🚚' },
+            { id: 'COMPLETED', label: 'Completed', count: statusCounts.completed, icon: '✅' },
+            { id: 'CANCELLED', label: 'Cancelled', count: statusCounts.cancelled, icon: '❌' }
+          ].map((card) => (
+            <div
+              key={card.id}
+              className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm"
+            >
+              <div className="flex justify-between items-start mb-1">
+                <span className="text-lg">{card.icon}</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                  {card.count}
+                </span>
               </div>
-              <p className="text-slate-500 text-xs   mb-1">{card.label}</p>
-              <h3 className="text-xl  text-slate-900">{card.count}</h3>
+              <p className="text-slate-600 text-[11px] font-medium truncate">{card.label}</p>
             </div>
           ))}
         </div>
 
+        {selectedMrIds.size > 0 && (
+          <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between shadow-sm animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">
+                {selectedMrIds.size}
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-900">
+                  {selectedMrIds.size} {selectedMrIds.size === 1 ? 'Material Request' : 'Material Requests'} Selected
+                </span>
+                <span className="text-[11px] text-slate-500 ml-2 hidden sm:inline">
+                  Click Bulk Create RFQ to review and generate RFQs
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSelectedMrIds(new Set())}
+                className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded text-xs font-medium transition-colors"
+              >
+                Clear Selection
+              </button>
+              <button
+                onClick={handleOpenBulkRfqModal}
+                className="px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Bulk Create RFQ
+              </button>
+            </div>
+          </div>
+        )}
+
         <DataTable
           columns={columns}
-          data={requests}
+          data={filteredRequests}
           loading={loading}
+          selectable={true}
+          selectedRows={selectedMrIds}
+          onSelectionChange={(newSelection) => setSelectedMrIds(newSelection)}
+          rowId="id"
           searchPlaceholder="Search by ID, drawing, description, project, requester..."
           emptyMessage="No material requests found"
           customFilter={(row, searchLower) => {
@@ -849,22 +1079,57 @@ const POMaterialRequest = () => {
             return matchesId || matchesRequester || matchesDrawing || matchesFinishedGood || matchesProject;
           }}
           filterComponent={
-            <div className="flex items-center gap-2 ">
-              <select className="p-2 .5 bg-white border border-slate-200 rounded  text-xs outline-none focus:ring-2 focus:ring-indigo-100">
-                <option>All Statuses</option>
-                <option>Draft</option>
-                <option>Approved</option>
-                <option>Fulfilled</option>
-              </select>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-slate-600">Status:</span>
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer shadow-sm hover:border-slate-300"
+                >
+                  <option value="ALL">All ({statusCounts.all})</option>
+                  <option value="DRAFT">Draft ({statusCounts.draft})</option>
+                  <option value="PENDING">Pending / Processing ({statusCounts.pending})</option>
+                  <option value="PARTIALLY_RELEASED">Partially Released ({statusCounts.partially_released})</option>
+                  <option value="RELEASED">Released / Fulfilled ({statusCounts.released})</option>
+                  <option value="COMPLETED">Completed ({statusCounts.completed})</option>
+                  <option value="CANCELLED">Cancelled ({statusCounts.cancelled})</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-slate-600">Availability:</span>
+                <select
+                  value={selectedAvailability}
+                  onChange={(e) => setSelectedAvailability(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer shadow-sm hover:border-slate-300"
+                >
+                  <option value="ALL">All ({availabilityCounts.all})</option>
+                  <option value="AVAILABLE">Available ({availabilityCounts.available})</option>
+                  <option value="UNAVAILABLE">Unavailable ({availabilityCounts.unavailable})</option>
+                </select>
+              </div>
+
+              {(selectedStatus !== 'ALL' || selectedAvailability !== 'ALL') && (
+                <button
+                  onClick={() => {
+                    setSelectedStatus('ALL');
+                    setSelectedAvailability('ALL');
+                  }}
+                  className="px-2.5 py-1 text-xs font-medium text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors"
+                >
+                  Reset Filters
+                </button>
+              )}
             </div>
           }
           actions={
             <div className="flex gap-2">
-              <button className="p-2 .5 border border-slate-200 rounded  text-xs text-slate-600 flex items-center gap-2  hover:bg-slate-50">
+              <button className="p-2 .5 border border-slate-200 rounded text-xs text-slate-600 flex items-center gap-2 hover:bg-slate-50">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" /></svg>
                 Columns
               </button>
-              <button className="p-2 .5 border border-slate-200 rounded  text-xs text-slate-600 flex items-center gap-2  hover:bg-slate-50">
+              <button className="p-2 .5 border border-slate-200 rounded text-xs text-slate-600 flex items-center gap-2 hover:bg-slate-50">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M16 9l-4-4m0 0L8 9m4-4v12" /></svg>
                 Export
               </button>
@@ -1879,6 +2144,153 @@ const POMaterialRequest = () => {
               </>
             );
           })()}
+        </div>
+      </Modal>
+
+      {/* Bulk Create RFQ Modal */}
+      <Modal
+        isOpen={bulkRfqModalOpen}
+        onClose={() => setBulkRfqModalOpen(false)}
+        title="Bulk Create RFQ"
+        size="4xl"
+      >
+        <div className="p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">
+                Review Selected Material Requests ({bulkRfqPreview?.summary?.total || selectedMrIds.size})
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Each eligible Material Request will create an independent RFQ traceable to that request.
+              </p>
+            </div>
+            {bulkRfqPreview?.summary && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-medium">
+                  {bulkRfqPreview.summary.ready} Ready
+                </span>
+                {bulkRfqPreview.summary.alreadyExists > 0 && (
+                  <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded font-medium">
+                    {bulkRfqPreview.summary.alreadyExists} Already Exists
+                  </span>
+                )}
+                {bulkRfqPreview.summary.noPendingItems > 0 && (
+                  <span className="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded font-medium">
+                    {bulkRfqPreview.summary.noPendingItems} No Pending
+                  </span>
+                )}
+                {bulkRfqPreview.summary.cannotCreate > 0 && (
+                  <span className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded font-medium">
+                    {bulkRfqPreview.summary.cannotCreate} Cannot Create
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {bulkRfqLoading ? (
+            <div className="py-16 text-center text-slate-400">
+              <svg className="w-8 h-8 mx-auto animate-spin text-indigo-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Evaluating Material Requests & RFQ Readiness...
+            </div>
+          ) : (
+            <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[400px] overflow-y-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 text-slate-700 font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-3">Material Request</th>
+                    <th className="py-2.5 px-3">Drawing / Project</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3">Availability</th>
+                    <th className="py-2.5 px-3">RFQ Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {bulkRfqPreview?.previewItems?.map((item) => {
+                    const reqObj = requests.find(r => r.id === item.id);
+                    const availability = reqObj?.availability || 'unavailable';
+
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900">
+                          {item.mr_number}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-medium text-slate-800">{item.drawing_no || 'Direct Item'}</div>
+                          <div className="text-[11px] text-slate-400 truncate max-w-[200px]">{item.finished_good || item.project_name}</div>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-medium inline-flex items-center gap-1 ${
+                            availability === 'available' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${availability === 'available' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                            {availability}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          {item.readiness === 'READY' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+                              ✓ Ready ({item.eligibleItemsCount} item{item.eligibleItemsCount === 1 ? '' : 's'})
+                            </span>
+                          )}
+                          {item.readiness === 'ALREADY_EXISTS' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-800" title={item.reason}>
+                              ℹ RFQ Exists ({item.existingRfqNumber})
+                            </span>
+                          )}
+                          {item.readiness === 'NO_PENDING_ITEMS' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800" title={item.reason}>
+                              ⚠ No Pending Items
+                            </span>
+                          )}
+                          {(item.readiness === 'CANNOT_CREATE' || item.readiness === 'FAILED') && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800" title={item.reason}>
+                              ⚠ {item.reason}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <button
+              onClick={() => setBulkRfqModalOpen(false)}
+              disabled={bulkRfqCreating}
+              className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 border border-slate-200 hover:bg-slate-50 rounded transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmBulkRfq}
+              disabled={bulkRfqCreating || !bulkRfqPreview || bulkRfqPreview.summary.ready === 0}
+              className="px-4 py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded shadow-sm flex items-center gap-2 transition-colors"
+            >
+              {bulkRfqCreating ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Creating RFQs...
+                </>
+              ) : (
+                <>
+                  Confirm & Create {bulkRfqPreview?.summary?.ready ? `${bulkRfqPreview.summary.ready} ` : ''}RFQs
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

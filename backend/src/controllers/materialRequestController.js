@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const stockService = require('../services/stockService');
+const rfqService = require('../services/rfqService');
 
 const resolveDimensionItemCode = async (connection, item) => {
   const lengthVal = parseFloat(item.length || 0);
@@ -1571,7 +1572,336 @@ const materialRequestController = {
     } finally {
       connection.release();
     }
+  },
+
+  bulkCreateRfqPreview: async (req, res) => {
+    try {
+      const { materialRequestIds } = req.body;
+      if (!Array.isArray(materialRequestIds) || materialRequestIds.length === 0) {
+        return res.status(400).json({ message: 'materialRequestIds array is required' });
+      }
+
+      const previewItems = [];
+      const summary = {
+        total: materialRequestIds.length,
+        ready: 0,
+        alreadyExists: 0,
+        noPendingItems: 0,
+        cannotCreate: 0
+      };
+
+      for (const mrId of materialRequestIds) {
+        const details = await _fetchMrDetailsForRfq(mrId);
+        if (!details) {
+          previewItems.push({
+            id: mrId,
+            mr_number: `MR #${mrId}`,
+            drawing_no: '-',
+            status: 'NOT_FOUND',
+            readiness: 'FAILED',
+            reason: 'Material Request not found',
+            eligibleItemsCount: 0
+          });
+          summary.cannotCreate++;
+          continue;
+        }
+
+        const { mr, existingRfq, eligibleItems, readiness, reason } = details;
+
+        if (readiness === 'READY') summary.ready++;
+        else if (readiness === 'ALREADY_EXISTS') summary.alreadyExists++;
+        else if (readiness === 'NO_PENDING_ITEMS') summary.noPendingItems++;
+        else summary.cannotCreate++;
+
+        previewItems.push({
+          id: mr.id,
+          mr_number: mr.mr_number,
+          drawing_no: mr.drawing_no || 'Direct Item',
+          finished_good: mr.finished_good || '-',
+          project_name: mr.project_name || '-',
+          status: mr.status,
+          readiness,
+          reason,
+          existingRfqNumber: existingRfq?.rfq_number || null,
+          eligibleItemsCount: eligibleItems.length
+        });
+      }
+
+      res.json({ summary, previewItems });
+    } catch (error) {
+      console.error('Error in bulkCreateRfqPreview:', error);
+      res.status(500).json({ message: error.message });
+    }
+  },
+
+  bulkCreateRfq: async (req, res) => {
+    try {
+      const { materialRequestIds } = req.body;
+      if (!Array.isArray(materialRequestIds) || materialRequestIds.length === 0) {
+        return res.status(400).json({ message: 'materialRequestIds array is required' });
+      }
+
+      const results = {
+        created: [],
+        alreadyExists: [],
+        noPendingMaterials: [],
+        failed: []
+      };
+
+      for (const mrId of materialRequestIds) {
+        try {
+          const details = await _fetchMrDetailsForRfq(mrId);
+          if (!details) {
+            results.failed.push({
+              id: mrId,
+              mr_number: `MR #${mrId}`,
+              reason: 'Material Request not found'
+            });
+            continue;
+          }
+
+          const { mr, existingRfq, eligibleItems, readiness, reason } = details;
+
+          if (readiness === 'ALREADY_EXISTS') {
+            results.alreadyExists.push({
+              id: mr.id,
+              mr_number: mr.mr_number,
+              drawing_no: mr.drawing_no,
+              existingRfqNumber: existingRfq.rfq_number
+            });
+            continue;
+          }
+
+          if (readiness === 'NO_PENDING_ITEMS') {
+            results.noPendingMaterials.push({
+              id: mr.id,
+              mr_number: mr.mr_number,
+              drawing_no: mr.drawing_no,
+              reason: 'No pending items with remaining quantity'
+            });
+            continue;
+          }
+
+          if (readiness === 'CANNOT_CREATE') {
+            results.failed.push({
+              id: mr.id,
+              mr_number: mr.mr_number,
+              drawing_no: mr.drawing_no,
+              reason
+            });
+            continue;
+          }
+
+          // Call the exact existing rfqService.createRfq!
+          const rfqResult = await rfqService.createRfq({
+            mr_id: mr.id,
+            requested_by: req.user ? req.user.id : null,
+            notes: `Bulk created RFQ for ${mr.mr_number}`,
+            items: eligibleItems
+          });
+
+          results.created.push({
+            id: mr.id,
+            mr_number: mr.mr_number,
+            drawing_no: mr.drawing_no,
+            rfq_id: rfqResult.id,
+            rfq_number: rfqResult.rfq_number,
+            itemsCount: eligibleItems.length
+          });
+        } catch (err) {
+          console.error(`Error processing MR ${mrId} in bulk RFQ:`, err);
+          results.failed.push({
+            id: mrId,
+            error: err.message
+          });
+        }
+      }
+
+      const summary = {
+        total: materialRequestIds.length,
+        created: results.created.length,
+        alreadyExists: results.alreadyExists.length,
+        noPendingMaterials: results.noPendingMaterials.length,
+        failed: results.failed.length
+      };
+
+      res.json({ summary, results });
+    } catch (error) {
+      console.error('Error in bulkCreateRfq:', error);
+      res.status(500).json({ message: error.message });
+    }
   }
+};
+
+const _fetchMrDetailsForRfq = async (mrId) => {
+  const [mrRows] = await pool.query(`
+    SELECT mr.*, 
+      COALESCE(
+        (
+          SELECT COALESCE(soi.drawing_no, oi.drawing_no)
+          FROM production_plan_items ppi_dr
+          LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
+          LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
+          WHERE ppi_dr.plan_id = pp.id
+          LIMIT 1
+        ),
+        (
+          SELECT cd.drawing_no 
+          FROM customer_drawings cd 
+          WHERE (pp.bom_no REGEXP '^[0-9]+$' AND cd.id = CAST(pp.bom_no AS UNSIGNED)) OR (cd.drawing_no = pp.bom_no)
+          LIMIT 1
+        ),
+        CASE WHEN pp.bom_no NOT REGEXP '^[0-9]+$' THEN pp.bom_no ELSE NULL END
+      ) as drawing_no,
+      ppi.description as finished_good,
+      COALESCE(
+        (
+          SELECT so.project_name 
+          FROM production_plans pp
+          LEFT JOIN (
+            SELECT plan_id, sales_order_item_id FROM production_plan_items
+            WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+          ) ppi ON pp.id = ppi.plan_id
+          LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+          LEFT JOIN sales_orders so ON (
+            (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+            (soi.id IS NULL AND pp.sales_order_id = so.id)
+          )
+          WHERE pp.id = mr.plan_id
+        ),
+        (
+          SELECT o.project_name 
+          FROM production_plans pp
+          JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
+          WHERE pp.id = mr.plan_id
+        ),
+        mr.purpose,
+        '-'
+      ) as project_name
+    FROM material_requests mr
+    LEFT JOIN production_plans pp ON mr.plan_id = pp.id
+    LEFT JOIN (
+      SELECT plan_id, description FROM production_plan_items
+      WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+    ) ppi ON pp.id = ppi.plan_id
+    WHERE mr.id = ?
+  `, [mrId]);
+
+  if (mrRows.length === 0) return null;
+  const mr = mrRows[0];
+
+  // Check existing RFQ
+  const [rfqRows] = await pool.query(
+    'SELECT id, rfq_number FROM procurement_rfqs WHERE mr_id = ? ORDER BY id DESC LIMIT 1',
+    [mrId]
+  );
+  const existingRfq = rfqRows.length > 0 ? rfqRows[0] : null;
+
+  // Fetch MR items
+  const [items] = await pool.query(`
+    SELECT mri.*, 
+           COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
+           COALESCE(mri.uom, sb.unit) as uom,
+           COALESCE(mri.item_type, sb.material_type) as material_type,
+           CASE WHEN (COALESCE(mri.length, 0) > 0 OR COALESCE(mri.width, 0) > 0 OR COALESCE(mri.thickness, 0) > 0 OR COALESCE(mri.diameter, 0) > 0 OR COALESCE(mri.outer_diameter, 0) > 0) THEN COALESCE(mri.length, 0) ELSE COALESCE(sb.length, 0) END as length,
+           CASE WHEN (COALESCE(mri.length, 0) > 0 OR COALESCE(mri.width, 0) > 0 OR COALESCE(mri.thickness, 0) > 0 OR COALESCE(mri.diameter, 0) > 0 OR COALESCE(mri.outer_diameter, 0) > 0) THEN COALESCE(mri.width, 0) ELSE COALESCE(sb.width, 0) END as width,
+           CASE WHEN (COALESCE(mri.length, 0) > 0 OR COALESCE(mri.width, 0) > 0 OR COALESCE(mri.thickness, 0) > 0 OR COALESCE(mri.diameter, 0) > 0 OR COALESCE(mri.outer_diameter, 0) > 0) THEN COALESCE(mri.thickness, 0) ELSE COALESCE(sb.thickness, 0) END as thickness,
+           CASE WHEN (COALESCE(mri.length, 0) > 0 OR COALESCE(mri.width, 0) > 0 OR COALESCE(mri.thickness, 0) > 0 OR COALESCE(mri.diameter, 0) > 0 OR COALESCE(mri.outer_diameter, 0) > 0) THEN COALESCE(mri.diameter, 0) ELSE COALESCE(sb.diameter, 0) END as diameter,
+           CASE WHEN (COALESCE(mri.length, 0) > 0 OR COALESCE(mri.width, 0) > 0 OR COALESCE(mri.thickness, 0) > 0 OR COALESCE(mri.diameter, 0) > 0 OR COALESCE(mri.outer_diameter, 0) > 0) THEN COALESCE(mri.outer_diameter, 0) ELSE COALESCE(sb.outer_diameter, 0) END as outer_diameter,
+           CASE WHEN (COALESCE(mri.length, 0) > 0 OR COALESCE(mri.width, 0) > 0 OR COALESCE(mri.thickness, 0) > 0 OR COALESCE(mri.diameter, 0) > 0 OR COALESCE(mri.outer_diameter, 0) > 0) THEN COALESCE(mri.density, 0) ELSE COALESCE(sb.density, 0) END as density,
+           CASE WHEN (COALESCE(mri.length, 0) > 0 OR COALESCE(mri.width, 0) > 0 OR COALESCE(mri.thickness, 0) > 0 OR COALESCE(mri.diameter, 0) > 0 OR COALESCE(mri.outer_diameter, 0) > 0) THEN COALESCE(mri.weight_per_unit, 0) ELSE COALESCE(sb.weight_per_unit, 0) END as weight_per_unit,
+           COALESCE(mri.shape_type, shape_lookup.shape_name) as shape_type
+    FROM material_request_items mri
+    LEFT JOIN (
+      SELECT item_code, MAX(material_name) as material_name, MAX(item_description) as item_description, 
+             MAX(unit) as unit, MAX(material_type) as material_type, MAX(length) as length, 
+             MAX(width) as width, MAX(thickness) as thickness, MAX(diameter) as diameter, 
+             MAX(outer_diameter) as outer_diameter, MAX(density) as density, MAX(weight_per_unit) as weight_per_unit
+      FROM stock_balance GROUP BY item_code
+    ) sb ON mri.item_code = sb.item_code
+    LEFT JOIN (
+        SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
+               MAX(s.name) as shape_name
+        FROM sales_order_item_materials som
+        LEFT JOIN shapes s ON som.shape_id = s.id
+        GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
+    ) shape_lookup ON (
+        LOWER(TRIM(REPLACE(mri.item_name, '\\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\\t', '')))
+        AND ABS(COALESCE(mri.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
+        AND ABS(COALESCE(mri.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
+        AND ABS(COALESCE(mri.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
+        AND ABS(COALESCE(mri.diameter, 0) - COALESCE(shape_lookup.diameter, 0)) < 0.0001
+        AND ABS(COALESCE(mri.outer_diameter, 0) - COALESCE(shape_lookup.outer_diameter, 0)) < 0.0001
+    )
+    WHERE mri.mr_id = ?
+  `, [mrId]);
+
+  // Filter out Finished Goods and Sub-Assemblies
+  const eligibleItems = items.filter(item => {
+    const type = (item.material_type || item.item_type || '').toUpperCase();
+    const isNotFG = type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+
+    const remainingQty = item.remaining_qty !== undefined
+      ? parseFloat(item.remaining_qty || 0)
+      : Math.max(0, parseFloat(item.quantity || 0) - parseFloat(item.allocated_quantity || 0));
+
+    return isNotFG && remainingQty > 0;
+  }).map(item => {
+    const remainingQty = item.remaining_qty !== undefined
+      ? parseFloat(item.remaining_qty || 0)
+      : Math.max(0, parseFloat(item.quantity || 0) - parseFloat(item.allocated_quantity || 0));
+
+    const remainingWeight = item.remaining_weight !== undefined
+      ? parseFloat(item.remaining_weight || 0)
+      : Math.max(0, parseFloat(item.required_weight || 0) - parseFloat(item.allocated_weight || 0));
+
+    const isKg = (item.uom || '').toLowerCase() === 'kg' || (item.uom || '').toLowerCase() === 'kgs' || (item.uom || '').toLowerCase() === 'kilogram';
+
+    return {
+      item_code: item.item_code,
+      description: item.remarks || item.name || item.item_name || item.material_name || item.item_code,
+      material_name: item.name || item.material_name || item.item_name || item.item_code,
+      material_type: item.material_type,
+      drawing_no: mr.drawing_no || item.drawing_no || null,
+      quantity: isKg ? remainingWeight : remainingQty,
+      planned_qty: remainingQty,
+      design_qty: remainingQty,
+      uom: item.uom || 'Nos',
+      length: item.length || 0,
+      width: item.width || 0,
+      thickness: item.thickness || 0,
+      diameter: item.diameter || 0,
+      outer_diameter: item.outer_diameter || 0,
+      density: item.density || 0,
+      weight_per_unit: item.weight_per_unit || 0,
+      shape_type: item.shape_type || null
+    };
+  });
+
+  const currentStatus = (mr.status || '').toUpperCase().trim();
+  const isIneligibleStatus = ['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED', 'PO_CREATED'].includes(currentStatus);
+
+  let readiness = 'READY';
+  let reason = 'Ready';
+
+  if (existingRfq) {
+    readiness = 'ALREADY_EXISTS';
+    reason = `RFQ already exists (${existingRfq.rfq_number})`;
+  } else if (isIneligibleStatus) {
+    readiness = 'CANNOT_CREATE';
+    reason = `Material request is in ${mr.status} status`;
+  } else if (eligibleItems.length === 0) {
+    readiness = 'NO_PENDING_ITEMS';
+    reason = 'No pending items with remaining quantity';
+  }
+
+  return {
+    mr,
+    existingRfq,
+    eligibleItems,
+    readiness,
+    reason
+  };
 };
 
 module.exports = materialRequestController;

@@ -14,6 +14,8 @@ router.get('/sales-order/:id/bulk-preview', authorize(['PROD_VIEW']), production
 router.get('/item-bom/:salesOrderItemId', authorize(['PROD_VIEW']), productionPlanController.getItemBOMDetails);
 router.get('/:id', authorize(['PROD_VIEW']), productionPlanController.getProductionPlanById);
 router.post('/bulk', authorize(['PROD_MANAGE']), productionPlanController.bulkCreateProductionPlans);
+router.post('/bulk-material-request-preview', authorize(['PROD_VIEW']), productionPlanController.getBulkMaterialRequestPreview);
+router.post('/bulk-material-request', authorize(['PROD_MANAGE']), productionPlanController.bulkCreateMaterialRequests);
 router.post('/', authorize(['PROD_MANAGE']), productionPlanController.createProductionPlan);
 router.put('/:id', authorize(['PROD_MANAGE']), productionPlanController.updateProductionPlan);
 router.post('/transmit-mr/:id', authorize(['PROD_MANAGE']), productionPlanController.createMaterialRequestFromPlan);

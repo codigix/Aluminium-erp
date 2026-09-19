@@ -5,6 +5,9 @@ const { authenticate } = require('../middleware/authMiddleware');
 
 router.use(authenticate);
 
+router.post('/bulk-create-rfq-preview', materialRequestController.bulkCreateRfqPreview);
+router.post('/bulk-create-rfq', materialRequestController.bulkCreateRfq);
+
 router.get('/', materialRequestController.getAll);
 router.get('/:id', materialRequestController.getById);
 router.patch('/:id/status', materialRequestController.updateStatus);

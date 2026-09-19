@@ -151,6 +151,26 @@ const bulkCreateProductionPlans = async (req, res, next) => {
   }
 };
 
+const getBulkMaterialRequestPreview = async (req, res, next) => {
+  try {
+    const { planIds } = req.body;
+    const preview = await productionPlanService.getBulkMaterialRequestPreview(planIds);
+    res.json(preview);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const bulkCreateMaterialRequests = async (req, res, next) => {
+  try {
+    const { planIds } = req.body;
+    const result = await productionPlanService.bulkCreateMaterialRequests(planIds, req.user.id);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listProductionPlans,
   getProductionPlanById,
@@ -167,5 +187,7 @@ module.exports = {
   addManualMaterial,
   removeManualMaterial,
   getBulkCreationPreview,
-  bulkCreateProductionPlans
+  bulkCreateProductionPlans,
+  getBulkMaterialRequestPreview,
+  bulkCreateMaterialRequests
 };

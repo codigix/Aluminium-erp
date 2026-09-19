@@ -780,6 +780,7 @@ export const DataTable = ({
   emptyMessage = "No data found",
   searchPlaceholder = "Search...",
   actions,
+  filterComponent,
   onRowClick,
   renderExpanded,
   className = '',
@@ -920,7 +921,8 @@ export const DataTable = ({
             <span className="text-sm text-slate-500">entries</span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {filterComponent}
             {!hideSearch && (
               <div className="relative group min-w-[200px] md:min-w-[250px]">
                 <input
