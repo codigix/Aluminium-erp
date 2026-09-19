@@ -35,7 +35,6 @@ const createPdfParseFn = moduleRef => {
       }
       
       try {
-        // Handle mehmet-kozan/pdf-parse (v2.x)
         const parser = new pdfParseClass(new Uint8Array(buffer));
         if (typeof parser.load === 'function') {
           await parser.load();
@@ -88,8 +87,9 @@ const extractAddressBlock = (text, labelPatterns) => {
 
 const toNumber = value => {
   if (value === undefined || value === null) return 0;
-  const normalized = String(value).replace(/[^0-9.-]/g, '');
-  return normalized ? Number(normalized) : 0;
+  const normalized = String(value).replace(/,/g, '').replace(/[^0-9.-]/g, '');
+  const num = Number(normalized);
+  return isNaN(num) ? 0 : num;
 };
 
 const MONTHS = {
@@ -111,6 +111,9 @@ const MONTHS = {
 const normalizeDate = value => {
   if (!value) return null;
   const cleaned = value.replace(/[.]/g, '-').replace(/\//g, '-').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
+    return cleaned;
+  }
   if (/^\d{2}-\d{2}-\d{4}$/.test(cleaned)) {
     const [dd, mm, yyyy] = cleaned.split('-');
     return `${yyyy}-${mm}-${dd}`;
@@ -120,12 +123,13 @@ const normalizeDate = value => {
     const year = Number(yy) + 2000;
     return `${year}-${mm}-${dd}`;
   }
-  const match = cleaned.match(/^(\d{2})-([A-Za-z]{3})-(\d{2,4})$/);
+  const match = cleaned.match(/^(\d{1,2})-([A-Za-z]{3,4})-(\d{2,4})$/);
   if (match) {
     const [, dd, mon, yy] = match;
-    const month = MONTHS[mon.toUpperCase()] || '01';
+    const month = MONTHS[mon.substring(0, 3).toUpperCase()] || '01';
+    const day = dd.padStart(2, '0');
     const year = yy.length === 2 ? Number(yy) + 2000 : Number(yy);
-    return `${year}-${month}-${dd}`;
+    return `${year}-${month}-${day}`;
   }
   return null;
 };
@@ -170,37 +174,76 @@ const detectCompany = text => {
   return 'UNKNOWN';
 };
 
+const ROW_STOP_PATTERNS = [
+  /subtotal/i,
+  /total\s*value/i,
+  /grand\s*total/i,
+  /amount\s*payable/i,
+  /terms\s*&?\s*conditions/i,
+  /special\s*instructions/i,
+  /test\s*expectation/i,
+  /^test\s*note/i,
+  /^note\s*:/i,
+  /--\s*\d+\s*of\s*\d+\s*--/i
+];
+
+const ROW_IGNORE_PATTERNS = [
+  /^cin\b/i,
+  /^gstin\b/i,
+  /^telephone\b/i,
+  /^phone\b/i,
+  /^fax\b/i,
+  /^email\b/i,
+  /^website\b/i,
+  /^pincode\b/i,
+  /^page\s*\d+\s*(?:of|\/)\s*\d+/i,
+  /^--\s*\d+\s*of\s*\d+\s*--/i,
+  /^(?:sr\.?\s*no|drawing\s*no|description|hsn\s*code|delivery\s*date|qty|unit|rate|cgst|sgst|total\s*amount)/i
+];
+
+const DATE_REGEX = /(\d{1,2}[-/.][A-Za-z0-9]{2,3}[-/.][0-9]{2,4}|\d{4}[-/.][0-9]{1,2}[-/.][0-9]{1,2})/;
+
+// Pattern for a drawing number: e.g. Y31700, Y2027, TEST-DRW-99999, DRW-001, 520001, AL-100
+const isDrawingCode = (str) => {
+  if (!str || typeof str !== 'string') return false;
+  const clean = str.replace(/[:,\(\)]/g, '').toUpperCase();
+  if (clean.length < 3 || clean.length > 30) return false;
+  if (/^(ITEM|SR|NO|CODE|HSN|QTY|DATE|UNIT|RATE|INR|USD|EUR|NOS|PCS|PURCHASE|ORDER|CUSTOMER|PAYMENT|TERMS|TOTAL|DESCRIPTION|AMOUNT|DELIVERY|SL|SUBTOTAL)$/i.test(clean)) {
+    return false;
+  }
+  const hasDigit = /\d/.test(clean);
+  const hasSeparator = /[-_/.]/.test(clean);
+  const isValidFormat = /^[A-Z0-9][A-Z0-9\-_./]*[A-Z0-9]$/.test(clean) || /^[A-Z0-9]{3,}$/.test(clean);
+  return isValidFormat && (hasDigit || hasSeparator);
+};
+
+/**
+ * Segment text into header, table lines, and footer
+ */
 const segmentPoSections = text => {
   if (!text) {
-    return {
-      headerText: '',
-      tableLines: [],
-      footerText: '',
-      tableText: ''
-    };
+    return { headerText: '', tableLines: [], footerText: '', tableText: '' };
   }
-  const lines = text.split(/\r?\n/);
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const headerIndex = lines.findIndex(line => {
-    const normalized = line.toLowerCase();
+    const norm = line.toLowerCase();
     return (
-      (normalized.includes('item') && normalized.includes('description')) ||
-      (normalized.includes('material') && normalized.includes('qty'))
+      (norm.includes('item') && (norm.includes('description') || norm.includes('qty'))) ||
+      (norm.includes('material') && norm.includes('qty')) ||
+      (norm.includes('drawing') && (norm.includes('no') || norm.includes('description') || norm.includes('qty'))) ||
+      (norm.includes('drg') && (norm.includes('no') || norm.includes('qty'))) ||
+      (norm.includes('part') && (norm.includes('no') || norm.includes('description')))
     );
   });
+
   if (headerIndex === -1) {
-    return {
-      headerText: text,
-      tableLines: [],
-      footerText: '',
-      tableText: ''
-    };
+    return { headerText: text, tableLines: lines, footerText: '', tableText: text };
   }
+
   let tableEnd = lines.length;
   for (let i = headerIndex + 1; i < lines.length; i++) {
     const trimmed = lines[i].trim().toLowerCase();
-    if (!trimmed) {
-      continue;
-    }
+    if (!trimmed) continue;
     if (
       trimmed.includes('subtotal') ||
       trimmed.includes('total value') ||
@@ -208,12 +251,13 @@ const segmentPoSections = text => {
       trimmed.includes('amount payable') ||
       trimmed.includes('terms & conditions') ||
       trimmed.includes('terms and conditions') ||
-      trimmed.includes('remarks')
+      trimmed.includes('special instructions')
     ) {
       tableEnd = i;
       break;
     }
   }
+
   const headerText = lines.slice(0, headerIndex).join('\n');
   const tableLines = lines.slice(headerIndex + 1, tableEnd);
   const footerText = lines.slice(tableEnd).join('\n');
@@ -225,347 +269,321 @@ const segmentPoSections = text => {
   };
 };
 
-const ROW_STOP_PATTERNS = [
-  /subtotal/i,
-  /total\s*/i,
-  /grand\s*total/i,
-  /amount\s*payable/i,
-  /authorized/i,
-  /terms\s*&?\s*conditions/i,
-  /remarks/i
-];
-
-const ROW_IGNORE_PATTERNS = [
-  /gstin/i,
-  /cin/i,
-  /telephone/i,
-  /mobile/i,
-  /phone/i,
-  /fax/i,
-  /email/i,
-  /website/i,
-  /address/i,
-  /pincode/i,
-  /district/i,
-  /state/i,
-  /india/i,
-  /item\s*code/i,
-  /material\s*code/i,
-  /description/i,
-  /qty/i,
-  /quantity/i,
-  /rate/i,
-  /unit/i,
-  /hsn/i
-];
-
-const DATE_ONLY_PATTERN = /^\d{1,2}\s*[-/]\s*[A-Za-z]{3}\s*[-/]\s*\d{2,4}$/i;
-
-const sanitizeTableLines = lines => {
-  const sanitized = [];
-  for (const raw of lines) {
-    const trimmed = (raw || '').trim();
-    if (!trimmed) {
-      continue;
-    }
-    if (DATE_ONLY_PATTERN.test(trimmed)) {
-      continue;
-    }
-    if (ROW_STOP_PATTERNS.some(pattern => pattern.test(trimmed))) {
-      break;
-    }
-    if (ROW_IGNORE_PATTERNS.some(pattern => pattern.test(trimmed))) {
-      continue;
-    }
-    if (/^[=\-_.\s]+$/.test(trimmed)) {
-      continue;
-    }
-    sanitized.push(raw);
-  }
-  return sanitized;
-};
-
-const chunkTableRows = lines => {
+/**
+ * Consolidate multi-line wrapped table rows into single logical rows
+ */
+const consolidateTableRows = (lines, knownDrawingsSet = new Set()) => {
   const rows = [];
-  for (const raw of lines) {
-    const line = raw.replace(/\r/g, '');
+  let currentRow = '';
+
+  const isNewRowStart = (line) => {
     const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
+    // 1. Starts with serial number followed by drawing/text: e.g. "1 \tY31700", "1. Y31700"
+    if (/^\d{1,3}[\s.\t]+[A-Za-z0-9]/.test(trimmed)) {
+      return true;
     }
-    const hasColumns = /\s{2,}/.test(line);
-    const startsWithToken = /^[A-Za-z0-9]/.test(trimmed);
-    if (hasColumns && startsWithToken) {
-      rows.push(line);
-      continue;
+    // 2. Starts with a known drawing number
+    const firstTok = trimmed.split(/\s+/)[0]?.replace(/[^A-Za-z0-9\-_./]/g, '').toUpperCase();
+    if (firstTok && knownDrawingsSet.has(firstTok)) {
+      return true;
     }
-    if (rows.length) {
-      rows[rows.length - 1] = `${rows[rows.length - 1]} ${trimmed}`.trim();
+    // 3. Starts with a drawing-like code token (must contain digits or hyphens)
+    if (isDrawingCode(firstTok)) {
+      return true;
+    }
+    return false;
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (ROW_IGNORE_PATTERNS.some(p => p.test(line))) continue;
+    if (ROW_STOP_PATTERNS.some(p => p.test(line))) break;
+
+    if (isNewRowStart(line)) {
+      if (currentRow) {
+        rows.push(currentRow);
+      }
+      currentRow = line;
+    } else {
+      if (currentRow) {
+        currentRow = `${currentRow} ${line}`;
+      } else {
+        currentRow = line;
+      }
     }
   }
+
+  if (currentRow) {
+    rows.push(currentRow);
+  }
+
   return rows;
 };
 
-const parseSidelLineItems = lines => {
-  if (!Array.isArray(lines) || !lines.length) {
-    return [];
-  }
-  const items = [];
-  let pendingDescription = '';
-  for (const raw of lines) {
-    const line = (raw || '').replace(/\s+/g, ' ').trim();
-    if (!line) {
-      continue;
-    }
-    const lower = line.toLowerCase();
-    if (lower.includes('total value') || lower.includes('grand total') || lower.includes('amount payable')) {
+/**
+ * Parse a consolidated single line item string into a structured PO item
+ */
+const parseConsolidatedRow = (line, knownDrawingsSet = new Set()) => {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length < 5) return null;
+  if (ROW_STOP_PATTERNS.some(p => p.test(trimmed))) return null;
+
+  // Split tokens by whitespace or tabs
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return null;
+
+  // 1. Look for drawing number
+  let drawingNo = '';
+  let dwgIndex = -1;
+
+  // A. Check for match in knownDrawingsSet
+  for (let i = 0; i < tokens.length; i++) {
+    const cleanTok = tokens[i].replace(/[^A-Za-z0-9\-_./]/g, '').toUpperCase();
+    if (cleanTok && knownDrawingsSet.has(cleanTok)) {
+      drawingNo = cleanTok;
+      dwgIndex = i;
       break;
     }
-    if (lower.includes('gst')) {
-      continue;
-    }
-    if (DATE_ONLY_PATTERN.test(line)) {
-      continue;
-    }
-    const codeMatch = line.match(/^(\d{6,})(?:\s+)(.+)$/);
-    if (!codeMatch) {
-      if (/[A-Za-z]/.test(line)) {
-        pendingDescription = cleanup(line);
+  }
+
+  // B. If not in knownDrawingsSet, look for drawing code pattern
+  if (!drawingNo) {
+    for (let i = 0; i < Math.min(tokens.length, 5); i++) {
+      const tok = tokens[i].replace(/[:,\(\)]/g, '');
+      if (/^\d{1,3}\.?$/.test(tok) && i === 0 && tokens.length > 2) {
+        continue; // skip serial number
       }
-      continue;
-    }
-    const [, code, rest] = codeMatch;
-    const tokens = rest.split(/\s+/).filter(Boolean);
-    if (!tokens.length) {
-      continue;
-    }
-    let qty = 0;
-    let unit = 'NOS';
-    let rate = 0;
-    let qtyIndex = -1;
-    for (let i = 0; i < tokens.length; i++) {
-      const token = tokens[i];
-      const next = tokens[i + 1] || '';
-      if (/^-?[\d,.]+$/.test(token) && UNIT_KEYWORDS.includes(next.toUpperCase())) {
-        qty = toNumber(token);
-        unit = next.toUpperCase();
-        qtyIndex = i;
+      if (isDrawingCode(tok)) {
+        drawingNo = tok.toUpperCase();
+        dwgIndex = i;
         break;
       }
     }
-    if (qtyIndex === -1) {
-      const fallbackQtyIndex = tokens.findIndex(token => /^-?[\d,.]+$/.test(token));
-      if (fallbackQtyIndex > -1) {
-        qty = toNumber(tokens[fallbackQtyIndex]);
-        qtyIndex = fallbackQtyIndex;
-      }
+  }
+
+  if (!drawingNo) return null;
+
+  // 2. Extract Delivery Date
+  let deliveryDate = '';
+  const dateMatch = line.match(DATE_REGEX);
+  if (dateMatch) {
+    deliveryDate = normalizeDate(dateMatch[1]) || dateMatch[1];
+  }
+
+  // 3. Extract Unit
+  let unit = 'NOS';
+  let unitIdx = -1;
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i].toUpperCase();
+    if (UNIT_KEYWORDS.includes(t)) {
+      unit = t;
+      unitIdx = i;
+      break;
     }
-    let rateIndex = qtyIndex > -1 ? qtyIndex + 2 : -1;
-    if (rateIndex < 0 || rateIndex >= tokens.length) {
-      const numericAfterQty = tokens.slice(qtyIndex + 1).find(token => /^-?[\d,.]+$/.test(token));
-      if (numericAfterQty) {
-        rate = toNumber(numericAfterQty);
-      }
+  }
+
+  // 4. Extract HSN Code, Quantity, Rate, GST
+  const numbers = [];
+  tokens.forEach((t, idx) => {
+    if (idx === dwgIndex || idx === unitIdx) return;
+    if (idx === 0 && /^\d{1,3}\.?$/.test(t)) return; // skip row index
+
+    const clean = t.replace(/,/g, '');
+    if (/^-?\d+(?:\.\d+)?$/.test(clean)) {
+      const val = parseFloat(clean);
+      numbers.push({ val, idx, raw: t });
+    }
+  });
+
+  let hsnCode = '';
+  const hsnCandidate = numbers.find(n => /^\d{4,8}$/.test(n.raw) && n.val >= 1000 && n.idx > dwgIndex);
+  if (hsnCandidate) {
+    hsnCode = hsnCandidate.raw;
+  }
+
+  const nonHsnNumbers = numbers.filter(n => n !== hsnCandidate);
+
+  let quantity = 1;
+  let rate = 0;
+  let cgstPercent = 9;
+  let sgstPercent = 9;
+  let igstPercent = 0;
+
+  let qtyFound = false;
+  // If unit was found, quantity is usually adjacent to unit (before or after)
+  if (unitIdx > 0) {
+    const prevNum = nonHsnNumbers.find(n => n.idx === unitIdx - 1);
+    if (prevNum && prevNum.val > 0) {
+      quantity = prevNum.val;
+      qtyFound = true;
+    }
+  }
+
+  const remainingAfterQty = nonHsnNumbers.filter(n => n.idx !== (unitIdx > 0 ? unitIdx - 1 : -1));
+  if (!qtyFound && remainingAfterQty.length > 0) {
+    quantity = remainingAfterQty[0].val;
+    remainingAfterQty.shift();
+  }
+
+  if (remainingAfterQty.length > 0) {
+    rate = remainingAfterQty[0].val;
+    remainingAfterQty.shift();
+  }
+
+  // Look for GST percentages (typically 9, 9 or 18)
+  if (remainingAfterQty.length >= 2 && remainingAfterQty[0].val <= 28 && remainingAfterQty[1].val <= 28) {
+    cgstPercent = remainingAfterQty[0].val;
+    sgstPercent = remainingAfterQty[1].val;
+  } else if (remainingAfterQty.length === 1 && remainingAfterQty[0].val <= 28) {
+    if (remainingAfterQty[0].val === 18) {
+      cgstPercent = 9;
+      sgstPercent = 9;
     } else {
-      rate = toNumber(tokens[rateIndex]);
+      cgstPercent = remainingAfterQty[0].val / 2;
+      sgstPercent = remainingAfterQty[0].val / 2;
     }
-    const rawDescriptionTokens = qtyIndex > 0 ? tokens.slice(0, qtyIndex) : [];
-    let description = cleanup(rawDescriptionTokens.join(' '));
-    if (!description || /^[-\d.,]+$/.test(description)) {
-      description = pendingDescription || `Item ${code}`;
+  }
+
+  // 5. Extract Description: words between drawingNo and the next number/date
+  let descTokens = [];
+  for (let i = dwgIndex + 1; i < tokens.length; i++) {
+    const tok = tokens[i];
+    if (DATE_REGEX.test(tok)) break;
+    if (UNIT_KEYWORDS.includes(tok.toUpperCase())) break;
+    const cleanNum = tok.replace(/,/g, '');
+    if (/^-?\d+(?:\.\d+)?$/.test(cleanNum)) {
+      break;
     }
-    pendingDescription = '';
-    items.push({
-      drawingNo: cleanup(code),
-      description,
-      quantity: qty || 1,
-      unit,
-      rate,
-      cgstPercent: 0,
-      sgstPercent: 0,
-      igstPercent: 0,
-      deliveryDate: ''
-    });
+    descTokens.push(tok);
   }
-  return items;
-};
 
-const COMPANY_LINE_ITEM_PARSERS = {
-  SIDEL: parseSidelLineItems
-};
+  let description = cleanup(descTokens.join(' '));
+  if (!description) {
+    description = `Item ${drawingNo}`;
+  }
 
-const mapRowToItem = (row, index) => {
-  const parts = row.split(/\s{2,}/).map(cleanup).filter(Boolean);
-  if (parts.length < 3) {
-    return null;
-  }
-  const numericIndices = parts
-    .map((value, idx) => ({ value: value.replace(/,/g, ''), idx }))
-    .filter(entry => /^-?\d+(?:\.\d+)?$/.test(entry.value));
-  const unitIndex = parts.findIndex(part => UNIT_KEYWORDS.includes(part.toUpperCase()));
-  let qtyIndex = unitIndex > 0 ? unitIndex - 1 : -1;
-  let rateIndex = unitIndex > -1 ? unitIndex + 1 : -1;
-  if (qtyIndex <= 0 && numericIndices.length) {
-    qtyIndex = numericIndices[0].idx;
-  }
-  if ((rateIndex <= 0 || rateIndex === qtyIndex) && numericIndices.length > 1) {
-    rateIndex = numericIndices[1].idx;
-  }
-  if (qtyIndex <= 0 && parts.length >= 3) {
-    qtyIndex = parts.length - 2;
-  }
-  if ((rateIndex <= 0 || rateIndex === qtyIndex) && parts.length >= 2) {
-    rateIndex = parts.length - 1;
-  }
-  let descEnd = qtyIndex > 0 ? qtyIndex : parts.length;
-  if (unitIndex > 0 && unitIndex < descEnd) {
-    descEnd = unitIndex;
-  }
-  if (descEnd <= 1) {
-    descEnd = parts.length > 3 ? parts.length - 2 : 2;
-  }
-  const descriptionParts = parts.slice(1, descEnd).filter(Boolean);
-  const description = cleanup(descriptionParts.join(' ')) || cleanup(parts[1]);
-  if (!description || /^(?:gstin|cin|address)/i.test(description)) {
-    return null;
-  }
-  const quantity = qtyIndex > -1 ? toNumber(parts[qtyIndex]) : 1;
-  const rate = rateIndex > -1 ? toNumber(parts[rateIndex]) : 0;
-  const cgstPercent = rateIndex + 1 < parts.length ? toNumber(parts[rateIndex + 1]) : 0;
-  const sgstPercent = rateIndex + 2 < parts.length ? toNumber(parts[rateIndex + 2]) : 0;
-  const igstPercent = rateIndex + 3 < parts.length ? toNumber(parts[rateIndex + 3]) : 0;
-  const unit = unitIndex > -1 ? parts[unitIndex] : 'NOS';
+  const cleanDwg = cleanup(drawingNo).toUpperCase();
+  const isMatched = knownDrawingsSet.has(cleanDwg);
+
   return {
-    drawingNo: cleanup(parts[0]) || `DRW-${index + 1}`,
+    drawingNo: cleanDwg,
+    matched: isMatched,
+    drawingNotFound: !isMatched,
+    needsReview: !isMatched,
     description,
-    quantity: quantity || 1,
+    hsnCode,
+    quantity: quantity > 0 ? quantity : 1,
     unit,
-    rate,
+    rate: rate > 0 ? rate : 0,
     cgstPercent,
     sgstPercent,
     igstPercent,
-    deliveryDate: ''
+    deliveryDate,
+    amount: rate > 0 ? (rate * (quantity > 0 ? quantity : 1)) : 0
   };
 };
 
-const parseTableRows = lines => {
-  if (!Array.isArray(lines) || !lines.length) {
-    return [];
-  }
-  const sanitized = sanitizeTableLines(lines);
-  if (!sanitized.length) {
-    return [];
-  }
-  const rows = chunkTableRows(sanitized);
-  return rows
-    .map((row, index) => mapRowToItem(row, index))
-    .filter(Boolean);
-};
-
-const parseStructuredItems = text => {
-  const items = [];
-  const regex = /(\d{6,})\s+([A-Za-z0-9,\-\/(). ]+?)\s+(\d{2}[-\/][A-Za-z0-9]{3}[-\/]\d{2,4}|\d{2}[-\/]\d{2}[-\/]\d{2,4})\s+([\d,]+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+(PCS|PC|NOS|EA|SET|UNIT|KG|LTR|MTR|PACK|PAIR)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)/gi;
-  let match;
-  while ((match = regex.exec(text))) {
-    const [, code, desc, delivery, rate, qty, unit, cgst, sgst, amount] = match;
-    items.push({
-      drawingNo: cleanup(code),
-      description: cleanup(desc),
-      quantity: toNumber(qty) || 1,
-      unit: cleanup(unit),
-      rate: toNumber(rate),
-      cgstPercent: toNumber(cgst),
-      sgstPercent: toNumber(sgst),
-      igstPercent: 0,
-      deliveryDate: normalizeDate(delivery) || cleanup(delivery),
-      amount: toNumber(amount)
-    });
-  }
-  return items;
-};
-
-const parseFallbackItems = text => {
-  const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
-  const candidates = lines.filter(line => /\d{4,}/.test(line));
-  const source = candidates.length ? candidates : lines;
-  return source.slice(0, 5).map((line, index) => {
-    const tokens = line.split(/\s+/);
-    const code = tokens.shift();
-    return {
-      drawingNo: cleanup(code) || `DRW-${index + 1}`,
-      description: cleanup(tokens.join(' ')) || cleanup(line),
-      quantity: 1,
-      unit: 'NOS',
-      rate: 0,
-      cgstPercent: 0,
-      sgstPercent: 0,
-      igstPercent: 0,
-      deliveryDate: ''
-    };
-  });
-};
-
-const parseLineItems = (companyCode, tableLines, fallbackText) => {
-  const tableText = (tableLines || []).join('\n');
-  const structured = parseStructuredItems(tableText);
-  if (structured.length) {
-    return structured;
-  }
-  const sanitizedLines = sanitizeTableLines(tableLines || []);
-  const parser = COMPANY_LINE_ITEM_PARSERS[companyCode];
-  if (typeof parser === 'function') {
-    const companyItems = parser(sanitizedLines);
-    if (companyItems.length) {
-      return companyItems;
-    }
-  }
-  const tableItems = parseTableRows(sanitizedLines);
-  if (tableItems.length) {
-    return tableItems;
-  }
-  return parseFallbackItems(tableText || fallbackText || '');
-};
-
-const parsePoPdf = async buffer => {
+/**
+ * Main parsePoPdf function
+ */
+const parsePoPdf = async (buffer, knownDrawings = []) => {
   if (!buffer) {
     return {};
   }
+
   try {
     const result = await pdfParse(buffer);
     const text = result.text || '';
     const sections = segmentPoSections(text);
     const scopeForHeaders = [sections.headerText, sections.footerText].filter(Boolean).join('\n') || text;
     const companyCode = detectCompany(scopeForHeaders);
-    const paymentTerms = extractField(scopeForHeaders, [/Payment\s*Terms\s*[:\-]?\s*(.+)/i, /Terms\s*:\s*(.+)/i]);
-    const response = {
+
+    const knownDrawingsSet = new Set(
+      (knownDrawings || []).map(d => String(d).trim().toUpperCase()).filter(Boolean)
+    );
+
+    // Extract Header Fields with specific regex
+    const poNumber = extractField(scopeForHeaders, [
+      /(?:Customer\s+)?Purchase\s+Order\s*(?:No\.?|Number|#)\s*[:\-.]?\s*([A-Za-z0-9\-\/]+)/i,
+      /(?:Customer\s+)?Purchase\s+Order\s*[:\-.]\s*([A-Za-z0-9\-\/]+)/i,
+      /P\.O\.\s*(?:No\.?|#)\s*[:\-.]?\s*([A-Za-z0-9\-\/]+)/i,
+      /(?:PO|Order)\s*#\s*([A-Za-z0-9\-\/]+)/i,
+      /(?:PO|Order)\s*No\.?\s*[:\-.]?\s*([A-Za-z0-9\-\/]+)/i,
+      /(?:Customer\s+PO\s*(?:No\.?|Number|#)?)\s*[:\-.]?\s*([A-Za-z0-9\-\/]+)/i
+    ]);
+
+    const rawPoDate = extractField(scopeForHeaders, [
+      /(?:PO|Order|Purchase\s*Order)?\s*Date\s*[:\-.]?\s*(\d{1,2}[-/.][A-Za-z0-9]{2,3}[-/.][0-9]{2,4}|\d{4}[-/.][0-9]{1,2}[-/.][0-9]{1,2})/i,
+      /Date\s*[:\-.]?\s*(\d{1,2}[-/.][A-Za-z0-9]{2,3}[-/.][0-9]{2,4}|\d{4}[-/.][0-9]{1,2}[-/.][0-9]{1,2})/i
+    ]);
+    const poDate = normalizeDate(rawPoDate) || rawPoDate;
+
+    const paymentTerms = extractField(scopeForHeaders, [
+      /Payment\s*Terms\s*[:\-]?\s*([^\n\r]+)/i,
+      /Terms\s*of\s*Payment\s*[:\-]?\s*([^\n\r]+)/i,
+      /Terms\s*:\s*([^\n\r]+)/i
+    ]);
+
+    const customerGstin = extractField(sections.headerText, [
+      /GSTIN(?:\s*No)?\s*[:\-]?\s*([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1})/i,
+      /GSTIN(?:\s*No)?\s*[:\-]?\s*([A-Z0-9]+)/i
+    ]);
+
+    const companyName = extractField(sections.headerText, [
+      /(SIDEL[\sA-Za-z0-9.&()\-]+)/i,
+      /(PHOENIX[\sA-Za-z0-9.&()\-]+)/i,
+      /(BOSSAR[\sA-Za-z0-9.&()\-]+)/i,
+      /(?:Buyer|Customer|Company)\s*[:\-]?\s*([A-Za-z0-9.&()\- ]+)/i
+    ]) || COMPANY_BY_CODE[companyCode]?.displayName || '';
+
+    const billingAddress = extractAddressBlock(sections.headerText, ['Billing Address', 'Address', 'Customer Address']);
+
+    // Consolidate wrapped table rows
+    const consolidatedRows = consolidateTableRows(sections.tableLines, knownDrawingsSet);
+
+    const parsedItems = [];
+    const seenDrawings = new Set();
+
+    for (const row of consolidatedRows) {
+      const item = parseConsolidatedRow(row, knownDrawingsSet);
+      if (item && item.drawingNo) {
+        if (/^(CUSTOMER|PURCHASE|ORDER|PAYMENT|TERMS|DELIVERY|DATE|ITEM|HSN|QTY|RATE|UNIT|TOTAL|AMOUNT|SUBTOTAL)$/i.test(item.drawingNo)) {
+          continue;
+        }
+        const itemKey = `${item.drawingNo}_${item.quantity}_${item.rate}`;
+        if (!seenDrawings.has(itemKey)) {
+          seenDrawings.add(itemKey);
+          parsedItems.push(item);
+        }
+      }
+    }
+
+    return {
       companyCode,
-      companyName:
-        extractField(sections.headerText, [
-          /(SIDEL[\sA-Za-z0-9.&()\-]+)/i,
-          /(PHOENIX[\sA-Za-z0-9.&()\-]+)/i,
-          /(BOSSAR[\sA-Za-z0-9.&()\-]+)/i,
-          /(?:Buyer|Customer|Company|Supplier)\s*[:\-]?\s*(.+)/i
-        ]) || COMPANY_BY_CODE[companyCode]?.displayName || '',
-      customerGstin: extractField(sections.headerText, [/GSTIN(?:\s*No)?\s*[:\-]?\s*([A-Z0-9]+)/i]),
-      billingAddress: extractAddressBlock(sections.headerText, ['Billing Address', 'Address']),
-      poNumber: extractField(scopeForHeaders, [/Purchase\s*Order\s*(?:No|Number)\s*[:\-]?\s*(.+)/i, /PO\s*(?:No|Number)\s*[:\-]?\s*(.+)/i]),
-      poDate: normalizeDate(extractField(scopeForHeaders, [/PO\s*Date\s*[:\-]?\s*(.+)/i])) || extractField(scopeForHeaders, [/PO\s*Date\s*[:\-]?\s*(.+)/i]),
+      companyName,
+      customerGstin,
+      billingAddress,
+      poNumber: poNumber || '',
+      poDate: poDate || '',
       paymentTerms,
       creditDays: deriveCreditDays(paymentTerms),
-      freightTerms: extractField(scopeForHeaders, [/Freight(?:\s*Terms)?\s*[:\-]?\s*(.+)/i, /Freight\s*[:\-]?\s*(.+)/i]),
-      packingForwarding: extractField(scopeForHeaders, [/Packing(?:\s*&\s*Forwarding)?\s*[:\-]?\s*(.+)/i, /P\s*&\s*F\s*[:\-]?\s*(.+)/i]),
+      freightTerms: extractField(scopeForHeaders, [/Freight(?:\s*Terms)?\s*[:\-]?\s*(.+)/i]),
+      packingForwarding: extractField(scopeForHeaders, [/Packing(?:\s*&\s*Forwarding)?\s*[:\-]?\s*(.+)/i]),
       insuranceTerms: extractField(scopeForHeaders, [/Insurance\s*[:\-]?\s*(.+)/i]),
       currency: extractField(sections.headerText, [/Currency\s*[:\-]?\s*(\w+)/i]) || 'INR',
-      deliveryTerms: extractField(scopeForHeaders, [/Delivery\s*Terms\s*[:\-]?\s*(.+)/i, /Delivery\s*[:\-]?\s*(.+)/i]),
+      deliveryTerms: extractField(scopeForHeaders, [/Delivery\s*Terms\s*[:\-]?\s*(.+)/i]),
       remarks: extractField(scopeForHeaders, [/Remarks\s*[:\-]?\s*(.+)/i]),
       plant: extractField(scopeForHeaders, [/Plant\s*[:\-]?\s*(.+)/i]),
       orderType: extractField(scopeForHeaders, [/Order\s*Type\s*[:\-]?\s*(.+)/i]),
-      items: parseLineItems(companyCode, sections.tableLines, text)
+      items: parsedItems
     };
-    return response;
   } catch (error) {
-    console.error('PDF parse error', error.message);
-    return {};
+    console.error('PDF parse error:', error.message);
+    return {
+      header: {},
+      items: []
+    };
   }
 };
 

@@ -124,6 +124,7 @@ privateRouter.use('/users', userRoutes);
 privateRouter.use('/access', departmentDocumentRoutes);
 privateRouter.use('/companies', companyRoutes);
 privateRouter.use('/customer-pos', customerPoRoutes);
+privateRouter.use('/customer-po', customerPoRoutes);
 privateRouter.use('/sales-orders', salesOrderRoutes);
 privateRouter.use('/order', orderRoutes);
 privateRouter.use('/orders', orderRoutes);

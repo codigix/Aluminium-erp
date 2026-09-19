@@ -113,12 +113,13 @@ const createCustomerPo = async (req, res, next) => {
 
 const parseCustomerPoPdf = async (req, res, next) => {
   try {
-    if (!req.file) {
+    const parseFile = req.file || (req.files && req.files[0]);
+    if (!parseFile) {
       return res.status(400).json({ message: 'Upload a Customer PO PDF or Excel file' });
     }
 
-    const fileBuffer = fs.readFileSync(req.file.path);
-    const fileName = req.file.originalname || '';
+    const fileBuffer = fs.readFileSync(parseFile.path);
+    const fileName = parseFile.originalname || '';
     const fileExt = fileName.split('.').pop().toLowerCase();
     
     console.log(`[PO Parser] Processing file: ${fileName} (${fileExt})`);
@@ -131,14 +132,22 @@ const parseCustomerPoPdf = async (req, res, next) => {
         insights = await parseExcelPo(fileBuffer);
       } else {
         console.log('[PO Parser] Using PDF parser');
-        insights = await parsePoPdf(fileBuffer);
+        let knownDrawings = [];
+        try {
+          const pool = require('../config/db');
+          const [rows] = await pool.query('SELECT DISTINCT drawing_no FROM customer_drawings WHERE drawing_no IS NOT NULL AND TRIM(drawing_no) != ""');
+          knownDrawings = rows.map(r => String(r.drawing_no).trim()).filter(Boolean);
+        } catch (dbErr) {
+          console.warn('[PO Parser] Could not fetch known drawings from DB:', dbErr.message);
+        }
+        insights = await parsePoPdf(fileBuffer, knownDrawings);
       }
     } catch (parseError) {
       console.error('[PO Parser] Parse error:', parseError);
       insights = { header: {}, items: [] };
     }
     
-    fs.unlink(req.file.path, () => {});
+    fs.unlink(parseFile.path, () => {});
 
     console.log('[PO Parser] Parsed insights:', JSON.stringify(insights, null, 2));
 

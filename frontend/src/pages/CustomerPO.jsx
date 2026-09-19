@@ -347,6 +347,9 @@ const CustomerPO = ({
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [emailPoData, setEmailPoData] = useState(null)
   const [allDrawings, setAllDrawings] = useState([])
+  const [pdfParsingLoading, setPdfParsingLoading] = useState(false)
+  const [parsedPdfSummary, setParsedPdfSummary] = useState(null)
+  const poPdfInputRef = React.useRef(null)
   const [uploadLoading, setUploadLoading] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [selectedPoForModal, setSelectedPoForModal] = useState(null)
@@ -1049,6 +1052,180 @@ const CustomerPO = ({
     }))
   }
 
+  const handleBulkPdfUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      showToast('Please upload a PDF file only (.pdf)');
+      if (poPdfInputRef.current) poPdfInputRef.current.value = '';
+      return;
+    }
+
+    setPdfParsingLoading(true);
+    setParsedPdfSummary(null);
+
+    try {
+      showToast('Reading and extracting Customer PO PDF...');
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+      const token = localStorage.getItem('authToken');
+
+      const formData = new FormData();
+      formData.append('poPdf', file);
+
+      const response = await fetch(`${baseUrl}/customer-pos/parse`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.message || 'Failed to parse Customer PO PDF');
+      }
+
+      const { header = {}, items = [] } = resData;
+
+      if (!items || items.length === 0) {
+        showToast('No line items could be detected from the PDF. Please check the file or enter manually.');
+        setPdfParsingLoading(false);
+        if (poPdfInputRef.current) poPdfInputRef.current.value = '';
+        return;
+      }
+
+      // Automatically stage the uploaded file into attachments so user doesn't have to upload again
+      setAttachments(prev => {
+        const exists = prev.some(f => f.name === file.name && f.size === file.size);
+        return exists ? prev : [...prev, file];
+      });
+
+      // Update PO Header fields if available from PDF and not already set by user
+      setPoForm(prev => {
+        let updatedHeader = { ...prev };
+        if (header.poNumber && (!prev.poNumber || prev.poNumber.startsWith('PO'))) {
+          updatedHeader.poNumber = header.poNumber;
+        }
+        if (header.poDate) {
+          updatedHeader.poDate = header.poDate;
+        }
+        if (header.paymentTerms && !prev.paymentTerms) {
+          updatedHeader.paymentTerms = header.paymentTerms;
+        }
+        if (header.creditDays && !prev.creditDays) {
+          updatedHeader.creditDays = header.creditDays;
+        }
+
+        let matchedCount = 0;
+        let unmatchedCount = 0;
+
+        const populatedItems = items.map((pdfItem, idx) => {
+          const rawDwgNo = (pdfItem.drawingNo || '').trim().toUpperCase();
+
+          // 1. Search existing Drawing Master (allDrawings from /drawings/approved)
+          const matchedMaster = allDrawings.find(d =>
+            String(d.drawing_no).trim().toUpperCase() === rawDwgNo
+          );
+
+          // 2. Search quotation drawings fallback
+          const matchedQuote = !matchedMaster ? allQuotationDrawings.find(q =>
+            String(q.drawing_no || q.drawingNo).trim().toUpperCase() === rawDwgNo
+          ) : null;
+
+          if (matchedMaster) {
+            matchedCount++;
+            return {
+              drawingNo: matchedMaster.drawing_no,
+              description: matchedMaster.drawing_description || matchedMaster.description || pdfItem.description || '',
+              hsnCode: matchedMaster.hsn_code || pdfItem.hsnCode || '',
+              deliveryDate: pdfItem.deliveryDate || (matchedMaster.delivery_date ? new Date(matchedMaster.delivery_date).toISOString().split('T')[0] : prev.poDate || ''),
+              quantity: pdfItem.quantity || matchedMaster.qty || 1,
+              unit: pdfItem.unit || matchedMaster.unit || 'NOS',
+              rate: (pdfItem.rate && Number(pdfItem.rate) > 0) ? pdfItem.rate : (matchedMaster.bom_cost || ''),
+              cgstPercent: pdfItem.cgstPercent !== undefined ? pdfItem.cgstPercent : 9,
+              sgstPercent: pdfItem.sgstPercent !== undefined ? pdfItem.sgstPercent : 9,
+              igstPercent: pdfItem.igstPercent !== undefined ? pdfItem.igstPercent : 0,
+              sub_assemblies: (matchedMaster.sub_assemblies && matchedMaster.sub_assemblies.length > 0)
+                ? matchedMaster.sub_assemblies.map(sa => ({
+                    drawingNo: sa.drawingNo || sa.drawing_no || '',
+                    description: sa.description || '',
+                    quantity: sa.quantity || 0,
+                    unit: sa.unit || 'NOS',
+                    rate: sa.rate || sa.bom_cost || 0,
+                    cgstPercent: 0,
+                    sgstPercent: 0,
+                    igstPercent: 0,
+                    hsnCode: sa.hsn_code || sa.hsnCode || matchedMaster.hsn_code || '',
+                    deliveryDate: sa.delivery_date || sa.deliveryDate || (matchedMaster.delivery_date ? new Date(matchedMaster.delivery_date).toISOString().split('T')[0] : ''),
+                    item_group: sa.item_group || sa.drawing_type || (sa.is_assembly ? 'ASM' : 'PART'),
+                    drawing_type: sa.drawing_type || sa.item_group || (sa.is_assembly ? 'ASM' : 'Part'),
+                    is_assembly: !!(sa.is_assembly || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASM') || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASSEMBLY'))
+                  }))
+                : [],
+              isUnmatched: false,
+              needsReview: !pdfItem.rate || Number(pdfItem.rate) <= 0
+            };
+          } else if (matchedQuote) {
+            matchedCount++;
+            return {
+              drawingNo: (matchedQuote.drawing_no || matchedQuote.drawingNo).toUpperCase(),
+              description: matchedQuote.description || matchedQuote.item_description || pdfItem.description || '',
+              hsnCode: matchedQuote.hsnCode || matchedQuote.hsn_code || pdfItem.hsnCode || '',
+              deliveryDate: pdfItem.deliveryDate || (matchedQuote.deliveryDate ? new Date(matchedQuote.deliveryDate).toISOString().split('T')[0] : prev.poDate || ''),
+              quantity: pdfItem.quantity || matchedQuote.quantity || 1,
+              unit: pdfItem.unit || matchedQuote.unit || 'NOS',
+              rate: (pdfItem.rate && Number(pdfItem.rate) > 0) ? pdfItem.rate : (matchedQuote.rate || ''),
+              cgstPercent: pdfItem.cgstPercent !== undefined ? pdfItem.cgstPercent : 9,
+              sgstPercent: pdfItem.sgstPercent !== undefined ? pdfItem.sgstPercent : 9,
+              igstPercent: pdfItem.igstPercent !== undefined ? pdfItem.igstPercent : 0,
+              sub_assemblies: matchedQuote.sub_assemblies || [],
+              isUnmatched: false,
+              needsReview: !pdfItem.rate || Number(pdfItem.rate) <= 0
+            };
+          } else {
+            unmatchedCount++;
+            return {
+              drawingNo: rawDwgNo || `ITEM-${idx + 1}`,
+              description: pdfItem.description || '',
+              hsnCode: pdfItem.hsnCode || '',
+              deliveryDate: pdfItem.deliveryDate || prev.poDate || '',
+              quantity: pdfItem.quantity || 1,
+              unit: pdfItem.unit || 'NOS',
+              rate: pdfItem.rate || '',
+              cgstPercent: pdfItem.cgstPercent !== undefined ? pdfItem.cgstPercent : 9,
+              sgstPercent: pdfItem.sgstPercent !== undefined ? pdfItem.sgstPercent : 9,
+              igstPercent: pdfItem.igstPercent !== undefined ? pdfItem.igstPercent : 0,
+              sub_assemblies: [],
+              isUnmatched: true,
+              needsReview: true
+            };
+          }
+        });
+
+        setParsedPdfSummary({
+          fileName: file.name,
+          totalExtracted: items.length,
+          matchedCount,
+          unmatchedCount
+        });
+
+        return {
+          ...updatedHeader,
+          items: populatedItems
+        };
+      });
+
+      showToast(`Parsed ${items.length} line items from PDF successfully.`);
+    } catch (err) {
+      console.error('PDF parsing error:', err);
+      showToast(err.message || 'Failed to process PDF');
+    } finally {
+      setPdfParsingLoading(false);
+      if (poPdfInputRef.current) poPdfInputRef.current.value = '';
+    }
+  };
+
   const handleItemChange = (index, field, value) => {
     const newItems = [...poForm.items]
     newItems[index][field] = value
@@ -1062,7 +1239,7 @@ const CustomerPO = ({
       let isFromAllQuotes = false;
       if (!matchedQuoteDwg) {
         matchedQuoteDwg = allQuotationDrawings.find(q =>
-          String(q.drawing_no || q.drawingNo || '').trim().toUpperCase() === String(value).trim().toUpperCase()
+          String(q.drawing_no || q.drawingNo).trim().toUpperCase() === String(value).trim().toUpperCase()
         );
         if (matchedQuoteDwg) {
           isFromAllQuotes = true;
@@ -1070,6 +1247,9 @@ const CustomerPO = ({
       }
 
       if (matchedQuoteDwg) {
+        newItems[index].isUnmatched = false;
+        newItems[index].needsReview = false;
+
         const masterDwg = allDrawings.find(d =>
           String(d.drawing_no).trim().toUpperCase() === String(value).trim().toUpperCase()
         );
@@ -1128,16 +1308,19 @@ const CustomerPO = ({
           String(d.drawing_no).trim().toUpperCase() === String(value).trim().toUpperCase()
         );
         if (matchedDwg) {
-          newItems[index].description = matchedDwg.drawing_description || matchedDwg.description || '';
-          newItems[index].hsnCode = matchedDwg.hsn_code || '';
-          newItems[index].unit = matchedDwg.unit || 'NOS';
-          newItems[index].quantity = matchedDwg.qty || matchedDwg.quantity || '';
-          if (matchedDwg.bom_cost) {
-            newItems[index].rate = matchedDwg.bom_cost;
-          }
-          if (matchedDwg.delivery_date) {
-            newItems[index].deliveryDate = new Date(matchedDwg.delivery_date).toISOString().split('T')[0];
-          }
+          newItems[index].isUnmatched = false;
+          newItems[index].needsReview = false;
+          newItems[index].description = matchedDwg.drawing_description || matchedDwg.description || newItems[index].description || '';
+          newItems[index].hsnCode = matchedDwg.hsn_code || newItems[index].hsnCode || '';
+          newItems[index].unit = matchedDwg.unit || newItems[index].unit || 'NOS';
+          // Preserve PDF/user-entered values if already set, otherwise take from master
+          newItems[index].quantity = (newItems[index].quantity !== '' && newItems[index].quantity !== undefined && newItems[index].quantity !== null)
+            ? newItems[index].quantity
+            : (matchedDwg.qty || matchedDwg.quantity || 1);
+          newItems[index].rate = (newItems[index].rate !== '' && newItems[index].rate !== undefined && newItems[index].rate !== null && Number(newItems[index].rate) > 0)
+            ? newItems[index].rate
+            : (matchedDwg.bom_cost || '');
+          newItems[index].deliveryDate = newItems[index].deliveryDate || (matchedDwg.delivery_date ? new Date(matchedDwg.delivery_date).toISOString().split('T')[0] : '');
           // Sync sub-assemblies if they exist on the drawing
           if (matchedDwg.sub_assemblies && matchedDwg.sub_assemblies.length > 0) {
             newItems[index].sub_assemblies = matchedDwg.sub_assemblies.map(sa => ({
@@ -1145,7 +1328,7 @@ const CustomerPO = ({
               description: sa.description || '',
               quantity: sa.quantity || 0,
               unit: sa.unit || 'NOS',
-              rate: sa.rate || 0,
+              rate: sa.rate || sa.bom_cost || 0,
               cgstPercent: 0,
               sgstPercent: 0,
               igstPercent: 0,
@@ -1156,9 +1339,27 @@ const CustomerPO = ({
               is_assembly: !!(sa.is_assembly || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASM') || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASSEMBLY'))
             }));
           }
+        } else {
+          newItems[index].isUnmatched = true;
         }
       }
+
+      setParsedPdfSummary(prev => {
+        if (!prev) return null;
+        const currentUnmatched = newItems.filter(i => i.isUnmatched).length;
+        const currentMatched = newItems.filter(i => !i.isUnmatched).length;
+        return {
+          ...prev,
+          matchedCount: currentMatched,
+          unmatchedCount: currentUnmatched
+        };
+      });
     }
+
+    if ((field === 'rate' || field === 'quantity') && Number(value) > 0) {
+      newItems[index].needsReview = false;
+    }
+
     setPoForm(prev => ({ ...prev, items: newItems }))
   }
 
@@ -1169,6 +1370,9 @@ const CustomerPO = ({
     setAttachments([])
     setExistingAttachments([])
     setLocalError('')
+    setParsedPdfSummary(null)
+    setPdfParsingLoading(false)
+    if (poPdfInputRef.current) poPdfInputRef.current.value = ''
     if (window.location.pathname !== '/sales/customer-po') {
       window.history.pushState({}, '', '/sales/customer-po');
     }
@@ -1398,6 +1602,12 @@ const CustomerPO = ({
     for (let i = 0; i < poForm.items.length; i++) {
       const item = poForm.items[i];
       const itemLabel = `Line Item ${i + 1}`;
+      if (item.isUnmatched) {
+        const msg = `${itemLabel} (${item.drawingNo}) was not found in Drawing Master. Please select a valid Drawing No from the dropdown before submitting.`;
+        showToast(msg);
+        setLocalError(msg);
+        return;
+      }
       if (!item.drawingNo || !item.drawingNo.trim()) {
         const msg = `Drawing No is required for ${itemLabel}`;
         showToast(msg)
@@ -1874,18 +2084,34 @@ const CustomerPO = ({
           );
         }
         return (
-          <SearchableSelect
-            options={allDrawings.map(d => ({
-              value: d.drawing_no,
-              label: `${d.drawing_no} - ${d.drawing_description || d.description || ''}`
-            }))}
-            value={(item.drawingNo || val)?.toUpperCase() || ''}
-            onChange={(e) => handleItemChange(index, 'drawingNo', e.target.value.toUpperCase())}
-            placeholder="Search Drawing No..."
-            allowCustom={true}
-            openUpwards={false}
-            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
-          />
+          <div className="space-y-1">
+            <SearchableSelect
+              options={allDrawings.map(d => ({
+                value: d.drawing_no,
+                label: `${d.drawing_no} - ${d.drawing_description || d.description || ''}`
+              }))}
+              value={(item.drawingNo || val)?.toUpperCase() || ''}
+              onChange={(e) => handleItemChange(index, 'drawingNo', e.target.value.toUpperCase())}
+              placeholder="Search Drawing No..."
+              allowCustom={true}
+              openUpwards={false}
+              className={`w-full rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 ${
+                item.isUnmatched
+                  ? 'bg-rose-50/50 border border-rose-300 ring-1 ring-rose-200'
+                  : 'bg-slate-50 border border-slate-200'
+              }`}
+            />
+            {item.isUnmatched && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" /> Drawing Not Found
+              </span>
+            )}
+            {!item.isUnmatched && item.needsReview && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                ⚠️ Needs Review
+              </span>
+            )}
+          </div>
         );
       }
     },
@@ -2000,7 +2226,7 @@ const CustomerPO = ({
       className: 'text-center',
       render: (val, item, index) => {
         if (formMode === 'VIEW') {
-          return <span className="text-xs text-slate-600 font-medium">{val || 'Nos'}</span>;
+          return <span className="text-xs text-slate-600 font-medium">{val || 'NOS'}</span>;
         }
         return (
           <input
@@ -2020,12 +2246,17 @@ const CustomerPO = ({
         if (formMode === 'VIEW') {
           return <span className="text-xs font-mono font-semibold text-slate-700">{formatCurrency(val)}</span>;
         }
+        const needsReviewRate = item.needsReview && (!val || Number(val) <= 0);
         return (
           <input
             type="number"
             value={val || ''}
             onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
-            className="w-full bg-indigo-50 border border-indigo-100 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-indigo-600 placeholder:text-indigo-200"
+            className={`w-full rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all ${
+              needsReviewRate
+                ? 'bg-amber-50 border border-amber-300 text-amber-900 placeholder:text-amber-300 ring-1 ring-amber-200'
+                : 'bg-indigo-50 border border-indigo-100 text-indigo-600 placeholder:text-indigo-200'
+            }`}
             placeholder="0.00"
           />
         );
@@ -3212,16 +3443,82 @@ const CustomerPO = ({
                       <h3 className="text-sm  text-slate-800  ">Purchase Items</h3>
                     </div>
                     {formMode !== 'VIEW' && (
-                      <button
-                        type="button"
-                        onClick={handleAddItem}
-                        className="flex items-center gap-2 p-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded  text-xs    hover:bg-indigo-100 transition-all active:scale-95 "
-                      >
-                        <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                        Add Line Item
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {/* Hidden file input for Customer PO PDF */}
+                        <input
+                          type="file"
+                          ref={poPdfInputRef}
+                          onChange={handleBulkPdfUpload}
+                          accept=".pdf,application/pdf"
+                          className="hidden"
+                          disabled={pdfParsingLoading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => poPdfInputRef.current?.click()}
+                          disabled={pdfParsingLoading}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-50 to-blue-50 hover:from-indigo-100 hover:to-blue-100 text-indigo-700 border border-indigo-200 rounded text-xs font-semibold transition-all active:scale-95 shadow-xs disabled:opacity-50"
+                          title="Upload Customer PO PDF to extract all Drawing Nos and line items automatically"
+                        >
+                          {pdfParsingLoading ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                              <span>Parsing PDF...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Bulk Upload PDF</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAddItem}
+                          className="flex items-center gap-2 p-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded  text-xs    hover:bg-indigo-100 transition-all active:scale-95 "
+                        >
+                          <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                          Add Line Item
+                        </button>
+                      </div>
                     )}
                   </div>
+
+                  {parsedPdfSummary && (
+                    <div className={`p-2.5 rounded-lg border text-xs flex items-center justify-between transition-all ${
+                      parsedPdfSummary.unmatchedCount > 0
+                        ? 'bg-amber-50/95 border-amber-200 text-amber-900 shadow-xs'
+                        : 'bg-emerald-50/95 border-emerald-200 text-emerald-900 shadow-xs'
+                    }`}>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <FileText className={`w-4 h-4 shrink-0 ${parsedPdfSummary.unmatchedCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
+                        <span>
+                          <strong>{parsedPdfSummary.fileName}</strong>: Extracted <strong>{parsedPdfSummary.totalExtracted}</strong> line items
+                          {parsedPdfSummary.unmatchedCount > 0
+                            ? ` (${parsedPdfSummary.matchedCount} matched with Drawing Master, ${parsedPdfSummary.unmatchedCount} requires review)`
+                            : ` (${parsedPdfSummary.matchedCount} matched with Drawing Master)`}
+                        </span>
+                        <div className="flex items-center gap-1.5 ml-1">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-[11px]">
+                            ✓ {parsedPdfSummary.matchedCount} matched
+                          </span>
+                          {parsedPdfSummary.unmatchedCount > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold text-[11px]">
+                              ⚠️ {parsedPdfSummary.unmatchedCount} requires review
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setParsedPdfSummary(null)}
+                        className="text-slate-400 hover:text-slate-600 p-0.5 ml-2"
+                        title="Dismiss"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
 
                   <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs max-h-[45vh] min-h-[220px] relative">
                     <DataTable
