@@ -7,6 +7,7 @@ const { authenticate, authorize } = require('../middleware/authMiddleware');
 router.use(authenticate);
 
 router.post('/', authorize(['QUOTATION_EDIT']), quotationController.createQuotation);
+router.post('/merge', authorize(['QUOTATION_EDIT']), quotationController.mergeQuotations);
 router.post('/compare/approve', authorize(['QUOTATION_EDIT']), quotationController.approveComparedQuotations);
 router.get('/', authorize(['QUOTATION_VIEW']), quotationController.getQuotations);
 router.get('/stats', authorize(['QUOTATION_VIEW']), quotationController.getQuotationStats);

@@ -3,6 +3,8 @@ import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { Card, Modal, SearchableSelect, MultiSelect, Button, Tabs } from '../components/ui.jsx';
 import DataTable from '../components/DataTable.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import MergeRfqModal from '../components/MergeRfqModal.jsx';
+import MergeReceivedQuotesModal from '../components/MergeReceivedQuotesModal.jsx';
 import { getFileUrl } from '../utils/url';
 import {
   Eye,
@@ -26,7 +28,9 @@ import {
   Send,
   History,
   Building2,
-  Printer
+  Printer,
+  GitMerge,
+  Users
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -37,6 +41,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const rfqStatusColors = {
   DRAFT: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-700', label: 'Draft' },
+  MERGED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', label: 'Merged' },
   RFQ_REQUESTED: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600', badge: 'bg-orange-100 text-orange-700', label: 'RFQ Requested' },
   SENT: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', label: 'Sent' },
   EMAIL_RECEIVED: { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-600', badge: 'bg-sky-100 text-sky-700', label: 'Email Received' },
@@ -110,6 +115,8 @@ const Quotations = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showMergeRfqModal, setShowMergeRfqModal] = useState(false);
+  const [showMergeQuotesModal, setShowMergeQuotesModal] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState(null);
   const [hostCompanies, setHostCompanies] = useState([]);
   const [selectedHostId, setSelectedHostId] = useState('');
@@ -256,6 +263,12 @@ const Quotations = () => {
     fetchHostCompanies();
     fetchStockItems();
   }, []);
+
+  useEffect(() => {
+    fetchQuotations();
+    fetchRawRfqs();
+    fetchStats();
+  }, [location.pathname, activeTab]);
 
   const fetchHostCompanies = async () => {
     try {
@@ -1413,6 +1426,10 @@ const Quotations = () => {
     }
   };
 
+  const handleOpenMergeQuotes = () => {
+    setShowMergeQuotesModal(true);
+  };
+
   const openEmailModal = (quotation) => {
     const vendor = vendors.find(v => v.id === quotation.vendor_id);
     setSelectedQuotation(quotation);
@@ -1891,6 +1908,7 @@ const Quotations = () => {
     // In 'sent' tab, also show RFQs that don't have linked quotations yet, or have partial assignments
     if (activeTab === 'sent') {
       const rfqsNeedingAction = rawRfqs.filter(r => {
+        if (r.status === 'MERGED') return false; // Hide source RFQs that were merged into another
         const hasAllQuotes = (r.total_items || 0) > 0 && (r.pending_items || 0) === 0 && (r.quotations || []).length > 0;
         return !hasAllQuotes;
       });
@@ -1914,6 +1932,9 @@ const Quotations = () => {
     });
 
     const mapped = combined.filter(q => {
+      // Hide source quotations that have been merged
+      if (q.status === 'MERGED') return false;
+
       const isTabMatch = activeTab === 'sent'
         ? ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING', 'RFQ_REQUESTED', 'PENDING_ITEMS'].includes(q.status)
         : ['RECEIVED', 'REVIEWED', 'REJECTED'].includes(q.status);
@@ -1961,7 +1982,20 @@ const Quotations = () => {
         key: 'company_name',
         label: 'Client Name',
         sortable: true,
-        render: (val, q) => <span className="font-bold text-slate-900 text-xs">{q.company_name && q.company_name !== '-' && q.company_name !== '—' ? q.company_name : (q.client_name || q.customer_name || '—')}</span>
+        render: (val, q) => {
+          const client = (q.company_name && q.company_name !== '-' && q.company_name !== '—') 
+            ? q.company_name 
+            : (q.client_name || q.customer_name || '—');
+          if (client === 'Multiple Clients') {
+            return (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm">
+                <Users className="w-3 h-3 text-indigo-600" />
+                Multiple Clients
+              </span>
+            );
+          }
+          return <span className="font-bold text-slate-900 text-xs">{client}</span>;
+        }
       },
       {
         key: 'project_name',
@@ -1982,12 +2016,24 @@ const Quotations = () => {
                   V{q.version}
                 </span>
               )}
-              {q.isRFQOnly && q.status === 'PENDING_ITEMS' && (
+              {q.isRFQOnly && q.is_merged === 1 && (
+                <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 border border-purple-200 rounded text-[10px] font-bold uppercase flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  Merged RFQ
+                </span>
+              )}
+              {!q.isRFQOnly && q.is_merged === 1 && (
+                <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 border border-purple-200 rounded text-[10px] font-bold uppercase flex items-center gap-1 shadow-sm">
+                  <GitMerge className="w-3 h-3 text-purple-600" />
+                  MERGED QUOTE
+                </span>
+              )}
+              {q.isRFQOnly && q.status === 'PENDING_ITEMS' && !q.is_merged && (
                 <span className="px-1.5 py-0.5 bg-yellow-50 text-yellow-600 border border-yellow-100 rounded text-xs">
                   {q.assigned_items} of {q.total_items} Assigned
                 </span>
               )}
-              {q.isRFQOnly && q.status !== 'PENDING_ITEMS' && (
+              {q.isRFQOnly && q.status !== 'PENDING_ITEMS' && !q.is_merged && (
                 <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded text-xs">
                   No Vendor Assigned
                 </span>
@@ -2024,7 +2070,22 @@ const Quotations = () => {
         sortable: true,
         render: (val, q) => (
           <div className="flex flex-col">
-            {q.isRFQOnly && q.status === 'PENDING_ITEMS' ? (
+            {q.isRFQOnly && q.is_merged === 1 ? (
+              <>
+                <span className="text-purple-700 font-semibold text-sm">
+                  {(() => {
+                    // Look up vendor name from items[0].vendor_id since merged RFQ has no quotation yet
+                    const vendorId = q.items?.[0]?.vendor_id;
+                    if (vendorId) {
+                      const found = vendors.find(v => String(v.id) === String(vendorId));
+                      return found ? found.vendor_name : `Vendor #${vendorId}`;
+                    }
+                    return 'Vendor Assigned';
+                  })()}
+                </span>
+                <span className="text-xs text-purple-400 italic mt-0.5">{q.total_items} item{q.total_items !== 1 ? 's' : ''} consolidated</span>
+              </>
+            ) : q.isRFQOnly && q.status === 'PENDING_ITEMS' ? (
               <>
                 <span className="text-yellow-600 font-medium text-sm">
                   {q.assigned_items} of {q.total_items} Items Assigned
@@ -2076,10 +2137,26 @@ const Quotations = () => {
         sortable: true,
         render: (val, q) => (
           <div className="flex flex-col gap-1 items-start">
-            <span className={`inline-flex px-2.5 py-1 rounded text-xs    border ${rfqStatusColors[val]?.badge}`}>
-              {val === 'REJECTED' ? rfqStatusColors[val]?.label : (rfqStatusColors[val]?.label?.toUpperCase() || val)}
-            </span>
-            {/* Auto Approved label removed */}
+            {q.isRFQOnly && q.is_merged === 1 ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs border bg-purple-100 text-purple-700 border-purple-200 font-bold">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                MERGED RFQ
+              </span>
+            ) : !q.isRFQOnly && q.is_merged === 1 ? (
+              <div className="flex flex-col gap-1 items-start">
+                <span className={`inline-flex px-2.5 py-1 rounded text-xs border ${rfqStatusColors[val]?.badge || 'bg-emerald-100 text-emerald-700 border-emerald-200'}`}>
+                  {rfqStatusColors[val]?.label?.toUpperCase() || val}
+                </span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border bg-purple-50 text-purple-700 border-purple-200 font-bold">
+                  <GitMerge className="w-2.5 h-2.5" />
+                  MERGED
+                </span>
+              </div>
+            ) : (
+              <span className={`inline-flex px-2.5 py-1 rounded text-xs border ${rfqStatusColors[val]?.badge || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                {val === 'REJECTED' ? rfqStatusColors[val]?.label : (rfqStatusColors[val]?.label?.toUpperCase() || val)}
+              </span>
+            )}
           </div>
         )
       },
@@ -2113,7 +2190,7 @@ const Quotations = () => {
                 </button>
               </>
             )}
-            {q.isRFQOnly && (
+            {q.isRFQOnly && !q.is_merged && (
               <button
                 onClick={(e) => { e.stopPropagation(); openRFQSendModal(q); }}
                 className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded text-xs    hover:bg-amber-100 transition-all"
@@ -2121,6 +2198,16 @@ const Quotations = () => {
               >
                 <Mail className="w-3.5 h-3.5" />
                 Assign & Send
+              </button>
+            )}
+            {q.isRFQOnly && q.is_merged === 1 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); openRFQSendModal(q); }}
+                className="flex items-center gap-1.5 px-2 py-1 bg-purple-50 text-purple-600 border border-purple-100 rounded text-xs hover:bg-purple-100 transition-all"
+                title="Send Merged RFQ to Vendor"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Send to Vendor
               </button>
             )}
 
@@ -2229,9 +2316,18 @@ const Quotations = () => {
               type="checkbox"
               className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
               checked={selectedQuotes.includes(q.id)}
+              disabled={q.status === 'MERGED' || !!q.merged_into_quotation_id}
               onChange={(e) => {
                 e.stopPropagation();
                 if (e.target.checked) {
+                  // Validate same vendor selection
+                  if (selectedQuotes.length > 0) {
+                    const firstSelected = quotations.find(item => selectedQuotes.includes(item.id));
+                    if (firstSelected && String(firstSelected.vendor_id) !== String(q.vendor_id)) {
+                      errorToast(`All selected quotes must belong to the same vendor. Currently selected: ${getVendorName(firstSelected.vendor_id, firstSelected)}`);
+                      return;
+                    }
+                  }
                   setSelectedQuotes(prev => [...prev, q.id]);
                 } else {
                   setSelectedQuotes(prev => prev.filter(id => id !== q.id));
@@ -2279,22 +2375,55 @@ const Quotations = () => {
           <button
             onClick={() => { fetchQuotations(); fetchRawRfqs(); }}
             className="p-2 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
+            title="Refresh"
           >
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button
-            onClick={() => {
-              if (activeTab === 'sent') {
-                navigate('/procurement/quotations/request');
-              } else {
-                navigate('/procurement/quotations/record');
-              }
-            }}
-            className="flex items-center gap-2  p-2  bg-blue-600 text-white rounded  text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
-          >
-            <Plus className="w-5 h-5" />
-            {activeTab === 'sent' ? 'Request Quote' : 'Record Quote'}
-          </button>
+          {activeTab === 'sent' ? (
+            <>
+              <button
+                id="btn-merge-rfq"
+                onClick={() => setShowMergeRfqModal(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 rounded text-xs font-semibold transition-all active:scale-95 shadow-sm"
+                title="Merge multiple draft RFQs for a single supplier"
+              >
+                <GitMerge className="w-4 h-4 text-purple-600" />
+                <span>Merge RFQ</span>
+              </button>
+              <button
+                id="btn-request-quote"
+                onClick={() => navigate(`${deptPrefix}/quotations/request`)}
+                className="flex items-center gap-2 p-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Request Quote</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                id="btn-merge-quotes-top"
+                onClick={handleOpenMergeQuotes}
+                className={`flex items-center gap-2 px-3 py-2 rounded text-xs font-semibold transition-all active:scale-95 shadow-sm ${
+                  selectedQuotes.length >= 2
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white border border-transparent'
+                    : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
+                }`}
+                title="Merge selected received quotations"
+              >
+                <GitMerge className="w-4 h-4" />
+                <span>{selectedQuotes.length >= 2 ? `Merge Quotes (${selectedQuotes.length})` : 'Merge Quotes'}</span>
+              </button>
+              <button
+                id="btn-record-quote"
+                onClick={() => navigate(`${deptPrefix}/quotations/record`)}
+                className="flex items-center gap-2 p-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Record Quote</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -2347,6 +2476,16 @@ const Quotations = () => {
             >
               Compare Quotes {selectedQuotes.length > 0 && `(${selectedQuotes.length})`}
             </Button>
+            <Button
+              variant={selectedQuotes.length >= 2 ? 'primary' : 'default'}
+              size="sm"
+              onClick={handleOpenMergeQuotes}
+              icon={GitMerge}
+              className={selectedQuotes.length >= 2 ? 'bg-purple-600 hover:bg-purple-700 text-white border-transparent' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'}
+              title="Merge received quotations into a single received quote"
+            >
+              Merge Quotes {selectedQuotes.length > 0 && `(${selectedQuotes.length})`}
+            </Button>
           </div>
         )}
       </div>
@@ -2358,6 +2497,80 @@ const Quotations = () => {
         loading={loading}
         pageSize={5}
         searchPlaceholder="Search quote number, client, project, drawing..."
+        expandable={true}
+        renderExpanded={(row) => {
+          if (!row.items || row.items.length === 0) {
+            return (
+              <div className="p-3 bg-slate-50 text-xs text-slate-500 italic">
+                No quotation line items recorded
+              </div>
+            );
+          }
+          return (
+            <div className="p-3 bg-slate-50/80 border-y border-slate-200">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-bold text-slate-700 flex items-center gap-2">
+                  <span>Line Items ({row.items.length})</span>
+                  {row.is_merged === 1 && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200 uppercase flex items-center gap-1">
+                      <GitMerge className="w-2.5 h-2.5" />
+                      Consolidated Quote
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="bg-white rounded border border-slate-200 overflow-hidden shadow-sm">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-100 text-slate-600 border-b border-slate-200">
+                    <tr>
+                      <th className="p-2 w-8 text-center">#</th>
+                      {row.is_merged === 1 && (
+                        <>
+                          <th className="p-2">Client / Project</th>
+                          <th className="p-2">Source Quote</th>
+                        </>
+                      )}
+                      <th className="p-2">Drawing / Code</th>
+                      <th className="p-2">Material</th>
+                      <th className="p-2 text-right">Design Qty</th>
+                      <th className="p-2 text-right">Quoted Qty</th>
+                      <th className="p-2 text-right">Unit Rate</th>
+                      <th className="p-2 text-right">Total Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {row.items.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50">
+                        <td className="p-2 text-center text-slate-400 font-mono">{idx + 1}</td>
+                        {row.is_merged === 1 && (
+                          <>
+                            <td className="p-2">
+                              <span className="font-bold text-slate-800 text-xs block">{item.client_name || '—'}</span>
+                              <span className="text-[10px] text-slate-500 italic block">{item.project_name || 'General Procurement'}</span>
+                            </td>
+                            <td className="p-2">
+                              <span className="font-semibold text-purple-700">{item.source_quotation_number || '—'}</span>
+                            </td>
+                          </>
+                        )}
+                        <td className="p-2 font-medium text-slate-800">{item.drawing_no || item.item_code || '—'}</td>
+                        <td className="p-2 text-slate-600">{item.material_name || item.description || '—'}</td>
+                        <td className="p-2 text-right font-medium text-slate-700">
+                          {item.design_qty !== null && item.design_qty !== undefined ? item.design_qty : '—'} <span className="text-[10px] text-slate-400">{item.uom || item.unit || 'NOS'}</span>
+                        </td>
+                        <td className="p-2 text-right font-bold text-slate-900">
+                          {item.quantity || 0} <span className="text-[10px] text-purple-600 font-medium">{item.uom || item.unit || 'NOS'}</span>
+                        </td>
+                        <td className="p-2 text-right font-mono text-slate-700">₹{parseFloat(item.unit_rate || 0).toFixed(2)}</td>
+                        <td className="p-2 text-right font-mono font-semibold text-slate-900">₹{parseFloat(item.total_amount || item.amount || 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        }}
         customFilter={(row, searchLower) => {
           const matchesQuoteNo = String(row.quote_number || '').toLowerCase().includes(searchLower);
           const matchesVendor = getVendorName(row.vendor_id).toLowerCase().includes(searchLower);
@@ -4443,6 +4656,30 @@ const Quotations = () => {
         isOpen={showPreviewModal}
         onClose={() => setShowPreviewModal(false)}
         drawing={previewDrawing}
+      />
+
+      <MergeRfqModal
+        isOpen={showMergeRfqModal}
+        onClose={() => setShowMergeRfqModal(false)}
+        onSuccess={() => {
+          fetchQuotations();
+          fetchRawRfqs();
+          setShowMergeRfqModal(false);
+          navigate(`${deptPrefix}/quotations`);
+        }}
+      />
+
+      <MergeReceivedQuotesModal
+        isOpen={showMergeQuotesModal}
+        onClose={() => setShowMergeQuotesModal(false)}
+        selectedQuoteIds={selectedQuotes}
+        quotations={quotations}
+        vendors={vendors}
+        onSuccess={(newQuote) => {
+          setSelectedQuotes([]);
+          fetchQuotations();
+          fetchStats();
+        }}
       />
     </div>
   );

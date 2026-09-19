@@ -210,6 +210,22 @@ const approveComparedQuotations = async (req, res, next) => {
   }
 };
 
+const mergeQuotations = async (req, res, next) => {
+  try {
+    const result = await quotationService.mergeQuotations({
+      ...req.body,
+      requestedBy: req.user?.id
+    });
+    res.status(201).json({
+      success: true,
+      message: 'Received quotations merged successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createQuotation,
   getQuotations,
@@ -224,5 +240,6 @@ module.exports = {
   parseQuotationPDF,
   getReceivedQuotationPDF,
   parseReceivedQuotationPDF,
-  approveComparedQuotations
+  approveComparedQuotations,
+  mergeQuotations
 };

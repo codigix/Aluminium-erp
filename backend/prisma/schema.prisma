@@ -1140,6 +1140,10 @@ model procurement_rfq_items {
   vendor_id                          Int?
   vendor_ids                         String?                              @db.VarChar(255)
   shape_type                         String?                              @db.VarChar(100)
+  source_rfq_id                      Int?
+  source_rfq_item_id                 Int?
+  source_rfq_number                  String?                              @db.VarChar(50)
+  project_name                       String?                              @db.VarChar(255)
   procurement_rfqs                   procurement_rfqs?                    @relation(fields: [rfq_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "procurement_rfq_items_ibfk_1")
   procurement_rfq_vendor_assignments procurement_rfq_vendor_assignments[]
 
@@ -1147,22 +1151,27 @@ model procurement_rfq_items {
 }
 
 model procurement_rfqs {
-  id                                 Int                                  @id @default(autoincrement())
-  rfq_number                         String                               @unique(map: "rfq_number") @db.VarChar(50)
-  mr_id                              Int?
-  requested_by                       Int?
-  status                             String?                              @default("DRAFT") @db.VarChar(50)
-  notes                              String?                              @db.Text
-  created_at                         DateTime?                            @default(now()) @db.Timestamp(0)
-  updated_at                         DateTime?                            @default(now()) @db.Timestamp(0)
-  procurement_rfq_items              procurement_rfq_items[]
-  procurement_rfq_vendor_assignments procurement_rfq_vendor_assignments[]
-  material_requests                  material_requests?                   @relation(fields: [mr_id], references: [id], onUpdate: NoAction, map: "procurement_rfqs_ibfk_1")
-  users                              users?                               @relation(fields: [requested_by], references: [id], onUpdate: NoAction, map: "procurement_rfqs_ibfk_2")
-  quotations                         quotations[]
+  id                                                         Int                                  @id @default(autoincrement())
+  rfq_number                                                 String                               @unique(map: "rfq_number") @db.VarChar(50)
+  mr_id                                                      Int?
+  requested_by                                               Int?
+  status                                                     String?                              @default("DRAFT") @db.VarChar(50)
+  notes                                                      String?                              @db.Text
+  is_merged                                                  Boolean?                             @default(false)
+  merged_into_rfq_id                                         Int?
+  created_at                                                 DateTime?                            @default(now()) @db.Timestamp(0)
+  updated_at                                                 DateTime?                            @default(now()) @db.Timestamp(0)
+  procurement_rfq_items                                      procurement_rfq_items[]
+  procurement_rfq_vendor_assignments                         procurement_rfq_vendor_assignments[]
+  material_requests                                          material_requests?                   @relation(fields: [mr_id], references: [id], onUpdate: NoAction, map: "procurement_rfqs_ibfk_1")
+  users                                                      users?                               @relation(fields: [requested_by], references: [id], onUpdate: NoAction, map: "procurement_rfqs_ibfk_2")
+  procurement_rfqs                                           procurement_rfqs?                    @relation("procurement_rfqsToprocurement_rfqs", fields: [merged_into_rfq_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_merged_into_rfq")
+  other_procurement_rfqs                                     procurement_rfqs[]                   @relation("procurement_rfqsToprocurement_rfqs")
+  quotations                                                 quotations[]
 
   @@index([mr_id], map: "mr_id")
   @@index([requested_by], map: "requested_by")
+  @@index([merged_into_rfq_id], map: "fk_merged_into_rfq")
 }
 
 model production_plan_items {
@@ -1475,8 +1484,14 @@ model quotation_items {
   uom             String?    @db.VarChar(20)
   planned_qty     Decimal?   @default(0.000) @db.Decimal(14, 3)
   is_selected     Int?       @default(1) @db.TinyInt
-  shape_type      String?    @db.VarChar(100)
-  quotations      quotations @relation(fields: [quotation_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "quotation_items_ibfk_1")
+  shape_type                 String?    @db.VarChar(100)
+  source_quotation_id        Int?
+  source_quotation_item_id   Int?
+  source_quotation_number    String?    @db.VarChar(100)
+  source_rfq_id              Int?
+  source_rfq_number          String?    @db.VarChar(100)
+  project_name               String?    @db.VarChar(255)
+  quotations                 quotations @relation(fields: [quotation_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "quotation_items_ibfk_1")
 
   @@index([quotation_id], map: "idx_quotation_id")
 }
@@ -1555,9 +1570,12 @@ model quotations {
   rfq_id            Int?
   rfq_group_id      String?            @db.VarChar(50)
   version           Int?               @default(1)
-  base_quote_number String?            @db.VarChar(100)
-  host_company_id   Int?
-  purchase_orders   purchase_orders[]
+  base_quote_number        String?            @db.VarChar(100)
+  host_company_id          Int?
+  is_merged                Boolean?           @default(false)
+  merged_into_quotation_id Int?
+  project_name             String?            @db.VarChar(255)
+  purchase_orders          purchase_orders[]
   quotation_items   quotation_items[]
   material_requests material_requests? @relation(fields: [mr_id], references: [id], onUpdate: NoAction, map: "fk_quotations_mr")
   sales_orders      sales_orders?      @relation(fields: [sales_order_id], references: [id], onUpdate: NoAction, map: "quotations_ibfk_1")
@@ -2479,6 +2497,7 @@ enum quotations_status {
   EMAIL_RECEIVED
   SUPERSEDED
   REJECTED
+  MERGED
 }
 
 enum roles_status {

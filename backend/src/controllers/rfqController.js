@@ -60,8 +60,42 @@ const assignItemVendors = async (req, res, next) => {
 
 const deleteRfq = async (req, res, next) => {
     try {
-        await rfqService.deleteRfq(req.params.id);
+        const { id } = req.params;
+        await rfqService.deleteRfq(id);
         res.json({ message: 'RFQ deleted successfully' });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const getMergeEligibleVendors = async (req, res, next) => {
+    try {
+        const vendors = await rfqService.getMergeEligibleVendors();
+        res.json(vendors);
+    } catch (error) {
+        next(error);
+    }
+};
+
+const getMergeEligibleRfqs = async (req, res, next) => {
+    try {
+        const { vendorId } = req.query;
+        if (!vendorId) return res.status(400).json({ error: 'vendorId is required' });
+        const rfqs = await rfqService.getMergeEligibleRfqs(vendorId);
+        res.json(rfqs);
+    } catch (error) {
+        next(error);
+    }
+};
+
+const mergeRfqs = async (req, res, next) => {
+    try {
+        const payload = {
+            ...req.body,
+            requestedBy: req.user ? req.user.id : null
+        };
+        const result = await rfqService.mergeRfqs(payload);
+        res.status(201).json({ message: 'RFQs merged successfully', data: result });
     } catch (error) {
         next(error);
     }
@@ -73,5 +107,8 @@ module.exports = {
     getRfqsByMrId,
     getRfqs,
     assignItemVendors,
-    deleteRfq
+    deleteRfq,
+    getMergeEligibleVendors,
+    getMergeEligibleRfqs,
+    mergeRfqs
 };

@@ -265,6 +265,7 @@ const getQuotations = async (filters = {}) => {
              )
            ) as finished_good,
            COALESCE(
+             q.project_name,
              so.project_name, 
              (
                SELECT so2.project_name 
@@ -291,11 +292,19 @@ const getQuotations = async (filters = {}) => {
              'General Procurement'
            ) as project_name,
            COALESCE(
+              q.client_name,
               c_ord.company_name,
               c_so.company_name,
               c.company_name,
               'Internal'
             ) as company_name,
+           COALESCE(
+              q.client_name,
+              c_ord.company_name,
+              c_so.company_name,
+              c.company_name,
+              'Internal'
+            ) as client_name,
            mr.mr_number, r.rfq_number
     FROM quotations q
     LEFT JOIN vendors v ON v.id = q.vendor_id
@@ -388,7 +397,7 @@ const getQuotations = async (filters = {}) => {
     const isParentDwgPattern = parentDrawingNo ? /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(parentDrawingNo) : false;
 
     const quoteItems = items.filter(i => i.quotation_id === q.id).map(item => {
-      if (parentDrawingNo && !isParentDwgPattern) {
+      if (!q.is_merged && parentDrawingNo && !isParentDwgPattern) {
         return { ...item, drawing_no: parentDrawingNo };
       }
       return item;
@@ -431,6 +440,7 @@ const getQuotationById = async (quotationId) => {
               )
             ) as finished_good,
             COALESCE(
+              q.project_name,
               so.project_name, 
               (SELECT so2.project_name FROM sales_orders so2 JOIN production_plans pp ON so2.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
               (SELECT so3.project_name FROM sales_orders so3 WHERE mr.notes LIKE CONCAT('%', so3.project_name, '%') LIMIT 1),
@@ -438,11 +448,19 @@ const getQuotationById = async (quotationId) => {
               'General Procurement'
             ) as project_name, 
             COALESCE(
+              q.client_name,
               c_ord.company_name,
               c_so.company_name,
               c.company_name,
               'Internal'
             ) as company_name,
+            COALESCE(
+              q.client_name,
+              c_ord.company_name,
+              c_so.company_name,
+              c.company_name,
+              'Internal'
+            ) as client_name,
             r.rfq_number
      FROM quotations q 
      LEFT JOIN material_requests mr ON mr.id = q.mr_id
@@ -471,6 +489,7 @@ const getQuotationById = async (quotationId) => {
   const [items] = await pool.query(
     `SELECT qi.*, 
             COALESCE(
+              CASE WHEN q.is_merged = 1 THEN qi.drawing_no END,
               -- 1. Try production_plan_materials
               (
                 SELECT ppm.bom_ref 
@@ -2065,6 +2084,304 @@ const approveComparedQuotations = async (data) => {
   }
 };
 
+const mergeQuotations = async (payload) => {
+  const { sourceQuotationIds, notes, requestedBy } = payload;
+
+  if (!Array.isArray(sourceQuotationIds) || sourceQuotationIds.length < 2) {
+    const error = new Error('At least 2 source quotations are required to merge');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Fetch and validate source quotations with row locks
+    const [sourceQuotes] = await connection.query(
+      `SELECT q.*, v.vendor_name,
+              COALESCE(
+                q.client_name,
+                c_ord.company_name,
+                c_so.company_name,
+                c.company_name,
+                'Internal'
+              ) as resolved_client_name,
+              COALESCE(
+                q.project_name,
+                so.project_name,
+                (SELECT so2.project_name FROM sales_orders so2 JOIN production_plans pp ON so2.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+                mr.purpose,
+                'General Procurement'
+              ) as resolved_project_name,
+              r.rfq_number
+       FROM quotations q
+       LEFT JOIN vendors v ON v.id = q.vendor_id
+       LEFT JOIN sales_orders so ON so.id = q.sales_order_id
+       LEFT JOIN companies c ON c.id = so.company_id
+       LEFT JOIN material_requests mr ON mr.id = q.mr_id
+       LEFT JOIN procurement_rfqs r ON r.id = q.rfq_id
+       LEFT JOIN production_plans pp ON mr.plan_id = pp.id
+       LEFT JOIN orders o ON pp.sales_order_id = o.id
+       LEFT JOIN companies c_ord ON o.client_id = c_ord.id
+       LEFT JOIN sales_orders so_pp ON pp.sales_order_id = so_pp.id
+       LEFT JOIN companies c_so ON so_pp.company_id = c_so.id
+       WHERE q.id IN (?) FOR UPDATE`,
+      [sourceQuotationIds]
+    );
+
+    if (sourceQuotes.length !== sourceQuotationIds.length) {
+      const error = new Error('One or more source quotations could not be found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const firstVendorId = sourceQuotes[0].vendor_id;
+    for (const q of sourceQuotes) {
+      if (q.vendor_id !== firstVendorId) {
+        const error = new Error('All selected quotations must belong to the same vendor');
+        error.statusCode = 400;
+        throw error;
+      }
+      if (q.status === 'MERGED' || q.is_merged === 1 || q.merged_into_quotation_id) {
+        const error = new Error(`Quotation ${q.quote_number} has already been merged`);
+        error.statusCode = 400;
+        throw error;
+      }
+      if (['REJECTED', 'CLOSED', 'SUPERSEDED'].includes(q.status)) {
+        const error = new Error(`Quotation ${q.quote_number} is in status ${q.status} and cannot be merged`);
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+
+    // 2. Fetch all quotation items from all source quotations
+    const [sourceItems] = await connection.query(
+      `SELECT qi.*, 
+              q.quote_number as src_quote_number,
+              q.rfq_id as src_rfq_id,
+              r.rfq_number as src_rfq_number,
+              COALESCE(
+                q.project_name,
+                so.project_name,
+                (SELECT so2.project_name FROM sales_orders so2 JOIN production_plans pp ON so2.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+                mr.purpose,
+                'General Procurement'
+              ) as src_project_name
+       FROM quotation_items qi
+       JOIN quotations q ON q.id = qi.quotation_id
+       LEFT JOIN procurement_rfqs r ON r.id = q.rfq_id
+       LEFT JOIN sales_orders so ON so.id = q.sales_order_id
+       LEFT JOIN material_requests mr ON mr.id = q.mr_id
+       WHERE qi.quotation_id IN (?)
+       ORDER BY qi.quotation_id ASC, qi.id ASC`,
+      [sourceQuotationIds]
+    );
+
+    if (sourceItems.length === 0) {
+      const error = new Error('Selected quotations have no items to merge');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 3. Generate new quotation number
+    const newQuoteNumber = await generateQuoteNumber();
+
+    // Distinct clients resolution
+    const distinctClients = [...new Set(sourceQuotes.map(q => q.resolved_client_name).filter(Boolean))];
+    const mergedClientName = distinctClients.length === 1 
+      ? distinctClients[0] 
+      : (distinctClients.length > 1 ? 'Multiple Clients' : 'Internal');
+
+    // Consolidated project name
+    const distinctProjects = [...new Set(sourceQuotes.map(q => q.resolved_project_name).filter(Boolean))];
+    const consolidatedProjectName = distinctProjects.length > 0 ? distinctProjects.join(', ') : 'General Procurement';
+
+    // GST percentage from first quote (fallback 18)
+    const gstPercentage = sourceQuotes[0].gst_percentage !== null && sourceQuotes[0].gst_percentage !== undefined
+      ? parseFloat(sourceQuotes[0].gst_percentage)
+      : 18;
+
+    const firstQuote = sourceQuotes[0];
+
+    // 4. Insert new Quotation header
+    // Final result MUST be a RECEIVED quote with is_merged = 1
+    const defaultNotes = notes || `Merged from: ${sourceQuotes.map(q => q.quote_number).join(', ')}`;
+    const [headerResult] = await connection.execute(
+      `INSERT INTO quotations (
+        quote_number, base_quote_number, version, vendor_id, sales_order_id, mr_id, rfq_id,
+        status, is_merged, project_name, client_name, notes, host_company_id, gst_percentage
+      ) VALUES (?, ?, 1, ?, ?, ?, ?, 'RECEIVED', 1, ?, ?, ?, ?, ?)`,
+      [
+        newQuoteNumber,
+        newQuoteNumber,
+        firstVendorId,
+        distinctClients.length === 1 ? (firstQuote.sales_order_id || null) : null,
+        distinctClients.length === 1 ? (firstQuote.mr_id || null) : null,
+        distinctClients.length === 1 ? (firstQuote.rfq_id || null) : null,
+        consolidatedProjectName,
+        mergedClientName,
+        defaultNotes,
+        firstQuote.host_company_id || null,
+        gstPercentage
+      ]
+    );
+
+    const newQuotationId = headerResult.insertId;
+
+    // 5. Insert consolidated items with exact quantity and rate preservation
+    let totalAmount = 0;
+    let totalTaxAmount = 0;
+
+    for (const item of sourceItems) {
+      // Preservation rules:
+      // Exact copy from source: Design Qty, Quoted Qty, UOM, Unit Rate, GST
+      // No Nos -> Kg conversion
+      const designQty = (item.design_qty !== null && item.design_qty !== undefined)
+        ? parseFloat(item.design_qty)
+        : (parseFloat(item.quantity) || 0);
+
+      const quotedQty = parseFloat(item.quantity) || designQty || 0;
+      const uom = item.uom || item.unit || 'NOS';
+      const unitRate = parseFloat(item.unit_rate) || 0;
+
+      // Amount: preserve authoritative amount if available, otherwise calculate quotedQty * unitRate
+      let amount = parseFloat(item.amount);
+      if (isNaN(amount) || amount === 0) {
+        const lcRaw = String(item.laser_cutting || '').trim().toUpperCase();
+        const hasLaserCutting = lcRaw && !['SELECT', 'NONE', 'NULL', 'UNDEFINED', ''].includes(lcRaw);
+        const amountBase = hasLaserCutting ? designQty : quotedQty;
+        amount = Number((amountBase * unitRate).toFixed(2));
+      } else {
+        amount = Number(amount.toFixed(2));
+      }
+
+      // Taxes: preserve authoritative taxes or calculate from gstPercentage
+      const cgstPercent = (item.cgst_percent !== null && item.cgst_percent !== undefined)
+        ? parseFloat(item.cgst_percent)
+        : Number((gstPercentage / 2).toFixed(2));
+      const sgstPercent = (item.sgst_percent !== null && item.sgst_percent !== undefined)
+        ? parseFloat(item.sgst_percent)
+        : Number((gstPercentage / 2).toFixed(2));
+
+      let cgstAmount = parseFloat(item.cgst_amount);
+      let sgstAmount = parseFloat(item.sgst_amount);
+      if (isNaN(cgstAmount)) {
+        cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
+      }
+      if (isNaN(sgstAmount)) {
+        sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
+      }
+
+      let itemTotalAmount = parseFloat(item.total_amount);
+      if (isNaN(itemTotalAmount) || itemTotalAmount === 0) {
+        itemTotalAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
+      } else {
+        itemTotalAmount = Number(itemTotalAmount.toFixed(2));
+      }
+
+      totalAmount = Number((totalAmount + amount).toFixed(2));
+      totalTaxAmount = Number((totalTaxAmount + cgstAmount + sgstAmount).toFixed(2));
+
+      const quoteMap = new Map(sourceQuotes.map(sq => [sq.id, sq]));
+      const srcQuote = quoteMap.get(item.quotation_id);
+      const itemClientName = (srcQuote && srcQuote.resolved_client_name) ? srcQuote.resolved_client_name : (item.client_name || 'Internal');
+      const itemProjectName = (srcQuote && srcQuote.resolved_project_name) ? srcQuote.resolved_project_name : (item.src_project_name || consolidatedProjectName);
+      const itemQuoteNumber = (srcQuote && srcQuote.quote_number) ? srcQuote.quote_number : (item.src_quote_number || null);
+
+      await connection.execute(
+        `INSERT INTO quotation_items (
+          quotation_id, item_code, description, material_name, material_type, drawing_no, drawing_id,
+          quantity, design_qty, planned_qty, unit, uom, unit_rate, amount,
+          cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
+          length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, laser_cutting,
+          source_quotation_id, source_quotation_item_id, source_quotation_number,
+          source_rfq_id, source_rfq_number, project_name, client_name
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?,
+          ?, ?, ?, ?
+        )`,
+        [
+          newQuotationId,
+          item.item_code || null,
+          item.description || null,
+          item.material_name || null,
+          item.material_type || null,
+          item.drawing_no || item.item_code || null,
+          item.drawing_id || null,
+          quotedQty,
+          designQty,
+          item.planned_qty !== null && item.planned_qty !== undefined ? parseFloat(item.planned_qty) : null,
+          uom,
+          uom,
+          unitRate,
+          amount,
+          cgstPercent,
+          cgstAmount,
+          sgstPercent,
+          sgstAmount,
+          itemTotalAmount,
+          parseFloat(item.length) || 0,
+          parseFloat(item.width) || 0,
+          parseFloat(item.thickness) || 0,
+          parseFloat(item.diameter) || 0,
+          parseFloat(item.outer_diameter) || 0,
+          parseFloat(item.density) || 0,
+          parseFloat(item.weight_per_unit) || 0,
+          item.shape_type || null,
+          item.laser_cutting || null,
+          item.quotation_id,
+          item.id,
+          itemQuoteNumber,
+          item.src_rfq_id || null,
+          item.src_rfq_number || null,
+          itemProjectName,
+          itemClientName
+        ]
+      );
+
+      totalAmount = Number((totalAmount + amount).toFixed(2));
+      totalTaxAmount = Number((totalTaxAmount + cgstAmount + sgstAmount).toFixed(2));
+    }
+
+    const grandTotal = Number((totalAmount + totalTaxAmount).toFixed(2));
+
+    await connection.execute(
+      'UPDATE quotations SET total_amount = ?, tax_amount = ?, grand_total = ? WHERE id = ?',
+      [totalAmount, totalTaxAmount, grandTotal, newQuotationId]
+    );
+
+    // Mark source quotations as MERGED and link to new quotation
+    await connection.query(
+      `UPDATE quotations 
+       SET status = 'MERGED', is_merged = 1, merged_into_quotation_id = ? 
+       WHERE id IN (?)`,
+      [newQuotationId, sourceQuotationIds]
+    );
+
+    await connection.commit();
+
+    return {
+      id: newQuotationId,
+      quote_number: newQuoteNumber,
+      status: 'RECEIVED',
+      is_merged: 1,
+      total_items: sourceItems.length,
+      grand_total: grandTotal,
+      vendor_id: firstVendorId
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   createQuotation,
   getQuotations,
@@ -2076,5 +2393,6 @@ module.exports = {
   sendQuotationEmail,
   generateQuotationPDF,
   parseVendorQuotationPDF,
-  approveComparedQuotations
+  approveComparedQuotations,
+  mergeQuotations
 };

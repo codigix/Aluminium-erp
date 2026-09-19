@@ -311,8 +311,8 @@ const POMaterialRequest = () => {
       if (!response.ok) throw new Error('Failed to generate RFQ');
 
       await Swal.fire({
-        title: 'RFQ Generated!',
-        text: 'A new RFQ has been created. You can now view it in the requests list.',
+        title: 'RFQ Created Successfully',
+        text: `RFQ created successfully. Material Request ${mr.mr_number} is now Processing.`,
         icon: 'success',
         confirmButtonColor: '#10b981'
       });
@@ -732,9 +732,14 @@ const POMaterialRequest = () => {
 
       await Swal.fire({
         icon: createdCount > 0 ? 'success' : (failedCount > 0 ? 'warning' : 'info'),
-        title: 'Bulk RFQ Completed',
+        title: createdCount > 0 ? 'RFQ Created Successfully' : 'Bulk RFQ Completed',
         html: `
           <div style="text-align: left; font-size: 13px; line-height: 1.5;">
+            ${createdCount > 0 ? `
+              <div style="padding: 10px 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; margin-bottom: 12px; color: #166534; font-size: 12px; font-weight: 600;">
+                ✓ RFQ created successfully. Selected Material Request${createdCount === 1 ? '' : 's'} ${createdCount === 1 ? 'is' : 'are'} now Processing.
+              </div>
+            ` : ''}
             <div style="padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 12px;">
               <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center;">
                 <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 6px;">
@@ -757,9 +762,9 @@ const POMaterialRequest = () => {
             </div>
             ${resData.results?.created?.length > 0 ? `
               <div style="margin-bottom: 10px;">
-                <p style="font-size: 11px; font-weight: 700; color: #047857; text-transform: uppercase; margin: 0 0 4px 0;">Newly Created RFQs:</p>
+                <p style="font-size: 11px; font-weight: 700; color: #047857; text-transform: uppercase; margin: 0 0 4px 0;">Newly Created RFQs (Now Processing):</p>
                 <div style="max-height: 100px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; background: #fff;">
-                  ${resData.results.created.map(c => `<div style="padding: 4px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;"><span><strong>${c.mr_number}</strong> → <span style="color: #4f46e5; font-weight: 600;">${c.rfq_number}</span> (${c.drawing_no || 'Direct Item'})</span><span style="color: #64748b;">${c.itemsCount} item(s)</span></div>`).join('')}
+                  ${resData.results.created.map(c => `<div style="padding: 4px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;"><span><strong>${c.mr_number}</strong> → <span style="color: #4f46e5; font-weight: 600;">${c.rfq_number}</span> (${c.drawing_no || 'Direct Item'})</span><span style="color: #047857; font-weight: 600;">Processing</span></div>`).join('')}
                 </div>
               </div>
             ` : ''}
@@ -1009,20 +1014,34 @@ const POMaterialRequest = () => {
             { id: 'RELEASED', label: 'Released / Fulfilled', count: statusCounts.released, icon: '🚚' },
             { id: 'COMPLETED', label: 'Completed', count: statusCounts.completed, icon: '✅' },
             { id: 'CANCELLED', label: 'Cancelled', count: statusCounts.cancelled, icon: '❌' }
-          ].map((card) => (
-            <div
-              key={card.id}
-              className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm"
-            >
-              <div className="flex justify-between items-start mb-1">
-                <span className="text-lg">{card.icon}</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
-                  {card.count}
-                </span>
-              </div>
-              <p className="text-slate-600 text-[11px] font-medium truncate">{card.label}</p>
-            </div>
-          ))}
+          ].map((card) => {
+            const isActive = selectedStatus === card.id;
+            return (
+              <button
+                type="button"
+                key={card.id}
+                onClick={() => setSelectedStatus(card.id)}
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-indigo-50/70 border-indigo-500 shadow-sm ring-2 ring-indigo-500/20'
+                    : 'bg-white border-slate-200 shadow-sm hover:border-slate-300 hover:bg-slate-50/50'
+                }`}
+                title={`Filter by ${card.label}`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <span className="text-lg">{card.icon}</span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                    isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'
+                  }`}>
+                    {card.count}
+                  </span>
+                </div>
+                <p className={`text-[11px] font-medium truncate ${
+                  isActive ? 'text-indigo-900 font-semibold' : 'text-slate-600'
+                }`}>{card.label}</p>
+              </button>
+            );
+          })}
         </div>
 
         {selectedMrIds.size > 0 && (
@@ -1087,7 +1106,7 @@ const POMaterialRequest = () => {
                   onChange={(e) => setSelectedStatus(e.target.value)}
                   className="px-2.5 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer shadow-sm hover:border-slate-300"
                 >
-                  <option value="ALL">All ({statusCounts.all})</option>
+                  <option value="ALL">All Requests ({statusCounts.all})</option>
                   <option value="DRAFT">Draft ({statusCounts.draft})</option>
                   <option value="PENDING">Pending / Processing ({statusCounts.pending})</option>
                   <option value="PARTIALLY_RELEASED">Partially Released ({statusCounts.partially_released})</option>
