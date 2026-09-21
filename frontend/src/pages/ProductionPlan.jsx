@@ -2056,29 +2056,6 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <p className="text-xs text-indigo-600 mt-1 ">Quantity fetched from Design Order</p>
                   </FormControl>
                 </div>
-
-                {!isViewing && (
-                  <div className="flex flex-wrap items-center gap-3 mt-4 pt-3 border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={handleSubmit}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
-                      title="Create one Production Plan for the selected Drawing"
-                    >
-                      <Save className="w-4 h-4" />
-                      <span>Create Production Plan</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleBulkCreateClick}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-indigo-100 transition-all active:scale-95 cursor-pointer"
-                      title="Automatically fetch all Drawings of this Sales Order and create separate Production Plans in bulk"
-                    >
-                      <Layers className="w-4 h-4" />
-                      <span>Bulk Create Production Plans</span>
-                    </button>
-                  </div>
-                )}
               </div>
             </Card>
 
