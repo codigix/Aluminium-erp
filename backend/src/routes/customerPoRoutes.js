@@ -7,6 +7,7 @@ const { blockInProduction, authorize } = require('../middleware/authMiddleware')
 
 router.post('/parse', authorize(['PO_CREATE', 'PO_EDIT']), upload.any(), customerPoController.parseCustomerPoPdf);
 router.post('/parse-pdf', authorize(['PO_CREATE', 'PO_EDIT']), upload.any(), customerPoController.parseCustomerPoPdf);
+router.post('/bulk-drawing-details', authorize(['PO_CREATE', 'PO_EDIT', 'PO_VIEW']), customerPoController.getBulkDrawingDetails);
 router.post('/', authorize(['PO_CREATE']), upload.any(), customerPoController.createCustomerPo);
 router.get('/', authorize(['PO_VIEW']), customerPoController.listCustomerPos);
 router.get('/drawings/pending', authorize(['PO_VIEW']), customerPoController.getPendingDrawings);

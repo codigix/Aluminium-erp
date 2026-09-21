@@ -156,6 +156,7 @@ model customer_drawings {
   shared_at          DateTime?                 @db.Timestamp(0)
   excel_path         String?                   @db.VarChar(255)
   zip_path           String?                   @db.VarChar(255)
+  customer_po_items  customer_po_items[]
 
   @@index([client_name(length: 100)], map: "idx_cd_client_name")
   @@index([created_at], map: "idx_cd_created_at")
@@ -256,10 +257,15 @@ model customer_po_items {
   delivery_date                  DateTime?                        @db.Date
   purchase_req_no                String?                          @db.VarChar(120)
   customer_reference             String?                          @db.VarChar(120)
+  drawing_id                     Int?
+  status                         String?                          @default("ACTIVE") @db.VarChar(50)
+  design_status                  String?                          @db.VarChar(50)
   customer_po_item_subassemblies customer_po_item_subassemblies[]
   customer_pos                   customer_pos                     @relation(fields: [customer_po_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "customer_po_items_ibfk_1")
+  customer_drawings              customer_drawings?               @relation(fields: [drawing_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "customer_po_items_ibfk_drawing")
 
   @@index([customer_po_id], map: "customer_po_id")
+  @@index([drawing_id], map: "idx_cpi_drawing_id")
 }
 
 model customer_pos {

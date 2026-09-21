@@ -50,7 +50,10 @@ const createCustomerPo = async (req, res, next) => {
         purchaseReqNo: item.purchaseReqNo || null,
         customerReference: item.customerReference || null,
         discount: Number(item.discount) || 0,
-        sub_assemblies: item.sub_assemblies || []
+        sub_assemblies: item.sub_assemblies || [],
+        drawingId: item.drawingId ? Number(item.drawingId) : null,
+        status: item.status || (item.drawingId ? 'ACTIVE' : 'PENDING_DESIGN'),
+        designStatus: item.designStatus || (item.drawingId ? null : 'PENDING_DESIGN')
       }))
       .filter(item => item.description);
 
@@ -170,9 +173,20 @@ const parseCustomerPoPdf = async (req, res, next) => {
       orderType: insights.orderType || ''
     };
 
+    res.unlink ? fs.unlink(parseFile.path, () => {}) : null;
+
+    const drawingNumbers = Array.isArray(insights.drawingNumbers)
+      ? insights.drawingNumbers
+      : (Array.isArray(insights.items) ? insights.items.map(i => i.drawingNo).filter(Boolean) : []);
+
+    const enriched = await customerPoService.getBulkDrawingDetails(drawingNumbers);
+
     res.json({
       header,
-      items: Array.isArray(insights.items) ? insights.items : []
+      drawingNumbers,
+      matched: enriched.matched,
+      unmatched: enriched.unmatched,
+      items: enriched.items
     });
   } catch (error) {
     console.error('[PO Parser] Unexpected error:', error);
@@ -243,7 +257,10 @@ const updateCustomerPo = async (req, res, next) => {
       purchaseReqNo: item.purchaseReqNo || null,
       customerReference: item.customerReference || null,
       discount: Number(item.discount) || 0,
-      sub_assemblies: item.sub_assemblies || []
+      sub_assemblies: item.sub_assemblies || [],
+      drawingId: item.drawingId ? Number(item.drawingId) : null,
+      status: item.status || (item.drawingId ? 'ACTIVE' : 'PENDING_DESIGN'),
+      designStatus: item.designStatus || (item.drawingId ? null : 'PENDING_DESIGN')
     }));
 
     let filePaths = [];
@@ -449,9 +466,20 @@ const getPendingFilterOptions = async (req, res, next) => {
 };
 
 
+const getBulkDrawingDetails = async (req, res, next) => {
+  try {
+    const { drawingNumbers = [] } = req.body;
+    const result = await customerPoService.getBulkDrawingDetails(drawingNumbers);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createCustomerPo,
   parseCustomerPoPdf,
+  getBulkDrawingDetails,
   listCustomerPos,
   getCustomerPo,
   generateCustomerPoPdf,

@@ -169,8 +169,8 @@ const createCustomerPo = async payload => {
         `INSERT INTO customer_po_items
           (customer_po_id, item_code, description, hsn_code, drawing_no, revision_no, quantity,
            unit, rate, basic_amount, discount, cgst_percent, cgst_amount, sgst_percent, sgst_amount,
-           igst_percent, igst_amount, delivery_date, purchase_req_no, customer_reference)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           igst_percent, igst_amount, delivery_date, purchase_req_no, customer_reference, drawing_id, status, design_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ,
         [
           customerPoId,
@@ -192,7 +192,10 @@ const createCustomerPo = async payload => {
           item.igstAmount,
           item.deliveryDate || null,
           item.purchaseReqNo || null,
-          item.customerReference || null
+          item.customerReference || null,
+          item.drawingId ? Number(item.drawingId) : null,
+          item.status || (item.drawingId ? 'ACTIVE' : 'PENDING_DESIGN'),
+          item.designStatus || (item.drawingId ? null : 'PENDING_DESIGN')
         ]
       );
 
@@ -417,11 +420,12 @@ const getCustomerPoById = async id => {
   }
 
   const [items] = await pool.query(
-    `SELECT id, item_code, drawing_no, description, quantity, unit, rate, basic_amount, discount, 
-            cgst_percent, sgst_percent, igst_percent, cgst_amount, sgst_amount, igst_amount, hsn_code, delivery_date
-     FROM customer_po_items
-     WHERE customer_po_id = ?
-     ORDER BY id ASC`,
+    `SELECT cpi.id, cpi.item_code, cpi.drawing_no, cpi.description, cpi.quantity, cpi.unit, cpi.rate, cpi.basic_amount, cpi.discount, 
+            cpi.cgst_percent, cpi.sgst_percent, cpi.igst_percent, cpi.cgst_amount, cpi.sgst_amount, cpi.igst_amount, cpi.hsn_code, cpi.delivery_date,
+            cpi.drawing_id, cpi.status, cpi.design_status
+     FROM customer_po_items cpi
+     WHERE cpi.customer_po_id = ?
+     ORDER BY cpi.id ASC`,
     [id]
   );
 
@@ -631,8 +635,8 @@ const updateCustomerPo = async (id, payload) => {
         `INSERT INTO customer_po_items
           (customer_po_id, item_code, description, hsn_code, drawing_no, revision_no, quantity,
            unit, rate, basic_amount, discount, cgst_percent, cgst_amount, sgst_percent, sgst_amount,
-           igst_percent, igst_amount, delivery_date, purchase_req_no, customer_reference)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           igst_percent, igst_amount, delivery_date, purchase_req_no, customer_reference, drawing_id, status, design_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ,
         [
           id,
@@ -654,7 +658,10 @@ const updateCustomerPo = async (id, payload) => {
           item.igstAmount,
           item.deliveryDate || null,
           item.purchaseReqNo || null,
-          item.customerReference || null
+          item.customerReference || null,
+          item.drawingId ? Number(item.drawingId) : null,
+          item.status || (item.drawingId ? 'ACTIVE' : 'PENDING_DESIGN'),
+          item.designStatus || (item.drawingId ? null : 'PENDING_DESIGN')
         ]
       );
 
@@ -2426,6 +2433,236 @@ const getPendingFilterOptions = async () => {
   return { poNumbers, drawingNos, drawingNames, projects };
 };
 
+const getBulkDrawingDetails = async (drawingNumbers = []) => {
+  if (!Array.isArray(drawingNumbers) || drawingNumbers.length === 0) {
+    return { matched: [], unmatched: [], items: [], totalCount: 0, matchedCount: 0, unmatchedCount: 0 };
+  }
+
+  // Clean and preserve input array
+  const cleanedList = drawingNumbers.map(d => (d !== null && d !== undefined ? String(d).trim() : ''));
+  const uniqueNumbers = [...new Set(cleanedList.filter(d => d.length > 0))];
+
+  if (uniqueNumbers.length === 0) {
+    return { matched: [], unmatched: [], items: [], totalCount: 0, matchedCount: 0, unmatchedCount: 0 };
+  }
+
+  const upperUnique = uniqueNumbers.map(u => u.toUpperCase());
+
+  // 1. Fetch Drawing Master (customer_drawings)
+  let drawingRows = [];
+  try {
+    const [rows] = await pool.query(
+      `SELECT 
+         id, 
+         drawing_no, 
+         description, 
+         hsn_code, 
+         drawing_type, 
+         qty, 
+         delivery_date, 
+         client_name, 
+         project_name,
+         status,
+         created_at
+       FROM customer_drawings
+       WHERE drawing_no IN (?) OR UPPER(TRIM(drawing_no)) IN (?)
+       ORDER BY id DESC`,
+      [uniqueNumbers, upperUnique]
+    );
+    drawingRows = rows;
+  } catch (err) {
+    console.warn('[getBulkDrawingDetails] Error querying customer_drawings:', err.message);
+  }
+
+  const drawingsMap = new Map();
+  for (const row of drawingRows) {
+    const key = String(row.drawing_no).trim().toUpperCase();
+    if (!drawingsMap.has(key)) {
+      drawingsMap.set(key, row);
+    }
+  }
+
+  // 2. Fetch Item Master (items)
+  let itemRows = [];
+  try {
+    const [rows] = await pool.query(
+      `SELECT 
+         id, 
+         item_code, 
+         description, 
+         uom, 
+         item_group, 
+         valuation_rate, 
+         selling_rate, 
+         weight_per_unit, 
+         length, 
+         width, 
+         thickness, 
+         diameter, 
+         outer_diameter
+       FROM items
+       WHERE item_code IN (?) OR UPPER(TRIM(item_code)) IN (?)
+       ORDER BY id DESC`,
+      [uniqueNumbers, upperUnique]
+    );
+    itemRows = rows;
+  } catch (err) {
+    console.warn('[getBulkDrawingDetails] Error querying items:', err.message);
+  }
+
+  const itemsMap = new Map();
+  for (const row of itemRows) {
+    const key = String(row.item_code).trim().toUpperCase();
+    if (!itemsMap.has(key)) {
+      itemsMap.set(key, row);
+    }
+  }
+
+  // 3. Fetch BOM Costing from sales_order_items
+  let soRows = [];
+  try {
+    const [rows] = await pool.query(
+      `SELECT 
+         id,
+         drawing_id,
+         drawing_no,
+         item_code,
+         description,
+         unit,
+         bom_cost,
+         item_group,
+         item_type
+       FROM sales_order_items
+       WHERE (drawing_no IN (?) OR UPPER(TRIM(drawing_no)) IN (?))
+         AND bom_cost > 0
+       ORDER BY id DESC`,
+      [uniqueNumbers, upperUnique]
+    );
+    soRows = rows;
+  } catch (err) {
+    console.warn('[getBulkDrawingDetails] Error querying sales_order_items:', err.message);
+  }
+
+  const soMap = new Map();
+  for (const row of soRows) {
+    const key = String(row.drawing_no).trim().toUpperCase();
+    if (!soMap.has(key)) {
+      soMap.set(key, row);
+    }
+  }
+
+  // 4. Fetch Sub-assemblies for unique drawings
+  const subAssembliesMap = new Map();
+  await Promise.all(
+    uniqueNumbers.map(async (num) => {
+      const key = num.toUpperCase();
+      const dwg = drawingsMap.get(key);
+      const so = soMap.get(key);
+      try {
+        let components = [];
+        if (so && so.id) {
+          components = await bomService.getItemComponents(so.id);
+        } else if (num && num !== '—') {
+          components = await bomService.getItemComponents(null, null, num);
+        }
+        if (components && components.length > 0) {
+          subAssembliesMap.set(key, components);
+        }
+      } catch (err) {
+        // Safe to ignore if no BOM components
+      }
+    })
+  );
+
+  // 5. Construct 1:1 items preserving exact sequence and duplicate rows
+  const matched = [];
+  const unmatched = [];
+  const items = [];
+
+  for (let idx = 0; idx < cleanedList.length; idx++) {
+    const rawDwg = cleanedList[idx];
+    if (!rawDwg) continue;
+
+    const key = rawDwg.toUpperCase();
+    const dwgRecord = drawingsMap.get(key);
+    const itemRecord = itemsMap.get(key);
+    const soRecord = soMap.get(key);
+    const subAssemblies = subAssembliesMap.get(key) || [];
+
+    const isMatched = !!(dwgRecord || itemRecord || soRecord);
+
+    if (isMatched) {
+      const drawingId = dwgRecord?.id || soRecord?.drawing_id || null;
+      const drawingNo = dwgRecord?.drawing_no || itemRecord?.item_code || soRecord?.drawing_no || rawDwg;
+      const description = dwgRecord?.description || itemRecord?.description || soRecord?.description || `Item ${rawDwg}`;
+      const hsnCode = dwgRecord?.hsn_code || '';
+      const unit = itemRecord?.uom || soRecord?.unit || 'NOS';
+
+      // Authoritative ERP costing source (BOM Cost if available, else selling/valuation rate)
+      let rate = 0;
+      if (soRecord && Number(soRecord.bom_cost) > 0) {
+        rate = Number(soRecord.bom_cost);
+      } else if (itemRecord && Number(itemRecord.selling_rate) > 0) {
+        rate = Number(itemRecord.selling_rate);
+      } else if (itemRecord && Number(itemRecord.valuation_rate) > 0) {
+        rate = Number(itemRecord.valuation_rate);
+      }
+
+      const itemPayload = {
+        drawingNo,
+        drawingId,
+        itemCode: itemRecord?.item_code || dwgRecord?.drawing_no || rawDwg,
+        description,
+        hsnCode,
+        unit,
+        rate,
+        quantity: 1,
+        cgstPercent: 9,
+        sgstPercent: 9,
+        igstPercent: 0,
+        sub_assemblies: subAssemblies,
+        status: 'MATCHED',
+        isUnmatched: false,
+        needsReview: false
+      };
+
+      items.push(itemPayload);
+      matched.push(itemPayload);
+    } else {
+      // Unmatched drawing: status = PENDING_DESIGN, drawingId = null
+      const itemPayload = {
+        drawingNo: rawDwg,
+        drawingId: null,
+        itemCode: rawDwg,
+        description: `Item ${rawDwg}`,
+        hsnCode: '',
+        unit: 'NOS',
+        rate: 0,
+        quantity: 1,
+        cgstPercent: 9,
+        sgstPercent: 9,
+        igstPercent: 0,
+        sub_assemblies: [],
+        status: 'PENDING_DESIGN',
+        isUnmatched: true,
+        needsReview: false
+      };
+
+      items.push(itemPayload);
+      unmatched.push(itemPayload);
+    }
+  }
+
+  return {
+    matched,
+    unmatched,
+    items,
+    totalCount: items.length,
+    matchedCount: matched.length,
+    unmatchedCount: unmatched.length
+  };
+};
+
 module.exports = {
   createCustomerPo,
   listCustomerPos,
@@ -2436,6 +2673,7 @@ module.exports = {
   uploadCustomerPoPdf,
   getPendingDrawings,
   getPendingFilterOptions,
-  getDispatchedDrawings
+  getDispatchedDrawings,
+  getBulkDrawingDetails
 };
 

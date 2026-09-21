@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Loader2, ChevronRight, Eye, Plus, Trash2, X, Download, Pencil, Send,
@@ -350,6 +350,10 @@ const CustomerPO = ({
   const [pdfParsingLoading, setPdfParsingLoading] = useState(false)
   const [parsedPdfSummary, setParsedPdfSummary] = useState(null)
   const poPdfInputRef = React.useRef(null)
+  const isSubmittingRef = React.useRef(false)
+  const [itemSearchQuery, setItemSearchQuery] = useState('')
+  const [itemStatusFilter, setItemStatusFilter] = useState('ALL') // 'ALL' | 'MATCHED' | 'PENDING'
+  const [viewItemModal, setViewItemModal] = useState(null)
   const [uploadLoading, setUploadLoading] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [selectedPoForModal, setSelectedPoForModal] = useState(null)
@@ -1086,10 +1090,10 @@ const CustomerPO = ({
         throw new Error(resData.message || 'Failed to parse Customer PO PDF');
       }
 
-      const { header = {}, items = [] } = resData;
+      const { header = {}, items = [], matched = [], unmatched = [] } = resData;
 
       if (!items || items.length === 0) {
-        showToast('No line items could be detected from the PDF. Please check the file or enter manually.');
+        showToast('No drawing line items could be detected from the PDF. Please check the file or enter manually.');
         setPdfParsingLoading(false);
         if (poPdfInputRef.current) poPdfInputRef.current.value = '';
         return;
@@ -1101,7 +1105,7 @@ const CustomerPO = ({
         return exists ? prev : [...prev, file];
       });
 
-      // Update PO Header fields if available from PDF and not already set by user
+      // Directly populate PO Header and Items from authoritative backend lookup
       setPoForm(prev => {
         let updatedHeader = { ...prev };
         if (header.poNumber && (!prev.poNumber || prev.poNumber.startsWith('PO'))) {
@@ -1116,92 +1120,58 @@ const CustomerPO = ({
         if (header.creditDays && !prev.creditDays) {
           updatedHeader.creditDays = header.creditDays;
         }
+        if (header.currency && !prev.currency) {
+          updatedHeader.currency = header.currency;
+        }
 
-        let matchedCount = 0;
-        let unmatchedCount = 0;
+        // Auto-match company if not selected yet
+        if (!prev.companyId && (header.companyCode || header.companyName)) {
+          const searchCode = (header.companyCode || '').trim().toUpperCase();
+          const searchName = (header.companyName || '').trim().toUpperCase();
+          const targetPool = activeCompanies?.length ? activeCompanies : (companiesList || []);
+          const comp = targetPool.find(c => {
+            const cName = (c.company_name || '').toUpperCase();
+            return (searchCode && cName.includes(searchCode)) || (searchName && cName.includes('SIDEL'));
+          });
+          if (comp) {
+            updatedHeader.companyId = comp.id;
+            const primaryContact = comp.contacts?.find(ct => ct.contact_type === 'PRIMARY') || comp.contacts?.[0];
+            const billing = comp.addresses?.find(address => address.address_type === 'BILLING') || {};
+            const shipping = comp.addresses?.find(address => address.address_type === 'SHIPPING') || {};
+            const billingAddressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
+            const shippingAddressStr = [shipping.line1, shipping.line2, shipping.city, shipping.state, shipping.pincode].filter(Boolean).join(', ');
 
-        const populatedItems = items.map((pdfItem, idx) => {
-          const rawDwgNo = (pdfItem.drawingNo || '').trim().toUpperCase();
-
-          // 1. Search existing Drawing Master (allDrawings from /drawings/approved)
-          const matchedMaster = allDrawings.find(d =>
-            String(d.drawing_no).trim().toUpperCase() === rawDwgNo
-          );
-
-          // 2. Search quotation drawings fallback
-          const matchedQuote = !matchedMaster ? allQuotationDrawings.find(q =>
-            String(q.drawing_no || q.drawingNo).trim().toUpperCase() === rawDwgNo
-          ) : null;
-
-          if (matchedMaster) {
-            matchedCount++;
-            return {
-              drawingNo: matchedMaster.drawing_no,
-              description: matchedMaster.drawing_description || matchedMaster.description || pdfItem.description || '',
-              hsnCode: matchedMaster.hsn_code || pdfItem.hsnCode || '',
-              deliveryDate: pdfItem.deliveryDate || (matchedMaster.delivery_date ? new Date(matchedMaster.delivery_date).toISOString().split('T')[0] : prev.poDate || ''),
-              quantity: pdfItem.quantity || matchedMaster.qty || 1,
-              unit: pdfItem.unit || matchedMaster.unit || 'NOS',
-              rate: (pdfItem.rate && Number(pdfItem.rate) > 0) ? pdfItem.rate : (matchedMaster.bom_cost || ''),
-              cgstPercent: pdfItem.cgstPercent !== undefined ? pdfItem.cgstPercent : 9,
-              sgstPercent: pdfItem.sgstPercent !== undefined ? pdfItem.sgstPercent : 9,
-              igstPercent: pdfItem.igstPercent !== undefined ? pdfItem.igstPercent : 0,
-              sub_assemblies: (matchedMaster.sub_assemblies && matchedMaster.sub_assemblies.length > 0)
-                ? matchedMaster.sub_assemblies.map(sa => ({
-                    drawingNo: sa.drawingNo || sa.drawing_no || '',
-                    description: sa.description || '',
-                    quantity: sa.quantity || 0,
-                    unit: sa.unit || 'NOS',
-                    rate: sa.rate || sa.bom_cost || 0,
-                    cgstPercent: 0,
-                    sgstPercent: 0,
-                    igstPercent: 0,
-                    hsnCode: sa.hsn_code || sa.hsnCode || matchedMaster.hsn_code || '',
-                    deliveryDate: sa.delivery_date || sa.deliveryDate || (matchedMaster.delivery_date ? new Date(matchedMaster.delivery_date).toISOString().split('T')[0] : ''),
-                    item_group: sa.item_group || sa.drawing_type || (sa.is_assembly ? 'ASM' : 'PART'),
-                    drawing_type: sa.drawing_type || sa.item_group || (sa.is_assembly ? 'ASM' : 'Part'),
-                    is_assembly: !!(sa.is_assembly || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASM') || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASSEMBLY'))
-                  }))
-                : [],
-              isUnmatched: false,
-              needsReview: !pdfItem.rate || Number(pdfItem.rate) <= 0
-            };
-          } else if (matchedQuote) {
-            matchedCount++;
-            return {
-              drawingNo: (matchedQuote.drawing_no || matchedQuote.drawingNo).toUpperCase(),
-              description: matchedQuote.description || matchedQuote.item_description || pdfItem.description || '',
-              hsnCode: matchedQuote.hsnCode || matchedQuote.hsn_code || pdfItem.hsnCode || '',
-              deliveryDate: pdfItem.deliveryDate || (matchedQuote.deliveryDate ? new Date(matchedQuote.deliveryDate).toISOString().split('T')[0] : prev.poDate || ''),
-              quantity: pdfItem.quantity || matchedQuote.quantity || 1,
-              unit: pdfItem.unit || matchedQuote.unit || 'NOS',
-              rate: (pdfItem.rate && Number(pdfItem.rate) > 0) ? pdfItem.rate : (matchedQuote.rate || ''),
-              cgstPercent: pdfItem.cgstPercent !== undefined ? pdfItem.cgstPercent : 9,
-              sgstPercent: pdfItem.sgstPercent !== undefined ? pdfItem.sgstPercent : 9,
-              igstPercent: pdfItem.igstPercent !== undefined ? pdfItem.igstPercent : 0,
-              sub_assemblies: matchedQuote.sub_assemblies || [],
-              isUnmatched: false,
-              needsReview: !pdfItem.rate || Number(pdfItem.rate) <= 0
-            };
-          } else {
-            unmatchedCount++;
-            return {
-              drawingNo: rawDwgNo || `ITEM-${idx + 1}`,
-              description: pdfItem.description || '',
-              hsnCode: pdfItem.hsnCode || '',
-              deliveryDate: pdfItem.deliveryDate || prev.poDate || '',
-              quantity: pdfItem.quantity || 1,
-              unit: pdfItem.unit || 'NOS',
-              rate: pdfItem.rate || '',
-              cgstPercent: pdfItem.cgstPercent !== undefined ? pdfItem.cgstPercent : 9,
-              sgstPercent: pdfItem.sgstPercent !== undefined ? pdfItem.sgstPercent : 9,
-              igstPercent: pdfItem.igstPercent !== undefined ? pdfItem.igstPercent : 0,
-              sub_assemblies: [],
-              isUnmatched: true,
-              needsReview: true
-            };
+            updatedHeader.customerContactPerson = primaryContact?.name || comp.contact_person || '';
+            updatedHeader.customerEmail = primaryContact?.email || comp.email || comp.contact_email || '';
+            updatedHeader.customerPhone = primaryContact?.phone || comp.phone || comp.contact_mobile || '';
+            updatedHeader.customerGstin = comp.gstin || '';
+            updatedHeader.customerBillingAddress = billingAddressStr || comp.billing_address || '';
+            updatedHeader.customerShippingAddress = shippingAddressStr || comp.shipping_address || '';
           }
-        });
+        }
+
+        // Direct binding without slow in-memory filtering!
+        const populatedItems = items.map((item, idx) => ({
+          drawingNo: (item.drawingNo || `ITEM-${idx + 1}`).trim().toUpperCase(),
+          drawingId: item.drawingId || null,
+          itemCode: item.itemCode || item.drawingNo || `ITEM-${idx + 1}`,
+          description: item.description || `Item ${item.drawingNo || idx + 1}`,
+          hsnCode: item.hsnCode || '',
+          deliveryDate: item.deliveryDate || updatedHeader.poDate || prev.poDate || '',
+          quantity: item.quantity || 1,
+          unit: item.unit || 'NOS',
+          rate: (item.rate !== undefined && item.rate !== null) ? item.rate : 0,
+          cgstPercent: item.cgstPercent !== undefined ? item.cgstPercent : 9,
+          sgstPercent: item.sgstPercent !== undefined ? item.sgstPercent : 9,
+          igstPercent: item.igstPercent !== undefined ? item.igstPercent : 0,
+          sub_assemblies: item.sub_assemblies || [],
+          status: item.status || (item.drawingId ? 'MATCHED' : 'PENDING_DESIGN'),
+          isUnmatched: item.isUnmatched !== undefined ? item.isUnmatched : !item.drawingId,
+          needsReview: false
+        }));
+
+        const matchedCount = matched.length || populatedItems.filter(i => !i.isUnmatched).length;
+        const unmatchedCount = unmatched.length || populatedItems.filter(i => i.isUnmatched).length;
 
         setParsedPdfSummary({
           fileName: file.name,
@@ -1216,7 +1186,7 @@ const CustomerPO = ({
         };
       });
 
-      showToast(`Parsed ${items.length} line items from PDF successfully.`);
+      showToast(`Processed ${items.length} line items from PDF successfully.`);
     } catch (err) {
       console.error('PDF parsing error:', err);
       showToast(err.message || 'Failed to process PDF');
@@ -1370,8 +1340,12 @@ const CustomerPO = ({
     setAttachments([])
     setExistingAttachments([])
     setLocalError('')
+    isSubmittingRef.current = false
     setParsedPdfSummary(null)
     setPdfParsingLoading(false)
+    setItemSearchQuery('')
+    setItemStatusFilter('ALL')
+    setViewItemModal(null)
     if (poPdfInputRef.current) poPdfInputRef.current.value = ''
     if (window.location.pathname !== '/sales/customer-po') {
       window.history.pushState({}, '', '/sales/customer-po');
@@ -1459,7 +1433,12 @@ const CustomerPO = ({
           customerBillingAddress: data.billing_address || '',
           customerShippingAddress: data.shipping_address || '',
           items: data.items.map(item => ({
+            id: item.id,
+            itemCode: item.item_code || item.drawing_no || '',
             drawingNo: item.drawing_no || '',
+            drawingId: item.drawing_id || null,
+            status: item.status || (item.drawing_id ? 'MATCHED' : (item.design_status || 'PENDING_DESIGN')),
+            isUnmatched: item.status === 'PENDING_DESIGN' || item.design_status === 'PENDING_DESIGN' || (!item.drawing_id && item.status !== 'MATCHED' && item.status !== 'ACTIVE'),
             description: item.description || '',
             hsnCode: item.hsn_code || '',
             deliveryDate: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
@@ -1577,70 +1556,78 @@ const CustomerPO = ({
   };
 
   const handlePoSubmit = async (e) => {
-    e.preventDefault()
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+
+    // Strictly ignore submit event if triggered by non-submit buttons (e.g. pagination, tab clicks)
+    const submitter = e?.nativeEvent?.submitter;
+    if (submitter) {
+      const isSubmitBtn = submitter.getAttribute('type') === 'submit';
+      if (!isSubmitBtn) {
+        console.warn('[Customer PO] Non-submit button triggered form event, ignoring:', submitter);
+        return;
+      }
+    }
+
+    // Synchronous mutex lock to strictly prevent multi-click duplicate submissions
+    if (isSubmittingRef.current || poFormLoading) {
+      console.warn('[Customer PO] Submission already in progress, ignoring duplicate trigger');
+      return;
+    }
+    isSubmittingRef.current = true;
+
     setLocalError('')
     if (!poForm.companyId) {
+      isSubmittingRef.current = false;
       const msg = 'Please select a company';
       showToast(msg)
       setLocalError(msg)
       return
     }
     if (!poForm.poNumber || !poForm.poNumber.trim()) {
+      isSubmittingRef.current = false;
       const msg = 'Please enter a Customer Purchase Order Number';
       showToast(msg)
       setLocalError(msg)
       return
     }
     if (!poForm.poDate) {
+      isSubmittingRef.current = false;
       const msg = 'Please select a PO Date';
       showToast(msg)
       setLocalError(msg)
       return
     }
 
-    // Validate Items
+    // Validate Items - Do not block on unmatched drawings or zero rates for pending design items
     for (let i = 0; i < poForm.items.length; i++) {
       const item = poForm.items[i];
       const itemLabel = `Line Item ${i + 1}`;
-      if (item.isUnmatched) {
-        const msg = `${itemLabel} (${item.drawingNo}) was not found in Drawing Master. Please select a valid Drawing No from the dropdown before submitting.`;
+      if (!item.drawingNo || !item.drawingNo.trim()) {
+        isSubmittingRef.current = false;
+        const msg = `Drawing No is required for ${itemLabel}`;
         showToast(msg);
         setLocalError(msg);
         return;
       }
-      if (!item.drawingNo || !item.drawingNo.trim()) {
-        const msg = `Drawing No is required for ${itemLabel}`;
-        showToast(msg)
-        setLocalError(msg)
-        return;
-      }
-      if (!item.description || !item.description.trim()) {
-        const msg = `Description is required for ${itemLabel}`;
-        showToast(msg)
-        setLocalError(msg)
-        return;
-      }
       if (!item.quantity || Number(item.quantity) <= 0) {
+        isSubmittingRef.current = false;
         const msg = `Valid Quantity is required for ${itemLabel}`;
-        showToast(msg)
-        setLocalError(msg)
+        showToast(msg);
+        setLocalError(msg);
         return;
       }
       if (!item.unit || !item.unit.trim()) {
-        const msg = `Unit is required for ${itemLabel}`;
-        showToast(msg)
-        setLocalError(msg)
-        return;
+        item.unit = 'NOS';
       }
-      if (!item.rate || Number(item.rate) <= 0) {
-        const msg = `Valid Rate is required for ${itemLabel}`;
-        showToast(msg)
-        setLocalError(msg)
-        return;
+      if (!item.description || !item.description.trim()) {
+        item.description = `Item ${item.drawingNo}`;
       }
     }
 
     if (attachments.length === 0 && existingAttachments.length === 0) {
+      isSubmittingRef.current = false;
       const msg = 'Please upload at least one PO / Document attachment';
       showToast(msg)
       setLocalError(msg)
@@ -1678,6 +1665,8 @@ const CustomerPO = ({
       const mappedItems = poForm.items.map(item => ({
         ...item,
         drawingNo: (item.drawingNo || '').toUpperCase(),
+        drawingId: item.drawingId || null,
+        status: item.status || (item.drawingId ? 'ACTIVE' : 'PENDING_DESIGN'),
         hsn_code: item.hsnCode,
         delivery_date: item.deliveryDate,
         sub_assemblies: (item.sub_assemblies || []).map(sa => ({
@@ -1720,6 +1709,7 @@ const CustomerPO = ({
       showToast(error.message)
     } finally {
       setPoFormLoading(false)
+      isSubmittingRef.current = false
     }
   }
 
@@ -2019,7 +2009,12 @@ const CustomerPO = ({
                   customerBillingAddress: data.billing_address || '',
                   customerShippingAddress: data.shipping_address || '',
                   items: (data.items || []).map(item => ({
+                    id: item.id,
+                    itemCode: item.item_code || item.drawing_no || '',
                     drawingNo: item.drawing_no || '',
+                    drawingId: item.drawing_id || null,
+                    status: item.status || (item.drawing_id ? 'MATCHED' : (item.design_status || 'PENDING_DESIGN')),
+                    isUnmatched: item.status === 'PENDING_DESIGN' || item.design_status === 'PENDING_DESIGN' || (!item.drawing_id && item.status !== 'MATCHED' && item.status !== 'ACTIVE'),
                     description: item.description || '',
                     hsnCode: item.hsn_code || '',
                     deliveryDate: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
@@ -2071,16 +2066,81 @@ const CustomerPO = ({
     }
   ];
 
+  // Helper to accurately determine if an item is pending design or matched
+  const isItemPendingDesign = useCallback((item, drawingsList = allDrawings) => {
+    if (!item) return false;
+    const statusUpper = String(item.status || item.design_status || '').trim().toUpperCase();
+    if (statusUpper === 'PENDING_DESIGN' || statusUpper === 'PENDING') return true;
+    if (statusUpper === 'MATCHED' || statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') return false;
+    if (item.isUnmatched === true) return true;
+    if (item.isUnmatched === false) return false;
+    if (item.drawingId || item.drawing_id) return false;
+
+    // Fallback check against Drawing Master (allDrawings)
+    if (item.drawingNo && Array.isArray(drawingsList) && drawingsList.length > 0) {
+      const cleanNo = String(item.drawingNo).trim().toUpperCase();
+      const exists = drawingsList.some(d => String(d.drawing_no || d.drawingNo || '').trim().toUpperCase() === cleanNo);
+      return !exists;
+    }
+
+    return !item.drawingId && !item.drawing_id;
+  }, [allDrawings]);
+
+  // Dynamic counts for PO Form Items
+  const totalItemsCount = poForm.items?.length || 0;
+  const matchedItemsCount = useMemo(() => {
+    return (poForm.items || []).filter(item => !isItemPendingDesign(item, allDrawings)).length;
+  }, [poForm.items, allDrawings, isItemPendingDesign]);
+
+  const pendingItemsCount = useMemo(() => {
+    return (poForm.items || []).filter(item => isItemPendingDesign(item, allDrawings)).length;
+  }, [poForm.items, allDrawings, isItemPendingDesign]);
+
+  // Filtered Items memo with original index preserved
+  const filteredModalItems = useMemo(() => {
+    const rawItems = poForm.items || [];
+    const query = itemSearchQuery.trim().toLowerCase();
+
+    return rawItems
+      .map((item, originalIndex) => ({ ...item, _originalIndex: originalIndex }))
+      .filter(item => {
+        const isPending = isItemPendingDesign(item, allDrawings);
+
+        // Status Filter
+        if (itemStatusFilter === 'MATCHED' && isPending) return false;
+        if (itemStatusFilter === 'PENDING' && !isPending) return false;
+
+        // Search Query Filter
+        if (query) {
+          const dwg = String(item.drawingNo || '').toLowerCase();
+          const desc = String(item.description || '').toLowerCase();
+          const hsn = String(item.hsnCode || '').toLowerCase();
+          const code = String(item.itemCode || '').toLowerCase();
+          return dwg.includes(query) || desc.includes(query) || hsn.includes(query) || code.includes(query);
+        }
+
+        return true;
+      });
+  }, [poForm.items, itemSearchQuery, itemStatusFilter, allDrawings, isItemPendingDesign]);
+
   const modalItemColumns = useMemo(() => [
     {
       label: 'Drawing No *',
       key: 'drawingNo',
       render: (val, item, index) => {
+        const targetIndex = item._originalIndex !== undefined ? item._originalIndex : index;
         if (formMode === 'VIEW') {
           return (
-            <span className="text-xs font-mono font-bold text-slate-700 block max-w-[380px]" title={item.drawingNo}>
-              {(item.drawingNo || val)?.toUpperCase() || '—'}
-            </span>
+            <div className="space-y-0.5">
+              <span className="text-xs font-mono font-bold text-slate-700 block max-w-[380px]" title={item.drawingNo}>
+                {(item.drawingNo || val)?.toUpperCase() || '—'}
+              </span>
+              {isItemPendingDesign(item, allDrawings) ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                  <Clock className="w-3 h-3 text-amber-600 shrink-0" /> Pending Design
+                </span>
+              ) : null}
+            </div>
           );
         }
         return (
@@ -2091,22 +2151,22 @@ const CustomerPO = ({
                 label: `${d.drawing_no} - ${d.drawing_description || d.description || ''}`
               }))}
               value={(item.drawingNo || val)?.toUpperCase() || ''}
-              onChange={(e) => handleItemChange(index, 'drawingNo', e.target.value.toUpperCase())}
+              onChange={(e) => handleItemChange(targetIndex, 'drawingNo', e.target.value.toUpperCase())}
               placeholder="Search Drawing No..."
               allowCustom={true}
               openUpwards={false}
               className={`w-full rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 ${
-                item.isUnmatched
+                isItemPendingDesign(item, allDrawings)
                   ? 'bg-rose-50/50 border border-rose-300 ring-1 ring-rose-200'
                   : 'bg-slate-50 border border-slate-200'
               }`}
             />
-            {item.isUnmatched && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
-                <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" /> Drawing Not Found
+            {isItemPendingDesign(item, allDrawings) ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                <Clock className="w-3 h-3 text-amber-600 shrink-0" /> Pending Design
               </span>
-            )}
-            {!item.isUnmatched && item.needsReview && (
+            ) : null}
+            {!isItemPendingDesign(item, allDrawings) && item.needsReview && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
                 ⚠️ Needs Review
               </span>
@@ -2119,6 +2179,7 @@ const CustomerPO = ({
       label: 'Description *',
       key: 'description',
       render: (val, item, index) => {
+        const targetIndex = item._originalIndex !== undefined ? item._originalIndex : index;
         if (formMode === 'VIEW') {
           return (
             <span className="text-xs font-semibold text-slate-700 block truncate max-w-[200px]" title={val}>
@@ -2130,7 +2191,7 @@ const CustomerPO = ({
           <input
             type="text"
             value={val || ''}
-            onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+            onChange={(e) => handleItemChange(targetIndex, 'description', e.target.value)}
             placeholder="Item description..."
             className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
           />
@@ -2142,6 +2203,7 @@ const CustomerPO = ({
       key: 'hsnCode',
       className: 'text-center',
       render: (val, item, index) => {
+        const targetIndex = item._originalIndex !== undefined ? item._originalIndex : index;
         if (formMode === 'VIEW') {
           return <span className="text-xs text-slate-600 font-medium">{val || '—'}</span>;
         }
@@ -2149,7 +2211,7 @@ const CustomerPO = ({
           <input
             type="text"
             value={val || ''}
-            onChange={(e) => handleItemChange(index, 'hsnCode', e.target.value)}
+            onChange={(e) => handleItemChange(targetIndex, 'hsnCode', e.target.value)}
             placeholder="HSN..."
             className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
           />
@@ -2161,6 +2223,7 @@ const CustomerPO = ({
       key: 'deliveryDate',
       className: 'text-center',
       render: (val, item, index) => {
+        const targetIndex = item._originalIndex !== undefined ? item._originalIndex : index;
         if (formMode === 'VIEW') {
           return (
             <span className="text-xs text-slate-600 font-medium">
@@ -2172,7 +2235,7 @@ const CustomerPO = ({
           <input
             type="date"
             value={val || ''}
-            onChange={(e) => handleItemChange(index, 'deliveryDate', e.target.value)}
+            onChange={(e) => handleItemChange(targetIndex, 'deliveryDate', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
           />
         );
@@ -2183,6 +2246,7 @@ const CustomerPO = ({
       key: 'quantity',
       className: 'text-center',
       render: (val, item, index) => {
+        const targetIndex = item._originalIndex !== undefined ? item._originalIndex : index;
         if (formMode === 'VIEW') {
           return <span className="text-xs font-bold text-slate-800">{val || 0}</span>;
         }
@@ -2190,7 +2254,7 @@ const CustomerPO = ({
           <input
             type="number"
             value={val || ''}
-            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+            onChange={(e) => handleItemChange(targetIndex, 'quantity', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-800"
           />
         );
@@ -2225,6 +2289,7 @@ const CustomerPO = ({
       key: 'unit',
       className: 'text-center',
       render: (val, item, index) => {
+        const targetIndex = item._originalIndex !== undefined ? item._originalIndex : index;
         if (formMode === 'VIEW') {
           return <span className="text-xs text-slate-600 font-medium">{val || 'NOS'}</span>;
         }
@@ -2232,7 +2297,7 @@ const CustomerPO = ({
           <input
             type="text"
             value={val || ''}
-            onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
+            onChange={(e) => handleItemChange(targetIndex, 'unit', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
           />
         );
@@ -2243,6 +2308,7 @@ const CustomerPO = ({
       key: 'rate',
       className: 'text-center',
       render: (val, item, index) => {
+        const targetIndex = item._originalIndex !== undefined ? item._originalIndex : index;
         if (formMode === 'VIEW') {
           return <span className="text-xs font-mono font-semibold text-slate-700">{formatCurrency(val)}</span>;
         }
@@ -2251,7 +2317,7 @@ const CustomerPO = ({
           <input
             type="number"
             value={val || ''}
-            onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
+            onChange={(e) => handleItemChange(targetIndex, 'rate', e.target.value)}
             className={`w-full rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all ${
               needsReviewRate
                 ? 'bg-amber-50 border border-amber-300 text-amber-900 placeholder:text-amber-300 ring-1 ring-amber-200'
@@ -2267,6 +2333,7 @@ const CustomerPO = ({
       key: 'cgstPercent',
       className: 'text-center',
       render: (val, item, index) => {
+        const targetIndex = item._originalIndex !== undefined ? item._originalIndex : index;
         if (formMode === 'VIEW') {
           return <span className="text-xs text-slate-500">{parseFloat(val) || 0}%</span>;
         }
@@ -2274,7 +2341,7 @@ const CustomerPO = ({
           <input
             type="number"
             value={val || ''}
-            onChange={(e) => handleItemChange(index, 'cgstPercent', e.target.value)}
+            onChange={(e) => handleItemChange(targetIndex, 'cgstPercent', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
           />
         );
@@ -2285,6 +2352,7 @@ const CustomerPO = ({
       key: 'sgstPercent',
       className: 'text-center',
       render: (val, item, index) => {
+        const targetIndex = item._originalIndex !== undefined ? item._originalIndex : index;
         if (formMode === 'VIEW') {
           return <span className="text-xs text-slate-500">{parseFloat(val) || 0}%</span>;
         }
@@ -2292,7 +2360,7 @@ const CustomerPO = ({
           <input
             type="number"
             value={val || ''}
-            onChange={(e) => handleItemChange(index, 'sgstPercent', e.target.value)}
+            onChange={(e) => handleItemChange(targetIndex, 'sgstPercent', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
           />
         );
@@ -2303,6 +2371,7 @@ const CustomerPO = ({
       key: 'igstPercent',
       className: 'text-center',
       render: (val, item, index) => {
+        const targetIndex = item._originalIndex !== undefined ? item._originalIndex : index;
         if (formMode === 'VIEW') {
           return <span className="text-xs text-slate-500">{parseFloat(val) || 0}%</span>;
         }
@@ -2310,7 +2379,7 @@ const CustomerPO = ({
           <input
             type="number"
             value={val || ''}
-            onChange={(e) => handleItemChange(index, 'igstPercent', e.target.value)}
+            onChange={(e) => handleItemChange(targetIndex, 'igstPercent', e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
           />
         );
@@ -2331,16 +2400,28 @@ const CustomerPO = ({
       key: 'actions',
       className: 'text-center',
       render: (_, item, index) => {
-        if (formMode === 'VIEW') return null;
+        const targetIndex = item._originalIndex !== undefined ? item._originalIndex : index;
         return (
-          <button
-            type="button"
-            onClick={() => handleRemoveItem(index)}
-            className="p-1 bg-slate-50 border border-slate-200 rounded text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 transition-all active:scale-90"
-            title="Remove Item"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              onClick={() => setViewItemModal(item)}
+              className="p-1 bg-slate-50 border border-slate-200 rounded text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all active:scale-90"
+              title="View Item Details"
+            >
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+            {formMode !== 'VIEW' && (
+              <button
+                type="button"
+                onClick={() => handleRemoveItem(targetIndex)}
+                className="p-1 bg-slate-50 border border-slate-200 rounded text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 transition-all active:scale-90"
+                title="Remove Item"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         );
       }
     }
@@ -3119,7 +3200,16 @@ const CustomerPO = ({
                   </div>
                 </div>
               )}
-              <form onSubmit={handlePoSubmit} id="po-manual-form" className="space-y-10">
+              <form
+                onSubmit={handlePoSubmit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                    e.preventDefault();
+                  }
+                }}
+                id="po-manual-form"
+                className="space-y-10"
+              >
                 {/* Host Company Profile Details */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
@@ -3434,14 +3524,107 @@ const CustomerPO = ({
                 </div>
 
                 {/* Items Table Section */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
-                        <Package className="w-5 h-5" />
+                <div className="space-y-2.5">
+                  {/* Single Horizontal Line ERP Toolbar */}
+                  <div className="bg-slate-50/90 border border-slate-200 rounded-lg p-2.5 flex flex-wrap items-center justify-between gap-2.5 shadow-2xs">
+                    {/* Left Side: Search + Status Dropdown + Quick Badges */}
+                    <div className="flex items-center gap-2 flex-1 min-w-[300px] flex-wrap">
+                      {/* Search Input */}
+                      <div className="relative min-w-[200px] max-w-[280px] flex-1">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={itemSearchQuery}
+                          onChange={(e) => setItemSearchQuery(e.target.value)}
+                          placeholder="Search Drawing / Item No. / Description..."
+                          className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-200 rounded-md text-xs focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700 placeholder:text-slate-400 transition-all font-medium"
+                        />
+                        {itemSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setItemSearchQuery('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded"
+                            title="Clear search"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
-                      <h3 className="text-sm  text-slate-800  ">Purchase Items</h3>
+
+                      {/* Status Dropdown */}
+                      <div className="relative">
+                        <select
+                          value={itemStatusFilter}
+                          onChange={(e) => setItemStatusFilter(e.target.value)}
+                          className="bg-white border border-slate-200 rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:border-indigo-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-2xs"
+                        >
+                          <option value="ALL">Status: All ({totalItemsCount})</option>
+                          <option value="MATCHED">Matched ({matchedItemsCount})</option>
+                          <option value="PENDING">Pending Design ({pendingItemsCount})</option>
+                        </select>
+                      </div>
+
+                      {/* Quick Filter Badges */}
+                      <button
+                        type="button"
+                        onClick={() => setItemStatusFilter(prev => prev === 'MATCHED' ? 'ALL' : 'MATCHED')}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all border ${
+                          itemStatusFilter === 'MATCHED'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                            : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                        }`}
+                        title="Filter matched drawings"
+                      >
+                        <span>✓</span>
+                        <span>Matched</span>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                          itemStatusFilter === 'MATCHED' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {matchedItemsCount}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setItemStatusFilter(prev => prev === 'PENDING' ? 'ALL' : 'PENDING')}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all border ${
+                          itemStatusFilter === 'PENDING'
+                            ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
+                            : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'
+                        }`}
+                        title="Filter pending design items"
+                      >
+                        <span>🕒</span>
+                        <span>Pending Design</span>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                          itemStatusFilter === 'PENDING' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {pendingItemsCount}
+                        </span>
+                      </button>
+
+                      {/* Filtered count or PDF tag */}
+                      {(itemSearchQuery || itemStatusFilter !== 'ALL') ? (
+                        <span className="text-[11px] text-slate-500 font-medium whitespace-nowrap">
+                          Showing <strong className="text-slate-800">{filteredModalItems.length}</strong> of {totalItemsCount}
+                        </span>
+                      ) : parsedPdfSummary ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-slate-100 text-slate-600 border border-slate-200">
+                          <FileText className="w-3 h-3 text-indigo-500" />
+                          <span className="max-w-[120px] truncate" title={parsedPdfSummary.fileName}>{parsedPdfSummary.fileName}</span>
+                          <button
+                            type="button"
+                            onClick={() => setParsedPdfSummary(null)}
+                            className="text-slate-400 hover:text-slate-600 ml-0.5"
+                            title="Dismiss"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </span>
+                      ) : null}
                     </div>
+
+                    {/* Right Side: Action Buttons */}
                     {formMode !== 'VIEW' && (
                       <div className="flex items-center gap-2">
                         {/* Hidden file input for Customer PO PDF */}
@@ -3457,7 +3640,7 @@ const CustomerPO = ({
                           type="button"
                           onClick={() => poPdfInputRef.current?.click()}
                           disabled={pdfParsingLoading}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-50 to-blue-50 hover:from-indigo-100 hover:to-blue-100 text-indigo-700 border border-indigo-200 rounded text-xs font-semibold transition-all active:scale-95 shadow-xs disabled:opacity-50"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-50 to-blue-50 hover:from-indigo-100 hover:to-blue-100 text-indigo-700 border border-indigo-200 rounded-md text-xs font-semibold transition-all active:scale-95 shadow-2xs disabled:opacity-50"
                           title="Upload Customer PO PDF to extract all Drawing Nos and line items automatically"
                         >
                           {pdfParsingLoading ? (
@@ -3475,58 +3658,26 @@ const CustomerPO = ({
                         <button
                           type="button"
                           onClick={handleAddItem}
-                          className="flex items-center gap-2 p-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded  text-xs    hover:bg-indigo-100 transition-all active:scale-95 "
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-xs font-semibold transition-all active:scale-95 shadow-2xs"
                         >
                           <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                          Add Line Item
+                          <span>Add Line Item</span>
                         </button>
                       </div>
                     )}
                   </div>
 
-                  {parsedPdfSummary && (
-                    <div className={`p-2.5 rounded-lg border text-xs flex items-center justify-between transition-all ${
-                      parsedPdfSummary.unmatchedCount > 0
-                        ? 'bg-amber-50/95 border-amber-200 text-amber-900 shadow-xs'
-                        : 'bg-emerald-50/95 border-emerald-200 text-emerald-900 shadow-xs'
-                    }`}>
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <FileText className={`w-4 h-4 shrink-0 ${parsedPdfSummary.unmatchedCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
-                        <span>
-                          <strong>{parsedPdfSummary.fileName}</strong>: Extracted <strong>{parsedPdfSummary.totalExtracted}</strong> line items
-                          {parsedPdfSummary.unmatchedCount > 0
-                            ? ` (${parsedPdfSummary.matchedCount} matched with Drawing Master, ${parsedPdfSummary.unmatchedCount} requires review)`
-                            : ` (${parsedPdfSummary.matchedCount} matched with Drawing Master)`}
-                        </span>
-                        <div className="flex items-center gap-1.5 ml-1">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-[11px]">
-                            ✓ {parsedPdfSummary.matchedCount} matched
-                          </span>
-                          {parsedPdfSummary.unmatchedCount > 0 && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold text-[11px]">
-                              ⚠️ {parsedPdfSummary.unmatchedCount} requires review
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setParsedPdfSummary(null)}
-                        className="text-slate-400 hover:text-slate-600 p-0.5 ml-2"
-                        title="Dismiss"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-
                   <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs max-h-[45vh] min-h-[220px] relative">
                     <DataTable
                       columns={modalItemColumns}
-                      data={poForm.items}
+                      data={filteredModalItems}
                       pageSize={100}
                       hideSearch={true}
-                      emptyMessage="No purchase items found."
+                      emptyMessage={
+                        itemSearchQuery || itemStatusFilter !== 'ALL'
+                          ? "No purchase items match your search or filter."
+                          : "No purchase items found."
+                      }
                       expandable={poForm.items.some(i => i.sub_assemblies && i.sub_assemblies.length > 0)}
                       renderExpanded={(item) => {
                         if (!item.sub_assemblies || item.sub_assemblies.length === 0) return null;
@@ -3725,15 +3876,16 @@ const CustomerPO = ({
                   </button>
                   {formMode !== 'VIEW' && (
                     <button
+                      id="btn-confirm-create-po"
                       form="po-manual-form"
                       type="submit"
                       disabled={poFormLoading}
-                      className="flex-1 md:flex-none bg-indigo-600 text-white p-2  rounded text-xs    hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+                      className="flex-1 md:flex-none bg-indigo-600 text-white p-2 rounded text-xs hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100 flex items-center justify-center gap-2"
                     >
                       {poFormLoading ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin stroke-[3]" />
-                          Processing...
+                          Creating Purchase Order...
                         </>
                       ) : (
                         formMode === 'EDIT' ? 'Update Purchase Order' : 'Confirm & Create PO'
@@ -3742,6 +3894,90 @@ const CustomerPO = ({
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item Details View Modal */}
+      {viewItemModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs animate-in fade-in" onClick={() => setViewItemModal(null)} />
+          <div className="relative bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg p-5 z-10 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-bold text-slate-800 text-sm">Line Item Details</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewItemModal(null)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <span className="text-slate-400 block text-[11px]">Drawing / Item No</span>
+                <span className="font-mono font-bold text-slate-800">{viewItemModal.drawingNo || '—'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Status</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${
+                  isItemPendingDesign(viewItemModal)
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  {isItemPendingDesign(viewItemModal) ? 'Pending Design' : 'Matched'}
+                </span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-slate-400 block text-[11px]">Description</span>
+                <span className="font-semibold text-slate-700">{viewItemModal.description || '—'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">HSN Code</span>
+                <span className="font-mono text-slate-700">{viewItemModal.hsnCode || '—'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Delivery Date</span>
+                <span className="text-slate-700">{viewItemModal.deliveryDate || '—'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Quantity & Unit</span>
+                <span className="font-bold text-slate-800">{viewItemModal.quantity || 0} {viewItemModal.unit || 'NOS'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Rate</span>
+                <span className="font-bold text-slate-800">{formatCurrency(viewItemModal.rate || 0)}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Taxes</span>
+                <span className="text-slate-600">
+                  CGST: {viewItemModal.cgstPercent || 0}% | SGST: {viewItemModal.sgstPercent || 0}% | IGST: {viewItemModal.igstPercent || 0}%
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Total (Incl. Tax)</span>
+                <span className="font-black text-indigo-600 text-sm">
+                  {formatCurrency(
+                    ((parseFloat(viewItemModal.quantity) || 0) * (parseFloat(viewItemModal.rate) || 0)) *
+                    (1 + ((parseFloat(viewItemModal.cgstPercent) || 0) + (parseFloat(viewItemModal.sgstPercent) || 0) + (parseFloat(viewItemModal.igstPercent) || 0)) / 100)
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setViewItemModal(null)}
+                className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-md text-xs transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

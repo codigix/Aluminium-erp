@@ -227,16 +227,30 @@ const ensureCustomerPoColumns = async () => {
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
-    if (!missing.length) {
-      return;
+    if (missing.length > 0) {
+      const alterSql = `ALTER TABLE customer_pos ${missing
+        .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+        .join(', ')};`;
+      await connection.query(alterSql);
+      console.log('Customer PO columns synchronized');
     }
 
-    const alterSql = `ALTER TABLE customer_pos ${missing
-      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
-      .join(', ')};`;
-
-    await connection.query(alterSql);
-    console.log('Customer PO columns synchronized');
+    // Ensure customer_po_items columns
+    const [itemCols] = await connection.query('SHOW COLUMNS FROM customer_po_items');
+    const existingItemCols = new Set(itemCols.map(column => column.Field));
+    const requiredItemCols = [
+      { name: 'drawing_id', definition: 'INT NULL' },
+      { name: 'status', definition: "VARCHAR(50) DEFAULT 'ACTIVE'" },
+      { name: 'design_status', definition: 'VARCHAR(50) NULL' }
+    ];
+    const missingItemCols = requiredItemCols.filter(col => !existingItemCols.has(col.name));
+    if (missingItemCols.length > 0) {
+      const alterItemSql = `ALTER TABLE customer_po_items ${missingItemCols
+        .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+        .join(', ')};`;
+      await connection.query(alterItemSql);
+      console.log('Customer PO items columns synchronized');
+    }
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') {
       console.error('Customer PO column sync failed', error.message);
