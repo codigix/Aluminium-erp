@@ -2171,7 +2171,7 @@ const POMaterialRequest = () => {
         isOpen={bulkRfqModalOpen}
         onClose={() => setBulkRfqModalOpen(false)}
         title="Bulk Create RFQ"
-        size="4xl"
+        size="5xl"
       >
         <div className="p-6">
           <div className="mb-4 flex items-center justify-between">
@@ -2221,6 +2221,8 @@ const POMaterialRequest = () => {
                   <tr>
                     <th className="py-2.5 px-3">Material Request</th>
                     <th className="py-2.5 px-3">Drawing / Project</th>
+                    <th className="py-2.5 px-3">Required Qty</th>
+                    <th className="py-2.5 px-3">Required Weight</th>
                     <th className="py-2.5 px-3">Status</th>
                     <th className="py-2.5 px-3">Availability</th>
                     <th className="py-2.5 px-3">RFQ Status</th>
@@ -2229,23 +2231,31 @@ const POMaterialRequest = () => {
                 <tbody className="divide-y divide-slate-100">
                   {bulkRfqPreview?.previewItems?.map((item) => {
                     const reqObj = requests.find(r => r.id === item.id);
-                    const availability = reqObj?.availability || 'unavailable';
+                    const availability = item.availability || reqObj?.availability || 'unavailable';
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50">
-                        <td className="py-2.5 px-3 font-semibold text-slate-900">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900 whitespace-nowrap">
                           {item.mr_number}
                         </td>
                         <td className="py-2.5 px-3">
                           <div className="font-medium text-slate-800">{item.drawing_no || 'Direct Item'}</div>
                           <div className="text-[11px] text-slate-400 truncate max-w-[200px]">{item.finished_good || item.project_name}</div>
                         </td>
-                        <td className="py-2.5 px-3">
-                          <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">
-                            {item.status}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className="font-semibold text-slate-800">
+                            {item.required_qty_formatted || `${item.required_qty || 0} Nos`}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className="font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded font-mono text-[11px]">
+                            {item.required_weight_formatted || `${Number(item.required_weight || 0).toFixed(3)} KG`}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <StatusBadge status={item.status} />
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
                           <span className={`px-2 py-0.5 rounded text-[11px] font-medium inline-flex items-center gap-1 ${
                             availability === 'available' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
                           }`}>
@@ -2255,22 +2265,22 @@ const POMaterialRequest = () => {
                         </td>
                         <td className="py-2.5 px-3">
                           {item.readiness === 'READY' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 whitespace-nowrap">
                               ✓ Ready ({item.eligibleItemsCount} item{item.eligibleItemsCount === 1 ? '' : 's'})
                             </span>
                           )}
                           {item.readiness === 'ALREADY_EXISTS' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-800" title={item.reason}>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-800 whitespace-nowrap" title={item.reason}>
                               ℹ RFQ Exists ({item.existingRfqNumber})
                             </span>
                           )}
                           {item.readiness === 'NO_PENDING_ITEMS' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800" title={item.reason}>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 whitespace-nowrap" title={item.reason}>
                               ⚠ No Pending Items
                             </span>
                           )}
                           {(item.readiness === 'CANNOT_CREATE' || item.readiness === 'FAILED') && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800" title={item.reason}>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 whitespace-nowrap" title={item.reason}>
                               ⚠ {item.reason}
                             </span>
                           )}

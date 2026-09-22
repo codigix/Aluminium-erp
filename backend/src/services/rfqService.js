@@ -23,11 +23,16 @@ const createRfq = async (payload) => {
 
         if (Array.isArray(items) && items.length > 0) {
             for (const item of items) {
+                const isKg = (item.uom || '').toLowerCase() === 'kg' || (item.uom || '').toLowerCase() === 'kgs' || (item.uom || '').toLowerCase() === 'kilogram';
+                const requiredWeight = item.required_weight !== undefined 
+                    ? parseFloat(item.required_weight || 0) 
+                    : (isKg ? parseFloat(item.quantity || 0) : 0);
+
                 await connection.execute(
                     `INSERT INTO procurement_rfq_items (
-                        rfq_id, item_code, description, material_name, material_type, drawing_no, quantity, planned_qty, uom,
+                        rfq_id, item_code, description, material_name, material_type, drawing_no, quantity, required_weight, planned_qty, uom,
                         length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         rfq_id,
                         item.item_code || null,
@@ -36,6 +41,7 @@ const createRfq = async (payload) => {
                         item.material_type || null,
                         item.drawing_no || null,
                         item.quantity || 0,
+                        requiredWeight,
                         item.planned_qty || 0,
                         item.uom || 'NOS',
                         item.length || 0,
@@ -466,13 +472,18 @@ const mergeRfqs = async (payload) => {
 
         // 4. Save merged items line-by-line preserving source RFQ references
         for (const item of items) {
+            const isKg = (item.uom || item.unit || '').toLowerCase() === 'kg' || (item.uom || item.unit || '').toLowerCase() === 'kgs' || (item.uom || item.unit || '').toLowerCase() === 'kilogram';
+            const requiredWeight = item.required_weight !== undefined 
+                ? parseFloat(item.required_weight || 0) 
+                : (isKg ? parseFloat(item.quantity || 0) : 0);
+
             await connection.execute(
                 `INSERT INTO procurement_rfq_items (
                     rfq_id, item_code, description, material_name, material_type, drawing_no,
-                    quantity, planned_qty, uom, length, width, thickness, diameter, outer_diameter,
+                    quantity, required_weight, planned_qty, uom, length, width, thickness, diameter, outer_diameter,
                     density, weight_per_unit, vendor_id, shape_type,
                     source_rfq_id, source_rfq_item_id, source_rfq_number, project_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     newRfqId,
                     item.item_code || null,
@@ -481,6 +492,7 @@ const mergeRfqs = async (payload) => {
                     item.material_type || null,
                     item.drawing_no || null,
                     parseFloat(item.quantity) || 0,
+                    requiredWeight,
                     parseFloat(item.planned_qty) || parseFloat(item.quantity) || 0,
                     item.uom || item.unit || 'NOS',
                     parseFloat(item.length) || 0,

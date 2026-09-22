@@ -1606,7 +1606,11 @@ const materialRequestController = {
           continue;
         }
 
-        const { mr, existingRfq, eligibleItems, readiness, reason } = details;
+        const { 
+          mr, existingRfq, eligibleItems, readiness, reason,
+          allItemsAvailable, totalRequiredQty, totalRequiredWeight,
+          requiredQtyFormatted, requiredWeightFormatted
+        } = details;
 
         if (readiness === 'READY') summary.ready++;
         else if (readiness === 'ALREADY_EXISTS') summary.alreadyExists++;
@@ -1620,10 +1624,16 @@ const materialRequestController = {
           finished_good: mr.finished_good || '-',
           project_name: mr.project_name || '-',
           status: mr.status,
+          availability: allItemsAvailable ? 'available' : 'unavailable',
           readiness,
           reason,
           existingRfqNumber: existingRfq?.rfq_number || null,
-          eligibleItemsCount: eligibleItems.length
+          eligibleItemsCount: eligibleItems.length,
+          required_qty: totalRequiredQty,
+          required_qty_formatted: requiredQtyFormatted,
+          required_weight: totalRequiredWeight,
+          required_weight_formatted: requiredWeightFormatted,
+          items: eligibleItems
         });
       }
 
@@ -1797,9 +1807,10 @@ const _fetchMrDetailsForRfq = async (mrId) => {
   );
   const existingRfq = rfqRows.length > 0 ? rfqRows[0] : null;
 
-  // Fetch MR items
+  // Fetch MR items with stock balances and dimension lookups (identical to getById)
   const [items] = await pool.query(`
-    SELECT mri.*, 
+    SELECT mri.id, mri.mr_id, mri.item_code, mri.planned_qty, mri.unit_rate, mri.warehouse, mri.item_source, mri.remarks,
+           COALESCE(mri.shape_type, shape_lookup.shape_name) as shape_type,
            COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
            COALESCE(mri.uom, sb.unit) as uom,
            COALESCE(mri.item_type, sb.material_type) as material_type,
@@ -1810,14 +1821,35 @@ const _fetchMrDetailsForRfq = async (mrId) => {
            CASE WHEN (COALESCE(mri.length, 0) > 0 OR COALESCE(mri.width, 0) > 0 OR COALESCE(mri.thickness, 0) > 0 OR COALESCE(mri.diameter, 0) > 0 OR COALESCE(mri.outer_diameter, 0) > 0) THEN COALESCE(mri.outer_diameter, 0) ELSE COALESCE(sb.outer_diameter, 0) END as outer_diameter,
            CASE WHEN (COALESCE(mri.length, 0) > 0 OR COALESCE(mri.width, 0) > 0 OR COALESCE(mri.thickness, 0) > 0 OR COALESCE(mri.diameter, 0) > 0 OR COALESCE(mri.outer_diameter, 0) > 0) THEN COALESCE(mri.density, 0) ELSE COALESCE(sb.density, 0) END as density,
            CASE WHEN (COALESCE(mri.length, 0) > 0 OR COALESCE(mri.width, 0) > 0 OR COALESCE(mri.thickness, 0) > 0 OR COALESCE(mri.diameter, 0) > 0 OR COALESCE(mri.outer_diameter, 0) > 0) THEN COALESCE(mri.weight_per_unit, 0) ELSE COALESCE(sb.weight_per_unit, 0) END as weight_per_unit,
-           COALESCE(mri.shape_type, shape_lookup.shape_name) as shape_type
+           mri.quantity,
+           mri.allocated_quantity,
+           CASE 
+             WHEN LOWER(TRIM(COALESCE(mri.item_type, sb.material_type, ''))) IN ('bought_out', 'bought out', 'bought-out')
+                  OR UPPER(COALESCE(mri.item_code, '')) LIKE 'BO-%'
+                  OR LOWER(TRIM(COALESCE(mri.uom, sb.unit, ''))) NOT IN ('kg', 'kgs', 'kilogram')
+             THEN 0
+             WHEN LOWER(TRIM(COALESCE(mri.uom, sb.unit, ''))) IN ('kg', 'kgs', 'kilogram') THEN mri.quantity
+             ELSE COALESCE(NULLIF(mri.required_weight, 0), mri.quantity * COALESCE(NULLIF(mri.weight_per_unit, 0), sb.weight_per_unit, 0), 0)
+           END as required_weight,
+           COALESCE(mri.allocated_weight, 0) as allocated_weight,
+           COALESCE(mri.design_qty, 1) as design_qty
     FROM material_request_items mri
+    JOIN material_requests mr ON mri.mr_id = mr.id
     LEFT JOIN (
-      SELECT item_code, MAX(material_name) as material_name, MAX(item_description) as item_description, 
-             MAX(unit) as unit, MAX(material_type) as material_type, MAX(length) as length, 
-             MAX(width) as width, MAX(thickness) as thickness, MAX(diameter) as diameter, 
-             MAX(outer_diameter) as outer_diameter, MAX(density) as density, MAX(weight_per_unit) as weight_per_unit
-      FROM stock_balance GROUP BY item_code
+      SELECT item_code, 
+             MAX(material_name) as material_name, 
+             MAX(item_description) as item_description, 
+             MAX(unit) as unit,
+             MAX(material_type) as material_type,
+             MAX(length) as length, 
+             MAX(width) as width, 
+             MAX(thickness) as thickness, 
+             MAX(diameter) as diameter, 
+             MAX(outer_diameter) as outer_diameter, 
+             MAX(density) as density, 
+             MAX(weight_per_unit) as weight_per_unit
+      FROM stock_balance 
+      GROUP BY item_code
     ) sb ON mri.item_code = sb.item_code
     LEFT JOIN (
         SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
@@ -1826,7 +1858,7 @@ const _fetchMrDetailsForRfq = async (mrId) => {
         LEFT JOIN shapes s ON som.shape_id = s.id
         GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
     ) shape_lookup ON (
-        LOWER(TRIM(REPLACE(mri.item_name, '\\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\\t', '')))
+        LOWER(TRIM(REPLACE(mri.item_name, '\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\t', '')))
         AND ABS(COALESCE(mri.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
         AND ABS(COALESCE(mri.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
         AND ABS(COALESCE(mri.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
@@ -1836,7 +1868,29 @@ const _fetchMrDetailsForRfq = async (mrId) => {
     WHERE mri.mr_id = ?
   `, [mrId]);
 
-  // Filter out Finished Goods and Sub-Assemblies
+  // Run calculateItemStockAndAvailability on each item (identical to getById)
+  let allItemsAvailable = true;
+  for (let item of items) {
+    const availInfo = await calculateItemStockAndAvailability(pool, item, mr.status);
+
+    item.resolved_item_code = availInfo.resolvedItemCode;
+    item.stocks = availInfo.stocks;
+    item.total_stock = availInfo.totalStock;
+    item.total_weight = availInfo.totalWeight;
+    item.design_qty = availInfo.requiredQty;
+    item.required_weight = availInfo.requiredWeight;
+    item.allocated_quantity = availInfo.releasedQty;
+    item.allocated_weight = availInfo.releasedWeight;
+    item.remaining_qty = availInfo.remainingQty;
+    item.remaining_weight = availInfo.remainingWeight;
+    item.available = availInfo.available;
+
+    if (!availInfo.available) {
+      allItemsAvailable = false;
+    }
+  }
+
+  // Filter out Finished Goods and Sub-Assemblies (exact single RFQ logic)
   const eligibleItems = items.filter(item => {
     const type = (item.material_type || item.item_type || '').toUpperCase();
     const isNotFG = type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
@@ -1861,9 +1915,12 @@ const _fetchMrDetailsForRfq = async (mrId) => {
       item_code: item.item_code,
       description: item.remarks || item.name || item.item_name || item.material_name || item.item_code,
       material_name: item.name || item.material_name || item.item_name || item.item_code,
-      material_type: item.material_type,
+      material_type: item.material_type || item.item_type || 'RAW_MATERIAL',
       drawing_no: mr.drawing_no || item.drawing_no || null,
       quantity: isKg ? remainingWeight : remainingQty,
+      required_weight: remainingWeight,
+      remaining_qty: remainingQty,
+      remaining_weight: remainingWeight,
       planned_qty: remainingQty,
       design_qty: remainingQty,
       uom: item.uom || 'Nos',
@@ -1877,6 +1934,26 @@ const _fetchMrDetailsForRfq = async (mrId) => {
       shape_type: item.shape_type || null
     };
   });
+
+  // Calculate MR-level summary for the preview
+  let totalRequiredQty = 0;
+  let totalRequiredWeight = 0;
+
+  const itemsForSummary = eligibleItems.length > 0 ? eligibleItems : items.filter(item => {
+    const type = (item.material_type || item.item_type || '').toUpperCase();
+    return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+  });
+
+  for (const it of itemsForSummary) {
+    totalRequiredQty += parseFloat(it.remaining_qty !== undefined ? it.remaining_qty : (it.design_qty || it.quantity || 0));
+    totalRequiredWeight += parseFloat(it.remaining_weight !== undefined ? it.remaining_weight : (it.required_weight || 0));
+  }
+
+  const roundedQty = Math.round(totalRequiredQty * 1000) / 1000;
+  const roundedWeight = Math.round(totalRequiredWeight * 1000) / 1000;
+
+  const requiredQtyFormatted = `${roundedQty} Nos`;
+  const requiredWeightFormatted = `${roundedWeight.toFixed(3)} KG`;
 
   const currentStatus = (mr.status || '').toUpperCase().trim();
   const isIneligibleStatus = ['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED', 'PO_CREATED'].includes(currentStatus);
@@ -1900,7 +1977,12 @@ const _fetchMrDetailsForRfq = async (mrId) => {
     existingRfq,
     eligibleItems,
     readiness,
-    reason
+    reason,
+    allItemsAvailable,
+    totalRequiredQty: roundedQty,
+    totalRequiredWeight: roundedWeight,
+    requiredQtyFormatted,
+    requiredWeightFormatted
   };
 };
 
