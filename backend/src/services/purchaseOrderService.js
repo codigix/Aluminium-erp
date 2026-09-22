@@ -1745,6 +1745,27 @@ const approvePurchaseOrder = async (poId, userId) => {
   }
 };
 
+const bulkApprovePurchaseOrders = async (poIds, userId) => {
+  const approved = [];
+  const failed = [];
+
+  for (const poId of poIds) {
+    try {
+      const res = await approvePurchaseOrder(poId, userId);
+      approved.push({ poId, ...res });
+    } catch (err) {
+      failed.push({ poId, reason: err.message });
+    }
+  }
+
+  return {
+    message: `${approved.length} Purchase Order${approved.length === 1 ? '' : 's'} approved successfully`,
+    approved,
+    failed,
+    total: poIds.length
+  };
+};
+
 const handleStoreAcceptance = async (poId, payload) => {
   const { status, notes, items } = payload;
   const connection = await pool.getConnection();
@@ -3109,6 +3130,7 @@ module.exports = {
   getPurchaseOrderStats,
   getPOMaterialRequests,
   approvePurchaseOrder,
+  bulkApprovePurchaseOrders,
   handleStoreAcceptance,
   generatePurchaseOrderPDF,
   sendPurchaseOrderEmail,

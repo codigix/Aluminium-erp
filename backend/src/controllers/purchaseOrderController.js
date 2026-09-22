@@ -96,6 +96,19 @@ const approvePurchaseOrder = async (req, res, next) => {
   }
 };
 
+const bulkApprovePurchaseOrders = async (req, res, next) => {
+  try {
+    const { poIds } = req.body;
+    if (!Array.isArray(poIds) || poIds.length === 0) {
+      return res.status(400).json({ message: 'No Purchase Order IDs provided' });
+    }
+    const result = await purchaseOrderService.bulkApprovePurchaseOrders(poIds, req.user.id);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getPurchaseOrderPDF = async (req, res, next) => {
   try {
     const pdfBuffer = await purchaseOrderService.generatePurchaseOrderPDF(req.params.poId);
@@ -233,6 +246,7 @@ module.exports = {
   getPOMaterialRequests,
   handleStoreAcceptance,
   approvePurchaseOrder,
+  bulkApprovePurchaseOrders,
   getPurchaseOrderPDF,
   sendPurchaseOrderEmail,
   uploadInvoice,

@@ -6,6 +6,7 @@ const { authorize } = require('../middleware/authMiddleware');
 const upload = require('../middleware/upload');
 
 router.get('/material-requests', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPOMaterialRequests);
+router.post('/bulk-approve', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.bulkApprovePurchaseOrders);
 router.patch('/:poId/send-to-payment', authorize(['PAYMENT_PROCESS']), purchaseOrderController.sendToPendingPayment);
 router.put('/:poId/send-to-accounts', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.forwardToAccounts);
 router.post('/:poId/invoice', authorize(['PURCHASE_ORDER_EDIT']), upload.array('invoice', 10), purchaseOrderController.uploadInvoice);

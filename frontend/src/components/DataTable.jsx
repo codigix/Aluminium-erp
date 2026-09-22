@@ -23,6 +23,7 @@ const CustomDataTable = ({
   activeTab = '',
   onTabChange,
   selectable = false,
+  selectAllLabel = null,
   selectedRows = [],
   onSelectionChange,
   bulkActions = [],
@@ -352,14 +353,21 @@ const CustomDataTable = ({
                  <th className="px-2 py-3 w-8"></th>
               )}
               {selectable && (
-                 <th className="px-4 py-3 w-10">
-                    <input 
-                       type="checkbox" 
-                       checked={isAllSelected} 
-                       ref={input => { if (input) input.indeterminate = isSomeSelected; }}
-                       onChange={handleSelectAll}
-                       className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer" 
-                    />
+                 <th className="px-4 py-3 w-auto min-w-[48px]">
+                    <div className="flex items-center gap-1.5 select-none">
+                      <input 
+                         type="checkbox" 
+                         checked={isAllSelected} 
+                         ref={input => { if (input) input.indeterminate = isSomeSelected; }}
+                         onChange={handleSelectAll}
+                         className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer" 
+                      />
+                      {selectAllLabel && (
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                          {selectAllLabel}
+                        </span>
+                      )}
+                    </div>
                  </th>
               )}
               {columns.map((col, idx) => (
@@ -424,14 +432,20 @@ const CustomDataTable = ({
                           {selectable && (
                             <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                               {isSelectableRow ? (
-                               <input 
-                                  type="checkbox" 
-                                  checked={selected}
-                                  onChange={(e) => handleRowSelect(e, currentRow)}
-                                  className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer" 
-                               />
-              ) : (
-                                <div className="w-4 h-4" />
+                                <input 
+                                   type="checkbox" 
+                                   checked={selected}
+                                   onChange={(e) => handleRowSelect(e, currentRow)}
+                                   className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer" 
+                                />
+                              ) : (
+                                <input 
+                                   type="checkbox" 
+                                   disabled
+                                   checked={false}
+                                   className="w-4 h-4 text-slate-300 rounded border-slate-200 cursor-not-allowed opacity-35" 
+                                   title="Not eligible for approval"
+                                />
                               )}
                             </td>
                           )}

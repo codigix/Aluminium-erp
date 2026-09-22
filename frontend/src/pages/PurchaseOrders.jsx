@@ -72,6 +72,12 @@ const PurchaseOrders = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [selectedPOIds, setSelectedPOIds] = useState([]);
+
+  const isPOEligibleForApproval = (po) => {
+    if (!po) return false;
+    return ['DRAFT', 'PO_REQUEST'].includes(po.status) && Boolean(po.vendor_id);
+  };
 
   useEffect(() => {
     const path = location.pathname;
@@ -1257,6 +1263,55 @@ const PurchaseOrders = () => {
     }
   };
 
+  const handleBulkApprove = async () => {
+    const eligiblePOs = pos.filter(po => selectedPOIds.includes(po.id) && isPOEligibleForApproval(po));
+    if (eligiblePOs.length === 0) {
+      return errorToast('No eligible Purchase Orders selected for approval');
+    }
+
+    try {
+      const result = await Swal.fire({
+        title: `Approve ${eligiblePOs.length} selected Purchase Order${eligiblePOs.length > 1 ? 's' : ''}?`,
+        text: 'This will confirm the orders and allow material receipts.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Approve',
+        cancelButtonText: 'Cancel'
+      });
+
+      if (result.isConfirmed) {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/purchase-orders/bulk-approve`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ poIds: eligiblePOs.map(p => p.id) })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          const approvedCount = data.approved ? data.approved.length : eligiblePOs.length;
+          successToast(`${approvedCount} Purchase Order${approvedCount === 1 ? '' : 's'} approved successfully.`);
+          setSelectedPOIds([]);
+          fetchPOs(false);
+          fetchStats();
+        } else {
+          errorToast(data.message || 'Failed to approve selected Purchase Orders');
+        }
+      }
+    } catch (error) {
+      console.error('Bulk Approve Error:', error);
+      errorToast('Network error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleViewPDF = async (poId) => {
     try {
       const token = localStorage.getItem('authToken');
@@ -1713,6 +1768,15 @@ const PurchaseOrders = () => {
             icon={RefreshCw}
             className={loading ? 'animate-spin' : ''}
           />
+          {selectedPOIds.length > 0 && (
+            <button
+              onClick={handleBulkApprove}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all active:scale-95 animate-in fade-in"
+            >
+              <CheckCircle2 size={14} />
+              Approve Selected ({selectedPOIds.length})
+            </button>
+          )}
           <Button
             variant="secondary"
             onClick={handleOpenMergeModal}
@@ -1783,7 +1847,10 @@ const PurchaseOrders = () => {
                 { id: 'FULFILLED', label: 'Fulfilled', icon: Package }
               ]}
               activeTab={statusFilter}
-              onTabChange={setStatusFilter}
+              onTabChange={(tab) => {
+                setStatusFilter(tab);
+                setSelectedPOIds([]);
+              }}
             />
           </div>
         </div>
@@ -1799,6 +1866,19 @@ const PurchaseOrders = () => {
           pageSize={5}
           hideHeader={true}
           className="border-none shadow-none rounded-none"
+          selectable={true}
+          selectAllLabel="Select All"
+          selectedRows={selectedPOIds}
+          onSelectionChange={setSelectedPOIds}
+          isRowSelectable={isPOEligibleForApproval}
+          bulkActions={[
+            {
+              label: `Approve Selected (${selectedPOIds.length})`,
+              icon: CheckCircle2,
+              onClick: handleBulkApprove,
+              className: 'text-white bg-emerald-600 hover:bg-emerald-700 border-transparent shadow-sm'
+            }
+          ]}
         />
       </div>
 
