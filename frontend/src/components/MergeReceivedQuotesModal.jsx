@@ -41,19 +41,19 @@ const MergeReceivedQuotesModal = ({
   const [notes, setNotes] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Eligible received quotations: status === 'RECEIVED', not already merged
+  // Eligible received quotations: status === 'RECEIVED' or 'REVIEWED', not already merged
   const eligibleQuotes = useMemo(() => {
+    const eligibleStatuses = ['RECEIVED', 'REVIEWED'];
     return (quotations || []).filter(q => {
       if (q.isRFQOnly) return false;
-      if (q.status === 'MERGED') return false;
-      if (q.merged_into_quotation_id) return false;
-      if (q.is_merged === 1 && q.status !== 'RECEIVED') return false;
-      return q.status === 'RECEIVED' || q.status === 'REVIEWED';
+      if (q.status === 'MERGED' || q.is_merged === 1 || q.merged_into_quotation_id) return false;
+      if (['REJECTED', 'CLOSED', 'SUPERSEDED'].includes(q.status)) return false;
+      return eligibleStatuses.includes(q.status);
     });
   }, [quotations]);
 
-  // Vendors that have at least 2 eligible received quotations
-  const eligibleVendors = useMemo(() => {
+  // Full vendor list with their count of eligible RECEIVED/REVIEWED quotations
+  const vendorDropdownList = useMemo(() => {
     const counts = {};
     eligibleQuotes.forEach(q => {
       if (q.vendor_id) {
@@ -61,13 +61,32 @@ const MergeReceivedQuotesModal = ({
       }
     });
 
-    return vendors
-      .filter(v => (counts[v.id] || 0) >= 2)
-      .map(v => ({
-        ...v,
-        quote_count: counts[v.id]
-      }));
-  }, [eligibleQuotes, vendors]);
+    const vendorMap = new Map();
+    (vendors || []).forEach(v => {
+      vendorMap.set(String(v.id), {
+        id: v.id,
+        vendor_name: v.vendor_name || v.name || `Vendor #${v.id}`,
+        quote_count: counts[v.id] || 0
+      });
+    });
+
+    (quotations || []).forEach(q => {
+      if (q.vendor_id && !vendorMap.has(String(q.vendor_id))) {
+        vendorMap.set(String(q.vendor_id), {
+          id: q.vendor_id,
+          vendor_name: q.vendor_name || `Vendor #${q.vendor_id}`,
+          quote_count: counts[q.vendor_id] || 0
+        });
+      }
+    });
+
+    return Array.from(vendorMap.values()).sort((a, b) => {
+      if (b.quote_count !== a.quote_count) {
+        return b.quote_count - a.quote_count;
+      }
+      return (a.vendor_name || '').localeCompare(b.vendor_name || '');
+    });
+  }, [eligibleQuotes, vendors, quotations]);
 
   // Initialize modal state on open
   useEffect(() => {
@@ -110,11 +129,14 @@ const MergeReceivedQuotesModal = ({
       }
     }
 
-    // Default to first eligible vendor
-    if (eligibleVendors.length > 0) {
-      setSelectedVendorId(String(eligibleVendors[0].id));
+    // Default to first vendor with eligible quotes if available, otherwise first vendor
+    const firstEligible = vendorDropdownList.find(v => v.quote_count >= 2) || vendorDropdownList.find(v => v.quote_count > 0);
+    if (firstEligible) {
+      setSelectedVendorId(String(firstEligible.id));
+    } else if (vendorDropdownList.length > 0) {
+      setSelectedVendorId(String(vendorDropdownList[0].id));
     }
-  }, [isOpen, selectedQuoteIds, eligibleQuotes, eligibleVendors]);
+  }, [isOpen, selectedQuoteIds, eligibleQuotes, vendorDropdownList]);
 
   // Quotes available for the currently selected vendor in Step 1
   const vendorQuotes = useMemo(() => {
@@ -371,16 +393,16 @@ const MergeReceivedQuotesModal = ({
                   }}
                   className="flex-1 text-xs p-2.5 bg-white border border-slate-300 rounded-lg font-medium text-slate-800 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none"
                 >
-                  <option value="">-- Choose Vendor with Received Quotes --</option>
-                  {eligibleVendors.map(v => (
+                  <option value="">-- Choose Vendor --</option>
+                  {vendorDropdownList.map(v => (
                     <option key={v.id} value={v.id}>
-                      {v.vendor_name} ({v.quote_count} quotes eligible)
+                      {v.vendor_name} ({v.quote_count})
                     </option>
                   ))}
                 </select>
                 {currentVendor && (
                   <span className="text-xs text-slate-500">
-                    <span className="font-semibold text-purple-700">{vendorQuotes.length}</span> received quotes available
+                    <span className="font-semibold text-purple-700">{vendorQuotes.length}</span> received/reviewed quotes available
                   </span>
                 )}
               </div>
@@ -435,6 +457,7 @@ const MergeReceivedQuotesModal = ({
                           <th className="py-2.5 px-3">Client</th>
                           <th className="py-2.5 px-3">Project</th>
                           <th className="py-2.5 px-3">Drawing / Part</th>
+                          <th className="py-2.5 px-3 text-center">Status</th>
                           <th className="py-2.5 px-3 text-center">Items</th>
                           <th className="py-2.5 px-3">Date</th>
                           <th className="py-2.5 px-3 text-right">Total Amount</th>
@@ -443,8 +466,8 @@ const MergeReceivedQuotesModal = ({
                       <tbody className="divide-y divide-slate-100">
                         {filteredVendorQuotes.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="text-center py-8 text-slate-400 italic">
-                              No eligible received quotations found for this vendor.
+                            <td colSpan={9} className="text-center py-8 text-slate-400 italic">
+                              No received/reviewed quotations available for this vendor.
                             </td>
                           </tr>
                         ) : (
@@ -493,6 +516,17 @@ const MergeReceivedQuotesModal = ({
                                 <td className="py-2.5 px-3 text-slate-700 font-mono">
                                   {q.drawing_no || '—'}
                                 </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  {q.status === 'REVIEWED' ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                                      Reviewed
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">
+                                      Received
+                                    </span>
+                                  )}
+                                </td>
                                 <td className="py-2.5 px-3 text-center text-slate-600">
                                   {q.items?.length || 1}
                                 </td>
@@ -514,7 +548,7 @@ const MergeReceivedQuotesModal = ({
             ) : (
               <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-xl">
                 <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                <p className="text-xs text-slate-500">Please select a vendor above to see their received quotations.</p>
+                <p className="text-xs text-slate-500">Please select a vendor above to see their received/reviewed quotations.</p>
               </div>
             )}
           </div>

@@ -1983,6 +1983,14 @@ const Quotations = () => {
         label: 'Client Name',
         sortable: true,
         render: (val, q) => {
+          if (!q.isRFQOnly && q.is_merged === 1) {
+            return (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200 shadow-xs">
+                <GitMerge className="w-3.5 h-3.5 text-purple-600" />
+                MERGED PO
+              </span>
+            );
+          }
           const client = (q.company_name && q.company_name !== '-' && q.company_name !== '—') 
             ? q.company_name 
             : (q.client_name || q.customer_name || '—');
@@ -2001,7 +2009,26 @@ const Quotations = () => {
         key: 'project_name',
         label: 'Project Name',
         sortable: true,
-        render: (val, q) => <span className="text-slate-600 text-xs font-medium italic">{q.project_name || 'General Project'}</span>
+        render: (val, q) => {
+          if (!q.isRFQOnly && q.is_merged === 1) {
+            const itemProjects = new Set((q.items || []).map(i => i.project_name).filter(Boolean));
+            const hasMultipleProjects = itemProjects.size > 1 || q.project_name === 'Multiple Projects';
+            const displayProject = hasMultipleProjects ? 'Multiple Projects' : (q.project_name || Array.from(itemProjects)[0] || 'Multiple Projects');
+            return (
+              <div className="flex flex-col">
+                <span className="text-slate-800 text-xs font-bold">
+                  {displayProject}
+                </span>
+                {itemProjects.size > 1 && (
+                  <span className="text-[10px] text-slate-400 italic">
+                    {itemProjects.size} Projects
+                  </span>
+                )}
+              </div>
+            );
+          }
+          return <span className="text-slate-600 text-xs font-medium italic">{q.project_name || 'General Project'}</span>;
+        }
       },
       {
         key: 'quote_number',
@@ -2009,8 +2036,8 @@ const Quotations = () => {
         sortable: true,
         render: (val, q) => (
           <div className=" text-slate-900">
-            <div className="text-sm   flex items-center gap-2">
-              {val}
+            <div className="text-sm flex items-center gap-2">
+              <span className="font-semibold">{val}</span>
               {q.version && (
                 <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded text-xs">
                   V{q.version}
@@ -2051,18 +2078,35 @@ const Quotations = () => {
         key: 'drawing_no',
         label: 'Drawing',
         sortable: true,
-        render: (val, q) => (
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-[#111827] leading-[16px]">
-              {q.drawing_no || '—'}
-            </span>
-            {q.finished_good && (
-              <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
-                {q.finished_good}
+        render: (val, q) => {
+          if (!q.isRFQOnly && q.is_merged === 1) {
+            const distinctDrawings = new Set((q.items || []).map(i => i.drawing_no || i.item_code).filter(Boolean));
+            const totalItems = (q.items && q.items.length) || q.total_items || 0;
+            const isMultiple = distinctDrawings.size > 1 || !q.drawing_no || q.drawing_no === 'Multiple Drawings';
+            return (
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-900 leading-[16px]">
+                  {isMultiple ? 'Multiple Drawings' : (Array.from(distinctDrawings)[0] || q.drawing_no || 'Multiple Drawings')}
+                </span>
+                <span className="text-[11px] font-medium text-purple-600 leading-[14px] mt-0.5">
+                  {totalItems} Item{totalItems !== 1 ? 's' : ''}
+                </span>
+              </div>
+            );
+          }
+          return (
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold text-[#111827] leading-[16px]">
+                {q.drawing_no || '—'}
               </span>
-            )}
-          </div>
-        )
+              {q.finished_good && (
+                <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
+                  {q.finished_good}
+                </span>
+              )}
+            </div>
+          );
+        }
       },
       {
         key: 'vendor_id',
@@ -2084,6 +2128,12 @@ const Quotations = () => {
                   })()}
                 </span>
                 <span className="text-xs text-purple-400 italic mt-0.5">{q.total_items} item{q.total_items !== 1 ? 's' : ''} consolidated</span>
+              </>
+            ) : !q.isRFQOnly && q.is_merged === 1 ? (
+              <>
+                <span className="text-slate-900 font-semibold">{val ? getVendorName(val, q) : 'Unassigned'}</span>
+                <span className="text-[11px] text-purple-600 font-medium mt-0.5">[Merged Vendor]</span>
+                {val && <span className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1 opacity-70">Vendor ID: #{val}</span>}
               </>
             ) : q.isRFQOnly && q.status === 'PENDING_ITEMS' ? (
               <>
@@ -2506,9 +2556,12 @@ const Quotations = () => {
               </div>
             );
           }
+          const sourceQuotes = row.is_merged === 1
+            ? Array.from(new Set((row.items || []).map(i => i.source_quotation_number).filter(Boolean)))
+            : [];
           return (
             <div className="p-3 bg-slate-50/80 border-y border-slate-200">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                 <div className="text-xs font-bold text-slate-700 flex items-center gap-2">
                   <span>Line Items ({row.items.length})</span>
                   {row.is_merged === 1 && (
@@ -2518,6 +2571,16 @@ const Quotations = () => {
                     </span>
                   )}
                 </div>
+                {row.is_merged === 1 && sourceQuotes.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-semibold text-purple-800">Source Quotes ({sourceQuotes.length}):</span>
+                    {sourceQuotes.map((sq, sIdx) => (
+                      <span key={sIdx} className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white text-purple-700 border border-purple-200 shadow-xs">
+                        {sq}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="bg-white rounded border border-slate-200 overflow-hidden shadow-sm">
                 <table className="w-full text-xs text-left">

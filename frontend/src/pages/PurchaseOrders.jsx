@@ -1341,11 +1341,25 @@ const PurchaseOrders = () => {
       label: 'Client Name',
       key: 'company_name',
       sortable: true,
-      render: (val, row) => (
-        <span className="font-bold text-slate-900 text-xs">
-          {row.company_name || '—'}
-        </span>
-      )
+      render: (val, row) => {
+        const isMergedPO = Boolean(
+          row.is_merged || 
+          row.drawing_no === 'Merged Drawings' || 
+          (row.items && row.items.some(i => i.source_po_item_id || i.source_quotation_id || i.source_quotation_number))
+        );
+        if (isMergedPO) {
+          return (
+            <span className="font-bold text-slate-900 text-xs">
+              MERGE PO
+            </span>
+          );
+        }
+        return (
+          <span className="font-bold text-slate-900 text-xs">
+            {row.company_name || '—'}
+          </span>
+        );
+      }
     },
     {
       label: 'Project Name',
@@ -1390,11 +1404,6 @@ const PurchaseOrders = () => {
           <span className=" text-blue-600 cursor-pointer hover:underline text-xs ">
             {val || `PO-${String(row.id).padStart(4, '0')}`}
           </span>
-          {row.is_merged ? (
-            <span className="p-1 bg-purple-50 text-purple-600 rounded text-[9px] font-bold border border-purple-100 w-fit mt-1">
-              MERGED PO
-            </span>
-          ) : null}
           <span className="text-xs text-slate-400  flex items-center gap-1 mt-0.5">
             {row.mr_number || (row.quotation_id ? `QT-${row.quotation_id}` : `ID-${row.id}`)}
           </span>
@@ -1634,12 +1643,19 @@ const PurchaseOrders = () => {
   ];
 
   const filteredPOs = pos.filter(po => {
+    const isMergedPO = Boolean(
+      po.is_merged || 
+      po.drawing_no === 'Merged Drawings' || 
+      (po.items && po.items.some(i => i.source_po_item_id || i.source_quotation_id || i.source_quotation_number))
+    );
+    const clientName = isMergedPO ? 'MERGE PO' : (po.company_name || '');
     const matchesSearch = !searchTerm ||
       po.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       po.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       po.drawing_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       po.finished_good?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      po.project_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      po.project_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      clientName.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
 
