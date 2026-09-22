@@ -2313,11 +2313,6 @@ const generatePurchaseOrderPDF = async (poId) => {
             <td>{{hostGSTIN}}</td>
           </tr>
           <tr>
-            <td style="font-weight: bold;">State</td>
-            <td>:</td>
-            <td>{{hostState}}</td>
-          </tr>
-          <tr>
             <td style="font-weight: bold;">Contact Person</td>
             <td>:</td>
             <td>{{created_by_name}}</td>
@@ -2356,7 +2351,6 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td style="text-align: center;">{{sl_no}}</td>
         <td style="text-align: center; font-weight: bold; color: #000; white-space: nowrap;">{{drawing_no}}</td>
         <td style="text-align: center; line-height: 1.25;">
-          <span style="font-size: 8px; color: #444; display: block; word-break: break-all;">{{item_no}}</span>
           <strong style="font-size: 10px; color: #000;">{{material_name}}</strong>
         </td>
         <td style="text-align: center; vertical-align: middle; font-weight: bold; color: #000; font-size: 11px; white-space: nowrap;">{{size}}</td>
@@ -2451,19 +2445,9 @@ const generatePurchaseOrderPDF = async (poId) => {
             <td>{{insurance}}</td>
           </tr>
           <tr>
-            <td style="font-weight: bold;">Purchase Term</td>
-            <td>:</td>
-            <td>{{purchase_term}}</td>
-          </tr>
-          <tr>
             <td style="font-weight: bold;">Delivery Terms</td>
             <td>:</td>
             <td>{{delivery_terms}}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold;">Delivery Date</td>
-            <td>:</td>
-            <td>{{expected_delivery_date}}</td>
           </tr>
           <tr>
             <td style="font-weight: bold;">Your Ref No.</td>
