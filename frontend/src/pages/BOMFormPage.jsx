@@ -4769,15 +4769,15 @@ const BOMFormPage = () => {
         <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3 mb-3">
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5 mb-1.5">
-              <div className="bg-red-600 text-white font-bold text-sm px-2 py-0.5 rounded leading-none">
-                ILLUMIUM
+              <div className="bg-amber-800 text-white font-bold text-sm px-2 py-0.5 rounded leading-none">
+                SP TECHPIONEER
               </div>
-              <div className="text-red-600 font-bold text-[9px] tracking-wider uppercase">
+              <div className="text-amber-700 font-bold text-[9px] tracking-wider uppercase">
                 Design-Eng
               </div>
             </div>
             <div className="text-[9px] text-slate-700 leading-tight font-medium">
-              <div className="font-bold text-xs text-slate-900 leading-none mb-0.5">SPTECH</div>
+              <div className="font-bold text-xs text-slate-900 leading-none mb-0.5">SP TECHPIONEER PVT. LTD.</div>
               <div>Pune – 411 050, Maharashtra, India</div>
               <div>GSTIN: 27ABCDE1234F1Z5</div>
             </div>

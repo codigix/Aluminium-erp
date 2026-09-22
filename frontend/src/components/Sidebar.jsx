@@ -1,14 +1,27 @@
 import { NavLink } from 'react-router-dom'
+import spEmblem from '../assets/sp_emblem_clean.png'
 
 const Sidebar = ({ items = [] }) => (
   <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-slate-200/60 shadow-sm flex flex-col z-50">
-    <div className="p-6 border-b border-slate-100 flex items-center gap-3.5">
-      <div className="h-9 w-9 rounded-xl bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20">
-        <span className="text-white  text-lg">I</span>
-      </div>
-      <div className="min-w-0">
-        <p className="text-sm  text-slate-900  leading-none">ILLUMIUM</p>
-        <p className="text-[9px] text-rose-500  uppercase tracking-[0.15em] mt-1.5 truncate">Aluminium Systems</p>
+    <div className="p-4 border-b border-slate-100 flex items-center bg-white">
+      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+        {/* Left: Square SP/TP Logo */}
+        <div className="w-11 h-11 rounded overflow-hidden flex-shrink-0 flex items-center justify-center">
+          <img src={spEmblem} alt="SP TECHPIONEER" className="w-full h-full object-contain" />
+        </div>
+
+        {/* Right: Branding Text Block */}
+        <div className="flex flex-col justify-center min-w-0 flex-1">
+          <span className="text-[12.5px] font-black text-slate-900 tracking-[0.03em] leading-tight font-serif truncate uppercase">
+            SP TECHPIONEER
+          </span>
+          <span className="text-[7.5px] font-bold text-amber-700 tracking-[0.14em] uppercase leading-tight mt-0.5 truncate">
+            PRIVATE LIMITED
+          </span>
+          <span className="text-[5.8px] font-bold text-slate-400 tracking-[0.08em] uppercase leading-tight mt-0.5 truncate">
+            ENGINEERING A BETTER TOMORROW
+          </span>
+        </div>
       </div>
     </div>
     <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1.5 custom-scrollbar">

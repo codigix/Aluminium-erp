@@ -98,6 +98,8 @@ import ApprovedQuotations from "./pages/ApprovedQuotations";
 import ActiveClients from "./pages/ActiveClients";
 import DatabaseBackup from "./pages/DatabaseBackup";
 import { FormControl, StatusBadge, Button } from "./components/ui.jsx";
+import spTechLogo from './assets/sp_techpioneer_logo.png';
+import spEmblem from './assets/sp_emblem_clean.png';
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -1793,20 +1795,30 @@ function App() {
       <div className="flex h-screen overflow-hidden bg-gray-50 text-slate-900">
         <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-600 flex-col transition-all lg:transition-none z-50 border-r border-slate-200/60 shadow-sm ${mobileMenuOpen ? 'flex' : 'hidden'
           } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
-            <div className="flex items-center gap-3.5 flex-1 overflow-hidden">
-              <div className="h-9 w-9 rounded bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20 flex-shrink-0 transition-transform duration-300">
-                <Building2 className="h-5 w-5 text-white" />
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+              {/* Left: Square SP/TP Logo */}
+              <div className="w-11 h-11 rounded overflow-hidden flex-shrink-0 flex items-center justify-center">
+                <img src={spEmblem} alt="SP TECHPIONEER" className="w-full h-full object-contain" />
               </div>
-              <div className="min-w-0">
-                <p className="text-sm  text-slate-900  leading-none">ILLUMIUM</p>
-                <p className="text-[9px] text-rose-500   tracking-[0.15em] mt-1.5 truncate">{sidebarDept === 'PROCUREMENT' ? 'PURCHASE' : (sidebarDept || 'ERP System')}</p>
+
+              {/* Right: Branding Text Block */}
+              <div className="flex flex-col justify-center min-w-0 flex-1">
+                <span className="text-[12.5px] font-black text-slate-900 tracking-[0.03em] leading-tight font-serif truncate uppercase">
+                  SP TECHPIONEER
+                </span>
+                <span className="text-[7.5px] font-bold text-amber-700 tracking-[0.14em] uppercase leading-tight mt-0.5 truncate">
+                  PRIVATE LIMITED
+                </span>
+                <span className="text-[5.8px] font-bold text-slate-400 tracking-[0.08em] uppercase leading-tight mt-0.5 truncate">
+                  ENGINEERING A BETTER TOMORROW
+                </span>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setMobileMenuOpen(false)}
-              className="lg:hidden p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
+              className="lg:hidden p-1.5 hover:bg-slate-100 rounded transition-colors text-slate-400 flex-shrink-0"
             >
               <XCircle className="w-5 h-5" />
             </button>
