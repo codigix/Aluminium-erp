@@ -1,6 +1,60 @@
 const pool = require('../config/db');
 const bomService = require('./bomService');
 
+/**
+ * Ensures that every Part and Assembly Production Plan contains Shipment as the final default operation.
+ * - Preserves all existing operations in their original order.
+ * - If Shipment/Dispatch is missing -> adds Shipment as the final operation.
+ * - If Shipment/Dispatch already exists -> reuses the existing operation and moves it to the final position.
+ * - Never creates duplicate Shipment operations.
+ * - Re-indexes step_no / step sequentially.
+ */
+const ensureShipmentAsFinalOperation = (opsList, context = {}) => {
+  if (!Array.isArray(opsList)) return [];
+
+  const nonShipmentOps = [];
+  let existingShipment = null;
+
+  for (const op of opsList) {
+    const name = String(op.operation_name || op.operationName || '').toLowerCase().trim();
+    if (name === 'shipment' || name === 'dispatch') {
+      if (!existingShipment) {
+        existingShipment = op;
+      }
+    } else {
+      nonShipmentOps.push(op);
+    }
+  }
+
+  const finalShipment = existingShipment || {
+    id: 999999,
+    plan_id: context.planId || null,
+    operation_name: 'Shipment',
+    operationName: 'Shipment',
+    workstation: 'Dispatch',
+    process_type: 'In-House',
+    operation_type: 'In-House',
+    processType: 'In-House',
+    cycle_time_min: 0,
+    setup_time_min: 0,
+    hourly_rate: 0,
+    base_time: 0,
+    net_time: 0,
+    source_item: context.sourceItem || 'Main Item',
+    sourceItem: context.sourceItem || 'Main Item',
+    item_group: context.itemGroup || (context.isPartPlan ? 'Part' : 'Assembly'),
+    item_type: context.itemType || (context.isPartPlan ? 'PART' : 'FG')
+  };
+
+  const finalOps = [...nonShipmentOps, finalShipment];
+
+  return finalOps.map((op, idx) => ({
+    ...op,
+    step_no: idx + 1,
+    step: String(idx + 1).padStart(2, '0')
+  }));
+};
+
 const listProductionPlans = async () => {
   const [rows] = await pool.query(
     `SELECT pp.*, u.username as creator_name, 
@@ -316,34 +370,15 @@ const getProductionPlanById = async (id) => {
     operations = storedOps;
   }
 
-  // Append Shipment only for Assembly plans (not for Part plans)
-  if (!isPartPlan) {
-    const hasShipment = operations.some(op => {
-      const name = String(op.operation_name || '').toLowerCase();
-      return name === 'shipment' || name === 'dispatch';
-    });
-    if (!hasShipment) {
-      operations.push({
-        id: 999999,
-        plan_id: id,
-        step_no: operations.length + 1,
-        operation_name: 'Shipment',
-        workstation: 'Dispatch',
-        process_type: 'In-House',
-        operation_type: 'In-House',
-        cycle_time_min: 0,
-        setup_time_min: 0,
-        hourly_rate: 0,
-        base_time: 0,
-        net_time: 0,
-        source_item: 'Main Item',
-        item_group: 'Assembly',
-        item_type: 'FG'
-      });
-    }
-  }
-
-  plan.operations = operations;
+  // Ensure every Part and Assembly Production Plan always contains Shipment as the final default operation
+  const planItem = allPlanItems[0] || null;
+  plan.operations = ensureShipmentAsFinalOperation(operations, {
+    planId: id,
+    sourceItem: (planItem && planItem.item_code) || plan.description || plan.plan_code || 'Main Item',
+    isPartPlan,
+    itemGroup: isPartPlan ? 'Part' : 'Assembly',
+    itemType: isPartPlan ? 'PART' : 'FG'
+  });
 
   return plan;
 };
@@ -538,23 +573,37 @@ const createProductionPlan = async (planData, createdBy) => {
       }
     }
 
-    // 5. Save Operations
+    // 5. Save Operations (Ensure Shipment is the final default operation for both Part and Assembly plans)
     if (operations && Array.isArray(operations)) {
-      for (const op of operations) {
+      const isPart = Boolean(
+        finishedGoods?.some(item => 
+          (item.itemGroup && item.itemGroup.toLowerCase() === 'part') || 
+          String(item.itemCode || '').toUpperCase().startsWith('PART-')
+        )
+      );
+      const opsWithShipment = ensureShipmentAsFinalOperation(operations, {
+        planId,
+        sourceItem: finishedGoods?.[0]?.itemCode || 'Main Item',
+        isPartPlan: isPart,
+        itemGroup: isPart ? 'Part' : 'Assembly',
+        itemType: isPart ? 'PART' : 'FG'
+      });
+
+      for (const op of opsWithShipment) {
         await connection.execute(
           `INSERT INTO production_plan_operations 
            (plan_id, step_no, operation_name, process_type, workstation, base_time, net_time, source_item, item_type, cycle_time_min, setup_time_min)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
-            op.step || op.stepNo || 0,
+            op.step_no || op.step || 0,
             op.operationName || op.operation_name || null,
             op.processType || op.operation_type || 'In-House',
             op.workstation || null,
             op.baseTime || op.base_time || op.baseTimeHrs || op.base_hour || 0,
             op.netTime || op.net_time || 0,
             op.sourceItem || op.source_item || null,
-            op.item_type || op.itemType || 'FG',
+            op.item_type || op.itemType || (isPart ? 'PART' : 'FG'),
             op.cycle_time_min || op.cycleTimeMin || 0,
             op.setup_time_min || op.setupTimeMin || 0
           ]
@@ -3274,15 +3323,24 @@ const bulkCreateProductionPlans = async (payload, createdBy) => {
             outer_diameter: parseFloat(m.outer_diameter || 0)
           };
         }),
-        operations: operations.map((op, idx) => ({
-          step: (idx + 1).toString().padStart(2, '0'),
-          operationName: op.operation_name || null,
-          processType: op.operation_type || 'In-House',
-          workstation: op.workstation || null,
-          baseTime: op.base_time || op.base_hour || 0,
-          cycle_time_min: op.cycle_time_min || 0,
-          setup_time_min: op.setup_time_min || 0
-        }))
+        operations: ensureShipmentAsFinalOperation(
+          operations.map((op, idx) => ({
+            step: (idx + 1).toString().padStart(2, '0'),
+            operationName: op.operation_name || null,
+            processType: op.operation_type || 'In-House',
+            workstation: op.workstation || null,
+            baseTime: op.base_time || op.base_hour || 0,
+            cycle_time_min: op.cycle_time_min || 0,
+            setup_time_min: op.setup_time_min || 0,
+            sourceItem: group.item_code || null
+          })),
+          {
+            sourceItem: group.item_code || null,
+            isPartPlan: String(group.item_code || '').toUpperCase().startsWith('PART-'),
+            itemGroup: String(group.item_code || '').toUpperCase().startsWith('PART-') ? 'Part' : 'Assembly',
+            itemType: String(group.item_code || '').toUpperCase().startsWith('PART-') ? 'PART' : 'FG'
+          }
+        )
       };
 
       const planId = await createProductionPlan(singlePayload, createdBy);
@@ -3613,6 +3671,7 @@ module.exports = {
   getBulkCreationPreview,
   bulkCreateProductionPlans,
   getBulkMaterialRequestPreview,
-  bulkCreateMaterialRequests
+  bulkCreateMaterialRequests,
+  ensureShipmentAsFinalOperation
 };
 

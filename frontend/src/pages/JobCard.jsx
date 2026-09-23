@@ -6545,28 +6545,43 @@ const JobCard = () => {
         const itemGroup = (row.item_group || '').toUpperCase();
         const drawingType = (row.drawing_type || '').toUpperCase();
 
-        let isPart = false;
+        let badgeType = 'PART';
         if (
-          itemGroup === 'PART' ||
-          drawingType === 'PART' ||
-          sourceType === 'PART' ||
-          sourceType === 'SA' ||
-          sourceType === 'SUB ASSEMBLY' ||
-          sourceType === 'SUB-ASSEMBLY' ||
-          itemCode.startsWith('PART-')
+          itemCode.startsWith('BO-') ||
+          itemGroup.includes('BOUGHT') ||
+          drawingType.includes('BOUGHT') ||
+          sourceType === 'BO' ||
+          sourceType.includes('BOUGHT')
         ) {
-          isPart = true;
+          badgeType = 'BOUGHT OUT';
         } else if (
+          itemGroup === 'ASSEMBLY' ||
+          drawingType === 'ASSEMBLY' ||
+          itemCode.startsWith('ASSEMBLY-') ||
+          itemCode.startsWith('SA-') ||
+          itemCode.startsWith('SFG-') ||
           sourceType === 'FG' ||
           sourceType === 'FINISHED GOOD' ||
           sourceType === 'FINISHED GOODS' ||
-          itemCode.startsWith('ASSEMBLY-') ||
+          sourceType === 'SA' ||
+          sourceType === 'SUB ASSEMBLY' ||
+          sourceType === 'SUB-ASSEMBLY' ||
+          itemName.includes('ASSEMBLAGE') ||
           (itemName.includes('ASSEMBLY') && !itemCode.startsWith('PART-'))
         ) {
-          isPart = false;
+          if (itemGroup === 'PART' || drawingType === 'PART' || itemCode.startsWith('PART-')) {
+            badgeType = 'PART';
+          } else {
+            badgeType = 'ASSEMBLY';
+          }
         } else {
-          isPart = !itemCode.startsWith('ASSEMBLY-');
+          badgeType = 'PART';
         }
+
+        const isPart = badgeType === 'PART';
+        let badgeColor = 'text-rose-500';
+        if (badgeType === 'ASSEMBLY') badgeColor = 'text-indigo-600';
+        else if (badgeType === 'BOUGHT OUT') badgeColor = 'text-amber-600';
 
         let modeText = 'In-house';
         let modeClass = 'text-blue-600';
@@ -6581,8 +6596,8 @@ const JobCard = () => {
         return (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-semibold ${isPart ? 'text-rose-500' : 'text-indigo-600'}`}>
-                {isPart ? 'PART' : 'ASSEMBLY'}
+              <span className={`text-[10px] font-semibold ${badgeColor}`}>
+                {badgeType}
               </span>
               <span className={`text-[10px]  uppercase  ${modeClass}`}>
                 ({modeText})

@@ -446,63 +446,54 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
 
   // 3. Get Operations
   let operationsToUse = [];
-  if (providedOperations && Array.isArray(providedOperations)) {
-    // If operations are provided, use them strictly
-    // IMPROVED: If we are creating job cards for a Finished Good WO, 
-    // we should include all operations where source_item matches item_code OR drawing_no
-    // OR if the operation item_type is 'FG' and this is an 'FG' work order.
-    
-    const [woDetails] = await connection.query('SELECT drawing_no, item_code FROM sales_order_items WHERE id = ?', [wo.sales_order_item_id]);
-    const woDrawing = woDetails[0]?.drawing_no || wo.bom_no;
-    const woSoiCode = woDetails[0]?.item_code;
 
-    operationsToUse = providedOperations.filter(op => {
-      const isFG = wo.source_type === 'FG';
-      const isSA = wo.source_type === 'SA';
+  const [woDetails] = await connection.query(
+    'SELECT drawing_no, item_code, drawing_type FROM sales_order_items WHERE id = ?',
+    [wo.sales_order_item_id]
+  );
+  const woDrawing = woDetails[0]?.drawing_no || wo.bom_no;
+  const woSoiCode = woDetails[0]?.item_code;
+  const woDrawingType = (woDetails[0]?.drawing_type || '').toUpperCase();
 
-      const opSource = (op.source_item || op.sourceItem || '').toUpperCase();
-      const opType = (op.item_type || op.itemType || '').toUpperCase();
+  const targetCode = (wo.item_code || '').toUpperCase().trim();
+  const targetDrawing = (woDrawing || '').toUpperCase().trim();
+  const targetSoiCode = (woSoiCode || '').toUpperCase().trim();
+  const targetName = (wo.item_name || '').toUpperCase().trim();
+  const targetSourceFg = (wo.source_fg || '').toUpperCase().trim();
+  const isPart = (wo.source_type === 'PART' || targetCode.startsWith('PART-') || woDrawingType === 'PART');
+  const isFG = wo.source_type === 'FG' || (!isPart && !wo.parent_wo_id);
 
-      const opIsFG = ['FG', 'FINISHED GOOD', 'FINISHED GOODS'].includes(opType);
-      const opIsSA = ['SA', 'SUB ASSEMBLY', 'SUB-ASSEMBLY', 'SUBASSEMBLY', 'SFG'].includes(opType) || 
-                     opSource.startsWith('PART-') || opSource.includes('PART');
+  if (providedOperations && Array.isArray(providedOperations) && providedOperations.length > 0) {
+    // 1. Check if operations in providedOperations explicitly target this item
+    const specificToThisWo = providedOperations.filter(op => {
+      const opSource = (op.source_item || op.sourceItem || '').toUpperCase().trim();
+      if (!opSource) return false;
+      return (
+        opSource === targetCode ||
+        (targetDrawing && opSource === targetDrawing) ||
+        (targetSoiCode && opSource === targetSoiCode) ||
+        (targetName && opSource === targetName) ||
+        (targetSourceFg && opSource === targetSourceFg)
+      );
+    });
 
-      // SPECIAL OVERRIDE: Any operation named 'ASSEMBLY' (case-insensitive) always belongs to the parent FG assembly
-      // unless it explicitly specifies a child part as its source item.
-      const isAssemblyOp = (op.operation_name || op.operationName || '').toUpperCase().includes('ASSEMBLY');
-      if (isAssemblyOp && !opIsSA) {
-        return isFG; // Assign ONLY to FG work orders, block from SA
-      }
+    if (specificToThisWo.length > 0) {
+      operationsToUse = specificToThisWo;
+      // Also append any generic operations (e.g. Shipment, Main Item) if not already present
+      const genericOps = providedOperations.filter(op => {
+        const opSource = (op.source_item || op.sourceItem || '').toUpperCase().trim();
+        const opName = (op.operation_name || op.operationName || '').toUpperCase().trim();
+        const isGeneric = !opSource || opSource === 'MAIN ITEM' || opName === 'SHIPMENT' || opName === 'DISPATCH';
+        return isGeneric && !operationsToUse.some(o => (o.operation_name || o.operationName) === (op.operation_name || op.operationName));
+      });
+      operationsToUse = [...operationsToUse, ...genericOps];
+    } else {
+      // If no operation explicitly mentions this item code, check if operations are generic for the entire plan
+      // E.g. for a single-item plan, all operations belong to this item
+      operationsToUse = providedOperations;
+    }
 
-      const targetCode = (wo.item_code || '').toUpperCase();
-      const targetDrawing = (woDrawing || '').toUpperCase();
-      const targetSoiCode = (woSoiCode || '').toUpperCase();
-      const targetName = (wo.item_name || '').toUpperCase();
-      const targetSourceFg = (wo.source_fg || '').toUpperCase();
-
-      // Priority 1: Direct match by source item code, drawing, name, source_fg, or SOI code
-      if (opSource) {
-        // If opSource is specified, it MUST match one of the identifiers 
-        // AND the item type must also match to avoid cross-contamination between FG and SA
-        const sourceMatches = (opSource === targetCode || 
-                               (targetDrawing && opSource === targetDrawing) ||
-                               (targetSoiCode && opSource === targetSoiCode) ||
-                               (targetName && opSource === targetName) ||
-                               (targetSourceFg && opSource === targetSourceFg));
-        
-        const typeMatches = (isFG && opIsFG) || (isSA && opIsSA);
-        
-        if (sourceMatches && typeMatches) return true;
-      }
-
-      // Priority 2: If opSource is NOT specified, fallback to matching strictly by type
-      if (!opSource) {
-        if (isFG && opIsFG) return true;
-        if (isSA && opIsSA) return true;
-      }
-
-      return false;
-    }).map(op => ({
+    operationsToUse = operationsToUse.map(op => ({
       operation_name: op.operation_name || op.operationName,
       workstation: op.workstation,
       base_time: op.base_time || op.cycle_time_min || op.baseTime,
@@ -512,52 +503,56 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
       operation_type: op.process_type || op.processType || op.operation_type || op.operationType || 'In-House',
       execution_type: op.process_type || op.processType || op.operation_type || op.operationType || 'In-House',
       cycle_time_min: op.cycle_time_min || op.cycleTimeMin || 0,
-      setup_time_min: op.setup_time_min || op.setupTimeMin || 0
+      setup_time_min: op.setup_time_min || op.setupTimeMin || 0,
+      target_warehouse: op.target_warehouse || op.targetWarehouse || null
     }));
-  } else {
-    // Fetch from BOM if not provided (fallback)
-    if (wo.source_type === 'SA' || !wo.sales_order_item_id) {
-      operationsToUse = await bomService.getItemOperations(null, wo.item_code);
-    } else {
-      operationsToUse = await bomService.getItemOperations(wo.sales_order_item_id, wo.item_code);
-    }
-    // Ensure execution_type is set for fallback operations too
-    operationsToUse = operationsToUse.map(op => ({
-      ...op,
-      operation_name: op.operation_name,
-      execution_type: op.operation_type || 'In-House'
-    }));
-  }
-  
-  // Auto-append Shipment operation ONLY for top-level Finished Goods (FG) work orders
-  const hasShipment = operationsToUse.some(op => {
-    const name = String(op.operation_name || op.operationName || '').toLowerCase();
-    return name === 'shipment' || name === 'dispatch';
-  });
-  if (!hasShipment && wo.source_type === 'FG') {
-    operationsToUse.push({
-      operation_name: 'Shipment',
-      workstation: 'Dispatch',
-      base_time: 0,
-      net_time: 0,
-      time_uom: 'Min',
-      hourly_rate: 0,
-      execution_type: 'In-House',
-      cycle_time_min: 0,
-      setup_time_min: 0
-    });
   }
 
-  // 4. Create Job Cards for defined operations
+  // Fallback: Fetch directly from BOM operations if no operations were matched from providedOperations
+  if (operationsToUse.length === 0) {
+    let fallbackOps = [];
+    if (wo.sales_order_item_id) {
+      fallbackOps = await bomService.getItemOperations(wo.sales_order_item_id, wo.item_code);
+    }
+    if (!fallbackOps || fallbackOps.length === 0) {
+      fallbackOps = await bomService.getItemOperations(null, wo.item_code, wo.bom_no);
+    }
+    if (fallbackOps && fallbackOps.length > 0) {
+      operationsToUse = fallbackOps.map(op => ({
+        ...op,
+        operation_name: op.operation_name,
+        execution_type: op.operation_type || 'In-House'
+      }));
+    }
+  }
+
+  // Ensure every Part and Assembly Work Order has Shipment as the final default operation
+  // If missing -> Add Shipment. If already exists -> Move to final position. Never create duplicate Shipment.
+  const { ensureShipmentAsFinalOperation } = require('./productionPlanService');
+  operationsToUse = ensureShipmentAsFinalOperation(operationsToUse, {
+    sourceItem: targetCode || 'Main Item',
+    isPartPlan: isPart,
+    itemGroup: isPart ? 'Part' : 'Assembly',
+    itemType: isPart ? 'PART' : 'FG'
+  });
+
+  // 4. Create Job Cards for each defined operation
   for (let i = 0; i < operationsToUse.length; i++) {
     const op = operationsToUse[i];
     const sequenceNo = i + 1;
+
+    // Do not create duplicate Job Cards when the same Work Order / Operation already has a Job Card
+    const [existingOpJc] = await connection.query(
+      'SELECT id FROM job_cards WHERE work_order_id = ? AND LOWER(TRIM(operation_name)) = LOWER(TRIM(?))',
+      [workOrderId, op.operation_name]
+    );
+    if (existingOpJc.length > 0) continue;
     const [masterOps] = await connection.query(
-      'SELECT id, std_time, time_uom, hourly_rate FROM operations WHERE operation_name = ?',
+      'SELECT id, std_time, time_uom, hourly_rate FROM operations WHERE LOWER(TRIM(operation_name)) = LOWER(TRIM(?))',
       [op.operation_name]
     );
     const [masterWs] = await connection.query(
-      'SELECT id FROM workstations WHERE workstation_name = ?',
+      'SELECT id FROM workstations WHERE LOWER(TRIM(workstation_name)) = LOWER(TRIM(?))',
       [op.workstation]
     );
 
@@ -565,7 +560,10 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     let targetWarehouseId = null;
     const targetWhName = op.target_warehouse || op.targetWarehouse;
     if (targetWhName) {
-      const [whRows] = await connection.query('SELECT id FROM warehouses WHERE warehouse_name = ?', [targetWhName]);
+      const [whRows] = await connection.query(
+        'SELECT id FROM warehouses WHERE LOWER(TRIM(warehouse_name)) = LOWER(TRIM(?))',
+        [targetWhName]
+      );
       if (whRows.length > 0) targetWarehouseId = whRows[0].id;
     }
 
@@ -581,12 +579,13 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     const cycleTime = op.cycle_time_min || (masterOps[0]?.std_time && masterOps[0]?.time_uom === 'Min' ? masterOps[0]?.std_time : 0);
     const setupTime = op.setup_time_min || 0;
 
-    // If it's from op.base_time or op.cycle_time_min, it's almost always intended as Min in this system
     const timeUom = (op.net_time || op.base_time || op.cycle_time_min) ? 'Min' : (masterOps[0]?.time_uom || 'Min');
     const hourlyRate = op.hourly_rate || masterOps[0]?.hourly_rate || 0;
-    const executionType = op.operation_type || 'In-House';
+    const executionType = op.operation_type || op.execution_type || 'In-House';
 
-    const initialPlannedQty = i === 0 ? wo.quantity : 0;
+    // Retain full Work Order target quantity on each operation in the routing
+    const initialPlannedQty = parseFloat(wo.quantity || 1);
+
     await connection.execute(
       `INSERT INTO job_cards 
        (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, time_uom, hourly_rate, operation_name, execution_type, execution_mode, sequence_no, target_warehouse_id, cycle_time, setup_time)

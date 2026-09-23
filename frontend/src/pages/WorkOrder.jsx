@@ -126,34 +126,46 @@ const WorkOrder = () => {
         const itemGroupUpper = (row.item_group || '').toUpperCase();
         const drawingTypeUpper = (row.drawing_type || '').toUpperCase();
 
-        let isPart = false;
+        let badgeType = 'PART';
         if (
-          itemGroupUpper === 'PART' ||
-          drawingTypeUpper === 'PART' ||
-          valUpper === 'PART' ||
-          valUpper === 'SA' ||
-          valUpper === 'SUB ASSEMBLY' ||
-          valUpper === 'SUB-ASSEMBLY' ||
-          itemCodeUpper.startsWith('PART-')
+          itemCodeUpper.startsWith('BO-') ||
+          itemGroupUpper.includes('BOUGHT') ||
+          drawingTypeUpper.includes('BOUGHT') ||
+          valUpper === 'BO' ||
+          valUpper.includes('BOUGHT')
         ) {
-          isPart = true;
+          badgeType = 'BOUGHT OUT';
         } else if (
+          itemGroupUpper === 'ASSEMBLY' ||
+          drawingTypeUpper === 'ASSEMBLY' ||
+          itemCodeUpper.startsWith('ASSEMBLY-') ||
+          itemCodeUpper.startsWith('SA-') ||
+          itemCodeUpper.startsWith('SFG-') ||
           valUpper === 'FG' ||
           valUpper === 'FINISHED GOOD' ||
           valUpper === 'FINISHED GOODS' ||
-          itemCodeUpper.startsWith('ASSEMBLY-') ||
+          valUpper === 'SA' ||
+          valUpper === 'SUB ASSEMBLY' ||
+          valUpper === 'SUB-ASSEMBLY' ||
+          itemNameUpper.includes('ASSEMBLAGE') ||
           (itemNameUpper.includes('ASSEMBLY') && !itemCodeUpper.startsWith('PART-'))
         ) {
-          isPart = false;
+          if (itemGroupUpper === 'PART' || drawingTypeUpper === 'PART' || itemCodeUpper.startsWith('PART-')) {
+            badgeType = 'PART';
+          } else {
+            badgeType = 'ASSEMBLY';
+          }
         } else {
-          isPart = !itemCodeUpper.startsWith('ASSEMBLY-');
+          badgeType = 'PART';
         }
 
+        let colorClass = 'text-rose-500';
+        if (badgeType === 'ASSEMBLY') colorClass = 'text-indigo-600';
+        else if (badgeType === 'BOUGHT OUT') colorClass = 'text-amber-600';
+
         return (
-          <span className={`text-[10px] font-semibold ${
-            isPart ? 'text-rose-500' : 'text-indigo-600'
-          }`}>
-            {isPart ? 'PART' : 'ASSEMBLY'}
+          <span className={`text-[10px] font-semibold ${colorClass}`}>
+            {badgeType}
           </span>
         );
       }
