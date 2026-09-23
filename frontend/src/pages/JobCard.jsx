@@ -902,6 +902,49 @@ const JobCard = () => {
     }
   };
 
+  const [resettingQueue, setResettingQueue] = useState(false);
+
+  const handleResetQueue = async () => {
+    try {
+      const result = await Swal.fire({
+        title: 'Reset Queue?',
+        text: 'Are you sure you want to delete all Job Cards? This action cannot be undone.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e11d48',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, Delete All',
+        cancelButtonText: 'Cancel'
+      });
+
+      if (result.isConfirmed) {
+        setResettingQueue(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/job-cards/delete-all`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const resData = await response.json();
+          successToast(resData.message || 'All job cards deleted successfully');
+          await fetchJobCards();
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          errorToast(errData.error || errData.message || 'Failed to delete job cards');
+        }
+      }
+    } catch (err) {
+      console.error('Error resetting queue:', err);
+      errorToast('Failed to reset queue');
+    } finally {
+      setResettingQueue(false);
+    }
+  };
+
   const fetchWorkOrders = async () => {
     try {
       const token = localStorage.getItem('authToken');
@@ -1040,15 +1083,15 @@ const JobCard = () => {
 
   const getSourcePriority = (type) => {
     const t = (type || '').toLowerCase();
-    if (t.includes('assembly') || t === 'sa') return 1;
+    if (t.includes('part') || t.includes('assembly') || t === 'sa') return 1;
     if (t.includes('semi') || t === 'sfg') return 2;
     if (t.includes('finish') || t === 'fg') return 3;
     return 4;
   };
 
   const filteredJobCards = useMemo(() => {
-    // Show Job Cards for Finished Goods (FG) and Sub-Assemblies (SA)
-    const allowedSourceTypes = ['FG', 'SA', 'SFG', 'Sub Assembly', 'Finished Goods'];
+    // Show Job Cards for Finished Goods (FG), Sub-Assemblies (SA), and Parts
+    const allowedSourceTypes = ['FG', 'SA', 'SFG', 'Sub Assembly', 'Finished Goods', 'PART', 'Part'];
     const filteredBySource = jobCards.filter(jc => allowedSourceTypes.includes(jc.source_type));
 
     let result = filteredBySource;
@@ -1096,7 +1139,7 @@ const JobCard = () => {
 
   const groupedJobCards = useMemo(() => {
     const acc = {};
-    const allowedSourceTypes = ['FG', 'SA', 'SFG', 'Sub Assembly', 'Finished Goods'];
+    const allowedSourceTypes = ['FG', 'SA', 'SFG', 'Sub Assembly', 'Finished Goods', 'PART', 'Part'];
     const query = searchQuery.toLowerCase();
 
     // 1. Group Work Orders and find latest ID in each batch for sorting
@@ -1182,7 +1225,7 @@ const JobCard = () => {
   }, [filteredJobCards, workOrders, searchQuery]);
 
   const stats = useMemo(() => {
-    const allowedSourceTypes = ['FG', 'SA', 'SFG', 'Sub Assembly', 'Finished Goods'];
+    const allowedSourceTypes = ['FG', 'SA', 'SFG', 'Sub Assembly', 'Finished Goods', 'PART', 'Part'];
     const filteredBySource = jobCards.filter(jc => allowedSourceTypes.includes(jc.source_type));
     const total = filteredBySource.length;
     const inProduction = filteredBySource.filter(jc => jc.status === 'IN_PROGRESS').length;
@@ -6499,14 +6542,31 @@ const JobCard = () => {
         const sourceType = (row.source_type || '').toUpperCase();
         const itemName = (row.item_name || '').toUpperCase();
         const itemCode = (row.item_code || '').toUpperCase();
+        const itemGroup = (row.item_group || '').toUpperCase();
+        const drawingType = (row.drawing_type || '').toUpperCase();
 
-        const isAssembly = sourceType === 'FG' ||
-                           sourceType === 'FINISHED GOOD' ||
-                           sourceType === 'FINISHED GOODS' ||
-                           itemCode.startsWith('ASSEMBLY-') ||
-                           (itemName.includes('ASSEMBLY') && !itemCode.startsWith('PART-'));
-
-        const isPart = !isAssembly;
+        let isPart = false;
+        if (
+          itemGroup === 'PART' ||
+          drawingType === 'PART' ||
+          sourceType === 'PART' ||
+          sourceType === 'SA' ||
+          sourceType === 'SUB ASSEMBLY' ||
+          sourceType === 'SUB-ASSEMBLY' ||
+          itemCode.startsWith('PART-')
+        ) {
+          isPart = true;
+        } else if (
+          sourceType === 'FG' ||
+          sourceType === 'FINISHED GOOD' ||
+          sourceType === 'FINISHED GOODS' ||
+          itemCode.startsWith('ASSEMBLY-') ||
+          (itemName.includes('ASSEMBLY') && !itemCode.startsWith('PART-'))
+        ) {
+          isPart = false;
+        } else {
+          isPart = !itemCode.startsWith('ASSEMBLY-');
+        }
 
         let modeText = 'In-house';
         let modeClass = 'text-blue-600';
@@ -6521,7 +6581,7 @@ const JobCard = () => {
         return (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
-              <span className={`text-[10px]  ${isPart ? 'text-amber-700' : 'text-indigo-700'}`}>
+              <span className={`text-[10px] font-semibold ${isPart ? 'text-rose-500' : 'text-indigo-600'}`}>
                 {isPart ? 'PART' : 'ASSEMBLY'}
               </span>
               <span className={`text-[10px]  uppercase  ${modeClass}`}>
@@ -6955,9 +7015,14 @@ const JobCard = () => {
                 <span className="text-xs  text-slate-500  ">System Status</span>
                 <span className="text-xs  text-slate-900">{new Date().toLocaleTimeString()}</span>
               </div>
-              <button className="flex items-center gap-2  p-2 text-rose-600 hover:bg-rose-50 rounded  transition-all  text-xs">
-                <Trash2 className="w-4 h-4" />
-                Reset Queue
+              <button 
+                onClick={handleResetQueue}
+                disabled={resettingQueue || jobCards.length === 0}
+                className="flex items-center gap-2 p-2 text-rose-600 hover:bg-rose-50 rounded transition-all text-xs disabled:opacity-50"
+                title="Delete all Job Cards"
+              >
+                <Trash2 className={`w-4 h-4 ${resettingQueue ? 'animate-spin' : ''}`} />
+                {resettingQueue ? 'Resetting...' : 'Reset Queue'}
               </button>
               <button
                 onClick={() => navigate(`${deptPrefix}/job-card/add`)}

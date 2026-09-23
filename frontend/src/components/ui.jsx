@@ -806,6 +806,13 @@ export const DataTable = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(initialPageSize);
 
+  // Single source of truth: prefer the actual ID field; fall back to position in filteredData.
+  // globalIndex = (currentPage-1)*pageSize + rowIdx  — stable regardless of pageSize changes.
+  const getRowId = (row, globalIndex) =>
+    (row[rowIdProp] !== undefined && row[rowIdProp] !== null && row[rowIdProp] !== '')
+      ? row[rowIdProp]
+      : globalIndex;
+
   const expandedRows = expandedRowsProp || internalExpandedRows;
 
   const toggleRow = (id) => {
@@ -878,14 +885,28 @@ export const DataTable = ({
     return filteredData.filter(row => !isRowSelectable || isRowSelectable(row));
   }, [filteredData, isRowSelectable]);
 
+  // Selectable rows on the CURRENT PAGE — each entry carries a stable { row, id } pair.
+  // Using getRowId ensures the ID never changes when pageSize or currentPage changes.
+  const pageSelectableRows = React.useMemo(() => {
+    return paginatedData
+      .map((row, rowIdx) => ({
+        row,
+        id: getRowId(row, (currentPage - 1) * pageSize + rowIdx)
+      }))
+      .filter(({ row }) => !isRowSelectable || isRowSelectable(row));
+  }, [paginatedData, isRowSelectable, currentPage, pageSize]);
+
+  // Page-wise Select All — merges / removes only current page IDs, preserves other pages
   const handleSelectAll = (e) => {
-    if (onSelectionChange) {
-      if (e.target.checked) {
-        onSelectionChange(new Set(selectableRows.map((row, idx) => row[rowIdProp] || row.id || idx)));
-      } else {
-        onSelectionChange(new Set());
-      }
+    if (!onSelectionChange) return;
+    const pageIds = pageSelectableRows.map(({ id }) => id);
+    const next = new Set(selectedRows); // clone — preserve selections from other pages
+    if (e.target.checked) {
+      pageIds.forEach(id => next.add(id));
+    } else {
+      pageIds.forEach(id => next.delete(id));
     }
+    onSelectionChange(next);
   };
 
   const handleSelectRow = (id) => {
@@ -953,7 +974,13 @@ export const DataTable = ({
                     type="checkbox"
                     className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                     onChange={handleSelectAll}
-                    checked={selectableRows.length > 0 && selectableRows.every((row, idx) => selectedRows.has(row[rowIdProp] || row.id || idx))}
+                    checked={pageSelectableRows.length > 0 && pageSelectableRows.every(({ id }) => selectedRows.has(id))}
+                    ref={el => {
+                      if (el) {
+                        const selectedOnPage = pageSelectableRows.filter(({ id }) => selectedRows.has(id)).length;
+                        el.indeterminate = selectedOnPage > 0 && selectedOnPage < pageSelectableRows.length;
+                      }
+                    }}
                   />
                 </th>
               )}
@@ -1020,7 +1047,9 @@ export const DataTable = ({
               </tr>
             ) : (
               paginatedData.map((row, rowIdx) => {
-                const rowId = row[rowIdProp] || row.id || (currentPage - 1) * pageSize + rowIdx;
+                // globalIndex = absolute position in filteredData — stable across pageSize changes
+                const globalIndex = (currentPage - 1) * pageSize + rowIdx;
+                const rowId = getRowId(row, globalIndex);
                 const isExpanded = expandedRows.has(rowId);
                 const isSelected = selectedRows.has(rowId);
 

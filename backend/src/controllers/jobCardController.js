@@ -46,6 +46,15 @@ const deleteJobCard = async (req, res) => {
   }
 };
 
+const deleteAllJobCards = async (req, res) => {
+  try {
+    const result = await jobCardService.deleteAllJobCards();
+    res.json({ message: 'All job cards deleted successfully', ...result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const getJobCardLogs = async (req, res) => {
   try {
     const { id } = req.params;
@@ -221,6 +230,7 @@ module.exports = {
   updateProgress,
   updateJobCard,
   deleteJobCard,
+  deleteAllJobCards,
   getJobCardLogs,
   getWorkOrderLogs,
   addTimeLog,

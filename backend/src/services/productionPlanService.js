@@ -101,17 +101,26 @@ const getProductionPlanById = async (id) => {
   const [items] = await pool.query(
     `SELECT ppi.*, 
             COALESCE(o.project_name, so.project_name, '—') as project_name, 
-            COALESCE(ppi.item_code, oi.item_code, soi.item_code) as item_code, 
-            COALESCE(ppi.description, oi.description, soi.description) as description, 
-            COALESCE(oi.drawing_no, soi.drawing_no) as drawing_no, 
-            COALESCE(ppi.design_qty, oi.quantity, soi.quantity) as design_qty, 
-            COALESCE(ppi.uom, soi.unit, 'Nos') as uom,
-            COALESCE(o.order_no, so.so_number, 'Direct Order') as order_no
+            COALESCE(ppi.item_code, oi.item_code, soi.item_code, soi_fallback.item_code) as item_code, 
+            COALESCE(ppi.description, oi.description, soi.description, soi_fallback.description) as description, 
+            COALESCE(oi.drawing_no, soi.drawing_no, soi_fallback.drawing_no) as drawing_no, 
+            COALESCE(ppi.design_qty, oi.quantity, soi.quantity, soi_fallback.quantity) as design_qty, 
+            COALESCE(ppi.uom, soi.unit, soi_fallback.unit, 'Nos') as uom,
+            COALESCE(o.order_no, so.so_number, 'Direct Order') as order_no,
+            COALESCE(soi.item_group, soi_fallback.item_group, '') as item_group,
+            COALESCE(soi.drawing_type, soi_fallback.drawing_type, '') as drawing_type
      FROM production_plan_items ppi
      LEFT JOIN orders o ON ppi.sales_order_id = o.id
      LEFT JOIN sales_orders so ON ppi.sales_order_id = so.id
-     LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
-     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id AND ppi.sales_order_id = soi.sales_order_id
+     LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id
+     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+     LEFT JOIN sales_order_items soi_fallback ON (
+       soi.id IS NULL AND (
+         soi_fallback.drawing_no = ppi.bom_no 
+         OR soi_fallback.drawing_no = ppi.item_code 
+         OR soi_fallback.item_code = ppi.item_code
+       )
+     )
      LEFT JOIN workstations w ON ppi.workstation_id = w.id
      WHERE ppi.plan_id = ?`,
     [id]
@@ -125,6 +134,29 @@ const getProductionPlanById = async (id) => {
     [id]
   );
   plan.subAssemblies = subAssemblies;
+
+  // Check if this plan is strictly for a Part item
+  const isPartPlan = (subAssemblies.length === 0) && items.some(item => {
+    const grp = (item.item_group || '').toLowerCase();
+    const dt = (item.drawing_type || '').toLowerCase();
+    const code = (item.item_code || '').toUpperCase();
+    return grp === 'part' || dt === 'part' || code.startsWith('PART-');
+  });
+
+  if (isPartPlan) {
+    const partItem = items.find(it => {
+      const grp = (it.item_group || '').toLowerCase();
+      const dt = (it.drawing_type || '').toLowerCase();
+      const code = (it.item_code || '').toUpperCase();
+      return grp === 'part' || dt === 'part' || code.startsWith('PART-');
+    }) || items[0];
+
+    const partDesignQty = partItem ? (parseFloat(partItem.design_qty) || parseFloat(partItem.planned_qty) || 1) : 1;
+    plan.configure_target_qty = partDesignQty;
+    // For work order configuration modal, use the Part's design quantity
+    plan.target_qty = partDesignQty;
+    plan.is_part_plan = true;
+  }
 
   // 4. Fetch Materials
   const [materials] = await pool.query(
@@ -257,7 +289,8 @@ const getProductionPlanById = async (id) => {
         base_time: op.base_time || 0,
         net_time: op.net_time || 0,
         source_item: planItem.item_code || op.item_code || op.drawing_no || null,
-        item_type: planItem.source_type === 'SA' || (bomNo && bomNo !== plan.bom_no) ? 'SA' : (op.item_type || 'FG')
+        item_group: (isPartPlan || (planItem.item_group && planItem.item_group.toLowerCase() === 'part') || String(planItem.item_code || '').toUpperCase().startsWith('PART-')) ? 'Part' : (op.item_group || 'Assembly'),
+        item_type: (isPartPlan || (planItem.item_group && planItem.item_group.toLowerCase() === 'part') || String(planItem.item_code || '').toUpperCase().startsWith('PART-')) ? 'PART' : (planItem.source_type === 'SA' || (bomNo && bomNo !== plan.bom_no) ? 'SA' : (op.item_type || 'FG'))
       });
     }
   }
@@ -283,27 +316,31 @@ const getProductionPlanById = async (id) => {
     operations = storedOps;
   }
 
-  // Always append Shipment as the last operation if not already present
-  const hasShipment = operations.some(op => {
-    const name = String(op.operation_name || '').toLowerCase();
-    return name === 'shipment' || name === 'dispatch';
-  });
-  if (!hasShipment) {
-    operations.push({
-      id: 999999,
-      plan_id: id,
-      step_no: operations.length + 1,
-      operation_name: 'Shipment',
-      workstation: 'Dispatch',
-      process_type: 'In-House',
-      operation_type: 'In-House',
-      cycle_time_min: 0,
-      setup_time_min: 0,
-      hourly_rate: 0,
-      base_time: 0,
-      net_time: 0,
-      source_item: 'Main Item'
+  // Append Shipment only for Assembly plans (not for Part plans)
+  if (!isPartPlan) {
+    const hasShipment = operations.some(op => {
+      const name = String(op.operation_name || '').toLowerCase();
+      return name === 'shipment' || name === 'dispatch';
     });
+    if (!hasShipment) {
+      operations.push({
+        id: 999999,
+        plan_id: id,
+        step_no: operations.length + 1,
+        operation_name: 'Shipment',
+        workstation: 'Dispatch',
+        process_type: 'In-House',
+        operation_type: 'In-House',
+        cycle_time_min: 0,
+        setup_time_min: 0,
+        hourly_rate: 0,
+        base_time: 0,
+        net_time: 0,
+        source_item: 'Main Item',
+        item_group: 'Assembly',
+        item_type: 'FG'
+      });
+    }
   }
 
   plan.operations = operations;
@@ -2884,7 +2921,7 @@ const getBulkCreationPreview = async (salesOrderId) => {
 
   // Check existing production plan items for this sales order by sales_order_item_id and bom_no
   const [existingPlanItems] = await pool.query(
-    `SELECT ppi.sales_order_item_id, ppi.bom_no, ppi.item_code, pp.id as plan_id, pp.plan_code
+    `SELECT ppi.sales_order_item_id, ppi.bom_no, ppi.item_code, pp.id as plan_id, pp.plan_code, pp.sales_order_id
      FROM production_plans pp
      LEFT JOIN production_plan_items ppi ON ppi.plan_id = pp.id
      WHERE pp.sales_order_id IN (?) AND pp.status NOT IN ('CANCELLED', 'DELETED')`,
@@ -2898,7 +2935,11 @@ const getBulkCreationPreview = async (salesOrderId) => {
       existingItemIdMap.set(String(p.sales_order_item_id), p.plan_code);
     }
     if (p.bom_no) {
-      existingBomsMap.set(String(p.bom_no).trim().toLowerCase(), p.plan_code);
+      // Key = salesOrderId:bom_no → scoped to exact Sales Order, never globally by Drawing No. alone
+      existingBomsMap.set(
+        `${p.sales_order_id}:${String(p.bom_no).trim().toLowerCase()}`,
+        p.plan_code
+      );
     }
   });
 
@@ -2947,7 +2988,7 @@ const getBulkCreationPreview = async (salesOrderId) => {
     const drawingNo = group.drawingNo;
     const primaryItemId = group.itemIds[0];
 
-    // Check duplicate by sales_order_item_id or bom_no within this scoped sales order
+    // Check duplicate by sales_order_item_id or by (salesOrderId + bom_no) — never bom_no alone
     let existingCode = null;
     for (const itemId of group.itemIds) {
       if (itemId && existingItemIdMap.has(String(itemId))) {
@@ -2955,8 +2996,10 @@ const getBulkCreationPreview = async (salesOrderId) => {
         break;
       }
     }
-    if (!existingCode && existingBomsMap.has(drawingNo.toLowerCase())) {
-      existingCode = existingBomsMap.get(drawingNo.toLowerCase());
+    // Scoped lookup: only flag as existing if THIS sales order already has a plan for this drawing
+    const scopedBomKey = `${salesOrderId}:${drawingNo.toLowerCase()}`;
+    if (!existingCode && existingBomsMap.has(scopedBomKey)) {
+      existingCode = existingBomsMap.get(scopedBomKey);
     }
 
     let hasBomData = false;
@@ -3037,7 +3080,7 @@ const bulkCreateProductionPlans = async (payload, createdBy) => {
 
   // Check existing production plan items for this sales order by sales_order_item_id and bom_no
   const [existingPlanItems] = await pool.query(
-    `SELECT ppi.sales_order_item_id, ppi.bom_no, ppi.item_code, pp.id as plan_id, pp.plan_code
+    `SELECT ppi.sales_order_item_id, ppi.bom_no, ppi.item_code, pp.id as plan_id, pp.plan_code, pp.sales_order_id
      FROM production_plans pp
      LEFT JOIN production_plan_items ppi ON ppi.plan_id = pp.id
      WHERE pp.sales_order_id IN (?) AND pp.status NOT IN ('CANCELLED', 'DELETED')`,
@@ -3051,7 +3094,11 @@ const bulkCreateProductionPlans = async (payload, createdBy) => {
       existingItemIdMap.set(String(p.sales_order_item_id), p.plan_code);
     }
     if (p.bom_no) {
-      existingBomsMap.set(String(p.bom_no).trim().toLowerCase(), p.plan_code);
+      // Key = salesOrderId:bom_no → scoped to exact Sales Order, never globally by Drawing No. alone
+      existingBomsMap.set(
+        `${p.sales_order_id}:${String(p.bom_no).trim().toLowerCase()}`,
+        p.plan_code
+      );
     }
   });
 
@@ -3104,7 +3151,7 @@ const bulkCreateProductionPlans = async (payload, createdBy) => {
     const targetQuantity = parseFloat(group.quantity || 1);
     const primaryItemId = group.itemIds[0];
 
-    // 1. Check duplicate for THIS specific sales order
+    // 1. Check duplicate by sales_order_item_id or by (salesOrderId + bom_no) — never bom_no alone
     let existingCode = null;
     for (const itemId of group.itemIds) {
       if (itemId && existingItemIdMap.has(String(itemId))) {
@@ -3112,8 +3159,10 @@ const bulkCreateProductionPlans = async (payload, createdBy) => {
         break;
       }
     }
-    if (!existingCode && existingBomsMap.has(drawingNo.toLowerCase())) {
-      existingCode = existingBomsMap.get(drawingNo.toLowerCase());
+    // Scoped lookup: only flag as existing if THIS sales order already has a plan for this drawing
+    const scopedBomKey = `${salesOrderId}:${drawingNo.toLowerCase()}`;
+    if (!existingCode && existingBomsMap.has(scopedBomKey)) {
+      existingCode = existingBomsMap.get(scopedBomKey);
     }
 
     if (existingCode) {

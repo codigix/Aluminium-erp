@@ -5,6 +5,22 @@ const stockService = require('./stockService');
 const listWorkOrders = async () => {
   const [rows] = await pool.query(
     `SELECT wo.*, COALESCE(so.project_name, o_dir.project_name) as project_name, w.workstation_name, COALESCE(c.company_name, c_dir.company_name) as client_name,
+            COALESCE(
+              CASE WHEN cd.drawing_type IS NOT NULL AND cd.drawing_type != '' THEN cd.drawing_type END,
+              CASE WHEN soi.item_group IS NOT NULL AND soi.item_group != '' THEN soi.item_group END,
+              CASE WHEN soic.item_group IS NOT NULL AND soic.item_group != '' THEN soic.item_group END,
+              CASE WHEN sb.material_type IS NOT NULL AND sb.material_type != '' THEN sb.material_type END,
+              soi_item.item_group,
+              ''
+            ) as item_group,
+            COALESCE(
+              CASE WHEN cd.drawing_type IS NOT NULL AND cd.drawing_type != '' THEN cd.drawing_type END,
+              CASE WHEN soi.drawing_type IS NOT NULL AND soi.drawing_type != '' THEN soi.drawing_type END,
+              CASE WHEN soic.item_group IS NOT NULL AND soic.item_group != '' THEN soic.item_group END,
+              CASE WHEN sb.material_type IS NOT NULL AND sb.material_type != '' THEN sb.material_type END,
+              soi_item.drawing_type,
+              ''
+            ) as drawing_type,
             COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
             (SELECT COUNT(*) FROM job_cards WHERE work_order_id = wo.id) as total_job_cards,
             (SELECT COUNT(*) FROM job_cards WHERE work_order_id = wo.id AND status = 'COMPLETED') as completed_job_cards,
@@ -21,6 +37,14 @@ const listWorkOrders = async () => {
      LEFT JOIN order_items oi_fallback ON (wo_parent.item_code = oi_fallback.item_code OR wo_parent.bom_no = oi_fallback.drawing_no) AND oi_fallback.order_id = wo_parent.sales_order_id
      LEFT JOIN sales_order_items soi_source ON (wo.source_fg = soi_source.item_code OR wo.source_fg = soi_source.drawing_no) AND (soi_source.sales_order_id = wo.sales_order_id OR soi_source.sales_order_id IS NULL)
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN sales_order_items soi_item ON (soi.id IS NULL AND wo.item_code = soi_item.item_code)
+     LEFT JOIN stock_balance sb ON wo.item_code = sb.item_code
+     LEFT JOIN (
+       SELECT component_code, MAX(item_group) as item_group 
+       FROM sales_order_item_components 
+       GROUP BY component_code
+     ) soic ON wo.item_code = soic.component_code
+     LEFT JOIN customer_drawings cd ON wo.item_code = cd.drawing_no
      LEFT JOIN sales_orders so ON (
        (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
        (soi.id IS NULL AND soi_parent.id IS NOT NULL AND soi_parent.sales_order_id = so.id) OR
@@ -30,7 +54,7 @@ const listWorkOrders = async () => {
      LEFT JOIN orders o_dir ON wo.sales_order_id = o_dir.id AND o_dir.source_type = 'DIRECT' AND soi.id IS NULL AND soi_parent.id IS NULL
      LEFT JOIN companies c_dir ON o_dir.client_id = c_dir.id
      LEFT JOIN workstations w ON wo.workstation_id = w.id
-     ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC`
+     ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' OR wo.source_type = 'PART' THEN 0 ELSE 1 END ASC, wo.id ASC`
   );
   return rows;
 };
@@ -139,12 +163,16 @@ const createWorkOrdersFromPlan = async (planId) => {
       }
     }
 
-    // 2. Process Finished Goods SECOND
+    // 2. Process Finished Goods / Parts SECOND
     for (const item of items) {
-      const woId = await createWO(item, 'FG');
+      const isPartItem = Boolean(livePlanData?.is_part_plan) ||
+                         (item.item_group && item.item_group.toLowerCase() === 'part') ||
+                         (String(item.item_code || '').toUpperCase().startsWith('PART-'));
+      const woSourceType = isPartItem ? 'PART' : 'FG';
+      const woId = await createWO(item, woSourceType);
       if (woId) {
         createdWorkOrders.push(woId);
-        if (!parentWoId) parentWoId = woId; // Use first FG as parent for linking
+        if (!parentWoId && !isPartItem) parentWoId = woId; // Use first FG as parent for linking
       }
     }
 
@@ -659,6 +687,67 @@ const deleteWorkOrder = async (id) => {
   }
 };
 
+const deleteAllWorkOrders = async () => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Delete material issue items and material issues
+    try {
+      await connection.execute(`
+        DELETE mii FROM material_issue_items mii
+        JOIN material_issues mi ON mii.issue_id = mi.id
+      `);
+      await connection.execute('DELETE FROM material_issues');
+    } catch (err) {
+      // ignore if tables not present
+    }
+
+    // 2. Dissociate payments linked to job card quality logs to avoid FK constraint fails
+    try {
+      await connection.execute(`
+        UPDATE payments p
+        JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
+        SET p.job_card_quality_log_id = NULL
+      `);
+    } catch (err) {
+      // ignore
+    }
+
+    // 3. Clear outward challans job_card_id
+    try {
+      await connection.execute('UPDATE outward_challans SET job_card_id = NULL WHERE job_card_id IS NOT NULL');
+    } catch (err) {
+      // ignore
+    }
+
+    // 4. Delete child job cards & logs
+    await connection.execute('DELETE FROM job_card_time_logs');
+    await connection.execute('DELETE FROM job_card_quality_logs');
+    await connection.execute('DELETE FROM job_card_downtime_logs');
+    await connection.execute('DELETE FROM job_cards');
+
+    // 5. Delete all work orders
+    const [result] = await connection.execute('DELETE FROM work_orders');
+
+    // 6. Revert production plan items and production plans status to PENDING
+    try {
+      await connection.execute('UPDATE production_plan_items SET status = "PENDING"');
+      await connection.execute('UPDATE production_plans SET status = "PENDING" WHERE status = "IN_PROGRESS"');
+    } catch (err) {
+      // ignore
+    }
+
+    await connection.commit();
+    return { success: true, deletedCount: result.affectedRows };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const generateWoNumber = async (connection) => {
   const conn = connection || pool;
   const [rows] = await conn.query('SELECT COUNT(*) as count FROM work_orders');
@@ -674,6 +763,7 @@ module.exports = {
   getWorkOrderById,
   updateWorkOrderStatus,
   deleteWorkOrder,
+  deleteAllWorkOrders,
   generateWoNumber,
   getWorkOrderMaterialRequirements,
   updateMaterialConsumption

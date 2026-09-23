@@ -99,21 +99,26 @@ const CustomDataTable = ({
     return false;
   };
 
-  // Handle Select All
+  // Handle Select All — page-wise only (merge / remove current page IDs, preserve other pages)
   const handleSelectAll = (e) => {
     const selectableData = isRowSelectable ? paginatedData.filter(isRowSelectable) : paginatedData;
-    const allIds = selectableData.map(r => r[effectiveRowIdKey] !== undefined ? r[effectiveRowIdKey] : (r.id || r._id || r));
+    const pageIds = selectableData.map(r =>
+      r[effectiveRowIdKey] !== undefined ? r[effectiveRowIdKey] : (r.id || r._id || r)
+    );
     if (selectedRows instanceof Set) {
+      const next = new Set(selectedRows); // clone — preserve selections from other pages
       if (e.target.checked) {
-        onSelectionChange && onSelectionChange(new Set(allIds));
+        pageIds.forEach(id => next.add(id));    // merge current page IDs in
       } else {
-        onSelectionChange && onSelectionChange(new Set());
+        pageIds.forEach(id => next.delete(id)); // remove only current page IDs
       }
+      onSelectionChange && onSelectionChange(next);
     } else {
       if (e.target.checked) {
-        onSelectionChange && onSelectionChange(allIds);
+        const merged = Array.from(new Set([...selectedRows, ...pageIds]));
+        onSelectionChange && onSelectionChange(merged);
       } else {
-        onSelectionChange && onSelectionChange([]);
+        onSelectionChange && onSelectionChange(selectedRows.filter(id => !pageIds.includes(id)));
       }
     }
   };

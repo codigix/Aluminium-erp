@@ -16,6 +16,7 @@ router.get('/', authorize(['PROD_VIEW', 'QC_VIEW']), jobCardController.listJobCa
 router.get('/:id/details', authorize(['PROD_VIEW', 'QC_VIEW']), jobCardController.getJobCardDetails);
 router.post('/', authorize(['PROD_MANAGE']), jobCardController.createJobCard);
 router.put('/:id', authorize(['PROD_MANAGE']), jobCardController.updateJobCard);
+router.delete('/delete-all', authorize(['PROD_MANAGE']), jobCardController.deleteAllJobCards);
 router.delete('/:id', authorize(['PROD_MANAGE']), jobCardController.deleteJobCard);
 router.patch('/:id/progress', authorize(['PROD_MANAGE']), jobCardController.updateProgress);
 

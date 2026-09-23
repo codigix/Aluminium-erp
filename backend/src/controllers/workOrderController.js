@@ -72,6 +72,15 @@ const deleteWorkOrder = async (req, res) => {
   }
 };
 
+const deleteAllWorkOrders = async (req, res) => {
+  try {
+    const result = await workOrderService.deleteAllWorkOrders();
+    res.json({ message: 'All Work Orders deleted successfully', ...result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const getMaterialRequirements = async (req, res) => {
   try {
     const requirements = await workOrderService.getWorkOrderMaterialRequirements(req.params.id);
@@ -99,6 +108,7 @@ module.exports = {
   updateStatus,
   getNextWoNumber,
   deleteWorkOrder,
+  deleteAllWorkOrders,
   getMaterialRequirements,
   updateMaterialConsumption
 };

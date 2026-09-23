@@ -32,9 +32,25 @@ const listJobCards = async () => {
     `SELECT jc.id, jc.job_card_no, jc.work_order_id, jc.operation_id, COALESCE(jc.workstation_id, w.id) as workstation_id, jc.assigned_to, jc.planned_qty, jc.status, jc.execution_mode, jc.public_id,
             jc.sequence_no, jc.actual_start_date, jc.created_at,
             jc.start_time, jc.end_time, jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.rework_qty, jc.scrap_qty, jc.remarks, jc.vendor_id, jc.vendor_rate,
-            ROW_NUMBER() OVER (PARTITION BY COALESCE(wo.plan_id, wo.parent_wo_id, wo.id) ORDER BY CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC) as operation_sequence,
+            ROW_NUMBER() OVER (PARTITION BY COALESCE(wo.plan_id, wo.parent_wo_id, wo.id) ORDER BY CASE WHEN wo.source_type = 'SA' OR wo.source_type = 'PART' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC) as operation_sequence,
             wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             wo.plan_id, wo.sales_order_id, wo.parent_wo_id, wo.item_code, wo.sales_order_item_id,
+            COALESCE(
+              CASE WHEN cd.drawing_type IS NOT NULL AND cd.drawing_type != '' THEN cd.drawing_type END,
+              CASE WHEN soi.item_group IS NOT NULL AND soi.item_group != '' THEN soi.item_group END,
+              CASE WHEN soic.item_group IS NOT NULL AND soic.item_group != '' THEN soic.item_group END,
+              CASE WHEN sb.material_type IS NOT NULL AND sb.material_type != '' THEN sb.material_type END,
+              soi_item.item_group,
+              ''
+            ) as item_group,
+            COALESCE(
+              CASE WHEN cd.drawing_type IS NOT NULL AND cd.drawing_type != '' THEN cd.drawing_type END,
+              CASE WHEN soi.drawing_type IS NOT NULL AND soi.drawing_type != '' THEN soi.drawing_type END,
+              CASE WHEN soic.item_group IS NOT NULL AND soic.item_group != '' THEN soic.item_group END,
+              CASE WHEN sb.material_type IS NOT NULL AND sb.material_type != '' THEN sb.material_type END,
+              soi_item.drawing_type,
+              ''
+            ) as drawing_type,
             (SELECT status FROM material_requests WHERE plan_id = wo.plan_id ORDER BY id DESC LIMIT 1) as mr_status,
             COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
             COALESCE(soi.drawing_no, oi.drawing_no, soi_parent.drawing_no, oi_parent.drawing_no, wo.bom_no, wo_parent.bom_no, wo_parent.item_code, wo.item_code) as drawing_no,
@@ -69,6 +85,14 @@ const listJobCards = async () => {
      LEFT JOIN sales_order_items soi_fallback ON (wo_parent.item_code = soi_fallback.item_code OR wo_parent.bom_no = soi_fallback.drawing_no) AND soi_fallback.sales_order_id IS NULL
      LEFT JOIN order_items oi_fallback ON (wo_parent.item_code = oi_fallback.item_code OR wo_parent.bom_no = oi_fallback.drawing_no) AND oi_fallback.order_id = wo_parent.sales_order_id
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN sales_order_items soi_item ON (soi.id IS NULL AND wo.item_code = soi_item.item_code)
+     LEFT JOIN stock_balance sb ON wo.item_code = sb.item_code
+     LEFT JOIN (
+       SELECT component_code, MAX(item_group) as item_group 
+       FROM sales_order_item_components 
+       GROUP BY component_code
+     ) soic ON wo.item_code = soic.component_code
+     LEFT JOIN customer_drawings cd ON wo.item_code = cd.drawing_no
      LEFT JOIN sales_orders so ON (
        (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
        (soi.id IS NULL AND wo.sales_order_id = so.id)
@@ -81,7 +105,7 @@ const listJobCards = async () => {
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
      LEFT JOIN vendors v ON jc.vendor_id = v.id
-     ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC`
+     ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' OR wo.source_type = 'PART' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC`
   );
 
   // Batch load all child work orders for all job cards in 1 bulk query (eliminates N+1 loop queries)
@@ -2162,6 +2186,43 @@ const deleteJobCard = async (id) => {
   }
 };
 
+const deleteAllJobCards = async () => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Dissociate payments linked to job card quality logs to prevent foreign key constraint issues
+    await connection.execute(`
+      UPDATE payments p
+      JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
+      SET p.job_card_quality_log_id = NULL
+    `);
+
+    // 2. Delete logs
+    await connection.execute('DELETE FROM job_card_time_logs');
+    await connection.execute('DELETE FROM job_card_quality_logs');
+    await connection.execute('DELETE FROM job_card_downtime_logs');
+
+    // 3. Clear outward challans job_card_id if table exists
+    try {
+      await connection.execute('UPDATE outward_challans SET job_card_id = NULL WHERE job_card_id IS NOT NULL');
+    } catch (err) {
+      // ignore if column or table not present
+    }
+
+    // 4. Delete all job cards
+    const [result] = await connection.execute('DELETE FROM job_cards');
+
+    await connection.commit();
+    return { success: true, deletedCount: result.affectedRows };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const deleteTimeLog = async (logId) => {
   const [log] = await pool.query('SELECT job_card_id FROM job_card_time_logs WHERE id = ?', [logId]);
 
@@ -2530,6 +2591,7 @@ module.exports = {
   getJobCardById,
   updateJobCard,
   deleteJobCard,
+  deleteAllJobCards,
   getTimeLogs,
   addTimeLog,
   updateTimeLog,

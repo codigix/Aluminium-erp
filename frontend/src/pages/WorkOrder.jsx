@@ -25,6 +25,7 @@ const WorkOrder = () => {
   const [loading, setLoading] = useState(true);
   const [viewingWorkOrder, setViewingWorkOrder] = useState(null);
   const [woViewTab, setWoViewTab] = useState('foundation');
+  const [deletingAll, setDeletingAll] = useState(false);
 
   useEffect(() => {
     fetchWorkOrders();
@@ -58,7 +59,7 @@ const WorkOrder = () => {
   const sortedWorkOrders = React.useMemo(() => {
     const getSourcePriority = (type) => {
       const t = (type || '').toLowerCase();
-      if (t.includes('assembly') || t === 'sa') return 1;
+      if (t.includes('part') || t.includes('assembly') || t === 'sa') return 1;
       if (t.includes('finish') || t === 'fg') return 2;
       return 3;
     };
@@ -122,14 +123,31 @@ const WorkOrder = () => {
         const itemCodeUpper = (row.item_code || '').toUpperCase();
         const itemNameUpper = (row.item_name || '').toUpperCase();
         const valUpper = (val || '').toUpperCase();
+        const itemGroupUpper = (row.item_group || '').toUpperCase();
+        const drawingTypeUpper = (row.drawing_type || '').toUpperCase();
 
-        const isAssembly = valUpper === 'FG' ||
-                           valUpper === 'FINISHED GOOD' ||
-                           valUpper === 'FINISHED GOODS' ||
-                           itemCodeUpper.startsWith('ASSEMBLY-') ||
-                           (itemNameUpper.includes('ASSEMBLY') && !itemCodeUpper.startsWith('PART-'));
-
-        const isPart = !isAssembly;
+        let isPart = false;
+        if (
+          itemGroupUpper === 'PART' ||
+          drawingTypeUpper === 'PART' ||
+          valUpper === 'PART' ||
+          valUpper === 'SA' ||
+          valUpper === 'SUB ASSEMBLY' ||
+          valUpper === 'SUB-ASSEMBLY' ||
+          itemCodeUpper.startsWith('PART-')
+        ) {
+          isPart = true;
+        } else if (
+          valUpper === 'FG' ||
+          valUpper === 'FINISHED GOOD' ||
+          valUpper === 'FINISHED GOODS' ||
+          itemCodeUpper.startsWith('ASSEMBLY-') ||
+          (itemNameUpper.includes('ASSEMBLY') && !itemCodeUpper.startsWith('PART-'))
+        ) {
+          isPart = false;
+        } else {
+          isPart = !itemCodeUpper.startsWith('ASSEMBLY-');
+        }
 
         return (
           <span className={`text-[10px] font-semibold ${
@@ -266,6 +284,47 @@ const WorkOrder = () => {
     }
   };
 
+  const handleDeleteAllWorkOrders = async () => {
+    try {
+      const result = await Swal.fire({
+        title: 'Reset Queue?',
+        text: 'Are you sure you want to delete all Work Orders? This will also remove associated Job Cards and material issues, and cannot be undone.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e11d48',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, Delete All',
+        cancelButtonText: 'Cancel'
+      });
+
+      if (result.isConfirmed) {
+        setDeletingAll(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/work-orders/delete-all`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const resData = await response.json();
+          successToast(resData.message || 'All Work Orders deleted successfully');
+          await fetchWorkOrders();
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          errorToast(errData.error || errData.message || 'Failed to delete work orders');
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting work orders:', err);
+      errorToast('Failed to delete work orders');
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
   return (
     <div className="min-h-screen">
       {/* Header Section */}
@@ -280,6 +339,15 @@ const WorkOrder = () => {
               <div className="w-2 h-2 bg-emerald-500 rounded  animate-pulse"></div>
               <span className="text-xs   ">{workOrders.length} Orders Active</span>
             </div>
+            <button 
+              onClick={handleDeleteAllWorkOrders}
+              disabled={deletingAll || workOrders.length === 0}
+              className="flex items-center gap-2 p-2 text-rose-600 hover:bg-rose-50 rounded transition-all text-xs disabled:opacity-50"
+              title="Delete all Work Orders"
+            >
+              <Trash2 className={`w-4 h-4 ${deletingAll ? 'animate-spin' : ''}`} />
+              <span className="text-xs">{deletingAll ? 'Resetting...' : 'Reset Queue'}</span>
+            </button>
             <button 
               onClick={handleCreateNew}
               className="flex items-center gap-2  p-2  bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all  hover:shadow-indigo-100"

@@ -4452,9 +4452,19 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                                   {(() => {
                                     const itemCodeStr = (op.source_item || op.itemCode || '').toUpperCase();
                                     const itemType = (op.item_type || '').toUpperCase();
+                                    const itemGroup = (op.item_group || '').toUpperCase();
+                                    const isParentPartPlan = Boolean(selectedPlanConfig?.is_part_plan);
 
                                     let isPart = false;
-                                    if (itemType === 'SA' || itemType === 'SUB ASSEMBLY' || itemType === 'SUB-ASSEMBLY' || itemCodeStr.startsWith('PART-')) {
+                                    if (
+                                      itemGroup === 'PART' ||
+                                      itemType === 'PART' ||
+                                      itemType === 'SA' ||
+                                      itemType === 'SUB ASSEMBLY' ||
+                                      itemType === 'SUB-ASSEMBLY' ||
+                                      itemCodeStr.startsWith('PART-') ||
+                                      isParentPartPlan
+                                    ) {
                                       isPart = true;
                                     }
 

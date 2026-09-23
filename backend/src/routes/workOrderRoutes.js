@@ -13,6 +13,7 @@ router.get('/:id', authorize(['PROD_VIEW']), workOrderController.getWorkOrderByI
 router.get('/:id/material-requirements', authorize(['PROD_VIEW']), workOrderController.getMaterialRequirements);
 router.post('/:id/material-consumption', authorize(['PROD_MANAGE']), workOrderController.updateMaterialConsumption);
 router.patch('/:id/status', authorize(['PROD_MANAGE']), workOrderController.updateStatus);
+router.delete('/delete-all', authorize(['PROD_MANAGE']), workOrderController.deleteAllWorkOrders);
 router.delete('/:id', authorize(['PROD_MANAGE']), workOrderController.deleteWorkOrder);
 
 module.exports = router;
