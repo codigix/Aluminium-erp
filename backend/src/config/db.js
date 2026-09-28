@@ -2853,6 +2853,7 @@ const ensureProcurementRfqTables = async () => {
         material_type VARCHAR(100),
         drawing_no VARCHAR(100),
         quantity DECIMAL(14,3),
+        required_weight DECIMAL(14,3) DEFAULT 0,
         planned_qty DECIMAL(14,3) DEFAULT 0,
         uom VARCHAR(20),
         length DECIMAL(12, 4) DEFAULT 0,
@@ -2875,6 +2876,10 @@ const ensureProcurementRfqTables = async () => {
     // Update precision if needed
     await connection.query("ALTER TABLE procurement_rfq_items MODIFY COLUMN quantity DECIMAL(14, 3)");
     await connection.query("ALTER TABLE procurement_rfq_items MODIFY COLUMN planned_qty DECIMAL(14, 3)");
+
+    if (!existing.has('required_weight')) {
+      await connection.query("ALTER TABLE procurement_rfq_items ADD COLUMN required_weight DECIMAL(14, 3) DEFAULT 0 AFTER quantity");
+    }
 
     if (!existing.has('planned_qty')) {
       await connection.query("ALTER TABLE procurement_rfq_items ADD COLUMN planned_qty DECIMAL(14, 3) DEFAULT 0 AFTER quantity");

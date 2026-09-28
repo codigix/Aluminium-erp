@@ -1133,6 +1133,7 @@ model procurement_rfq_items {
   material_type                      String?                              @db.VarChar(100)
   drawing_no                         String?                              @db.VarChar(100)
   quantity                           Decimal?                             @db.Decimal(14, 3)
+  required_weight                    Decimal?                             @default(0.000) @db.Decimal(14, 3)
   planned_qty                        Decimal?                             @db.Decimal(14, 3)
   uom                                String?                              @db.VarChar(20)
   created_at                         DateTime?                            @default(now()) @db.Timestamp(0)
