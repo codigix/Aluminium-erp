@@ -1392,6 +1392,70 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       };
     });
 
+    // Identify Bought-Out items from components
+    const isBoughtOut = (c) => {
+      const code = String(c.itemCode || c.item_code || c.component_code || '').toUpperCase().trim();
+      // Never treat manufactured parts/assemblies as bought out
+      if (
+        code.startsWith('PART-') ||
+        code.startsWith('ASSEMBLY-') ||
+        code.startsWith('SA-') ||
+        code.startsWith('FG-')
+      ) {
+        return false;
+      }
+
+      const group = String(c.item_group || c.itemGroup || c.group || '').toUpperCase().trim();
+      const type = String(c.item_type || c.itemType || c.type || '').toUpperCase().trim();
+      const matType = String(c.material_type || c.materialType || '').toUpperCase().trim();
+      const desc = String(c.description || c.item_description || c.item_name || c.material_name || '').toUpperCase().trim();
+
+      const isHardwarePattern = /(SCREW|WASHER|NUT|CAP NUT|O-RING|POWER WASHER|SPRING WASHER|GROWER WASHER|CAP GPN|CAP|BEARING|STUD|CLAMP|PLUG|BOLT|CROWN RING|RING|SEAL|GASKET|PIN|RIVET|CIRCLIP)/i.test(desc);
+
+      return (
+        code.startsWith('BO-') || code.startsWith('BO_') || code.startsWith('BO:') ||
+        group.includes('BOUGHT') || group === 'BO' ||
+        type.includes('BOUGHT') || type === 'BO' ||
+        matType.includes('BOUGHT') || matType === 'BO' ||
+        isHardwarePattern
+      );
+    };
+
+    const targetMultiplier = parseFloat(newPlan.targetQuantity || 1) || 1;
+    const boughtOutMaterials = rawComponents.filter(isBoughtOut).map(c => {
+      const code = c.itemCode || c.item_code || c.component_code;
+      const baseQty = parseFloat(c.quantity || c.qty || c.bomQty || 0) || 1;
+      
+      const designQty = isViewing
+        ? parseFloat(c.design_qty || c.designQty || (baseQty * targetMultiplier))
+        : parseFloat(c.designQty || (baseQty * targetMultiplier));
+
+      const plannedQty = isViewing
+        ? parseFloat(c.required_qty || c.plannedQty || (baseQty * targetMultiplier))
+        : parseFloat(c.plannedQty || (baseQty * targetMultiplier));
+
+      const matName = c.description || c.item_description || c.item_name || c.material_name || code || 'Bought-Out Item';
+
+      return {
+        item_code: code,
+        material_name: matName,
+        description: matName,
+        design_qty: designQty,
+        totalDesignQty: designQty,
+        required_qty: plannedQty,
+        totalPlannedQty: plannedQty,
+        uom: c.unit || c.uom || 'Nos',
+        unit: c.unit || c.uom || 'Nos',
+        warehouse: c.targetWarehouse || c.target_warehouse || c.warehouse || 'Store - NC',
+        material_category: 'CORE',
+        bom_ref: c.bomNo || c.bom_no || newPlan.items?.[0]?.bom_no || 'BOM-REF',
+        bom_no: c.bomNo || c.bom_no || newPlan.items?.[0]?.bom_no || 'BOM-REF',
+        status: isViewing ? (c.status || 'SUBMITTED') : '--',
+        is_bought_out: true,
+        source_fg: c.source_fg || (newPlan.items?.[0]?.description || newPlan.items?.[0]?.itemCode || '-')
+      };
+    });
+
     // 4. Combine into final Material list
     let materialsToDisplay = isViewing ? (newPlan.materials || []).map(m => ({
       ...m,
@@ -1403,6 +1467,23 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       const codeMatch = (m) => (m.item_code || m.itemCode) === cam.item_code;
       if (!materialsToDisplay.some(codeMatch)) {
         materialsToDisplay.push(cam);
+      }
+    });
+
+    // Merge Bought-Out items into materials if not already present
+    boughtOutMaterials.forEach(bomMat => {
+      const alreadyPresent = materialsToDisplay.some(m => {
+        const mCode = String(m.item_code || m.itemCode || m.material_code || '').trim().toLowerCase();
+        const bomCode = String(bomMat.item_code || '').trim().toLowerCase();
+        if (mCode && bomCode && mCode === bomCode) return true;
+
+        const mName = String(m.material_name || m.description || '').trim().toLowerCase();
+        const bomName = String(bomMat.material_name || '').trim().toLowerCase();
+        return mName && bomName && mName === bomName;
+      });
+
+      if (!alreadyPresent) {
+        materialsToDisplay.push(bomMat);
       }
     });
 
@@ -2260,7 +2341,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                               <div className=" text-slate-800 text-xs ">{mat.description || mat.material_name}</div>
                               <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
                                 {renderDimensions(mat) || (
-                                  <span>{mat.description || mat.item_code || mat.itemCode || 'Direct Material'}</span>
+                                  <span>{mat.item_code || mat.itemCode || mat.description || 'Direct Material'}</span>
                                 )}
                               </div>
                             </td>
@@ -2284,15 +2365,17 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                               <div className="text-xs text-slate-600 ">{mat.warehouse || 'Store - NC'}</div>
                             </td>
                             <td className="p-2 ">
-                              <span className="text-xs text-slate-400 ">{isViewing ? mat.bom_ref : mat.bom_no}</span>
+                              <span className="text-xs text-slate-400 ">
+                                {(isViewing ? (mat.bom_ref || mat.bom_no) : (mat.bom_no || mat.bom_ref)) || '-'}
+                              </span>
                             </td>
                             <td className="p-2  text-center">
                               <span className={`p-1 rounded text-xs   border
                             ${mat.status === 'FULFILLED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                  mat.status === 'SUBMITTED' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                                  (mat.status === 'SUBMITTED' || isViewing) ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
                                     'bg-slate-100 text-slate-500 border-slate-200'}`}
                               >
-                                {isViewing ? (mat.status === 'FULFILLED' ? '✅ FULFILLED' : mat.status) : '--'}
+                                {isViewing ? (mat.status === 'FULFILLED' ? '✅ FULFILLED' : (mat.status || 'SUBMITTED')) : '--'}
                               </span>
                             </td>
                           </tr>
@@ -2579,7 +2662,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           requiredQty: m.totalPlannedQty || m.required_qty || 0,
           bomRef: m.bom_ref || m.bom_no || null,
           sourceAssembly: m.source_assembly || null,
-          category: m.material_category || null
+          category: m.material_category || 'CORE',
+          material_category: m.material_category || 'CORE',
+          materialCategory: m.material_category || 'CORE'
         })),
         operations: operationsToDisplay.map((op, idx) => ({
           ...op,

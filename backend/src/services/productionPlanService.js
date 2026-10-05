@@ -184,8 +184,20 @@ const getProductionPlanById = async (id) => {
 
   // 3. Fetch Sub-Assemblies
   const [subAssemblies] = await pool.query(
-    'SELECT * FROM production_plan_sub_assemblies WHERE plan_id = ?',
-    [id]
+    `SELECT ppsa.*, 
+            COALESCE(
+              MAX(soc.item_group), 
+              (SELECT item_group FROM items WHERE item_code = ppsa.item_code LIMIT 1),
+              ''
+            ) as item_group
+     FROM production_plan_sub_assemblies ppsa
+     LEFT JOIN sales_order_item_components soc ON (
+       (soc.component_code = ppsa.item_code OR soc.item_code = ppsa.item_code)
+       AND soc.sales_order_item_id IN (SELECT sales_order_item_id FROM production_plan_items WHERE plan_id = ?)
+     )
+     WHERE ppsa.plan_id = ?
+     GROUP BY ppsa.id`,
+    [id, id]
   );
   plan.subAssemblies = subAssemblies;
 
@@ -559,7 +571,7 @@ const createProductionPlan = async (planData, createdBy) => {
             mat.warehouse || null,
             mat.bomRef || mat.bom_ref || null,
             mat.sourceAssembly || mat.source_assembly || null,
-            mat.category || mat.material_category || (mat.sourceAssembly || mat.source_assembly ? 'EXPLODED' : 'CORE'),
+            mat.materialCategory || mat.category || mat.material_category || (mat.sourceAssembly || mat.source_assembly ? 'EXPLODED' : 'CORE'),
             mat.total_wt || 0,
             mat.is_kg_material ? 1 : 0,
             mat.status || '--',
@@ -1986,6 +1998,8 @@ const getItemBOMDetails = async (salesOrderItemId, drawingNoHint = null, itemCod
         if (existing) {
           existing.required_qty += reqQty;
           existing.totalRequiredQty += reqQty;
+          existing.totalDesignQty = (existing.totalDesignQty || 0) + baseQtyPerFG;
+          existing.design_qty = (existing.design_qty || 0) + baseQtyPerFG;
           
           // Merge BOM reference
           const newRef = comp.bom_no || comp.bom_ref || compDrawing;
@@ -2005,13 +2019,16 @@ const getItemBOMDetails = async (salesOrderItemId, drawingNoHint = null, itemCod
             material_category,
             required_qty: reqQty,
             totalRequiredQty: reqQty,
+            design_qty: baseQtyPerFG,
+            totalDesignQty: baseQtyPerFG,
             source_assembly,
             rate: boRate,
             bom_ref: comp.bom_no || comp.bom_ref || compDrawing || 'BOM-REF',
             total_wt: 0,
             uom: boUom,
             unit: boUom,
-            is_kg_material: false
+            is_kg_material: false,
+            is_bought_out: true
           });
         }
 
@@ -2022,13 +2039,17 @@ const getItemBOMDetails = async (salesOrderItemId, drawingNoHint = null, itemCod
           material_code: matCode,
           item_code: matCode,
           qty_per_pc: baseQtyPerFG,
+          design_qty: baseQtyPerFG,
+          totalDesignQty: baseQtyPerFG,
+          required_qty: reqQty,
           weight_per_unit: comp.weight_per_unit || 0,
           scrap_percent: comp.scrap_percent || 0,
           item_group: comp.item_group || 'BOUGHT_OUT',
           uom: boUom,
           unit: boUom,
           rate: boRate,
-          is_kg_material: false
+          is_kg_material: false,
+          is_bought_out: true
         });
       }
 
@@ -2082,7 +2103,7 @@ const getItemBOMDetails = async (salesOrderItemId, drawingNoHint = null, itemCod
           item_code: m.actual_item_code || m.material_code || m.item_code || m.itemCode || null,
           material_name: m.material_name || m.name || null,
           qty_per_pc: m.qty_per_pc || 0,
-          required_qty: baseQtyPerFG * qtyMultiplier,
+          required_qty: m.is_bought_out ? m.required_qty : (baseQtyPerFG * qtyMultiplier),
           total_wt: total_wt,
           is_kg_material: isKgMaterial
         };
