@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const mustache = require('mustache');
+const { getCompanyLogoBase64 } = require('./logoResolver');
 
 const generateJobCardQcPdf = async (data) => {
   const { log } = data;
@@ -397,7 +398,7 @@ const generateJobCardQcPdf = async (data) => {
     }
 
     const renderData = {
-      logoPath: 'file://' + path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png'),
+      logoPath: getCompanyLogoBase64(),
       reportNo: `QC-${new Date(log.check_date || Date.now()).getFullYear()}-${String(log.id).padStart(4, '0')}`,
       reportDate: formatDate(log.check_date),
       jobCardNo: log.job_card_no,

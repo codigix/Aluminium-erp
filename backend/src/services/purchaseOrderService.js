@@ -1922,29 +1922,9 @@ const generatePurchaseOrderPDF = async (poId) => {
 
   const fs = require('fs');
   const path = require('path');
-  let logoBase64 = null;
+  const { getCompanyLogoBase64 } = require('../utils/logoResolver');
+  const logoBase64 = getCompanyLogoBase64();
   let signatureBase64 = null;
-
-  if (activeCompany && activeCompany.company_logo) {
-    const logoPath = path.join(__dirname, '../../', activeCompany.company_logo);
-    if (fs.existsSync(logoPath)) {
-      logoBase64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
-    }
-  }
-  if (!logoBase64) {
-    const defaultLogoPaths = [
-      path.join(__dirname, '../../../frontend/src/assets/sp_techpioneer_logo.png'),
-      path.join(__dirname, '../../../frontend/src/assets/sp_techpioneer_logo.jpg'),
-      path.join(__dirname, '../../uploads/sp_techpioneer_logo.png'),
-      path.join(__dirname, '../../uploads/sp_techpioneer_logo.jpg')
-    ];
-    for (const dlp of defaultLogoPaths) {
-      if (fs.existsSync(dlp)) {
-        logoBase64 = `data:image/png;base64,${fs.readFileSync(dlp).toString('base64')}`;
-        break;
-      }
-    }
-  }
   if (activeCompany && activeCompany.authorized_signature) {
     const signaturePath = path.join(__dirname, '../../', activeCompany.authorized_signature);
     if (fs.existsSync(signaturePath)) {

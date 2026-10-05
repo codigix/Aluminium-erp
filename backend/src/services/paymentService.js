@@ -4,6 +4,7 @@ const mustache = require('mustache');
 const path = require('path');
 const fs = require('fs');
 const emailService = require('./emailService');
+const { getCompanyLogoBase64 } = require('../utils/logoResolver');
 
 const generatePaymentVoucherNo = async () => {
   const [rows] = await pool.query(
@@ -1153,19 +1154,7 @@ const generateVendorInvoicePDF = async (id, type) => {
       });
     }
 
-    let logoBase64 = null;
-    if (activeCompany && activeCompany.company_logo) {
-      const uploadedLogoPath = path.join(__dirname, '../../', activeCompany.company_logo);
-      if (fs.existsSync(uploadedLogoPath)) {
-        logoBase64 = `data:image/png;base64,${fs.readFileSync(uploadedLogoPath).toString('base64')}`;
-      }
-    }
-    if (!logoBase64) {
-      const logoPath = path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png');
-      if (fs.existsSync(logoPath)) {
-        logoBase64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
-      }
-    }
+    let logoBase64 = getCompanyLogoBase64();
 
     // Data packet for vendor-tax-invoice.html template
     const templateData = {

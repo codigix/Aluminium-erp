@@ -110,15 +110,9 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
 
   const fs = require('fs');
   const path = require('path');
-  let logoBase64 = null;
+  const { getCompanyLogoBase64 } = require('./logoResolver');
+  const logoBase64 = getCompanyLogoBase64();
   let signatureBase64 = null;
-
-  if (hostCompany && hostCompany.company_logo) {
-    const logoPath = path.join(__dirname, '../../', hostCompany.company_logo);
-    if (fs.existsSync(logoPath)) {
-      logoBase64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
-    }
-  }
 
   if (hostCompany && hostCompany.authorized_signature) {
     const signaturePath = path.join(__dirname, '../../', hostCompany.authorized_signature);
