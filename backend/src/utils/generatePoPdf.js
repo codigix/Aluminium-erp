@@ -192,11 +192,15 @@ const generatePoPdf = async (data) => {
       let parentDrawingNo = poDetail?.drawing_no || '';
       if (parentDrawingNo) {
         const isParentDwgPattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(parentDrawingNo);
-        if (isParentDwgPattern) {
+        if (isParentDwgPattern || parentDrawingNo === 'Merged Drawings') {
           parentDrawingNo = '';
         }
       }
-      const rawDrawingNo = parentDrawingNo || item.drawing_no || item.drawingNo || '';
+      const itemDwg = item.drawing_no || item.drawingNo || '';
+      const isItemDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(itemDwg);
+      const rawDrawingNo = (itemDwg && itemDwg !== itemCode && !isItemDwgCodePattern && itemDwg !== '—')
+        ? itemDwg
+        : (parentDrawingNo || '');
       const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(rawDrawingNo);
       const cleanDrawingNo = (rawDrawingNo && rawDrawingNo !== itemCode && !isItemCodePattern && rawDrawingNo !== '—') ? rawDrawingNo : null;
 

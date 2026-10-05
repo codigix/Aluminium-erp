@@ -937,7 +937,7 @@ const getParentDrawingNumber = async (connection, poHeader) => {
   if (poHeader.quotation_id) {
     try {
       const [qRows] = await conn.query(
-        `SELECT q.sales_order_id, q.mr_id,
+        `SELECT q.sales_order_id, q.mr_id, q.is_merged,
                 (SELECT pp.bom_no FROM production_plans pp JOIN material_requests mr ON mr.plan_id = pp.id WHERE mr.id = q.mr_id LIMIT 1) as plan_bom_no,
                 (SELECT pp.id FROM production_plans pp JOIN material_requests mr ON mr.plan_id = pp.id WHERE mr.id = q.mr_id LIMIT 1) as plan_id,
                 (SELECT soi.drawing_no FROM sales_order_items soi WHERE soi.sales_order_id = q.sales_order_id LIMIT 1) as so_drawing_no
@@ -946,6 +946,9 @@ const getParentDrawingNumber = async (connection, poHeader) => {
       );
       if (qRows.length > 0) {
         const q = qRows[0];
+        if (q.is_merged) {
+          return null;
+        }
         if (q.plan_id) {
           const [ppiRows] = await conn.query(
             `SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) as drawing_no
@@ -1403,13 +1406,13 @@ const getPurchaseOrderById = async (poId) => {
     return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
   });
 
-  filteredItems.forEach(item => {
-    item.drawing_no = parentDrawingNo || item.drawing_no;
-  });
-
+  const uniqueDwgNos = new Set();
   for (const item of filteredItems) {
-    const resolvedDwg = await getItemParentDrawingNumber(pool, item);
-    item.drawing_no = resolvedDwg || parentDrawingNo || item.drawing_no;
+    const isCurrentValid = item.drawing_no && !/^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no) && item.drawing_no !== '—';
+    if (!isCurrentValid) {
+      const resolvedDwg = await getItemParentDrawingNumber(pool, item);
+      item.drawing_no = resolvedDwg || parentDrawingNo || item.drawing_no;
+    }
 
     if (item.drawing_no) {
       const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no);
@@ -1419,6 +1422,15 @@ const getPurchaseOrderById = async (poId) => {
     } else {
       item.drawing_no = '—';
     }
+
+    if (item.drawing_no && item.drawing_no !== '—') {
+      uniqueDwgNos.add(item.drawing_no);
+    }
+  }
+
+  if (po.is_merged === 1 || po.is_merged === true || uniqueDwgNos.size > 1) {
+    po.drawing_no = 'Merged Drawings';
+    po.finished_good = `${uniqueDwgNos.size} Drawings`;
   }
 
   // Use the total_amount stored in po if available, otherwise calculate from filtered items
@@ -2638,19 +2650,20 @@ const generatePurchaseOrderPDF = async (poId) => {
       const designQty = parseFloat(i.planned_qty || i.design_qty || (isBoughtOutItem ? i.quantity : 0) || 0);
       const requiredQty = isBoughtOutItem ? 0 : parseFloat(i.quantity || i.required_weight || 0);
 
-      let resolvedDrawingNo = await getItemParentDrawingNumber(pool, i);
+      const isItemDwgValid = i.drawing_no && !/^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(i.drawing_no) && i.drawing_no !== 'Merged Drawings' && i.drawing_no !== '—';
+      let resolvedDrawingNo = isItemDwgValid ? i.drawing_no : (await getItemParentDrawingNumber(pool, i));
       if (resolvedDrawingNo) {
         const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(resolvedDrawingNo);
-        if (isItemCodePattern) {
+        if (isItemCodePattern || resolvedDrawingNo === 'Merged Drawings') {
           resolvedDrawingNo = null;
         }
       }
       if (!resolvedDrawingNo) {
-        resolvedDrawingNo = po.drawing_no || i.drawing_no;
+        resolvedDrawingNo = (po.drawing_no !== 'Merged Drawings' ? po.drawing_no : null) || i.drawing_no;
       }
 
-      // If the drawing number matches the item code or is a fallback dash/empty, set it to null so it doesn't print
-      if (resolvedDrawingNo && (resolvedDrawingNo === i.item_code || resolvedDrawingNo === '—' || resolvedDrawingNo.trim() === '')) {
+      // If the drawing number matches the item code or is a fallback dash/empty or Merged Drawings, set it to null so it doesn't print
+      if (resolvedDrawingNo && (resolvedDrawingNo === i.item_code || resolvedDrawingNo === '—' || resolvedDrawingNo === 'Merged Drawings' || resolvedDrawingNo.trim() === '')) {
         resolvedDrawingNo = null;
       }
 

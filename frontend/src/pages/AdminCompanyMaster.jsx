@@ -107,8 +107,15 @@ const AdminCompanyMaster = () => {
     }
   };
 
+  // Close and Reset Modal Form
+  const handleCloseModal = () => {
+    setShowModal(false);
+    resetForm();
+  };
+
   // Reset Form
   const resetForm = () => {
+    setShowModal(false);
     setFormData({
       companyName: '',
       companyAddress: '',
@@ -189,8 +196,7 @@ const AdminCompanyMaster = () => {
       }
 
       successToast(isEditing ? 'Company master updated successfully' : 'Company master created successfully');
-      setShowModal(false);
-      resetForm();
+      handleCloseModal();
       fetchCompanies();
     } catch (error) {
       errorToast(error.message);
@@ -564,7 +570,7 @@ const AdminCompanyMaster = () => {
       {/* Add / Edit / View Modal */}
       <Modal
         isOpen={showModal}
-        onClose={resetForm}
+        onClose={handleCloseModal}
         title={viewOnly ? 'View Company Profile' : isEditing ? 'Edit Host Company' : 'Add Host Company'}
         size="4xl"
       >
@@ -851,7 +857,7 @@ const AdminCompanyMaster = () => {
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => { setShowModal(false); resetForm(); }}
+              onClick={handleCloseModal}
               className="p-2 border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-all font-semibold"
             >
               {viewOnly ? 'Close' : 'Cancel'}

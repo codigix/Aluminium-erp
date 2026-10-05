@@ -515,6 +515,7 @@ const getQuotationById = async (quotationId) => {
               SELECT cd.description 
               FROM customer_drawings cd 
               WHERE cd.drawing_no = COALESCE(
+                qi.drawing_no,
                 (
                   SELECT ppm.bom_ref 
                   FROM production_plan_materials ppm
@@ -688,12 +689,15 @@ const getQuotationById = async (quotationId) => {
   );
 
   const quote = rows[0];
-  if (quote && quote.drawing_no) {
+  if (!quote?.is_merged && quote && quote.drawing_no) {
     const parentDrawingNo = quote.drawing_no;
     const isParentDwgPattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(parentDrawingNo);
     if (!isParentDwgPattern) {
       items.forEach(item => {
-        item.drawing_no = parentDrawingNo;
+        const itemNeedsDrawing = !item.drawing_no || /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no);
+        if (itemNeedsDrawing) {
+          item.drawing_no = parentDrawingNo;
+        }
       });
     }
   }
@@ -2204,6 +2208,15 @@ const mergeQuotations = async (payload) => {
 
     const firstQuote = sourceQuotes[0];
 
+    // Check if all source quotes share identical sales_order_id, mr_id, or rfq_id
+    const distinctSoIds = [...new Set(sourceQuotes.map(q => q.sales_order_id).filter(Boolean))];
+    const distinctMrIds = [...new Set(sourceQuotes.map(q => q.mr_id).filter(Boolean))];
+    const distinctRfqIds = [...new Set(sourceQuotes.map(q => q.rfq_id).filter(Boolean))];
+
+    const mergedSalesOrderId = distinctSoIds.length === 1 ? distinctSoIds[0] : null;
+    const mergedMrId = distinctMrIds.length === 1 ? distinctMrIds[0] : null;
+    const mergedRfqId = distinctRfqIds.length === 1 ? distinctRfqIds[0] : null;
+
     // 4. Insert new Quotation header
     // Final result MUST be a RECEIVED quote with is_merged = 1
     const defaultNotes = notes || `Merged from: ${sourceQuotes.map(q => q.quote_number).join(', ')}`;
@@ -2216,9 +2229,9 @@ const mergeQuotations = async (payload) => {
         newQuoteNumber,
         newQuoteNumber,
         firstVendorId,
-        distinctClients.length === 1 ? (firstQuote.sales_order_id || null) : null,
-        distinctClients.length === 1 ? (firstQuote.mr_id || null) : null,
-        distinctClients.length === 1 ? (firstQuote.rfq_id || null) : null,
+        mergedSalesOrderId,
+        mergedMrId,
+        mergedRfqId,
         consolidatedProjectName,
         mergedClientName,
         defaultNotes,
