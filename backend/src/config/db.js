@@ -403,6 +403,25 @@ const ensureQuotationItemColumns = async () => {
   }
 };
 
+const ensureItemsColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [cols] = await connection.query('SHOW COLUMNS FROM items');
+    const existing = new Set(cols.map(c => c.Field));
+    if (!existing.has('hsn_code')) {
+      await connection.query('ALTER TABLE items ADD COLUMN hsn_code VARCHAR(50) NULL AFTER item_group');
+      console.log('Items table hsn_code column synchronized');
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Items column sync failed:', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensurePoReceiptItemTable = async () => {
   let connection;
   try {
@@ -3066,6 +3085,7 @@ const bootstrapDatabase = async () => {
   await ensurePurchaseOrderQuotationNullable();
   await ensurePurchaseOrderVendorNullable();
   await ensureQuotationItemColumns();
+  await ensureItemsColumns();
   await ensurePoReceiptItemTable();
   await ensurePoReceiptColumns();
   await ensureGrnColumns();

@@ -1070,6 +1070,7 @@ const downloadQuotationPDF = async (req, res, next) => {
       return {
         id: q.id,
         item_code: q.item_code || null,
+        hsn_code: q.hsn_code || null,
         drawing_no: q.effective_drawing_no || '—',
         description: q.effective_description || '',
         quantity: q.item_qty || 1,
