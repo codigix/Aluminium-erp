@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const pool = require('../config/db');
 const bomService = require('./bomService');
+const { normalizeDrawingType } = require('../utils/excelDrawingParser');
 
 const getAllDrawings = async () => {
   const [rows] = await pool.query(
@@ -561,9 +562,14 @@ const updateDrawing = async (id, data) => {
     const updates = [];
     const params = [];
 
+    let normDrawingType = undefined;
     if (description !== undefined) { updates.push('description = ?'); params.push(description); }
     if (revisionNo !== undefined) { updates.push('revision = ?'); params.push(revisionNo); }
-    if (drawing_type !== undefined) { updates.push('drawing_type = ?'); params.push(drawing_type); }
+    if (drawing_type !== undefined) { 
+      normDrawingType = normalizeDrawingType(drawing_type, description);
+      updates.push('drawing_type = ?'); 
+      params.push(normDrawingType); 
+    }
     if (drawingPdf !== undefined) { updates.push('file_path = ?'); params.push(drawingPdf); }
     if (fileType !== undefined) { updates.push('file_type = ?'); params.push(fileType); }
     if (clientName !== undefined) { updates.push('client_name = ?'); params.push(clientName); }
@@ -613,7 +619,11 @@ const updateDrawing = async (id, data) => {
         if (drawingNo !== undefined) { itemUpdates.push('drawing_no = ?'); itemParams.push(drawingNo); }
         if (revisionNo !== undefined) { itemUpdates.push('revision_no = ?'); itemParams.push(revisionNo); }
         if (description !== undefined && item.bom_id === null) { itemUpdates.push('description = ?'); itemParams.push(description); }
-        if (drawing_type !== undefined) { itemUpdates.push('drawing_type = ?'); itemParams.push(drawing_type); }
+        if (normDrawingType !== undefined) { 
+          itemUpdates.push('drawing_type = ?'); itemParams.push(normDrawingType);
+          itemUpdates.push('item_type = ?'); itemParams.push(normDrawingType);
+          itemUpdates.push('item_group = ?'); itemParams.push(normDrawingType);
+        }
         if (drawingPdf !== undefined && drawingPdf !== null) { itemUpdates.push('drawing_pdf = ?'); itemParams.push(drawingPdf); }
         if (qty !== undefined && item.bom_id === null) { itemUpdates.push('quantity = ?'); itemParams.push(qty); }
         if (deliveryDate !== undefined) { itemUpdates.push('delivery_date = ?'); itemParams.push(deliveryDate || null); }
@@ -730,10 +740,16 @@ const updateItemDrawing = async (itemId, data) => {
     const updates = [];
     const params = [];
 
+    let normItemDrawingType = undefined;
     if (drawingNo !== undefined) { updates.push('drawing_no = ?'); params.push(drawingNo); }
     if (revisionNo !== undefined) { updates.push('revision_no = ?'); params.push(revisionNo); }
     if (description !== undefined) { updates.push('description = ?'); params.push(description); }
-    if (drawing_type !== undefined) { updates.push('drawing_type = ?'); params.push(drawing_type); }
+    if (drawing_type !== undefined) { 
+      normItemDrawingType = normalizeDrawingType(drawing_type, description);
+      updates.push('drawing_type = ?'); params.push(normItemDrawingType);
+      updates.push('item_type = ?'); params.push(normItemDrawingType);
+      updates.push('item_group = ?'); params.push(normItemDrawingType);
+    }
     if (drawingPdf !== undefined && drawingPdf !== null) { updates.push('drawing_pdf = ?'); params.push(drawingPdf); }
 
     if (updates.length > 0) {
@@ -751,7 +767,7 @@ const updateItemDrawing = async (itemId, data) => {
       if (drawingNo !== undefined) { dUpdates.push('drawing_no = ?'); dParams.push(drawingNo); }
       if (revisionNo !== undefined) { dUpdates.push('revision = ?'); dParams.push(revisionNo); }
       if (description !== undefined) { dUpdates.push('description = ?'); dParams.push(description); }
-      if (drawing_type !== undefined) { dUpdates.push('drawing_type = ?'); dParams.push(drawing_type); }
+      if (normItemDrawingType !== undefined) { dUpdates.push('drawing_type = ?'); dParams.push(normItemDrawingType); }
       if (drawingPdf !== undefined && drawingPdf !== null) { dUpdates.push('file_path = ?'); dParams.push(drawingPdf); }
 
       if (dUpdates.length > 0) {
@@ -810,6 +826,8 @@ const createCustomerDrawing = async (data) => {
     let salesOrderId = providedSalesOrderId;
     let salesOrderPublicId = null;
 
+    const itemDrawingType = normalizeDrawingType(drawing_type, description);
+
     // 1. Insert into customer_drawings
     const [result] = await connection.execute(
       `INSERT INTO customer_drawings 
@@ -820,7 +838,7 @@ const createCustomerDrawing = async (data) => {
       ,
       [
         drawingPublicId,
-        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, deliveryDate || null, filePath || '', fileType || null, remarks || null,
+        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, itemDrawingType, hsnCode || null, deliveryDate || null, filePath || '', fileType || null, remarks || null,
         uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
         customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
         fileType === 'XLSX' || fileType === 'XLS' ? filePath : null,
@@ -892,9 +910,9 @@ const createCustomerDrawing = async (data) => {
 
     // 4. Create Sales Order Item
     await connection.execute(
-      `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, drawing_type, quantity, unit, delivery_date, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
-      [salesOrderId, drawingNo, drawingId, revision || '0', filePath, description || 'Customer Drawing', drawing_type || 'Part', qty || 1, 'NOS', deliveryDate || null]
+      `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, drawing_type, item_type, item_group, quantity, unit, delivery_date, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+      [salesOrderId, drawingNo, drawingId, revision || '0', filePath, description || 'Customer Drawing', itemDrawingType, itemDrawingType, itemDrawingType, qty || 1, 'NOS', deliveryDate || null]
     );
 
     await connection.commit();
@@ -933,6 +951,8 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
         drawing_type, hsnCode, deliveryDate
       } = data;
 
+      const itemDrawingType = normalizeDrawingType(drawing_type, description);
+
       // Check if the drawing number already exists as an approved drawing
       await checkDuplicateApprovedDrawing(connection, drawingNo);
 
@@ -948,7 +968,7 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
         ,
         [
           drawingPublicId,
-          clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, deliveryDate || null, filePath || '', fileType || null, remarks || null,
+          clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, itemDrawingType, hsnCode || null, deliveryDate || null, filePath || '', fileType || null, remarks || null,
           uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
           customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
           batchInfo.excelPath || null,
@@ -1020,9 +1040,9 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
 
       // 4. Create Sales Order Item
       await connection.execute(
-        `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, drawing_type, quantity, unit, delivery_date, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
-        [salesOrderId, drawingNo, drawingId, revision || null, filePath, description || null, drawing_type || 'Part', qty || 1, 'NOS', deliveryDate || null]
+        `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, drawing_type, item_type, item_group, quantity, unit, delivery_date, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+        [salesOrderId, drawingNo, drawingId, revision || null, filePath, description || null, itemDrawingType, itemDrawingType, itemDrawingType, qty || 1, 'NOS', deliveryDate || null]
       );
 
       count++;

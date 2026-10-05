@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const AdmZip = require('adm-zip');
 const drawingService = require('../services/drawingService');
-const parseExcelDrawings = require('../utils/excelDrawingParser');
+const { parseExcelDrawings, normalizeDrawingType } = require('../utils/excelDrawingParser');
 const { uploadsPath } = require('../config/uploadConfig');
 
 const listDrawings = async (req, res, next) => {
@@ -111,7 +111,7 @@ const updateDrawing = async (req, res, next) => {
       qty,
       remarks,
       drawingNo,
-      drawing_type,
+      drawing_type: drawing_type !== undefined ? normalizeDrawingType(drawing_type, description) : undefined,
       hsnCode: hsnCode || hsn_code,
       deliveryDate: deliveryDate || delivery_date
     });
@@ -127,7 +127,13 @@ const updateItemDrawing = async (req, res, next) => {
     const { drawingNo, revisionNo, description, drawing_type } = req.body;
     const drawingPdf = req.file ? `uploads/${req.file.filename}` : null;
 
-    await drawingService.updateItemDrawing(itemId, { drawingNo, revisionNo, description, drawingPdf, drawing_type });
+    await drawingService.updateItemDrawing(itemId, { 
+      drawingNo, 
+      revisionNo, 
+      description, 
+      drawingPdf, 
+      drawing_type: drawing_type !== undefined ? normalizeDrawingType(drawing_type, description) : undefined 
+    });
     res.json({ message: 'Item drawing updated successfully' });
   } catch (error) {
     next(error);
@@ -178,6 +184,101 @@ const createDrawing = async (req, res, next) => {
 
     const uploadedBy = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() : 'Sales';
 
+const normalizeCode = (str) => {
+  if (!str) return '';
+  return String(str).trim().toLowerCase().replace(/^0+/, '').replace(/[^a-z0-9]/g, '');
+};
+
+const collapseZeros = (str) => {
+  return normalizeCode(str).replace(/0+/g, '0');
+};
+
+const getEntryPathParts = (entryName) => {
+  const normalized = String(entryName || '').replace(/\\/g, '/');
+  const parts = normalized.split('/').map(p => p.trim()).filter(Boolean);
+  const fileName = parts.length > 0 ? parts[parts.length - 1] : '';
+  const ext = path.extname(fileName);
+  const baseNoExt = ext ? fileName.slice(0, fileName.length - ext.length) : fileName;
+  const folderParts = parts.slice(0, -1);
+  return { normalized, parts, fileName, ext, baseNoExt, folderParts };
+};
+
+const findMatchingZipEntry = (zipEntries, drawingNo, explicitFileName) => {
+  if (!zipEntries || zipEntries.length === 0 || !drawingNo) return null;
+
+  const rawDrawingNo = String(drawingNo).trim();
+  const cleanDrawingNo = rawDrawingNo.toLowerCase();
+  const normDrawingNo = normalizeCode(cleanDrawingNo);
+  const collapsedDrawingNo = collapseZeros(cleanDrawingNo);
+  const cleanExplicit = explicitFileName ? String(explicitFileName).trim().toLowerCase() : null;
+
+  const validEntries = zipEntries.filter(e => {
+    if (e.isDirectory) return false;
+    const { normalized, fileName } = getEntryPathParts(e.entryName);
+    if (normalized.includes('__MACOSX') || fileName.startsWith('.')) return false;
+    return true;
+  });
+
+  // Priority 0: Exact match with explicit drawingFile from Excel
+  if (cleanExplicit) {
+    const match = validEntries.find(e => {
+      const { fileName, baseNoExt } = getEntryPathParts(e.entryName);
+      return fileName.toLowerCase() === cleanExplicit || baseNoExt.toLowerCase() === cleanExplicit;
+    });
+    if (match) return match;
+  }
+
+  // Priority 1: Exact match of filename without extension
+  let match = validEntries.find(e => {
+    const { baseNoExt } = getEntryPathParts(e.entryName);
+    return baseNoExt.toLowerCase().trim() === cleanDrawingNo;
+  });
+  if (match) return match;
+
+  // Priority 2: Normalized match of filename without extension (removes leading zeros, symbols)
+  match = validEntries.find(e => {
+    const { baseNoExt } = getEntryPathParts(e.entryName);
+    return normalizeCode(baseNoExt) === normDrawingNo;
+  });
+  if (match) return match;
+
+  // Priority 3: Parent directory match (e.g., "09002017001/090002017001.png" -> folder "09002017001" matches "9002017001")
+  match = validEntries.find(e => {
+    const { folderParts } = getEntryPathParts(e.entryName);
+    return folderParts.some(f => {
+      const cleanFolder = f.toLowerCase();
+      return cleanFolder === cleanDrawingNo || normalizeCode(cleanFolder) === normDrawingNo;
+    });
+  });
+  if (match) return match;
+
+  // Priority 4: Filename contains drawing number (or normalized contains normalized)
+  match = validEntries.find(e => {
+    const { baseNoExt } = getEntryPathParts(e.entryName);
+    const normBase = normalizeCode(baseNoExt);
+    return baseNoExt.toLowerCase().includes(cleanDrawingNo) || (normDrawingNo.length >= 4 && normBase.includes(normDrawingNo));
+  });
+  if (match) return match;
+
+  // Priority 5: Zero-collapsed match for zero repetition differences (e.g. 090002017001 vs 9002017001)
+  match = validEntries.find(e => {
+    const { folderParts, baseNoExt } = getEntryPathParts(e.entryName);
+    const allSegments = [...folderParts, baseNoExt];
+    return allSegments.some(seg => collapseZeros(seg) === collapsedDrawingNo);
+  });
+  if (match) return match;
+
+  // Priority 6: Any segment in the entry path includes the normalized drawing number
+  match = validEntries.find(e => {
+    const { normalized } = getEntryPathParts(e.entryName);
+    const normPath = normalizeCode(normalized);
+    return normDrawingNo.length >= 4 && normPath.includes(normDrawingNo);
+  });
+  if (match) return match;
+
+  return null;
+};
+
     // Handle Excel + ZIP
     if (fileName && (fileType === 'XLSX' || fileType === 'XLS') && excelFile) {
       const parsedDrawings = await parseExcelDrawings(absoluteExcelPath);
@@ -193,40 +294,18 @@ const createDrawing = async (req, res, next) => {
           let rowFilePath = null;
 
           if (zipFile && zipEntries.length > 0) {
-            // Find drawing file in ZIP matching drawingNo or drawingFile column
-            // We search for files matching drawingNo (ignoring case and extension)
-            const cleanDrawingNo = d.drawingNo.toLowerCase().trim();
-            const explicitFileName = d.drawingFile ? d.drawingFile.toLowerCase().trim() : null;
-
-            const entry = zipEntries.find(e => {
-              if (e.isDirectory) return false;
-              const entryName = e.entryName.toLowerCase();
-              const fileNameWithExt = path.basename(entryName);
-              const fileNameWithoutExt = path.basename(entryName, path.extname(entryName));
-
-              // Priority 0: Exact match with explicit drawingFile from Excel
-              if (explicitFileName && (fileNameWithExt === explicitFileName || fileNameWithoutExt === explicitFileName)) return true;
-
-              // Priority 1: Exact match of filename without extension
-              if (fileNameWithoutExt === cleanDrawingNo) return true;
-
-              // Priority 2: Full entry name matches (for files in root)
-              if (entryName === cleanDrawingNo) return true;
-
-              // Priority 3: Filename includes drawing number (best effort)
-              return fileNameWithoutExt.includes(cleanDrawingNo) || cleanDrawingNo.includes(fileNameWithoutExt);
-            });
+            const entry = findMatchingZipEntry(zipEntries, d.drawingNo, d.drawingFile);
 
             if (entry) {
-              const safeFileName = `${Date.now()}-${path.basename(entry.entryName).replace(/\s+/g, '_')}`;
+              const { fileName: entryFileName } = getEntryPathParts(entry.entryName);
+              const safeFileName = `${Date.now()}_${Math.floor(Math.random() * 10000)}-${entryFileName.replace(/[\s,;'"()]+/g, '_')}`;
               const destPath = path.join(uploadsPath, safeFileName);
               fs.writeFileSync(destPath, entry.getData());
               rowFilePath = `uploads/${safeFileName}`;
             }
           }
 
-          // If no ZIP match, we can still save the record but without a file path
-          // Unless the user uploaded a single drawing (which shouldn't happen in batch mode but let's be safe)
+          const itemDrawingType = normalizeDrawingType(d.drawing_type || d.drawingType || drawing_type, d.description || description);
 
           batchData.push({
             clientName,
@@ -235,7 +314,7 @@ const createDrawing = async (req, res, next) => {
             revision: d.revision || revision,
             qty: d.qty || qty || 1,
             description: d.description || description,
-            drawing_type: d.drawing_type || d.drawingType || drawing_type || 'Part',
+            drawing_type: itemDrawingType,
             hsnCode: d.hsnCode || d.hsn_code || hsnCode,
             deliveryDate: d.deliveryDate || d.delivery_date || deliveryDate || delivery_date || null,
             filePath: rowFilePath,
@@ -286,7 +365,7 @@ const createDrawing = async (req, res, next) => {
       state,
       billingAddress,
       shippingAddress,
-      drawing_type,
+      drawing_type: normalizeDrawingType(drawing_type, description),
       hsnCode: hsnCode || hsn_code,
       deliveryDate: deliveryDate || delivery_date,
       salesOrderId: salesOrderId ? parseInt(salesOrderId) : null

@@ -533,7 +533,7 @@ const DrawingMaster = () => {
       billing_address: drawing.billing_address || billingAddressLine,
       shipping_address: drawing.shipping_address || shippingAddressLine,
       qty: drawing.qty || 1,
-      drawing_type: drawing.drawing_type || 'Part',
+      drawing_type: (drawing.drawing_type && (String(drawing.drawing_type).toLowerCase().includes('assembly') || String(drawing.drawing_type) === '1' || String(drawing.drawing_type) === '2')) ? 'Assembly' : 'Part',
       hsn_code: drawing.hsn_code || '',
       remarks: drawing.remarks || '',
       drawing_pdf: null,
@@ -955,7 +955,7 @@ const DrawingMaster = () => {
                 <label className="text-xs  text-slate-500  ">Type</label>
                 <select
                   className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  value={editData.drawing_type || 'Part'}
+                  value={(editData.drawing_type && (String(editData.drawing_type).toLowerCase().includes('assembly') || String(editData.drawing_type) === '1' || String(editData.drawing_type) === '2')) ? 'Assembly' : 'Part'}
                   onChange={(e) => setEditData({ ...editData, drawing_type: e.target.value })}
                 >
                   <option value="Part">Part</option>

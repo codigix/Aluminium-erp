@@ -19,6 +19,33 @@ const parseExcelDate = (val) => {
   return cleanVal;
 };
 
+const normalizeDrawingType = (rawVal, description = '') => {
+  if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '') {
+    const s = String(rawVal).trim().toLowerCase();
+    // Keywords for Assembly
+    if (s === 'assembly' || s === 'assly' || s === 'sub-assembly' || s === 'subassembly' || s === 'sa' || s.includes('assembly') || s.includes('assly')) {
+      return 'Assembly';
+    }
+    // Keywords for Part
+    if (s === 'part' || s === 'prt' || s === 'component' || s === 'child' || s.includes('part')) {
+      return 'Part';
+    }
+    // Numeric representations: in 0-indexed lists, 0=Part, 1=Assembly. If 2 is used, it's also Assembly.
+    if (s === '0') return 'Part';
+    if (s === '1' || s === '2') return 'Assembly';
+  }
+
+  // Fallback: check description for assembly keywords
+  if (description) {
+    const desc = String(description).toLowerCase();
+    if (desc.includes('assembly') || desc.includes('assly')) {
+      return 'Assembly';
+    }
+  }
+
+  return 'Part';
+};
+
 const parseExcelDrawings = async (filePath) => {
   try {
     const workbook = XLSX.readFile(filePath);
@@ -45,7 +72,7 @@ const parseExcelDrawings = async (filePath) => {
 
     // Find header row
     for (let i = 0; i < Math.min(50, rawData.length); i++) {
-      const row = rawData[i].map(v => String(v || '').toLowerCase());
+      const row = rawData[i].map(v => String(v || '').replace(/[\u00a0\s]+/g, ' ').trim().toLowerCase());
       const hasDrawing = row.some(v => v.includes('drawing') || v.includes('drw') || v.includes('part no'));
       
       if (hasDrawing) {
@@ -85,18 +112,15 @@ const parseExcelDrawings = async (filePath) => {
         if (!drawingNo) continue;
 
         const rawType = columnMap.drawingType !== -1 ? cleanup(row[columnMap.drawingType]) : '';
-        let drawingType = 'Part';
-        if (rawType === '2' || rawType.toLowerCase().includes('assembly') || rawType.toLowerCase().includes('assly')) {
-          drawingType = 'Assembly';
-        } else if (rawType === '1' || rawType.toLowerCase().includes('part')) {
-          drawingType = 'Part';
-        }
+        const description = columnMap.description !== -1 ? cleanup(row[columnMap.description]) : '';
+        const drawingType = normalizeDrawingType(rawType, description);
 
         drawings.push({
           drawingNo: drawingNo,
           revision: columnMap.revision !== -1 ? cleanup(row[columnMap.revision]) : '',
-          description: columnMap.description !== -1 ? cleanup(row[columnMap.description]) : '',
+          description: description,
           drawingType: drawingType,
+          drawing_type: drawingType,
           hsnCode: columnMap.hsnCode !== -1 ? cleanup(row[columnMap.hsnCode]) : '',
           deliveryDate: columnMap.deliveryDate !== -1 ? parseExcelDate(row[columnMap.deliveryDate]) : '',
           qty: columnMap.qty !== -1 ? parseInt(row[columnMap.qty]) || 1 : 1,
@@ -106,32 +130,27 @@ const parseExcelDrawings = async (filePath) => {
       }
     } else {
       // Fallback: try to find any row that looks like it has a drawing number
-      // This is a bit risky but helps with unstructured files
       for (let i = 0; i < rawData.length; i++) {
         const row = rawData[i];
         if (!row || row.length < 1) continue;
         
-        // If first column looks like a drawing number (often has hyphens or mixed alphanumeric)
         const firstCell = cleanup(row[0]);
         if (firstCell && firstCell.length > 3 && /[A-Z0-9]/.test(firstCell)) {
-           const rawType = row[4] ? cleanup(row[4]) : '';
-           let drawingType = 'Part';
-           if (rawType === '2' || rawType.toLowerCase().includes('assembly') || rawType.toLowerCase().includes('assly')) {
-             drawingType = 'Assembly';
-           } else if (rawType === '1' || rawType.toLowerCase().includes('part')) {
-             drawingType = 'Part';
-           }
+          const rawType = row[5] !== undefined ? cleanup(row[5]) : (row[4] ? cleanup(row[4]) : '');
+          const description = row[1] && row[2] ? cleanup(row[1]) : (row[2] ? cleanup(row[2]) : '');
+          const drawingType = normalizeDrawingType(rawType, description);
 
-           drawings.push({
-             drawingNo: firstCell,
-             revision: row[1] ? cleanup(row[1]) : '',
-             description: row[2] ? cleanup(row[2]) : '',
-             hsnCode: row[3] ? cleanup(row[3]) : '',
-             drawingType: drawingType,
-             qty: row[5] ? parseInt(row[5]) || 1 : 1,
-             remarks: row[6] ? cleanup(row[6]) : '',
-             drawingFile: row[7] ? cleanup(row[7]) : ''
-           });
+          drawings.push({
+            drawingNo: firstCell,
+            revision: row[4] ? cleanup(row[4]) : (row[1] ? cleanup(row[1]) : ''),
+            description: description,
+            hsnCode: row[3] ? cleanup(row[3]) : '',
+            drawingType: drawingType,
+            drawing_type: drawingType,
+            qty: row[3] && !isNaN(row[3]) ? parseInt(row[3]) : (row[5] ? parseInt(row[5]) || 1 : 1),
+            remarks: row[6] ? cleanup(row[6]) : '',
+            drawingFile: row[7] ? cleanup(row[7]) : ''
+          });
         }
       }
     }
@@ -144,3 +163,5 @@ const parseExcelDrawings = async (filePath) => {
 };
 
 module.exports = parseExcelDrawings;
+module.exports.parseExcelDrawings = parseExcelDrawings;
+module.exports.normalizeDrawingType = normalizeDrawingType;
