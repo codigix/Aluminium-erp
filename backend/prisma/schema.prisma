@@ -566,7 +566,6 @@ model items {
   description     String?   @db.Text
   uom             String?   @db.VarChar(20)
   item_group      String?   @db.VarChar(100)
-  hsn_code        String?   @db.VarChar(50)
   valuation_rate  Decimal?  @default(0.00) @db.Decimal(12, 2)
   selling_rate    Decimal?  @default(0.00) @db.Decimal(12, 2)
   weight_per_unit Decimal?  @default(0.000) @db.Decimal(12, 3)
@@ -1527,7 +1526,6 @@ model quotation_requests {
   description              String?                    @db.Text
   item_unit                String?                    @default("Nos") @db.VarChar(50)
   item_group               String?                    @db.VarChar(50)
-  hsn_code                 String?                    @db.VarChar(50)
   project_name             String?                    @db.VarChar(255)
   batch_id                 String?                    @db.VarChar(100)
   bom_cost                 Decimal?                   @default(0.00) @db.Decimal(14, 2)

@@ -31,53 +31,18 @@ const createTransporter = () => {
 
 const generateQuotationHTML = async (clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany = null, clientDetails = null) => {
   for (let item of items) {
-    let hsn = (item.hsn_code && item.hsn_code !== '—') ? String(item.hsn_code).trim() : '';
-
-    if (!hsn) {
+    if (!item.hsn_code) {
+      let hsn = '—';
       if (item.drawing_no) {
-        try {
-          const [dRows] = await pool.query(
-            'SELECT hsn_code FROM customer_drawings WHERE drawing_no = ? AND hsn_code IS NOT NULL AND hsn_code != "" LIMIT 1',
-            [item.drawing_no]
-          );
-          if (dRows.length > 0 && dRows[0].hsn_code) {
-            hsn = String(dRows[0].hsn_code).trim();
-          }
-        } catch (err) {
-          // Guard against schema discrepancies or query errors
-        }
+        const [dRows] = await pool.query('SELECT hsn_code FROM customer_drawings WHERE drawing_no = ?', [item.drawing_no]);
+        if (dRows.length > 0 && dRows[0].hsn_code) hsn = dRows[0].hsn_code;
       }
-
-      if (!hsn && item.item_code) {
-        try {
-          const [iRows] = await pool.query(
-            'SELECT hsn_code FROM items WHERE item_code = ? AND hsn_code IS NOT NULL AND hsn_code != "" LIMIT 1',
-            [item.item_code]
-          );
-          if (iRows.length > 0 && iRows[0].hsn_code) {
-            hsn = String(iRows[0].hsn_code).trim();
-          }
-        } catch (err) {
-          // Guard against missing column or query errors
-        }
+      if (hsn === '—' && item.item_code) {
+        const [iRows] = await pool.query('SELECT hsn_code FROM items WHERE item_code = ?', [item.item_code]);
+        if (iRows.length > 0 && iRows[0].hsn_code) hsn = iRows[0].hsn_code;
       }
-
-      if (!hsn && item.item_code) {
-        try {
-          const [sRows] = await pool.query(
-            'SELECT hsn_code FROM stock_balance WHERE item_code = ? AND hsn_code IS NOT NULL AND hsn_code != "" LIMIT 1',
-            [item.item_code]
-          );
-          if (sRows.length > 0 && sRows[0].hsn_code) {
-            hsn = String(sRows[0].hsn_code).trim();
-          }
-        } catch (err) {
-          // Guard against schema differences
-        }
-      }
+      item.hsn_code = hsn;
     }
-
-    item.hsn_code = (hsn && hsn !== '—') ? hsn : '';
   }
   let subTotal = 0;
   let totalTax = 0;
@@ -130,7 +95,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
           ${item.description ? `<div style="font-weight: bold; color: #000; font-size: 12px; text-transform: uppercase; margin-top: 4px;">${item.description}</div>` : ''}
           ${isRejected ? `<div style="font-size: 10px; color: #dc2626; margin-top: 4px; font-weight: bold;">Reason: ${item.rejection_reason || 'Not specified'}</div>` : ''}
         </td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: center;">${item.hsn_code || ''}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: center;">${item.hsn_code || '—'}</td>
         <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: center;">${quantity}</td>
         <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: right;">${unitPriceStr}</td>
         <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: right; font-weight: bold;">${totalLineStr}</td>
