@@ -1215,7 +1215,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       }
     });
 
-    // 1. Collect all materials
+    // 1. Collect materials
     const consolidatedMaterialsMap = new Map();
     const processedMaterialSOItems = new Set();
 
@@ -1358,33 +1358,58 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     }
     const rawComponents = Array.from(consolidatedComponentsMap.values());
 
-    // 3. Separate real Sub-Assemblies from Consumables (Item Code starts with CON-)
+    // 3. Keep exactly the 32 Part items in Scope to Produce (subAssembliesToDisplay) unchanged
     const subAssembliesToDisplay = rawComponents.filter(c => {
       const code = (c.itemCode || c.item_code || '').toUpperCase();
       return !code.startsWith('CON-');
     });
 
+    // Helper: identify direct Bought-Out / hardware / consumable items to include in Materials section
+    const isBoughtOutComponent = (comp) => {
+      const code = String(comp.component_code || comp.item_code || comp.itemCode || '').toUpperCase().trim();
+      const group = String(comp.item_group || '').toUpperCase().trim();
+      const type = String(comp.item_type || comp.material_type || '').toUpperCase().trim();
+
+      if (
+        comp.is_bought_out === true || comp.is_bought_out === 1 ||
+        group.includes('BOUGHT') || group.includes('CONSUMABLE') || group.includes('HARDWARE') || group.includes('STANDARD') ||
+        type.includes('BOUGHT') || code.startsWith('BO-') || code.startsWith('BO_') || code.startsWith('CONS-') || code.startsWith('CON-')
+      ) {
+        return true;
+      }
+
+      // If not a manufactured part (does not start with PART- or ASSEMBLY- or SA-)
+      const isManufactured = code.startsWith('PART-') || code.startsWith('ASSEMBLY-') || code.startsWith('SA-') || code.startsWith('FG-');
+      if (!isManufactured) {
+        return true;
+      }
+
+      return false;
+    };
+
+    // Direct Bought-Out items belonging to Parent Assembly BOM are routed to the Materials section
     const componentsAsMaterials = rawComponents.filter(c => {
-      const code = (c.itemCode || c.item_code || '').toUpperCase();
-      return code.startsWith('CON-');
+      return isBoughtOutComponent(c);
     }).map(c => {
-      const uom = (c.unit || c.uom || '').toUpperCase();
-      const isKg = uom === 'KG' || c.is_kg_material;
+      const uom = c.unit || c.uom || 'Nos';
+      const isKg = uom.toUpperCase() === 'KG' || Boolean(c.is_kg_material);
 
       return {
-        material_name: c.description || c.item_name || 'Consumable',
-        description: c.description || 'Consumable item from BOM',
+        ...c,
+        material_name: c.description || c.item_name || 'Bought-Out Item',
+        description: c.description || 'Bought-Out item from BOM',
         required_qty: isViewing ? (c.required_qty || c.plannedQty) : c.plannedQty,
         design_qty: isViewing ? (c.design_qty || c.designQty) : c.designQty,
-        uom: c.unit || c.uom || 'Nos',
+        uom: uom,
+        unit: uom,
         warehouse: c.targetWarehouse || c.warehouse || 'Store - NC',
-        material_category: 'EXPLODED',
+        material_category: 'CORE',
         bom_ref: c.bomNo || c.bom_no || '-',
-        item_code: c.itemCode || c.item_code,
-        totalDesignQty: c.designQty || 0,
+        item_code: c.itemCode || c.item_code || c.component_code,
+        totalDesignQty: c.designQty || c.parentDesignQty || 0,
         totalPlannedQty: isViewing ? (c.required_qty || c.plannedQty) : c.plannedQty,
-        bom_no: c.bomNo || '-',
-        bomQty: c.bomQty,
+        bom_no: c.bomNo || c.bom_no || '-',
+        bomQty: c.bomQty || 1,
         source_fg: c.source_fg || '-',
         dimensions: c.dimensions || null,
         is_kg_material: isKg,
@@ -1392,15 +1417,21 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       };
     });
 
-    // 4. Combine into final Material list
+    // 4. Combine into final Material list (all direct materials + direct bought-out items)
     let materialsToDisplay = isViewing ? (newPlan.materials || []).map(m => ({
       ...m,
       bomQty: m.bom_qty || (parseFloat(m.design_qty || newPlan.targetQuantity || 1) > 0 ? parseFloat(m.required_qty || 0) / parseFloat(m.design_qty || newPlan.targetQuantity || 1) : 0)
     })) : allMaterials;
 
-    // Merge consumables from components into materials if not already present
+    // Merge direct bought-out items into materials if not already present
     componentsAsMaterials.forEach(cam => {
-      const codeMatch = (m) => (m.item_code || m.itemCode) === cam.item_code;
+      const codeMatch = (m) => {
+        const mCode = String(m.item_code || m.itemCode || '').trim().toLowerCase();
+        const camCode = String(cam.item_code || cam.itemCode || '').trim().toLowerCase();
+        const mDesc = String(m.material_name || m.description || '').trim().toLowerCase();
+        const camDesc = String(cam.material_name || cam.description || '').trim().toLowerCase();
+        return (mCode && camCode && mCode === camCode) || (mDesc && camDesc && mDesc === camDesc);
+      };
       if (!materialsToDisplay.some(codeMatch)) {
         materialsToDisplay.push(cam);
       }
