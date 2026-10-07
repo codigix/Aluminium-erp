@@ -3,7 +3,6 @@ const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 const bomService = require('./bomService');
 const stockService = require('./stockService');
-const { normalizeDrawingType } = require('../utils/excelDrawingParser');
 
 const numberToWords = (num) => {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -95,12 +94,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
   let allItems = [];
   if (orderIds.length > 0) {
     const [itemRows] = await pool.query(
-      `SELECT soi.*, 
-              COALESCE(NULLIF(soi.drawing_type, ''), NULLIF(cd.drawing_type, ''), 'Part') as drawing_type,
-              COALESCE(NULLIF(soi.drawing_pdf, ''), NULLIF(cd.file_path, '')) as drawing_pdf,
-              COALESCE(NULLIF(cd.file_path, ''), NULLIF(soi.drawing_pdf, '')) as file_path,
-              soi.quantity as design_qty, cd.hsn_code, cd.contact_person, cd.phone, cd.email, 
-              COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
+      `SELECT soi.*, soi.quantity as design_qty, cd.file_path, cd.hsn_code, cd.contact_person, cd.phone, cd.email, COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
        FROM sales_order_items soi
        INNER JOIN (
          SELECT MIN(id) as min_id
@@ -116,9 +110,6 @@ const listSalesOrders = async (includeWithoutPo = true) => {
 
   const itemsByOrderId = {};
   for (const item of allItems) {
-    item.drawing_type = normalizeDrawingType(item.drawing_type, item.description);
-    if (!item.file_path && item.drawing_pdf) item.file_path = item.drawing_pdf;
-    if (!item.drawing_pdf && item.file_path) item.drawing_pdf = item.file_path;
     if (!itemsByOrderId[item.sales_order_id]) {
       itemsByOrderId[item.sales_order_id] = [];
     }
@@ -127,7 +118,6 @@ const listSalesOrders = async (includeWithoutPo = true) => {
 
   for (const order of rows) {
     order.items = itemsByOrderId[order.id] || [];
-    order.original_items = itemsByOrderId[order.id] || [];
     order.client = order.company_name; // Add client alias for frontend
   }
 
@@ -195,12 +185,7 @@ const getSalesOrderById = async (id) => {
   order.client = order.company_name;
 
   const [items] = await pool.query(
-    `SELECT soi.*, 
-            COALESCE(NULLIF(soi.drawing_type, ''), NULLIF(cd.drawing_type, ''), 'Part') as drawing_type,
-            COALESCE(NULLIF(soi.drawing_pdf, ''), NULLIF(cd.file_path, '')) as drawing_pdf,
-            COALESCE(NULLIF(cd.file_path, ''), NULLIF(soi.drawing_pdf, '')) as file_path,
-            cd.hsn_code, cd.contact_person, cd.phone, cd.email, 
-            COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
+    `SELECT soi.*, cd.file_path, cd.hsn_code, cd.contact_person, cd.phone, cd.email, COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
      FROM sales_order_items soi
      INNER JOIN (
        SELECT MIN(id) as min_id
@@ -219,15 +204,11 @@ const getSalesOrderById = async (id) => {
       [itemIds]
     );
     items.forEach(item => {
-      item.drawing_type = normalizeDrawingType(item.drawing_type, item.description);
-      if (!item.file_path && item.drawing_pdf) item.file_path = item.drawing_pdf;
-      if (!item.drawing_pdf && item.file_path) item.drawing_pdf = item.file_path;
       item.sub_assemblies = components.filter(c => c.sales_order_item_id === item.id);
     });
   }
 
   order.items = items;
-  order.original_items = items;
 
   return order;
 };
@@ -257,9 +238,6 @@ const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
   const query = `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name,
             soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
-            COALESCE(NULLIF(soi.drawing_type, ''), NULLIF(cd.drawing_type, ''), 'Part') as drawing_type,
-            COALESCE(NULLIF(soi.drawing_pdf, ''), NULLIF(cd.file_path, '')) as drawing_pdf,
-            COALESCE(NULLIF(cd.file_path, ''), NULLIF(soi.drawing_pdf, '')) as file_path,
             cd.drawing_name,
             sb.material_type as item_group,
             COALESCE(cd_contact.email, "") as email_address, 
@@ -283,11 +261,11 @@ const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
        WHERE cd.contact_person IS NOT NULL OR cd.phone IS NOT NULL OR cd.email IS NOT NULL
      ) cd_contact ON cd_contact.sales_order_id = so.id AND cd_contact.rn = 1
      LEFT JOIN (
-       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, quantity as design_qty, unit, status as item_status, rejection_reason as item_rejection_reason, drawing_type, drawing_pdf
+       SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, quantity as design_qty, unit, status as item_status, rejection_reason as item_rejection_reason
        FROM sales_order_items
      ) soi ON soi.sales_order_id = so.id
      LEFT JOIN (
-       SELECT d1.drawing_no, d1.description as drawing_name, d1.file_path, d1.drawing_type
+       SELECT d1.drawing_no, d1.description as drawing_name
        FROM customer_drawings d1
        JOIN (
          SELECT drawing_no, MAX(id) as max_id
@@ -306,7 +284,6 @@ const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
   // Add client alias for each row
   rows.forEach(row => {
     row.client = row.company_name;
-    row.drawing_type = normalizeDrawingType(row.drawing_type, row.item_description || row.drawing_name);
   });
 
   return rows;
@@ -1177,8 +1154,9 @@ const getApprovedDrawings = async (companyId = null) => {
      WHERE soi.sales_order_id IN (?) 
      AND (
        TRIM(UPPER(soi.item_group)) IN ('ASSEMBLY', 'PART') 
-       OR TRIM(UPPER(soi.item_type)) IN ('ASSEMBLY', 'PART')
-       OR TRIM(UPPER(COALESCE(soi.drawing_type, cd.drawing_type, ''))) IN ('ASSEMBLY', 'PART')
+       OR (
+         TRIM(UPPER(soi.item_type)) IN ('ASSEMBLY', 'PART')
+       )
      )
      AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))`,
     [orderIds]

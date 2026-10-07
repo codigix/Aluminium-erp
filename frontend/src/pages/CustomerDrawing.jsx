@@ -29,23 +29,6 @@ const generateRowId = () => {
   });
 };
 
-const normalizeType = (val, desc = '') => {
-  if (val !== undefined && val !== null && String(val).trim() !== '') {
-    const s = String(val).trim().toLowerCase();
-    if (s === 'assembly' || s === 'assly' || s === 'sub-assembly' || s === 'subassembly' || s === 'sa' || s.includes('assembly') || s.includes('assly') || s === '1' || s === '2') {
-      return 'Assembly';
-    }
-    if (s === 'part' || s === 'prt' || s === 'component' || s === 'child' || s.includes('part') || s === '0') {
-      return 'Part';
-    }
-  }
-  if (desc) {
-    const d = String(desc).toLowerCase();
-    if (d.includes('assembly') || d.includes('assly')) return 'Assembly';
-  }
-  return 'Part';
-};
-
 const getEmptyDrawingRow = () => ({
   id: generateRowId(),
   drawing_no: '',
@@ -582,7 +565,6 @@ const CustomerDrawing = () => {
 
       setFormMode('edit');
       setEditingRequirementId(data.id);
-      data.original_items = data.items || data.original_items || [];
       setEditingRequirementData(data);
       setShowFormModal(true);
     } catch (error) {
@@ -869,11 +851,9 @@ const CustomerDrawing = () => {
       const row = editingRequirementData;
       const company = companies.find(c => c.company_name === (row.client_name || row.company_name));
 
-      const rawItems = row.original_items || row.items || [];
-      const manualDrawings = rawItems.map(item => {
+      const manualDrawings = (row.original_items || []).map(item => {
         const pathVal = item.file_path || item.drawing_pdf || '';
         const existingFiles = pathVal.split(',').filter(Boolean);
-        const rawType = item.drawing_type || item.drawingType || item.item_type || item.type || '';
         return {
           id: item.id || generateRowId(),
           drawing_id: item.drawing_id || item.drawing_master_id,
@@ -883,7 +863,7 @@ const CustomerDrawing = () => {
           description: item.description || '',
           hsn_code: item.hsn_code || '',
           delivery_date: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
-          drawing_type: normalizeType(rawType, item.description),
+          drawing_type: item.drawing_type || 'Part',
           remarks: item.remarks || '',
           files: [],
           existingFiles: existingFiles,
@@ -1324,7 +1304,7 @@ const CustomerDrawing = () => {
                 formData.append('description', drawing.description || '');
                 formData.append('hsn_code', drawing.hsn_code || '');
                 formData.append('delivery_date', drawing.delivery_date || '');
-                formData.append('drawing_type', normalizeType(drawing.drawing_type, drawing.description));
+                formData.append('drawing_type', drawing.drawing_type || 'Part');
                 formData.append('remarks', drawing.remarks || '');
                 // Append the list of kept existing files as JSON
                 formData.append('existingFiles', JSON.stringify(drawing.existingFiles || []));
@@ -1819,7 +1799,7 @@ const CustomerDrawing = () => {
       formData.append('description', drawingData.description || '');
       formData.append('hsn_code', drawingData.hsn_code || '');
       formData.append('delivery_date', drawingData.delivery_date || '');
-      formData.append('drawing_type', normalizeType(drawingData.drawing_type, drawingData.description));
+      formData.append('drawing_type', drawingData.drawing_type || 'Part');
       formData.append('remarks', drawingData.remarks || '');
       formData.append('fileType', fileExt);
       if (drawingData.salesOrderId) {
@@ -3386,7 +3366,7 @@ const CustomerDrawing = () => {
                                       disabled={isTypeLocked}
                                       name={`manualDrawings[${index}].drawing_type`}
                                       className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isTypeLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : ((formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : 'border-slate-300')}`}
-                                      value={normalizeType(drawing.drawing_type, drawing.description)}
+                                      value={drawing.drawing_type || 'Part'}
                                       onChange={formik.handleChange}
                                       onBlur={formik.handleBlur}
                                     >
