@@ -30,8 +30,20 @@ const generateOutwardChallanPdf = async (challan) => {
       console.error(`[generateOutwardChallanPdf] Error loading company profile:`, err.message);
     }
 
-    const { getCompanyLogoBase64 } = require('./logoResolver');
-    const logoBase64 = getCompanyLogoBase64();
+    let logoBase64 = null;
+    if (activeCompany && activeCompany.company_logo) {
+      const uploadedLogoPath = path.join(__dirname, '../../', activeCompany.company_logo);
+      if (fs.existsSync(uploadedLogoPath)) {
+        logoBase64 = `data:image/png;base64,${fs.readFileSync(uploadedLogoPath).toString('base64')}`;
+      }
+    }
+
+    if (!logoBase64) {
+      const logoPath = path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png');
+      logoBase64 = fs.existsSync(logoPath)
+        ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+        : null;
+    }
 
     const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PVT. LTD.';
     const hostCompanyAddress = activeCompany?.company_address || 'Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026';

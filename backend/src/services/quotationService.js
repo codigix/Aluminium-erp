@@ -1146,8 +1146,15 @@ const generateQuotationPDF = async (quotationId) => {
   const hostGSTIN = activeCompany?.gstin || '';
   const invoiceFooterNotes = activeCompany?.invoice_footer_notes || '';
 
-  const { getCompanyLogoBase64 } = require('../utils/logoResolver');
-  const logoBase64 = getCompanyLogoBase64();
+  const fs = require('fs');
+  const path = require('path');
+  let logoBase64 = null;
+  if (activeCompany && activeCompany.company_logo) {
+    const logoPath = path.join(__dirname, '../../', activeCompany.company_logo);
+    if (fs.existsSync(logoPath)) {
+      logoBase64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
+    }
+  }
 
   const [vendorRows] = await pool.query('SELECT * FROM vendors WHERE id = ?', [quotation.vendor_id]);
   const vendor = vendorRows[0];
