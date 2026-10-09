@@ -81,7 +81,9 @@ export const SearchableSelect = ({
   disabled = false,
   openUpwards = false,
   className = '',
-  onFocus
+  onFocus,
+  showSearchIcon = false,
+  renderOption
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -196,7 +198,7 @@ export const SearchableSelect = ({
         />
         {!className.includes('hide-arrow') && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
-            {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {showSearchIcon ? <Search className="w-3.5 h-3.5 text-slate-400" /> : (isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
           </div>
         )}
       </div>
@@ -218,7 +220,7 @@ export const SearchableSelect = ({
                   }}
                 >
                   <div className="flex flex-col gap-0.5 whitespace-normal break-words">
-                    <span className="">{getLabel(opt)}</span>
+                    {renderOption ? renderOption(opt) : <span className="">{getLabel(opt)}</span>}
                     {getSublabel(opt) && (
                       <span className="text-xs text-slate-400 font-normal whitespace-pre-line">
                         {getSublabel(opt).startsWith('🟢') || getSublabel(opt).startsWith('🔴') || getSublabel(opt).startsWith('Drawing No') || getSublabel(opt).includes('\n')

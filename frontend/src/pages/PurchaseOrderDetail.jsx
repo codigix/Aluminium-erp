@@ -416,7 +416,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                       <th className="p-2">Drawing No</th>
                       <th className="p-2">Item / Description</th>
                       <th className="p-2 text-center">Design Qty</th>
-                      <th className="p-2 text-center">Required Weight</th>
+                      <th className="p-2 text-center">{po?.po_type === 'DIRECT_COMPANY' || po?.source === 'DIRECT_COMPANY_PURCHASE' ? 'Design Weight' : 'Required Weight'}</th>
                       <th className="p-2 text-center">Received Qty</th>
                       <th className="p-2 text-center">Received Weight</th>
                       <th className="p-2 text-center">Pending Qty</th>
@@ -428,24 +428,69 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {filteredItems.map((item, idx) => {
-                      const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
-                      const designQty = parseFloat(item.planned_qty || item.design_qty || (isBoughtOut ? item.quantity : 0) || 0);
-                      const reqWeight = isBoughtOut ? 0 : parseFloat(item.quantity || item.required_weight || 0);
-                      const recQty = parseFloat(item.received_qty || item.accepted_quantity || 0);
-                      const recWeight = isBoughtOut ? 0 : parseFloat(item.received_weight || 0);
+                      const isDirectCompany = po?.po_type === 'DIRECT_COMPANY' || po?.source === 'DIRECT_COMPANY_PURCHASE';
 
-                      const pendingQty = Math.max(0, designQty - recQty);
-                      const pendingWeight = isBoughtOut ? 0 : Math.max(0, reqWeight - recWeight);
+                      let designQty, reqWeight, designWeight, recQty, recWeight, pendingQty, pendingWeight, isFulfilled, isPartial, qtyUom, hasWeight;
 
-                      const isFulfilled = isBoughtOut
-                        ? (designQty > 0 && recQty >= designQty)
-                        : ((reqWeight > 0 && recWeight >= reqWeight) || (designQty > 0 && recQty >= designQty));
-                      const isPartial = isBoughtOut
-                        ? (recQty > 0 && recQty < designQty)
-                        : ((recQty > 0 || recWeight > 0) && !isFulfilled);
+                      if (isDirectCompany) {
+                        // Direct Company Purchase display logic
+                        qtyUom = (item.unit || item.uom || 'NOS').trim().toUpperCase();
+                        const rawDesignQty = parseFloat(item.design_qty);
+                        const rawPlannedQty = parseFloat(item.planned_qty);
+                        const rawQty = parseFloat(item.quantity);
+
+                        designQty = (!isNaN(rawDesignQty) && rawDesignQty > 0)
+                          ? rawDesignQty
+                          : ((!isNaN(rawPlannedQty) && rawPlannedQty > 0) ? rawPlannedQty : (!isNaN(rawQty) ? rawQty : 0));
+
+                        const wPerUnit = parseFloat(item.weight_per_unit || 0);
+                        const totWeight = parseFloat(item.total_weight || 0);
+                        hasWeight = totWeight > 0 || wPerUnit > 0 || qtyUom === 'KG';
+
+                        if (totWeight > 0) {
+                          designWeight = totWeight;
+                        } else if (wPerUnit > 0) {
+                          designWeight = Number((designQty * wPerUnit).toFixed(3));
+                        } else if (qtyUom === 'KG') {
+                          designWeight = designQty;
+                        } else {
+                          designWeight = null;
+                        }
+
+                        recQty = parseFloat(item.received_qty || item.accepted_quantity || 0);
+                        recWeight = hasWeight ? parseFloat(item.received_weight || 0) : null;
+
+                        pendingQty = Math.max(0, designQty - recQty);
+                        pendingWeight = designWeight !== null ? Math.max(0, designWeight - (recWeight || 0)) : null;
+
+                        isFulfilled = (designQty > 0 && recQty >= designQty) && (designWeight === null || (recWeight !== null && recWeight >= designWeight));
+                        isPartial = (recQty > 0 || (recWeight !== null && recWeight > 0)) && !isFulfilled;
+                      } else {
+                        // Existing PO / MR workflow (UNTOUCHED)
+                        qtyUom = 'NOS';
+                        const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+                        const plannedQtyVal = parseFloat(item.planned_qty);
+                        const designQtyVal = parseFloat(item.design_qty);
+                        designQty = (!isNaN(plannedQtyVal) && plannedQtyVal > 0)
+                          ? plannedQtyVal
+                          : ((!isNaN(designQtyVal) && designQtyVal > 0) ? designQtyVal : (isBoughtOut ? parseFloat(item.quantity || 0) : 0));
+                        reqWeight = isBoughtOut ? 0 : parseFloat(item.quantity || item.required_weight || 0);
+                        recQty = parseFloat(item.received_qty || item.accepted_quantity || 0);
+                        recWeight = isBoughtOut ? 0 : parseFloat(item.received_weight || 0);
+
+                        pendingQty = Math.max(0, designQty - recQty);
+                        pendingWeight = isBoughtOut ? 0 : Math.max(0, reqWeight - recWeight);
+
+                        isFulfilled = isBoughtOut
+                          ? (designQty > 0 && recQty >= designQty)
+                          : ((reqWeight > 0 && recWeight >= reqWeight) || (designQty > 0 && recQty >= designQty));
+                        isPartial = isBoughtOut
+                          ? (recQty > 0 && recQty < designQty)
+                          : ((recQty > 0 || recWeight > 0) && !isFulfilled);
+                      }
 
                       const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no || '');
-                      const cleanDwgNo = isDwgCodePattern ? '—' : (item.drawing_no || '—');
+                      const cleanDwgNo = isDirectCompany ? '—' : (isDwgCodePattern ? '—' : (item.drawing_no || '—'));
 
                       return (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
@@ -461,11 +506,22 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                             )}
                           </td>
                           <td className="p-2 text-center">
-                            <span className="font-semibold text-slate-800">{designQty.toFixed(0)}</span>
-                            <span className="text-[10px] text-slate-400 ml-1">Nos</span>
+                            <span className="font-semibold text-slate-800">
+                              {isDirectCompany ? (designQty % 1 === 0 ? designQty.toFixed(0) : designQty.toFixed(3)) : designQty.toFixed(0)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 ml-1">{qtyUom}</span>
                           </td>
                           <td className="p-2 text-center">
-                            {isBoughtOut ? (
+                            {isDirectCompany ? (
+                              designWeight !== null ? (
+                                <>
+                                  <span className="font-semibold text-indigo-600">{designWeight.toFixed(3)}</span>
+                                  <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                                </>
+                              ) : (
+                                <span className="text-slate-400 font-medium">—</span>
+                              )
+                            ) : ((item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'))) ? (
                               <span className="text-slate-400 font-medium">—</span>
                             ) : (
                               <>
@@ -475,11 +531,22 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                             )}
                           </td>
                           <td className="p-2 text-center">
-                            <span className="font-semibold text-emerald-600">{recQty.toFixed(0)}</span>
-                            <span className="text-[10px] text-slate-400 ml-1">Nos</span>
+                            <span className="font-semibold text-emerald-600">
+                              {isDirectCompany ? (recQty % 1 === 0 ? recQty.toFixed(0) : recQty.toFixed(3)) : recQty.toFixed(0)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 ml-1">{qtyUom}</span>
                           </td>
                           <td className="p-2 text-center">
-                            {isBoughtOut ? (
+                            {isDirectCompany ? (
+                              recWeight !== null ? (
+                                <>
+                                  <span className="font-semibold text-emerald-600">{recWeight.toFixed(3)}</span>
+                                  <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                                </>
+                              ) : (
+                                <span className="text-slate-400 font-medium">—</span>
+                              )
+                            ) : ((item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'))) ? (
                               <span className="text-slate-400 font-medium">—</span>
                             ) : (
                               <>
@@ -489,11 +556,22 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                             )}
                           </td>
                           <td className="p-2 text-center">
-                            <span className={`font-semibold ${pendingQty > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{pendingQty.toFixed(0)}</span>
-                            <span className="text-[10px] text-slate-400 ml-1">Nos</span>
+                            <span className={`font-semibold ${pendingQty > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                              {isDirectCompany ? (pendingQty % 1 === 0 ? pendingQty.toFixed(0) : pendingQty.toFixed(3)) : pendingQty.toFixed(0)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 ml-1">{qtyUom}</span>
                           </td>
                           <td className="p-2 text-center">
-                            {isBoughtOut ? (
+                            {isDirectCompany ? (
+                              pendingWeight !== null ? (
+                                <>
+                                  <span className={`font-semibold ${pendingWeight > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{pendingWeight.toFixed(3)}</span>
+                                  <span className="text-[10px] text-slate-400 ml-1">Kg</span>
+                                </>
+                              ) : (
+                                <span className="text-slate-400 font-medium">—</span>
+                              )
+                            ) : ((item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'))) ? (
                               <span className="text-slate-400 font-medium">—</span>
                             ) : (
                               <>
@@ -504,12 +582,22 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                           </td>
                           <td className="p-2 text-center text-slate-700">
                             {formatCurrency(item.unit_rate, po.currency)}
+                            {isDirectCompany && (
+                              <span className="text-[10px] text-slate-400 ml-0.5">
+                                /{hasWeight && designWeight && Math.abs(designWeight * (parseFloat(item.unit_rate) || 0) - (parseFloat(item.amount) || 0)) < 0.5 ? 'Kg' : qtyUom}
+                              </span>
+                            )}
                           </td>
                           <td className="p-2 text-right font-medium text-slate-900">
                             {(() => {
                               if (item.amount && parseFloat(item.amount) > 0) {
                                 return formatCurrency(parseFloat(item.amount), po.currency);
                               }
+                              if (isDirectCompany) {
+                                const effVal = (hasWeight && designWeight && qtyUom !== 'KG') ? designWeight : designQty;
+                                return formatCurrency(effVal * (parseFloat(item.unit_rate) || 0), po.currency);
+                              }
+                              const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
                               const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
                               const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
                                               lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
@@ -803,7 +891,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                 <th className="p-2 border-r border-slate-200">Item / Description</th>
                 <th className="p-2 border-r border-slate-200">Size</th>
                 <th className="p-2 text-center border-r border-slate-200">Design Qty</th>
-                <th className="p-2 text-center border-r border-slate-200">Required</th>
+                <th className="p-2 text-center border-r border-slate-200">{po?.po_type === 'DIRECT_COMPANY' || po?.source === 'DIRECT_COMPANY_PURCHASE' ? 'Weight (Kg)' : 'Required'}</th>
                 <th className="p-2 text-center border-r border-slate-200">Rate</th>
                 <th className="p-2 text-right border-r border-slate-200">Amount</th>
                 <th className="p-2 text-right">Total Amount</th>
@@ -811,8 +899,34 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
             </thead>
             <tbody className="divide-y divide-slate-200">
               {filteredItems.map((item, idx) => {
+                const isDirect = po?.po_type === 'DIRECT_COMPANY' || po?.source === 'DIRECT_COMPANY_PURCHASE';
                 const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no || '');
-                const cleanDwgNo = isDwgCodePattern ? '—' : (item.drawing_no || '—');
+                const cleanDwgNo = isDirect ? '—' : (isDwgCodePattern ? '—' : (item.drawing_no || '—'));
+
+                let dQtyStr, wtStr, amtVal;
+                if (isDirect) {
+                  const qUom = (item.unit || item.uom || 'NOS').trim().toUpperCase();
+                  const rawDQty = parseFloat(item.design_qty);
+                  const rawPQty = parseFloat(item.planned_qty);
+                  const rawQty = parseFloat(item.quantity);
+                  const dQty = (!isNaN(rawDQty) && rawDQty > 0) ? rawDQty : ((!isNaN(rawPQty) && rawPQty > 0) ? rawPQty : (!isNaN(rawQty) ? rawQty : 0));
+                  dQtyStr = `${dQty % 1 === 0 ? dQty.toFixed(0) : dQty.toFixed(3)} ${qUom}`;
+
+                  const wUnit = parseFloat(item.weight_per_unit || 0);
+                  const totWt = parseFloat(item.total_weight || 0);
+                  const hasWt = totWt > 0 || wUnit > 0 || qUom === 'KG';
+                  let dWt = null;
+                  if (totWt > 0) dWt = totWt;
+                  else if (wUnit > 0) dWt = Number((dQty * wUnit).toFixed(3));
+                  else if (qUom === 'KG') dWt = dQty;
+
+                  wtStr = dWt !== null ? `${dWt.toFixed(3)} Kg` : '—';
+                  amtVal = parseFloat(item.amount) > 0 ? parseFloat(item.amount) : ((dWt !== null && qUom !== 'KG' ? dWt : dQty) * (parseFloat(item.unit_rate) || 0));
+                } else {
+                  dQtyStr = `${Number(item.planned_qty || item.design_qty || 0).toFixed(3)} NOS`;
+                  wtStr = `${Number(item.quantity || 0).toFixed(3)} ${item.unit || item.uom}`;
+                  amtVal = (parseFloat(item.design_qty) || parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0);
+                }
 
                 return (
                   <tr key={idx} className="border-b border-slate-200">
@@ -828,14 +942,14 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                     </td>
                     <td className="p-2 border-r border-slate-200 font-mono font-bold">{formatDimensions(item) || '—'}</td>
                     <td className="p-2 text-center border-r border-slate-200 font-semibold">
-                      {Number(item.planned_qty || item.design_qty || 0).toFixed(3)} NOS
+                      {dQtyStr}
                     </td>
                     <td className="p-2 text-center border-r border-slate-200 font-semibold">
-                      {Number(item.quantity || 0).toFixed(3)} {item.unit || item.uom}
+                      {wtStr}
                     </td>
                     <td className="p-2 text-center border-r border-slate-200">{formatCurrency(item.unit_rate, po.currency)}</td>
-                    <td className="p-2 text-right border-r border-slate-200">{formatCurrency((parseFloat(item.design_qty) || parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0), po.currency)}</td>
-                    <td className="p-2 text-right font-bold">{formatCurrency((parseFloat(item.design_qty) || parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0) * 1.18, po.currency)}</td>
+                    <td className="p-2 text-right border-r border-slate-200">{formatCurrency(amtVal, po.currency)}</td>
+                    <td className="p-2 text-right font-bold">{formatCurrency(amtVal * 1.18, po.currency)}</td>
                   </tr>
                 );
               })}

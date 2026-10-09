@@ -1375,6 +1375,8 @@ model purchase_orders {
   merged_into_po_id                                                       Int?
   is_merged                                                               Boolean                                  @default(false)
   forwarded_to_accounts                                                   Int?                                     @default(0) @db.TinyInt
+  po_type                                                                 String                                   @default("DRAWING") @db.VarChar(30)
+  company_id                                                              Int?
   payments                                                                payments[]
   purchase_order_items_purchase_order_items_source_po_idTopurchase_orders purchase_order_items[]                   @relation("purchase_order_items_source_po_idTopurchase_orders")
   purchase_order_items                                                    purchase_order_items[]

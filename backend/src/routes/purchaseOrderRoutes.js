@@ -16,6 +16,7 @@ router.get('/:poId/pdf', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderContro
 router.post('/:poId/send-email', authorize(['PURCHASE_ORDER_EDIT', 'PURCHASE_ORDER_VIEW', 'PAYMENT_PROCESS']), purchaseOrderController.sendPurchaseOrderEmail);
 router.get('/preview/:quotationId', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.previewPurchaseOrder);
 router.post('/merge', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.mergePurchaseOrders);
+router.post('/direct-company', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.createDirectCompanyPurchaseOrder);
 router.post('/', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.createPurchaseOrder);
 router.get('/stats', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrderStats);
 router.get('/', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrders);

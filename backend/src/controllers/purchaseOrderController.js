@@ -9,6 +9,15 @@ const createPurchaseOrder = async (req, res, next) => {
   }
 };
 
+const createDirectCompanyPurchaseOrder = async (req, res, next) => {
+  try {
+    const result = await purchaseOrderService.createDirectCompanyPurchaseOrder(req.body);
+    res.status(201).json({ message: 'Direct Company Purchase Order created', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const previewPurchaseOrder = async (req, res, next) => {
   try {
     const preview = await purchaseOrderService.previewPurchaseOrder(req.params.quotationId);
@@ -237,6 +246,7 @@ const forwardToAccounts = async (req, res, next) => {
 
 module.exports = {
   createPurchaseOrder,
+  createDirectCompanyPurchaseOrder,
   previewPurchaseOrder,
   getPurchaseOrders,
   getPurchaseOrderById,

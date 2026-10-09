@@ -542,7 +542,9 @@ const ensurePoMaterialRequestColumns = async () => {
       { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' },
       { name: 'discount_type', definition: "VARCHAR(20) DEFAULT 'AMOUNT'" },
       { name: 'discount_value', definition: "DECIMAL(14, 2) DEFAULT 0.00" },
-      { name: 'discount_amount', definition: "DECIMAL(14, 2) DEFAULT 0.00" }
+      { name: 'discount_amount', definition: "DECIMAL(14, 2) DEFAULT 0.00" },
+      { name: 'po_type', definition: "VARCHAR(30) NOT NULL DEFAULT 'DRAWING'" },
+      { name: 'company_id', definition: "INT NULL" }
     ];
 
     const missingPoCols = requiredPoCols.filter(c => !existingPoCols.has(c.name));

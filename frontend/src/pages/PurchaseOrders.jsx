@@ -2,14 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, RefreshCw, Package, Clock, CheckCircle2,
-  AlertCircle, Truck, FileText, LayoutGrid, List, Filter, GitMerge
+  AlertCircle, Truck, FileText, LayoutGrid, List, Filter, GitMerge, X
 } from 'lucide-react';
 import { Card, SearchableSelect, Button, Tabs } from '../components/ui.jsx';
 import DataTable from '../components/DataTable.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
-import { formatDimensions } from '../utils/formatters';
+import { formatDimensions, calculateWeight, validateShapeDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -169,17 +169,21 @@ const PurchaseOrders = () => {
   });
 
   const [vendors, setVendors] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [stockItems, setStockItems] = useState([]);
   const [materialRequests, setMaterialRequests] = useState([]);
   const [showManualCreateModal, setShowManualCreateModal] = useState(false);
   const invoiceInputRef = useRef(null);
   const [uploadingPoId, setUploadingPoId] = useState(null);
   const [showAttachmentModal, setShowAttachmentModal] = useState(false);
+  const selectedPoForAttachmentRef = useRef(null);
   const [selectedPoForAttachment, setSelectedPoForAttachment] = useState(null);
   const [selectedAttachmentFiles, setSelectedAttachmentFiles] = useState([]);
   const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
   const [manualFormData, setManualFormData] = useState({
     id: null,
+    poType: 'DRAWING',
+    companyId: '',
     vendorId: '',
     quotationId: '',
     expectedDeliveryDate: '',
@@ -188,6 +192,36 @@ const PurchaseOrders = () => {
     discountType: 'AMOUNT',
     discountValue: 0,
     items: []
+  });
+
+  const [materials, setMaterials] = useState([]);
+  const [shapes, setShapes] = useState([]);
+  const [itemGroups, setItemGroups] = useState([]);
+
+  const [showAddPoItem, setShowAddPoItem] = useState(false);
+  const [newPoItem, setNewPoItem] = useState({
+    item_code: '',
+    material_name: '',
+    description: '',
+    quantity: 1,
+    unit: 'NOS',
+    item_group: '',
+    material_id: '',
+    material_type: '',
+    density: 0,
+    shape_id: '',
+    shape_type: '',
+    weight_per_unit: 0,
+    total_weight: 0,
+    length: '',
+    width: '',
+    thickness: '',
+    diameter: '',
+    outer_diameter: '',
+    thread_pitch: '',
+    rate: 0,
+    amount: 0,
+    remarks: ''
   });
 
   // Merge PO Wizard State
@@ -212,18 +246,41 @@ const PurchaseOrders = () => {
         fetchStats();
         fetchApprovedQuotations();
         fetchVendors();
+        fetchCompanies();
         fetchStockItems();
         fetchMaterialRequests();
+        fetchMaterials();
+        fetchShapes();
+        fetchItemGroups();
       }
     } else {
       fetchPOs();
       fetchStats();
       fetchApprovedQuotations();
       fetchVendors();
+      fetchCompanies();
       fetchStockItems();
       fetchMaterialRequests();
+      fetchMaterials();
+      fetchShapes();
+      fetchItemGroups();
     }
   }, []);
+
+  const fetchCompanies = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/companies`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCompanies(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+    }
+  };
 
   const fetchVendors = async () => {
     try {
@@ -256,6 +313,51 @@ const PurchaseOrders = () => {
       }
     } catch (error) {
       console.error('Error fetching items:', error);
+    }
+  };
+
+  const fetchMaterials = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/materials`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMaterials(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.error('Error fetching materials:', e);
+    }
+  };
+
+  const fetchShapes = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/shapes`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setShapes(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.error('Error fetching shapes:', e);
+    }
+  };
+
+  const fetchItemGroups = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/item-groups`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setItemGroups(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.error('Error fetching item groups:', e);
     }
   };
 
@@ -308,14 +410,247 @@ const PurchaseOrders = () => {
     }
   };
 
-  const handleAddManualItem = () => {
-    setManualFormData({
-      ...manualFormData,
-      items: [
-        ...manualFormData.items,
-        { item_code: '', description: '', quantity: 0, unit: 'NOS', rate: 0, amount: 0 }
-      ]
+  const directItemOptions = React.useMemo(() => {
+    const seen = new Set();
+    const opts = [];
+    (stockItems || []).forEach(si => {
+      const code = si.item_code ? String(si.item_code).trim() : '';
+      if (!code || seen.has(code)) return;
+      seen.add(code);
+      const matName = si.material_name || si.item_description || si.description || '';
+      opts.push({
+        value: code,
+        label: matName ? `${code} - ${matName}` : code,
+        item_code: code,
+        material_name: matName,
+        description: si.item_description || si.description || '',
+        unit: si.unit || 'Kg',
+        rate: parseFloat(si.valuation_rate) || parseFloat(si.standard_rate) || parseFloat(si.rate) || 0
+      });
     });
+    return opts;
+  }, [stockItems]);
+
+  const companyOptions = React.useMemo(() => {
+    return (companies || []).map(c => ({
+      label: c.company_name || c.name || '',
+      value: c.id,
+      company_name: c.company_name || c.name || ''
+    }));
+  }, [companies]);
+
+  const vendorOptions = React.useMemo(() => {
+    return (vendors || []).map(v => ({
+      label: v.vendor_name || v.name || '',
+      value: v.id,
+      vendor_name: v.vendor_name || v.name || ''
+    }));
+  }, [vendors]);
+
+  const handleAddManualItem = () => {
+    if (manualFormData.poType === 'DIRECT_COMPANY') {
+      setShowAddPoItem(prev => !prev);
+    } else {
+      setManualFormData({
+        ...manualFormData,
+        items: [
+          ...manualFormData.items,
+          { item_code: '', description: '', material_name: '', quantity: 0, unit: 'Kg', rate: 0, amount: 0 }
+        ]
+      });
+    }
+  };
+
+  // Auto-calculate Weight per Unit and Total Amount for Direct PO Item
+  useEffect(() => {
+    const qty = parseFloat(newPoItem.quantity) || 0;
+    const rate = parseFloat(newPoItem.rate) || 0;
+
+    if (!newPoItem.shape_type) {
+      const amt = Number((qty * rate).toFixed(2));
+      setNewPoItem(prev => {
+        if (prev.amount === amt) return prev;
+        return { ...prev, amount: amt };
+      });
+      return;
+    }
+
+    const calculatedWeight = calculateWeight({
+      shape: newPoItem.shape_type,
+      density: newPoItem.density,
+      length: newPoItem.length,
+      width: newPoItem.width,
+      thickness: newPoItem.thickness,
+      diameter: newPoItem.diameter,
+      outerDiameter: newPoItem.outer_diameter,
+      threadPitch: newPoItem.thread_pitch
+    });
+
+    const isKgUnit = (newPoItem.unit || '').toUpperCase() === 'KG';
+    const wPerUnit = calculatedWeight > 0 ? calculatedWeight : (parseFloat(newPoItem.weight_per_unit) || 0);
+    const totWeight = Number((qty * wPerUnit).toFixed(3));
+    const amt = isKgUnit && wPerUnit > 0
+      ? Number((totWeight * rate).toFixed(2))
+      : Number((qty * rate).toFixed(2));
+
+    setNewPoItem(prev => {
+      if (prev.weight_per_unit === wPerUnit && prev.total_weight === totWeight && prev.amount === amt) {
+        return prev;
+      }
+      return {
+        ...prev,
+        weight_per_unit: wPerUnit,
+        total_weight: totWeight,
+        amount: amt
+      };
+    });
+  }, [
+    newPoItem.length,
+    newPoItem.width,
+    newPoItem.thickness,
+    newPoItem.diameter,
+    newPoItem.outer_diameter,
+    newPoItem.thread_pitch,
+    newPoItem.density,
+    newPoItem.shape_type,
+    newPoItem.quantity,
+    newPoItem.rate,
+    newPoItem.unit
+  ]);
+
+  const handleSelectMaterialForPo = (itemCode) => {
+    const item = stockItems.find(i => String(i.item_code) === String(itemCode));
+    if (!item) return;
+
+    const unit = item.unit || item.uom || 'NOS';
+    const ig = (item.material_type || item.item_group || '').toLowerCase().replace(/_/g, ' ').trim();
+    const matchingGroup = itemGroups.find(g => {
+      const gName = g.name.toLowerCase().replace(/_/g, ' ').trim();
+      return gName === ig || ig.includes(gName) || gName.includes(ig);
+    });
+    const itemGroupName = matchingGroup ? matchingGroup.name : (item.material_type || item.item_group || '');
+
+    // Material matching
+    const materialObj = materials.find(m => String(m.id) === String(item.material_id))
+      || materials.find(m => m.name.toLowerCase() === (item.material_grade || '').toLowerCase());
+    const materialId = materialObj ? materialObj.id : (item.material_id || '');
+    const materialType = materialObj ? materialObj.name : (item.material_grade || '');
+    const density = materialObj ? parseFloat(materialObj.density) : (parseFloat(item.density) || 0);
+
+    // Shape matching
+    const shapeObj = shapes.find(s => String(s.id) === String(item.shape_id))
+      || shapes.find(s => s.name.toLowerCase() === (item.shape_type || '').toLowerCase());
+    const shapeId = shapeObj ? shapeObj.id : (item.shape_id || '');
+    const shapeType = shapeObj ? shapeObj.name : (item.shape_type || '');
+
+    const len = item.length || '';
+    const wid = item.width || '';
+    const thk = item.thickness || '';
+    const dia = item.diameter || '';
+    const od = item.outer_diameter || '';
+    const pitch = item.thread_pitch || item.threadPitch || '';
+    const wPerUnit = parseFloat(item.weight_per_unit) || 0;
+    const rate = parseFloat(item.valuation_rate) || parseFloat(item.standard_rate) || parseFloat(item.rate) || 0;
+    const qty = 1;
+
+    setNewPoItem({
+      item_code: item.item_code,
+      material_name: item.material_name || item.item_description || item.description || '',
+      description: item.item_description || item.description || item.material_name || '',
+      quantity: qty,
+      unit: unit,
+      item_group: itemGroupName,
+      material_id: materialId,
+      material_type: materialType,
+      density: density,
+      shape_id: shapeId,
+      shape_type: shapeType,
+      weight_per_unit: wPerUnit,
+      total_weight: wPerUnit * qty,
+      length: len,
+      width: wid,
+      thickness: thk,
+      diameter: dia,
+      outer_diameter: od,
+      thread_pitch: pitch,
+      rate: rate,
+      amount: (unit.toUpperCase() === 'KG' && wPerUnit > 0 ? wPerUnit * qty : qty) * rate,
+      remarks: ''
+    });
+  };
+
+  const handleCommitAddPoItem = () => {
+    if (!newPoItem.item_code) {
+      errorToast('Please select a material / item');
+      return;
+    }
+    const qty = parseFloat(newPoItem.quantity) || 0;
+    if (qty <= 0) {
+      errorToast('Quantity must be greater than 0');
+      return;
+    }
+
+    const isKgBased = (newPoItem.unit || '').toUpperCase() === 'KG' || (newPoItem.item_group || '').toLowerCase().includes('raw') || !!newPoItem.shape_type;
+    const finalQty = isKgBased && parseFloat(newPoItem.weight_per_unit) > 0 && (newPoItem.unit || '').toUpperCase() === 'KG'
+      ? Number((parseFloat(newPoItem.weight_per_unit) * qty).toFixed(3))
+      : qty;
+    const rate = parseFloat(newPoItem.rate) || 0;
+    const amt = parseFloat(newPoItem.amount) || Number((finalQty * rate).toFixed(2));
+
+    const itemToAdd = {
+      item_code: newPoItem.item_code,
+      material_name: newPoItem.material_name,
+      description: newPoItem.description || newPoItem.material_name,
+      quantity: finalQty,
+      design_qty: qty,
+      weight_per_unit: parseFloat(newPoItem.weight_per_unit) || 0,
+      total_weight: parseFloat(newPoItem.total_weight) || 0,
+      unit: newPoItem.unit || 'NOS',
+      rate: rate,
+      amount: amt,
+      remarks: newPoItem.remarks || '',
+      shape_type: newPoItem.shape_type || '',
+      material_type: newPoItem.material_type || '',
+      density: parseFloat(newPoItem.density) || 0,
+      length: parseFloat(newPoItem.length) || 0,
+      width: parseFloat(newPoItem.width) || 0,
+      thickness: parseFloat(newPoItem.thickness) || 0,
+      diameter: parseFloat(newPoItem.diameter) || 0,
+      outer_diameter: parseFloat(newPoItem.outer_diameter) || 0,
+      thread_pitch: parseFloat(newPoItem.thread_pitch) || 0
+    };
+
+    setManualFormData(prev => ({
+      ...prev,
+      items: [...prev.items, itemToAdd]
+    }));
+
+    setNewPoItem({
+      item_code: '',
+      material_name: '',
+      description: '',
+      quantity: 1,
+      unit: 'NOS',
+      item_group: '',
+      material_id: '',
+      material_type: '',
+      density: 0,
+      shape_id: '',
+      shape_type: '',
+      weight_per_unit: 0,
+      total_weight: 0,
+      length: '',
+      width: '',
+      thickness: '',
+      diameter: '',
+      outer_diameter: '',
+      thread_pitch: '',
+      rate: 0,
+      amount: 0,
+      remarks: ''
+    });
+    setShowAddPoItem(false);
+    successToast('Material added to Purchase Order');
   };
 
   const handleManualItemChange = (index, field, value) => {
@@ -325,10 +660,11 @@ const PurchaseOrders = () => {
     if (field === 'item_code') {
       const selectedItem = stockItems.find(i => String(i.item_code) === String(value));
       if (selectedItem) {
-        newItems[index].description = selectedItem.item_description || selectedItem.material_name || selectedItem.description;
-        newItems[index].material_name = selectedItem.material_name;
-        newItems[index].unit = selectedItem.unit || 'NOS';
-        newItems[index].rate = selectedItem.valuation_rate || 0;
+        const matName = selectedItem.material_name || selectedItem.item_description || selectedItem.description || '';
+        newItems[index].description = selectedItem.item_description || selectedItem.description || matName;
+        newItems[index].material_name = matName;
+        newItems[index].unit = selectedItem.unit || 'Kg';
+        newItems[index].rate = parseFloat(selectedItem.valuation_rate) || parseFloat(selectedItem.standard_rate) || parseFloat(selectedItem.rate) || 0;
         newItems[index].length = selectedItem.length || 0;
         newItems[index].width = selectedItem.width || 0;
         newItems[index].thickness = selectedItem.thickness || 0;
@@ -339,10 +675,46 @@ const PurchaseOrders = () => {
       }
     }
 
+    if (field === 'design_qty') {
+      const dQty = parseFloat(value) || 0;
+      newItems[index].design_qty = value;
+      const wpu = parseFloat(newItems[index].weight_per_unit) || 0;
+      if (wpu > 0) {
+        newItems[index].total_weight = Number((dQty * wpu).toFixed(3));
+        if ((newItems[index].unit || '').toUpperCase() === 'KG') {
+          newItems[index].quantity = newItems[index].total_weight;
+        } else {
+          newItems[index].quantity = dQty;
+        }
+      } else {
+        newItems[index].quantity = dQty;
+      }
+      const rate = parseFloat(newItems[index].rate) || 0;
+      const billingQty = ((newItems[index].unit || '').toUpperCase() === 'KG' && wpu > 0)
+        ? (newItems[index].total_weight || dQty)
+        : dQty;
+      newItems[index].amount = Number((billingQty * rate).toFixed(2));
+      setManualFormData({ ...manualFormData, items: newItems });
+      return;
+    }
+
+    if (field === 'rate') {
+      newItems[index].rate = value;
+      const r = parseFloat(value) || 0;
+      const wpu = parseFloat(newItems[index].weight_per_unit) || 0;
+      const dQty = parseFloat(newItems[index].design_qty !== undefined ? newItems[index].design_qty : newItems[index].quantity) || 0;
+      const billingQty = ((newItems[index].unit || '').toUpperCase() === 'KG' && wpu > 0)
+        ? (parseFloat(newItems[index].total_weight) || (dQty * wpu))
+        : (parseFloat(newItems[index].quantity) || dQty);
+      newItems[index].amount = Number((billingQty * r).toFixed(2));
+      setManualFormData({ ...manualFormData, items: newItems });
+      return;
+    }
+
     // Always recalculate amount on any change to quantity or rate
     const qty = parseFloat(newItems[index].quantity) || 0;
     const rate = parseFloat(newItems[index].rate) || 0;
-    newItems[index].amount = qty * rate;
+    newItems[index].amount = Number((qty * rate).toFixed(2));
 
     setManualFormData({ ...manualFormData, items: newItems });
   };
@@ -499,6 +871,71 @@ const PurchaseOrders = () => {
 
   const handleCreateManualPO = async (e) => {
     e.preventDefault();
+
+    if (manualFormData.poType === 'DIRECT_COMPANY') {
+      if (!manualFormData.companyId) return errorToast('Please select a company');
+      if (!manualFormData.vendorId) return errorToast('Please select a supplier');
+      if (manualFormData.items.length === 0) return errorToast('Please add at least one item');
+
+      try {
+        const token = localStorage.getItem('authToken');
+        const discVal = parseFloat(manualFormData.discountValue) || 0;
+
+        const rawComp = manualFormData.companyId;
+        const isNumComp = rawComp !== null && rawComp !== undefined && !isNaN(parseInt(rawComp)) && String(parseInt(rawComp)) === String(rawComp).trim();
+        const payload = {
+          companyId: isNumComp ? parseInt(rawComp) : null,
+          companyName: !isNumComp ? String(rawComp).trim() : (companies.find(c => String(c.id) === String(rawComp))?.company_name || null),
+          vendorId: parseInt(manualFormData.vendorId),
+          expectedDeliveryDate: manualFormData.expectedDeliveryDate || null,
+          notes: manualFormData.notes || null,
+          currency: manualFormData.currency?.split(' ')[0] || 'INR',
+          discount_type: manualFormData.discountType || 'AMOUNT',
+          discount_value: discVal,
+          items: manualFormData.items.map(item => ({
+            item_code: item.item_code,
+            description: item.description || item.material_name || item.item_code,
+            material_name: item.material_name || item.description || item.item_code,
+            design_qty: item.design_qty !== undefined && item.design_qty !== null ? parseFloat(item.design_qty) : (parseFloat(item.quantity) || 0),
+            quantity: parseFloat(item.quantity) || 0,
+            total_weight: parseFloat(item.total_weight) || 0,
+            unit: item.unit || 'NOS',
+            rate: parseFloat(item.rate) || 0,
+            amount: parseFloat(item.amount) || 0,
+            length: item.length || 0,
+            width: item.width || 0,
+            thickness: item.thickness || 0,
+            diameter: item.diameter || 0,
+            outer_diameter: item.outer_diameter || 0,
+            density: item.density || 0,
+            weight_per_unit: item.weight_per_unit || 0
+          }))
+        };
+
+        const response = await fetch(`${API_BASE}/purchase-orders/direct-company`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to create Direct Company PO');
+        }
+
+        successToast('Direct Company Purchase Order created successfully');
+        navigate(`${deptPrefix}/purchase-orders`);
+        fetchPOs(false);
+        fetchStats();
+      } catch (error) {
+        errorToast(error.message || 'Failed to create Direct Company PO');
+      }
+      return;
+    }
+
     if (!manualFormData.quotationId) return errorToast('Please select an approved quote');
     if (!manualFormData.vendorId) return errorToast('Please select a vendor');
     if (manualFormData.items.length === 0) return errorToast('Please add at least one item');
@@ -1460,7 +1897,7 @@ const PurchaseOrders = () => {
             {val || `PO-${String(row.id).padStart(4, '0')}`}
           </span>
           <span className="text-xs text-slate-400  flex items-center gap-1 mt-0.5">
-            {row.mr_number || (row.quotation_id ? `QT-${row.quotation_id}` : `ID-${row.id}`)}
+            {row.mr_number || (row.quotation_id ? `QT-${row.quotation_id}` : (row.po_type === 'DIRECT_COMPANY' ? 'Direct Purchase' : `ID-${row.id}`))}
           </span>
         </div>
       )
@@ -1487,7 +1924,7 @@ const PurchaseOrders = () => {
       render: (val, row) => (
         <div className="flex flex-col">
           <span className="text-xs font-semibold text-[#111827] leading-[16px]">
-            {row.drawing_no || '—'}
+            {row.drawing_no || (row.po_type === 'DIRECT_COMPANY' ? 'Direct Purchase' : '—')}
           </span>
           {row.finished_good && (
             <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
@@ -1898,8 +2335,48 @@ const PurchaseOrders = () => {
             </div>
 
             <form onSubmit={handleCreateManualPO} className="p-2 space-y-2 max-h-[calc(90vh-100px)] overflow-y-auto custom-scrollbar">
+              {/* Purchase Order Type Selector */}
+              <div className="bg-slate-50 border border-slate-200 rounded p-3">
+                <label className="text-xs font-semibold text-slate-700 ml-1 block mb-2">Purchase Order Type *</label>
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700 hover:text-blue-600">
+                    <input
+                      type="radio"
+                      name="poType"
+                      value="DRAWING"
+                      checked={manualFormData.poType === 'DRAWING'}
+                      onChange={() => setManualFormData(prev => ({
+                        ...prev,
+                        poType: 'DRAWING',
+                        companyId: '',
+                        items: []
+                      }))}
+                      className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    Against Drawing
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700 hover:text-blue-600">
+                    <input
+                      type="radio"
+                      name="poType"
+                      value="DIRECT_COMPANY"
+                      checked={manualFormData.poType === 'DIRECT_COMPANY'}
+                      onChange={() => setManualFormData(prev => ({
+                        ...prev,
+                        poType: 'DIRECT_COMPANY',
+                        quotationId: '',
+                        vendorId: '',
+                        items: []
+                      }))}
+                      className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    Direct Company Purchase
+                  </label>
+                </div>
+              </div>
+
               {/* Basic Information Section */}
-              <div className="bg-white border border-slate-200 rounded overflow-hidden ">
+              <div className="bg-white border border-slate-200 rounded overflow-visible">
                 <div className="bg-slate-50/50 px-4 p-2 border-b border-slate-100 flex items-center gap-2">
                   <div className="p-1.5 bg-blue-100 text-blue-600 rounded ">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
@@ -1907,61 +2384,86 @@ const PurchaseOrders = () => {
                   <h3 className="text-sm  text-slate-700">Basic Information</h3>
                 </div>
                 <div className="p-3 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label className="text-xs font-semibold text-slate-700 ml-1">Select Drawing *</label>
-                      <SearchableSelect
-                        options={quotations.filter(q => q.drawing_no).map(q => ({
-                          label: `${q.drawing_no} - ${q.finished_good || 'No description'}`,
-                          value: q.id
-                        }))}
-                        value={manualFormData.quotationId || ''}
-                        onChange={(e) => handleManualQuotationChange(e.target.value)}
-                        placeholder="Search & Select Drawing..."
-                        allowCustom={false}
-                      />
+                  {manualFormData.poType === 'DIRECT_COMPANY' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-700 ml-1">Company *</label>
+                        <SearchableSelect
+                          options={companyOptions}
+                          value={manualFormData.companyId}
+                          onChange={(e) => setManualFormData(prev => ({ ...prev, companyId: e.target.value }))}
+                          placeholder="Search or enter company name..."
+                          allowCustom={true}
+                          showSearchIcon={true}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-700 ml-1">Supplier *</label>
+                        <SearchableSelect
+                          options={vendorOptions}
+                          value={manualFormData.vendorId}
+                          onChange={(e) => setManualFormData(prev => ({ ...prev, vendorId: e.target.value }))}
+                          placeholder="Search & select supplier..."
+                          allowCustom={false}
+                          showSearchIcon={true}
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700 ml-1">Supplier *</label>
-                      <select
-                        value={manualFormData.vendorId}
-                        onChange={(e) => setManualFormData({ ...manualFormData, vendorId: e.target.value })}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        required
-                        disabled={!!manualFormData.quotationId}
-                      >
-                        <option value="">Select Supplier</option>
-                        {vendors.map(v => (
-                          <option key={v.id} value={v.id}>{v.vendor_name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const selectedQuoteDetails = quotations.find(q => String(q.id) === String(manualFormData.quotationId));
-                    if (!selectedQuoteDetails) return null;
-                    return (
-                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs animate-in fade-in duration-300">
-                        <div>
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Project No.</span>
-                          <span className="text-xs font-semibold text-slate-700">{selectedQuoteDetails.project_name || '—'}</span>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-1.5 md:col-span-2">
+                          <label className="text-xs font-semibold text-slate-700 ml-1">Select Drawing *</label>
+                          <SearchableSelect
+                            options={quotations.filter(q => q.drawing_no).map(q => ({
+                              label: `${q.drawing_no} - ${q.finished_good || 'No description'}`,
+                              value: q.id
+                            }))}
+                            value={manualFormData.quotationId || ''}
+                            onChange={(e) => handleManualQuotationChange(e.target.value)}
+                            placeholder="Search & Select Drawing..."
+                            allowCustom={false}
+                          />
                         </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Approved RFQ No.</span>
-                          <span className="text-xs font-semibold text-slate-700">{selectedQuoteDetails.quote_number || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Supplier</span>
-                          <span className="text-xs font-bold text-slate-700">{selectedQuoteDetails.vendor_name || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Finished Good</span>
-                          <span className="text-xs text-slate-600 truncate block" title={selectedQuoteDetails.finished_good}>{selectedQuoteDetails.finished_good || '—'}</span>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 ml-1">Supplier *</label>
+                          <SearchableSelect
+                            options={vendorOptions}
+                            value={manualFormData.vendorId}
+                            onChange={(e) => setManualFormData(prev => ({ ...prev, vendorId: e.target.value }))}
+                            placeholder="Select Supplier..."
+                            allowCustom={false}
+                            disabled={!!manualFormData.quotationId}
+                          />
                         </div>
                       </div>
-                    );
-                  })()}
+
+                      {(() => {
+                        const selectedQuoteDetails = quotations.find(q => String(q.id) === String(manualFormData.quotationId));
+                        if (!selectedQuoteDetails) return null;
+                        return (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs animate-in fade-in duration-300">
+                            <div>
+                              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Project No.</span>
+                              <span className="text-xs font-semibold text-slate-700">{selectedQuoteDetails.project_name || '—'}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Approved RFQ No.</span>
+                              <span className="text-xs font-semibold text-slate-700">{selectedQuoteDetails.quote_number || '—'}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Supplier</span>
+                              <span className="text-xs font-bold text-slate-700">{selectedQuoteDetails.vendor_name || '—'}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Finished Good</span>
+                              <span className="text-xs text-slate-600 truncate block" title={selectedQuoteDetails.finished_good}>{selectedQuoteDetails.finished_good || '—'}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
@@ -1988,7 +2490,7 @@ const PurchaseOrders = () => {
               </div>
 
               {/* Purchase Order Items Section */}
-              <div className="bg-white border border-slate-200 rounded overflow-hidden ">
+              <div className="bg-white border border-slate-200 rounded overflow-visible">
                 <div className="bg-slate-50/50 px-4 p-2 border-b border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-blue-100 text-blue-600 rounded ">
@@ -1996,128 +2498,808 @@ const PurchaseOrders = () => {
                     </div>
                     <h3 className="text-sm  text-slate-700">Purchase Order Items</h3>
                   </div>
-                  {/* <button
-                    type="button"
-                    onClick={handleAddManualItem}
-                    className="flex items-center gap-1.5 p-1.5 bg-white border border-blue-200 text-blue-600 rounded  text-xs  hover:bg-blue-50 transition-all "
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                    Add Item
-                  </button> */}
+                  {manualFormData.poType === 'DIRECT_COMPANY' && (
+                    <button
+                      type="button"
+                      onClick={handleAddManualItem}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+                    >
+                      <Plus size={14} />
+                      {showAddPoItem ? 'Close Form' : 'Add Item'}
+                    </button>
+                  )}
                 </div>
-                <div className="p-0 overflow-x-auto">
+
+                {/* Add Purchase Order Item Card (Material Request Style) */}
+                {manualFormData.poType === 'DIRECT_COMPANY' && showAddPoItem && (() => {
+                  const isKgBased = (newPoItem.unit || '').toUpperCase() === 'KG' ||
+                    (newPoItem.item_group || '').toLowerCase().includes('raw') ||
+                    !!newPoItem.shape_type;
+                  const selectedShape = (newPoItem.shape_type || '').trim();
+                  const shapeValidation = validateShapeDimensions({
+                    shape: selectedShape,
+                    width: newPoItem.width,
+                    thickness: newPoItem.thickness,
+                    diameter: newPoItem.diameter,
+                    outerDiameter: newPoItem.outer_diameter,
+                    threadPitch: newPoItem.thread_pitch
+                  });
+
+                  const resetPoItemForm = () => {
+                    setShowAddPoItem(false);
+                    setNewPoItem({
+                      item_code: '',
+                      material_name: '',
+                      description: '',
+                      quantity: 1,
+                      unit: 'NOS',
+                      item_group: '',
+                      material_id: '',
+                      material_type: '',
+                      density: 0,
+                      shape_id: '',
+                      shape_type: '',
+                      weight_per_unit: 0,
+                      total_weight: 0,
+                      length: '',
+                      width: '',
+                      thickness: '',
+                      diameter: '',
+                      outer_diameter: '',
+                      thread_pitch: '',
+                      rate: 0,
+                      amount: 0,
+                      remarks: ''
+                    });
+                  };
+
+                  return (
+                    <div className="p-4 bg-slate-50 border-b border-slate-200 space-y-3 animate-in fade-in duration-150">
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                        <h5 className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                          <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
+                          Add Purchase Order Item
+                        </h5>
+                        <button
+                          type="button"
+                          onClick={resetPoItemForm}
+                          className="p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-600 transition-colors"
+                          title="Close form"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Row 1: Material Selection, Quantity, UOM, Item Group */}
+                      <div className="grid grid-cols-12 gap-3 items-end">
+                        <div className="col-span-12 md:col-span-5 space-y-1">
+                          <label className="text-xs text-slate-600 font-semibold block">
+                            Material Selection <span className="text-rose-500">*</span>
+                          </label>
+                          <SearchableSelect
+                            placeholder="Search Item Code or Material Name..."
+                            options={directItemOptions}
+                            value={newPoItem.item_code}
+                            onChange={(e) => {
+                              handleSelectMaterialForPo(e.target.value);
+                            }}
+                            showSearchIcon={true}
+                            allowCustom={false}
+                            className="font-semibold"
+                            renderOption={(opt) => (
+                              <div className="flex items-center gap-2 py-0.5">
+                                <span className="font-bold text-slate-800 tracking-wide shrink-0">{opt.item_code}</span>
+                                <span className="text-slate-400 font-normal shrink-0">-</span>
+                                <span className="text-slate-700 font-medium truncate">{opt.material_name || opt.description}</span>
+                              </div>
+                            )}
+                          />
+                        </div>
+
+                        <div className="col-span-6 md:col-span-2 space-y-1">
+                          <label className="text-xs text-slate-600 font-semibold block">
+                            Quantity (Pieces) <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0.001"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-center"
+                            placeholder="1"
+                            value={newPoItem.quantity}
+                            onChange={(e) => setNewPoItem(prev => ({ ...prev, quantity: e.target.value }))}
+                          />
+                        </div>
+
+                        <div className="col-span-6 md:col-span-2 space-y-1">
+                          <label className="text-xs text-slate-600 font-semibold block">UOM</label>
+                          <select
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                            value={newPoItem.unit}
+                            onChange={(e) => setNewPoItem(prev => ({ ...prev, unit: e.target.value }))}
+                          >
+                            {['KG', 'NOS', 'MTR', 'SET', 'LTR', 'SQM', 'GM', 'TON'].map(u => (
+                              <option key={u} value={u}>{u}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="col-span-12 md:col-span-3 space-y-1">
+                          <label className="text-xs text-slate-600 font-semibold block">Item Group</label>
+                          <select
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                            value={newPoItem.item_group}
+                            onChange={(e) => setNewPoItem(prev => ({ ...prev, item_group: e.target.value }))}
+                          >
+                            <option value="">Select Group</option>
+                            {itemGroups.map(g => (
+                              <option key={g.id || g.name} value={g.name}>{g.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Material Type (with Density), Shape Type, Weight/Unit (Kg) - shown when isKgBased */}
+                      {isKgBased && (
+                        <div className="p-3 bg-indigo-50/40 rounded-lg border border-indigo-100/60 space-y-3">
+                          <div className="grid grid-cols-12 gap-3 items-end">
+                            <div className="col-span-12 md:col-span-5 space-y-1">
+                              <label className="text-xs text-slate-600 font-semibold block">
+                                Select Material Type
+                              </label>
+                              <select
+                                className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                value={newPoItem.material_id || ''}
+                                onChange={(e) => {
+                                  const mId = e.target.value;
+                                  const selectedMaterial = materials.find(m => String(m.id) === String(mId) || String(m.name).toLowerCase() === String(mId).toLowerCase());
+                                  setNewPoItem(prev => ({
+                                    ...prev,
+                                    material_id: mId,
+                                    material_type: selectedMaterial ? selectedMaterial.name : prev.material_type,
+                                    density: selectedMaterial ? parseFloat(selectedMaterial.density) : prev.density
+                                  }));
+                                }}
+                              >
+                                <option value="">Select Material</option>
+                                {materials.map(m => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.name} {m.density ? `[Density = ${parseFloat(m.density).toFixed(4)} ${m.density_unit || 'g/cm³'}]` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="col-span-12 md:col-span-4 space-y-1">
+                              <label className="text-xs text-slate-600 font-semibold block">
+                                Select Shape Type
+                              </label>
+                              <select
+                                className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                value={newPoItem.shape_id || newPoItem.shape_type || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const shapeObj = shapes.find(s => String(s.id) === String(val) || String(s.name).toLowerCase() === String(val).toLowerCase());
+                                  setNewPoItem(prev => ({
+                                    ...prev,
+                                    shape_id: shapeObj ? shapeObj.id : val,
+                                    shape_type: shapeObj ? shapeObj.name : val
+                                  }));
+                                }}
+                              >
+                                <option value="">Select Shape</option>
+                                {shapes.map(s => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="col-span-12 md:col-span-3 space-y-1">
+                              <label className="text-xs text-slate-600 font-semibold block">
+                                Weight/Unit (Kg)
+                              </label>
+                              <input
+                                type="text"
+                                readOnly
+                                placeholder="Auto"
+                                value={newPoItem.weight_per_unit > 0 ? `${newPoItem.weight_per_unit} kg` : ''}
+                                className="w-full p-2 bg-slate-100 border border-slate-200 rounded text-xs text-slate-800 font-bold outline-none text-center"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Row 3: Shape Dimensions Input card */}
+                          {selectedShape && (
+                            <div className="p-3 bg-white rounded border border-slate-200 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-indigo-700 text-xs font-semibold">
+                                  <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                                  {selectedShape} Dimensions (All in mm)
+                                </div>
+                                {newPoItem.weight_per_unit > 0 && (
+                                  <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                    Unit Wt: {newPoItem.weight_per_unit} kg
+                                  </span>
+                                )}
+                              </div>
+
+                              {!shapeValidation.isValid && (
+                                <div className="p-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded font-medium">
+                                  ⚠️ {shapeValidation.error}
+                                </div>
+                              )}
+
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                {(selectedShape.toLowerCase() === 'plate' || selectedShape.toLowerCase().includes('plate') || selectedShape.toLowerCase().includes('sheet') || selectedShape.toLowerCase().includes('flat')) && (
+                                  <>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Length (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.length || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, length: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Width (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.width || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, width: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Thickness (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.thickness || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, thickness: e.target.value }))}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+
+                                {(selectedShape.toLowerCase() === 'round' || (selectedShape.toLowerCase().includes('round') || selectedShape.toLowerCase().includes('rod') || selectedShape.toLowerCase().includes('bar')) && !selectedShape.toLowerCase().includes('hex') && !selectedShape.toLowerCase().includes('threaded') && !selectedShape.toLowerCase().includes('thread') && !selectedShape.toLowerCase().includes('square')) && (
+                                  <>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Diameter (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.diameter || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, diameter: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Length (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.length || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, length: e.target.value }))}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+
+                                {(selectedShape.toLowerCase().includes('threaded rod') || selectedShape.toLowerCase().includes('thread rod')) && (
+                                  <>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Outer Diameter (D) (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.diameter || newPoItem.outer_diameter || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, diameter: e.target.value, outer_diameter: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Thread Pitch (P) (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.thread_pitch || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, thread_pitch: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Length (L) (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.length || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, length: e.target.value }))}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+
+                                {(selectedShape.toLowerCase() === 'pipe' || (selectedShape.toLowerCase().includes('pipe') || selectedShape.toLowerCase().includes('tube')) && !selectedShape.toLowerCase().includes('square') && !selectedShape.toLowerCase().includes('rect')) && (
+                                  <>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Outer Diameter (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.outer_diameter || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, outer_diameter: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Thickness (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.thickness || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, thickness: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Length (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.length || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, length: e.target.value }))}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+
+                                {selectedShape.toLowerCase().includes('square') && (
+                                  <>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Outside Side (A) (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.width || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, width: e.target.value }))}
+                                      />
+                                    </div>
+                                    {!(selectedShape.toLowerCase().includes('square bar') || (selectedShape.toLowerCase().includes('square') && selectedShape.toLowerCase().includes('bar'))) && (
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-500 font-medium">Wall Thickness (T) (mm) *</label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                          placeholder="0.00"
+                                          value={newPoItem.thickness || ''}
+                                          onChange={(e) => setNewPoItem(prev => ({ ...prev, thickness: e.target.value }))}
+                                        />
+                                      </div>
+                                    )}
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Length (L) (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.length || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, length: e.target.value }))}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+
+                                {selectedShape.toLowerCase().includes('rect') && (
+                                  <>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Width (B) (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.width || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, width: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Height (H) (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.outer_diameter || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, outer_diameter: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Wall Thickness (T) (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.thickness || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, thickness: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Length (L) (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.length || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, length: e.target.value }))}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+
+                                {selectedShape.toLowerCase().includes('hex') && (
+                                  <>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Across Flats (AF) (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.width || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, width: e.target.value }))}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-slate-500 font-medium">Length (L) (mm) *</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={newPoItem.length || ''}
+                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, length: e.target.value }))}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Row 4: Rate, Remarks, Total Weight & Total Amount previews, Action buttons */}
+                      <div className="grid grid-cols-12 gap-3 items-end pt-1">
+                        <div className="col-span-6 md:col-span-3 space-y-1">
+                          <label className="text-xs text-slate-600 font-semibold block">
+                            Rate (₹) <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none font-medium text-center"
+                            placeholder="0.00"
+                            value={newPoItem.rate}
+                            onChange={(e) => setNewPoItem(prev => ({ ...prev, rate: e.target.value }))}
+                          />
+                        </div>
+
+                        <div className="col-span-6 md:col-span-4 space-y-1">
+                          <label className="text-xs text-slate-600 font-semibold block">Remarks (Optional)</label>
+                          <input
+                            type="text"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                            placeholder="Enter remarks or specifications..."
+                            value={newPoItem.remarks || ''}
+                            onChange={(e) => setNewPoItem(prev => ({ ...prev, remarks: e.target.value }))}
+                          />
+                        </div>
+
+                        <div className="col-span-12 md:col-span-5 flex items-center justify-end gap-3">
+                          {newPoItem.total_weight > 0 && (
+                            <div className="text-right mr-1">
+                              <div className="text-[10px] text-slate-400 uppercase font-semibold">Total Weight</div>
+                              <div className="text-xs font-bold text-slate-700">{newPoItem.total_weight} kg</div>
+                            </div>
+                          )}
+                          <div className="text-right mr-1">
+                            <div className="text-[10px] text-slate-400 uppercase font-semibold">Total Amount</div>
+                            <div className="text-sm font-bold text-blue-600">{formatCurrency(newPoItem.amount || 0)}</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleCommitAddPoItem}
+                            disabled={!newPoItem.item_code || parseFloat(newPoItem.quantity) <= 0 || !shapeValidation.isValid}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded text-xs font-semibold shadow-sm transition-all active:scale-95 flex items-center gap-1.5"
+                          >
+                            <Plus size={14} />
+                            Add Material
+                          </button>
+                          <button
+                            type="button"
+                            onClick={resetPoItemForm}
+                            className="p-2 border border-slate-200 hover:bg-slate-100 text-slate-500 rounded text-xs transition-all"
+                            title="Cancel"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+
+                <div className="p-0 overflow-visible">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
-                        <th className="px-4 p-2 text-left">Item ID</th>
-                        <th className="px-4 p-2 text-left">Material Name & Dimensions</th>
-                        <th className="px-4 p-2 text-center w-24">Design Qty</th>
-                        <th className="px-4 p-2 text-center w-24">UOM</th>
-                        <th className="px-4 p-2 text-center w-32">Rate</th>
-                        <th className="px-4 p-2 text-right w-32">Amount</th>
-                        <th className="px-4 p-2 text-center w-12"></th>
+                        {manualFormData.poType === 'DIRECT_COMPANY' ? (
+                          <>
+                            <th className="px-4 p-2 text-left min-w-[200px]">Material Name & Code</th>
+                            <th className="px-4 p-2 text-left">Remarks / Description</th>
+                            <th className="px-4 p-2 text-center w-28">Design Qty</th>
+                            <th className="px-4 p-2 text-center w-28">Weight</th>
+                            <th className="px-4 p-2 text-center w-28">Rate</th>
+                            <th className="px-4 p-2 text-right w-32">Amount</th>
+                            <th className="px-4 p-2 text-center w-12"></th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="px-4 p-2 text-left min-w-[280px]">Item Code</th>
+                            <th className="px-4 p-2 text-left">Material Name & Description</th>
+                            <th className="px-4 p-2 text-center w-28">Design Qty</th>
+                            <th className="px-4 p-2 text-center w-28">Weight</th>
+                            <th className="px-4 p-2 text-center w-28">Rate</th>
+                            <th className="px-4 p-2 text-right w-32">Amount</th>
+                            <th className="px-4 p-2 text-center w-12"></th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {manualFormData.items.map((item, idx) => (
                         <tr key={idx} className="group hover:bg-slate-50/50 transition-all">
-                          <td className="px-4 p-2 w-[220px]">
-                            <div className="flex flex-col gap-1">
-                              <select
-                                value={item.item_code}
-                                onChange={(e) => handleManualItemChange(idx, 'item_code', e.target.value)}
-                                className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer font-semibold"
-                              >
-                                <option value="">Select Item</option>
-                                {stockItems.map(si => (
-                                  <option key={si.id} value={si.item_code}>
-                                    {si.item_code}
-                                  </option>
-                                ))}
-                              </select>
-                              {item.description && (
-                                <span className="text-[10px] text-slate-400 font-medium px-1 leading-normal break-words max-w-[210px] block">
-                                  {item.description}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 p-2">
-                            <div className="flex flex-col gap-1">
-                              <input
-                                type="text"
-                                value={item.material_name || item.description || ''}
-                                onChange={(e) => handleManualItemChange(idx, 'material_name', e.target.value)}
-                                className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                placeholder="Material Name"
-                              />
-                              {formatDimensions(item) && (
-                                <div className="px-1 text-[10px] text-slate-400">
-                                  {formatDimensions(item)}
+                          {manualFormData.poType === 'DIRECT_COMPANY' ? (
+                            <>
+                              <td className="px-4 p-2 min-w-[200px]">
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-bold text-xs text-slate-800">{item.item_code}</span>
+                                    {item.shape_type && (
+                                      <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200">
+                                        {item.shape_type}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] text-slate-600 font-medium">{item.material_name || item.description}</span>
+                                  {formatDimensions(item) && (
+                                    <span className="text-[10px] text-slate-500 font-mono">
+                                      📐 {formatDimensions(item)}
+                                    </span>
+                                  )}
+                                  {parseFloat(item.weight_per_unit) > 0 && (
+                                    <span className="text-[10px] text-slate-400 font-medium">
+                                      Wt: {item.weight_per_unit} kg/ea
+                                    </span>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 p-2">
-                            <input
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) => handleManualItemChange(idx, 'quantity', e.target.value)}
-                              className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-center focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
-                            />
-                          </td>
-                          <td className="px-4 p-2">
-                            <input
-                              type="text"
-                              value={item.unit}
-                              readOnly
-                              className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs  text-center text-slate-400 outline-none "
-                            />
-                          </td>
-                          <td className="px-4 p-2">
-                            <input
-                              type="number"
-                              value={item.rate}
-                              onChange={(e) => handleManualItemChange(idx, 'rate', e.target.value)}
-                              className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-center focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
-                            />
-                          </td>
-                          <td className="px-4 p-2 text-right  text-slate-700">
-                            {formatCurrency(item.amount)}
-                          </td>
-                          <td className="px-4 p-2">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveManualItem(idx)}
-                              className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                          </td>
+                              </td>
+                              <td className="px-4 p-2">
+                                <input
+                                  type="text"
+                                  value={item.remarks || item.description || ''}
+                                  onChange={(e) => handleManualItemChange(idx, 'remarks', e.target.value)}
+                                  className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                  placeholder="Remarks"
+                                />
+                              </td>
+                              <td className="px-4 p-2 w-28 text-center">
+                                <div className="flex flex-col items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    min="0.001"
+                                    value={item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : (item.quantity || '')}
+                                    onChange={(e) => handleManualItemChange(idx, 'design_qty', e.target.value)}
+                                    className="w-20 p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-slate-800"
+                                  />
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase">
+                                    {(item.unit || '').toUpperCase() === 'KG' ? 'NOS' : (item.unit || 'NOS')}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 p-2 w-28 text-center">
+                                {parseFloat(item.total_weight) > 0 || parseFloat(item.weight_per_unit) > 0 || (item.unit || '').toUpperCase() === 'KG' ? (
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <span className="text-xs font-bold text-slate-800">
+                                      {Number(item.total_weight || item.quantity || 0).toFixed(3)}
+                                    </span>
+                                    <span className="text-[10px] text-emerald-600 font-bold uppercase">KG</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 font-medium">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 p-2 w-28">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={item.rate}
+                                    onChange={(e) => handleManualItemChange(idx, 'rate', e.target.value)}
+                                    className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700"
+                                  />
+                                  <span className="text-[9px] text-slate-400 font-medium">
+                                    {(item.unit || '').toUpperCase() === 'KG' ? '₹ / Kg' : `₹ / ${item.unit || 'Nos'}`}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 p-2 text-right font-bold text-xs text-slate-800 w-32">
+                                {formatCurrency(item.amount)}
+                              </td>
+                              <td className="px-4 p-2 text-center w-12">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveManualItem(idx)}
+                                  className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-all"
+                                  title="Remove item"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="px-4 p-2 min-w-[280px]">
+                                <div className="flex flex-col gap-1">
+                                  <select
+                                    value={item.item_code}
+                                    onChange={(e) => handleManualItemChange(idx, 'item_code', e.target.value)}
+                                    className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer font-semibold"
+                                  >
+                                    <option value="">Select Item</option>
+                                    {stockItems.map(si => (
+                                      <option key={si.id} value={si.item_code}>
+                                        {si.item_code}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {item.description && (
+                                    <span className="text-[10px] text-slate-400 font-medium px-1 leading-normal break-words max-w-[210px] block">
+                                      {item.description}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 p-2">
+                                <div className="flex flex-col gap-1">
+                                  <input
+                                    type="text"
+                                    value={item.material_name || item.description || ''}
+                                    onChange={(e) => handleManualItemChange(idx, 'material_name', e.target.value)}
+                                    className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    placeholder="Material Name"
+                                  />
+                                  {formatDimensions(item) && (
+                                    <div className="px-1 text-[10px] text-slate-400">
+                                      {formatDimensions(item)}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 p-2 w-28 text-center">
+                                <div className="flex flex-col items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    min="0.001"
+                                    value={item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : (item.quantity || '')}
+                                    onChange={(e) => handleManualItemChange(idx, 'design_qty', e.target.value)}
+                                    className="w-20 p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-slate-800"
+                                  />
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase">
+                                    {(item.unit || '').toUpperCase() === 'KG' ? 'NOS' : (item.unit || 'NOS')}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 p-2 w-28 text-center">
+                                {parseFloat(item.total_weight) > 0 || parseFloat(item.weight_per_unit) > 0 || (item.unit || '').toUpperCase() === 'KG' ? (
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <span className="text-xs font-bold text-slate-800">
+                                      {Number(item.total_weight || item.quantity || 0).toFixed(3)}
+                                    </span>
+                                    <span className="text-[10px] text-emerald-600 font-bold uppercase">KG</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 font-medium">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 p-2 w-28">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={item.rate}
+                                    onChange={(e) => handleManualItemChange(idx, 'rate', e.target.value)}
+                                    className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700"
+                                  />
+                                  <span className="text-[9px] text-slate-400 font-medium">
+                                    {(item.unit || '').toUpperCase() === 'KG' ? '₹ / Kg' : `₹ / ${item.unit || 'Nos'}`}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 p-2 text-right font-bold text-xs text-slate-800 w-32">
+                                {formatCurrency(item.amount)}
+                              </td>
+                              <td className="px-4 p-2 text-center w-12">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveManualItem(idx)}
+                                  className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-all"
+                                  title="Remove item"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </td>
+                            </>
+                          )}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   {manualFormData.items.length === 0 && (
                     <div className="py-12 text-center text-slate-400 italic text-xs">
-                      No items added yet. Click 'Add Item' to start.
+                      {manualFormData.poType === 'DIRECT_COMPANY'
+                        ? "No items added yet. Click '+ Add Item' above to add materials."
+                        : "No items loaded yet. Select a drawing quotation above."}
                     </div>
                   )}
                 </div>
-                <div className="p-2 bg-slate-50/30 border-t border-slate-100 grid grid-cols-3 gap-8">
+                <div className="p-3 bg-slate-50/50 border-t border-slate-100 grid grid-cols-4 gap-4">
                   <div className="flex flex-col">
-                    <span className="text-xs  text-slate-400  ">Total Items</span>
-                    <span className="text-xl  text-slate-800">{manualFormData.items.length}</span>
+                    <span className="text-xs text-slate-400 font-medium">Total Items</span>
+                    <span className="text-lg font-bold text-slate-800">{manualFormData.items.length}</span>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-xs  text-slate-400  ">Total Qty</span>
-                    <span className="text-xl  text-slate-800">
-                      {manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 0), 0)}
+                    <span className="text-xs text-slate-400 font-medium">Total Design Qty</span>
+                    <span className="text-lg font-bold text-slate-800">
+                      {manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.design_qty !== undefined && i.design_qty !== null ? i.design_qty : i.quantity) || 0), 0)} <span className="text-xs font-normal text-slate-400">NOS</span>
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs text-slate-400 font-medium">Total Weight</span>
+                    <span className="text-lg font-bold text-emerald-600">
+                      {manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.total_weight || ((i.unit || '').toUpperCase() === 'KG' ? i.quantity : 0)) || 0), 0).toFixed(3)} <span className="text-xs font-normal text-emerald-600">KG</span>
                     </span>
                   </div>
                   <div className="flex flex-col items-end">
-                    <span className="text-xs  text-slate-400  ">Item Subtotal</span>
-                    <span className="text-xl  text-blue-600">
+                    <span className="text-xs text-slate-400 font-medium">Item Subtotal</span>
+                    <span className="text-lg font-bold text-blue-600">
                       {formatCurrency(manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0))}
                     </span>
                   </div>
@@ -2361,7 +3543,7 @@ const PurchaseOrders = () => {
                           <th className="px-4 p-2 text-left">Description</th>
                           <th className="px-4 p-2 text-left">Material</th>
                           <th className="px-4 p-2 text-center">Design Qty</th>
-                          <th className="px-4 p-2 text-center">Required</th>
+                          <th className="px-4 p-2 text-center">Weight</th>
                           <th className="px-4 p-2 text-right">Rate</th>
                           <th className="px-4 p-2 text-right">Total</th>
                         </tr>
@@ -2511,7 +3693,7 @@ const PurchaseOrders = () => {
                         <th className="p-2 text-xs  text-slate-400  ">Drawing No</th>
                         <th className="p-2 text-xs  text-slate-400  ">Item</th>
                         <th className="p-2 text-xs  text-slate-400   text-center">Design Qty</th>
-                        <th className="p-2 text-xs  text-slate-400   text-center">Required Qty</th>
+                        <th className="p-2 text-xs  text-slate-400   text-center">Weight</th>
                         <th className="p-2 text-xs  text-slate-400   text-center">Rate</th>
                         <th className="p-2 text-xs  text-slate-400   text-right">Amount</th>
                         <th className="p-2 w-10"></th>

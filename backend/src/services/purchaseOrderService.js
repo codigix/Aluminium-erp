@@ -544,6 +544,180 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
   }
 };
 
+const createDirectCompanyPurchaseOrder = async (data) => {
+  const {
+    companyId,
+    companyName,
+    vendorId,
+    orderDate,
+    expectedDeliveryDate,
+    notes,
+    items,
+    discount_type,
+    discount_value,
+    discount_amount,
+    currency
+  } = data;
+
+  const resolvedCompanyName = companyName ? String(companyName).trim() : (typeof companyId === 'string' && isNaN(parseInt(companyId)) ? String(companyId).trim() : null);
+  const parsedCompanyId = companyId && !isNaN(parseInt(companyId)) ? parseInt(companyId) : null;
+
+  if (!parsedCompanyId && !resolvedCompanyName) {
+    throw new Error('Company is required for Direct Purchase Order');
+  }
+  if (!vendorId) throw new Error('Supplier is required for Direct Purchase Order');
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new Error('At least one item is required for Direct Purchase Order');
+  }
+
+  for (const item of items) {
+    if (!item.item_code) throw new Error('Item code is required for all items');
+    const qty = parseFloat(item.quantity) || 0;
+    if (qty <= 0) throw new Error(`Quantity must be greater than 0 for item ${item.item_code}`);
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    let finalCompanyId = parsedCompanyId;
+    if (!finalCompanyId && resolvedCompanyName) {
+      const [existing] = await connection.execute(
+        'SELECT id FROM companies WHERE LOWER(company_name) = LOWER(?) LIMIT 1',
+        [resolvedCompanyName]
+      );
+      if (existing.length > 0) {
+        finalCompanyId = existing[0].id;
+      } else {
+        const code = resolvedCompanyName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8).padEnd(4, 'X');
+        const [compRes] = await connection.execute(
+          `INSERT INTO companies (company_code, company_name, status) VALUES (?, ?, 'ACTIVE')`,
+          [code, resolvedCompanyName]
+        );
+        finalCompanyId = compRes.insertId;
+      }
+    }
+
+    const poNumber = await generatePONumber();
+    const publicId = crypto.randomUUID();
+
+    const formattedItems = items.map(item => {
+      const qty = parseFloat(item.quantity) || 0;
+      const rate = parseFloat(item.rate || item.unit_rate) || 0;
+      const amount = parseFloat(item.amount) > 0 ? parseFloat(item.amount) : Number((qty * rate).toFixed(2));
+      const cgstPercent = parseFloat(item.cgst_percent ?? 9);
+      const sgstPercent = parseFloat(item.sgst_percent ?? 9);
+      const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
+      const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
+      const totalAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
+
+      return {
+        item_code: item.item_code,
+        material_name: item.material_name || item.description || item.item_code,
+        description: item.description || item.material_name || item.item_code,
+        design_qty: parseFloat(item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : item.quantity) || 0,
+        quantity: qty,
+        unit: item.unit || item.uom || 'NOS',
+        unit_rate: rate,
+        amount: amount,
+        cgst_percent: cgstPercent,
+        cgst_amount: cgstAmount,
+        sgst_percent: sgstPercent,
+        sgst_amount: sgstAmount,
+        total_amount: totalAmount,
+        length: parseFloat(item.length) || 0,
+        width: parseFloat(item.width) || 0,
+        thickness: parseFloat(item.thickness) || 0,
+        diameter: parseFloat(item.diameter) || 0,
+        outer_diameter: parseFloat(item.outer_diameter) || 0,
+        density: parseFloat(item.density) || 0,
+        weight_per_unit: parseFloat(item.weight_per_unit) || 0
+      };
+    });
+
+    const subtotal = formattedItems.reduce((sum, i) => sum + i.amount, 0);
+    const discType = discount_type || 'AMOUNT';
+    const discVal = parseFloat(discount_value) || 0;
+    let discAmt = parseFloat(discount_amount) || 0;
+
+    if (discType === 'PERCENTAGE') {
+      discAmt = Number(((subtotal * discVal) / 100).toFixed(2));
+    } else if (discVal > 0) {
+      discAmt = Number(Math.min(discVal, subtotal).toFixed(2));
+    }
+
+    const taxableAmount = Math.max(0, subtotal - discAmt);
+    const cgstTotal = Number((taxableAmount * 0.09).toFixed(2));
+    const sgstTotal = Number((taxableAmount * 0.09).toFixed(2));
+    const actualTotalAmount = Number((taxableAmount + cgstTotal + sgstTotal).toFixed(2));
+
+    const [result] = await connection.execute(
+      `INSERT INTO purchase_orders (
+        po_number, public_id, po_type, company_id, vendor_id, 
+        quotation_id, mr_id, sales_order_id, status, total_amount, 
+        expected_delivery_date, notes, discount_type, discount_value, discount_amount
+      ) VALUES (?, ?, 'DIRECT_COMPANY', ?, ?, NULL, NULL, NULL, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
+      [
+        poNumber,
+        publicId,
+        finalCompanyId,
+        vendorId,
+        actualTotalAmount,
+        expectedDeliveryDate || null,
+        notes || null,
+        discType,
+        discVal,
+        discAmt
+      ]
+    );
+
+    const poId = result.insertId;
+
+    for (const item of formattedItems) {
+      await connection.execute(
+        `INSERT INTO purchase_order_items (
+          purchase_order_id, item_code, description, material_name, 
+          design_qty, planned_qty, quantity, unit, unit_rate, amount, cgst_percent, cgst_amount, 
+          sgst_percent, sgst_amount, total_amount, length, width, thickness, 
+          diameter, outer_diameter, density, weight_per_unit, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`,
+        [
+          poId,
+          item.item_code,
+          item.description,
+          item.material_name,
+          item.design_qty,
+          item.design_qty,
+          item.quantity,
+          item.unit,
+          item.unit_rate,
+          item.amount,
+          item.cgst_percent,
+          item.cgst_amount,
+          item.sgst_percent,
+          item.sgst_amount,
+          item.total_amount,
+          item.length,
+          item.width,
+          item.thickness,
+          item.diameter,
+          item.outer_diameter,
+          item.density,
+          item.weight_per_unit
+        ]
+      );
+    }
+
+    await connection.commit();
+    return { id: poId, po_number: poNumber, status: 'DRAFT', po_type: 'DIRECT_COMPANY' };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const getPurchaseOrders = async (filters = {}) => {
   let query = `
     SELECT 
@@ -654,6 +828,7 @@ const getPurchaseOrders = async (filters = {}) => {
         )
       ) as finished_good,
       COALESCE(
+        IF(po.po_type = 'DIRECT_COMPANY', 'Direct Purchase', NULL),
         (
           SELECT so.project_name 
           FROM sales_orders so
@@ -701,6 +876,11 @@ const getPurchaseOrders = async (filters = {}) => {
         'Stock/Internal'
       ) as project_name,
       COALESCE(
+        (
+          SELECT c_dir.company_name 
+          FROM companies c_dir 
+          WHERE c_dir.id = po.company_id
+        ),
         (
           SELECT c.company_name 
           FROM companies c 
@@ -2644,14 +2824,51 @@ const generatePurchaseOrderPDF = async (poId) => {
     hostIFSCCode: activeCompany?.ifsc_code ? activeCompany.ifsc_code.toUpperCase() : 'HDFC0001234',
     hostBranchName: activeCompany?.branch_name || 'Bhosari, Pune - 411026, Maharashtra',
     items: await Promise.all((po.items || []).map(async (i, idx) => {
+      const isDirectCompany = po.po_type === 'DIRECT_COMPANY' || po.source === 'DIRECT_COMPANY_PURCHASE';
       const matType = (i.material_type || i.item_type || '').toUpperCase().trim();
-      const isBoughtOutItem = matType.includes('BOUGHT') || (i.item_code && String(i.item_code).toUpperCase().startsWith('BO-'));
+      const isBoughtOutItem = isDirectCompany
+        ? false
+        : (matType.includes('BOUGHT') || (i.item_code && String(i.item_code).toUpperCase().startsWith('BO-')));
 
-      const designQty = parseFloat(i.planned_qty || i.design_qty || (isBoughtOutItem ? i.quantity : 0) || 0);
-      const requiredQty = isBoughtOutItem ? 0 : parseFloat(i.quantity || i.required_weight || 0);
+      let designQty = 0;
+      let requiredQty = 0;
+      let weightUnit = 'KG';
+      let isWeightEmpty = false;
+
+      if (isDirectCompany) {
+        const qtyUom = (i.unit || i.uom || 'NOS').trim().toUpperCase();
+        const rawDQty = parseFloat(i.design_qty);
+        const rawPQty = parseFloat(i.planned_qty);
+        const rawQty = parseFloat(i.quantity);
+        designQty = (!isNaN(rawDQty) && rawDQty > 0)
+          ? rawDQty
+          : ((!isNaN(rawPQty) && rawPQty > 0) ? rawPQty : (!isNaN(rawQty) ? rawQty : 0));
+
+        const wPerUnit = parseFloat(i.weight_per_unit || 0);
+        const totWeight = parseFloat(i.total_weight || 0);
+        const hasWeight = totWeight > 0 || wPerUnit > 0 || qtyUom === 'KG';
+
+        if (totWeight > 0) {
+          requiredQty = totWeight;
+        } else if (wPerUnit > 0) {
+          requiredQty = Number((designQty * wPerUnit).toFixed(3));
+        } else if (qtyUom === 'KG') {
+          requiredQty = designQty;
+        } else {
+          requiredQty = 0;
+        }
+
+        weightUnit = 'KG';
+        isWeightEmpty = !hasWeight || requiredQty <= 0;
+      } else {
+        designQty = parseFloat(i.planned_qty || i.design_qty || (isBoughtOutItem ? i.quantity : 0) || 0);
+        requiredQty = isBoughtOutItem ? 0 : parseFloat(i.quantity || i.required_weight || 0);
+        weightUnit = (i.unit || 'KG').toUpperCase();
+        isWeightEmpty = isBoughtOutItem;
+      }
 
       const isItemDwgValid = i.drawing_no && !/^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(i.drawing_no) && i.drawing_no !== 'Merged Drawings' && i.drawing_no !== '—';
-      let resolvedDrawingNo = isItemDwgValid ? i.drawing_no : (await getItemParentDrawingNumber(pool, i));
+      let resolvedDrawingNo = isDirectCompany ? '—' : (isItemDwgValid ? i.drawing_no : (await getItemParentDrawingNumber(pool, i)));
       if (resolvedDrawingNo) {
         const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(resolvedDrawingNo);
         if (isItemCodePattern || resolvedDrawingNo === 'Merged Drawings') {
@@ -2779,10 +2996,11 @@ const generatePurchaseOrderPDF = async (poId) => {
         hsn_code: '73089090', // realistic fallback
         expected_delivery_date: formatDate(po.expected_delivery_date),
         pur_req_no: po.mr_number || '—',
-        design_qty: designQty.toFixed(0),
-        required_qty: isBoughtOutItem ? '—' : requiredQty.toFixed(3),
-        quantity: isBoughtOutItem ? '—' : requiredQty.toFixed(3),
-        unit: isBoughtOutItem ? '' : (i.unit || 'KG').toUpperCase(),
+        design_qty: designQty % 1 === 0 ? designQty.toFixed(0) : designQty.toFixed(3),
+        required_qty: isWeightEmpty ? '—' : requiredQty.toFixed(3),
+        quantity: isWeightEmpty ? '—' : requiredQty.toFixed(3),
+        unit: isWeightEmpty ? '' : weightUnit,
+        is_bought_out: isWeightEmpty,
         unit_rate: parseFloat(i.unit_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         discount: (() => {
@@ -3133,6 +3351,7 @@ const forwardToAccounts = async (poId, receiptId = null) => {
 
 module.exports = {
   createPurchaseOrder,
+  createDirectCompanyPurchaseOrder,
   previewPurchaseOrder,
   getPurchaseOrders,
   getPurchaseOrderById,

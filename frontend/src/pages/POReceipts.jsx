@@ -282,9 +282,9 @@ const POReceipts = () => {
       }
 
       const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
-      const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
-                      lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
-                      lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
+      const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" ||
+        lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+        lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
 
       const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
       const currQty = parseFloat(item.current_receiving_qty !== undefined && item.current_receiving_qty !== '' ? item.current_receiving_qty : (item.received_qty || 0)) || 0;
@@ -518,10 +518,10 @@ const POReceipts = () => {
             .map(item => {
               const dQty = parseFloat(item.planned_qty || item.design_qty || 0);
               const reqWeight = parseFloat(item.required_weight || item.quantity || 0);
-              
+
               const rawPrevRecQty = parseFloat(item.received_qty);
               const rawPrevRecWt = parseFloat(item.received_weight);
-              
+
               const prevRecWeight = (!isNaN(rawPrevRecWt) && rawPrevRecWt > 0)
                 ? rawPrevRecWt
                 : (!isNaN(rawPrevRecQty) ? rawPrevRecQty : 0);
@@ -536,8 +536,8 @@ const POReceipts = () => {
               const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
               const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
               const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" ||
-                              lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
-                              lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
+                lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+                lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
               const effectiveQty = (isLaser || isBoughtOut) ? defaultCurrentQty : defaultCurrentWeight;
 
               return {
@@ -632,7 +632,7 @@ const POReceipts = () => {
       formDataPayload.append('receiptDate', formData.receiptDate);
       formDataPayload.append('receivedQuantity', formData.receivedQuantity);
       formDataPayload.append('notes', formData.notes || '');
-      
+
       const activeItems = (formData.items || []).filter(item => {
         const currQty = parseFloat(item.current_receiving_qty !== undefined ? item.current_receiving_qty : item.received_qty) || 0;
         const currWeight = parseFloat(item.current_receiving_weight !== undefined ? item.current_receiving_weight : item.received_weight) || 0;
@@ -1100,9 +1100,8 @@ const POReceipts = () => {
               type="button"
               onClick={handleCreateReceipt}
               disabled={formData.items.length === 0}
-              className={`px-6 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-200 active:scale-95 ${
-                formData.items.length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-blue-700'
-              }`}
+              className={`px-6 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-200 active:scale-95 ${formData.items.length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-blue-700'
+                }`}
             >
               Create GRN Request
             </button>
@@ -1422,11 +1421,10 @@ const POReceipts = () => {
                                 handleItemChange(idx, 'received_qty', cappedVal);
                               }}
                               max={Math.max(0, ordQty - prevQty)}
-                              className={`w-16 p-1.5 border rounded-lg text-center text-xs font-semibold focus:ring-2 outline-none ${
-                                isFullyReceived 
-                                  ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' 
+                              className={`w-16 p-1.5 border rounded-lg text-center text-xs font-semibold focus:ring-2 outline-none ${isFullyReceived
+                                  ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'
                                   : 'bg-white border-blue-200 text-blue-600 focus:ring-blue-500/20'
-                              }`}
+                                }`}
                               placeholder="0"
                             />
                           </td>
@@ -1477,14 +1475,14 @@ const POReceipts = () => {
                             <div className="flex flex-col items-end">
                               <span className="text-slate-900 text-xs font-bold">
                                 {(() => {
-                                    const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
-                                    const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
-                                                    lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
-                                                    lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
-                                    const effectiveQty = (isLaser || isBoughtOut) ? currQty : currWeight;
-                                    const rate = parseFloat(item.rate || item.unit_rate) || 0;
-                                    return formatCurrency(effectiveQty * rate);
-                                  })()}
+                                  const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
+                                  const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" ||
+                                    lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
+                                    lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
+                                  const effectiveQty = (isLaser || isBoughtOut) ? currQty : currWeight;
+                                  const rate = parseFloat(item.rate || item.unit_rate) || 0;
+                                  return formatCurrency(effectiveQty * rate);
+                                })()}
                               </span>
                             </div>
                           </td>
@@ -1614,9 +1612,8 @@ const POReceipts = () => {
               <button
                 type="submit"
                 disabled={formData.items.length === 0}
-                className={`flex items-center gap-2 px-8 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-200 active:scale-95 ${
-                  formData.items.length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-blue-700'
-                }`}
+                className={`flex items-center gap-2 px-8 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-200 active:scale-95 ${formData.items.length === 0 ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:bg-blue-700'
+                  }`}
               >
                 Create GRN Request
               </button>
@@ -1943,10 +1940,10 @@ const POReceipts = () => {
                       const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
                       const dQty = parseFloat(item.planned_qty || item.design_qty || (isBoughtOut ? (item.quantity || item.received_quantity) : 0) || 0);
                       const reqWt = isBoughtOut ? 0 : parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0);
-                      
+
                       const rawRecQty = parseFloat(item.received_qty);
                       const rawRecWt = parseFloat(item.received_weight);
-                      
+
                       const recWt = isBoughtOut ? 0 : ((!isNaN(rawRecWt) && rawRecWt > 0) ? rawRecWt : parseFloat(item.received_quantity || 0));
                       const recQty = (!isNaN(rawRecQty) && rawRecQty > 0) ? rawRecQty : dQty;
 
