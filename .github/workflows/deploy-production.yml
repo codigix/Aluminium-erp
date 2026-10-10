@@ -3,7 +3,7 @@ name: Deploy Aluminium ERP Prod
 on:
   push:
     branches:
-      - development_branch
+      - Codigix_branch
   workflow_dispatch:
 
 jobs:
@@ -24,8 +24,8 @@ jobs:
 
             cd /var/www/Aluminium-erp
 
-            git fetch origin production_branch
-            git reset --hard origin/production_branch
+            git fetch origin Codigix_branch
+            git reset --hard origin/Codigix_branch
 
             # === FRONTEND ===
             echo "Rebuilding frontend..."
