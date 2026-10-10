@@ -3,7 +3,7 @@ name: Deploy Aluminium ERP Prod
 on:
   push:
     branches:
-      - development_branch
+      - Codigix_branch
   workflow_dispatch:
 
 jobs:
