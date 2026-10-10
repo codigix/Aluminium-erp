@@ -276,6 +276,11 @@ const RFQPrintDetail = ({ quotationId: propQuotationId, onBack: propOnBack }) =>
                         <td className="p-3">
                           <p className="font-semibold text-slate-900">{item.material_name || item.description || 'N/A'}</p>
                           {item.item_code && <span className="text-[10px] text-slate-400 font-mono">Code: {item.item_code}</span>}
+                          {(item.laser_cutting || String(item.operation || '').toLowerCase().includes('laser')) && (
+                            <span style={{ color: '#2563EB' }} className="block text-[10px] font-semibold mt-0.5">
+                              Operation: Laser Cutting {item.laser_cutting ? `(${item.laser_cutting})` : ''}
+                            </span>
+                          )}
                         </td>
                         <td className="p-3 font-mono text-slate-600">{dims || item.description || '—'}</td>
                         <td className="p-3 text-slate-600">{item.material_type || '—'}</td>
@@ -396,7 +401,14 @@ const RFQPrintDetail = ({ quotationId: propQuotationId, onBack: propOnBack }) =>
                   <tr key={idx} className="border-b border-slate-200">
                     <td className="p-2 text-center font-bold border-r border-slate-300">{idx + 1}</td>
                     <td className="p-2 font-mono font-semibold border-r border-slate-300">{item.drawing_no || item.item_code || '—'}</td>
-                    <td className="p-2 border-r border-slate-300 font-bold">{item.material_name || item.description || 'N/A'}</td>
+                    <td className="p-2 border-r border-slate-300 font-bold">
+                      <div>{item.material_name || item.description || 'N/A'}</div>
+                      {(item.laser_cutting || String(item.operation || '').toLowerCase().includes('laser')) && (
+                        <div style={{ color: '#2563EB' }} className="text-[9px] font-semibold">
+                          Operation: Laser Cutting {item.laser_cutting ? `(${item.laser_cutting})` : ''}
+                        </div>
+                      )}
+                    </td>
                     <td className="p-2 border-r border-slate-300 font-mono">{dims || item.description || '—'}</td>
                     <td className="p-2 border-r border-slate-300">{item.material_type || '—'}</td>
                     <td className="p-2 text-center font-bold border-r border-slate-300">

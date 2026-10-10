@@ -666,11 +666,13 @@ const materialRequestController = {
       if (rows.length > 0) {
         const mrIds = rows.map(r => r.id);
         const [mris] = await pool.query(`
-          SELECT mri.*, COALESCE(mri.shape_type, shape_lookup.shape_name) as shape_type
+          SELECT mri.*, COALESCE(mri.shape_type, shape_lookup.shape_name) as shape_type,
+                 shape_lookup.operation as operation
           FROM material_request_items mri
           LEFT JOIN (
               SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
-                     MAX(s.name) as shape_name
+                     MAX(s.name) as shape_name,
+                     MAX(som.operation) as operation
               FROM sales_order_item_materials som
               LEFT JOIN shapes s ON som.shape_id = s.id
               GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
@@ -798,6 +800,7 @@ const materialRequestController = {
       const [items] = await pool.query(`
         SELECT mri.id, mri.mr_id, mri.item_code, mri.planned_qty, mri.unit_rate, mri.warehouse, mri.item_source, mri.remarks,
                COALESCE(mri.shape_type, shape_lookup.shape_name) as shape_type,
+               shape_lookup.operation as operation,
                COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
                COALESCE(mri.uom, sb.unit) as uom,
                COALESCE(mri.item_type, sb.material_type) as material_type,
@@ -849,7 +852,8 @@ const materialRequestController = {
         ) sb ON mri.item_code = sb.item_code
         LEFT JOIN (
             SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
-                   MAX(s.name) as shape_name
+                   MAX(s.name) as shape_name,
+                   MAX(som.operation) as operation
             FROM sales_order_item_materials som
             LEFT JOIN shapes s ON som.shape_id = s.id
             GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
@@ -1811,6 +1815,7 @@ const _fetchMrDetailsForRfq = async (mrId) => {
   const [items] = await pool.query(`
     SELECT mri.id, mri.mr_id, mri.item_code, mri.planned_qty, mri.unit_rate, mri.warehouse, mri.item_source, mri.remarks,
            COALESCE(mri.shape_type, shape_lookup.shape_name) as shape_type,
+           shape_lookup.operation as operation,
            COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
            COALESCE(mri.uom, sb.unit) as uom,
            COALESCE(mri.item_type, sb.material_type) as material_type,
@@ -1853,7 +1858,8 @@ const _fetchMrDetailsForRfq = async (mrId) => {
     ) sb ON mri.item_code = sb.item_code
     LEFT JOIN (
         SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
-               MAX(s.name) as shape_name
+               MAX(s.name) as shape_name,
+               MAX(som.operation) as operation
         FROM sales_order_item_materials som
         LEFT JOIN shapes s ON som.shape_id = s.id
         GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter

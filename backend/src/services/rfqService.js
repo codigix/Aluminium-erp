@@ -212,7 +212,52 @@ const _enrichRfqs = async (rfqs) => {
         SELECT i.*, 
                COALESCE(i.material_name, sb.material_name, sb.item_description, i.item_code) as material_name,
                COALESCE(i.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type,
-               COALESCE(i.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name
+               COALESCE(i.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name,
+               COALESCE(
+                 shape_lookup.operation,
+                 (
+                   SELECT som.operation
+                   FROM material_requests mr_sub
+                   JOIN production_plan_items ppi_op ON ppi_op.plan_id = mr_sub.plan_id
+                   JOIN sales_order_item_materials som ON som.sales_order_item_id = ppi_op.sales_order_item_id
+                   WHERE mr_sub.id = r.mr_id
+                     AND (
+                       LOWER(TRIM(som.material_name)) = LOWER(TRIM(i.material_name))
+                       OR LOWER(TRIM(som.item_code)) = LOWER(TRIM(i.item_code))
+                     )
+                     AND som.operation IS NOT NULL AND TRIM(som.operation) != ''
+                   LIMIT 1
+                 ),
+                 (
+                   SELECT som.operation
+                   FROM material_requests mr_sub2
+                   JOIN production_plans pp_sub ON mr_sub2.plan_id = pp_sub.id
+                   JOIN sales_order_item_materials som ON som.drawing_no = COALESCE(
+                     (SELECT soi.drawing_no FROM production_plan_items ppi2 JOIN sales_order_items soi ON ppi2.sales_order_item_id = soi.id WHERE ppi2.plan_id = pp_sub.id LIMIT 1),
+                     pp_sub.bom_no,
+                     i.drawing_no
+                   )
+                   WHERE mr_sub2.id = r.mr_id
+                     AND (
+                       LOWER(TRIM(som.material_name)) = LOWER(TRIM(i.material_name))
+                       OR LOWER(TRIM(som.item_code)) = LOWER(TRIM(i.item_code))
+                     )
+                     AND som.operation IS NOT NULL AND TRIM(som.operation) != ''
+                   LIMIT 1
+                 ),
+                 (
+                   SELECT som.operation
+                   FROM sales_order_item_materials som
+                   WHERE som.drawing_no = i.drawing_no
+                     AND (
+                       LOWER(TRIM(som.material_name)) = LOWER(TRIM(i.material_name))
+                       OR LOWER(TRIM(som.item_code)) = LOWER(TRIM(i.item_code))
+                     )
+                     AND som.operation IS NOT NULL AND TRIM(som.operation) != ''
+                   LIMIT 1
+                 ),
+                 NULL
+               ) as operation
         FROM procurement_rfq_items i 
         JOIN procurement_rfqs r ON i.rfq_id = r.id
         LEFT JOIN (
@@ -222,10 +267,10 @@ const _enrichRfqs = async (rfqs) => {
         ) sb ON i.item_code = sb.item_code
         LEFT JOIN (
             SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
-                   MAX(s.name) as shape_name
+                   MAX(s.name) as shape_name,
+                   MAX(som.operation) as operation
             FROM sales_order_item_materials som
             LEFT JOIN shapes s ON som.shape_id = s.id
-            WHERE s.id IS NOT NULL
             GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
         ) shape_lookup ON (
             LOWER(TRIM(REPLACE(i.material_name, '\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\t', '')))

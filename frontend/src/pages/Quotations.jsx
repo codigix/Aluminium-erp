@@ -529,25 +529,32 @@ const Quotations = () => {
               const code = (item.item_code || item.drawing_no || '').toUpperCase().trim();
               return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type) && !code.startsWith('ASSEMBLY');
             })
-            .map(item => ({
-              drawing_no: item.item_code || '—',
-              material_name: item.name || item.material_name || '',
-              material_type: getCorrectMaterialType(item.item_code || item.drawing_no, item.material_type),
-              design_qty: parseFloat(item.quantity) || parseFloat(item.design_qty) || 0, // Prefer requested quantity
-              planned_qty: parseFloat(item.design_qty) || 0, // Keep actual design qty as planned_qty
-              quantity: parseFloat(item.quantity) || parseFloat(item.design_qty) || 0,
-              uom: item.uom || 'NOS',
-              unit_rate: item.unit_rate || item.rate || 0,
-              length: item.length || 0,
-              width: item.width || 0,
-              thickness: item.thickness || 0,
-              diameter: item.diameter || 0,
-              outer_diameter: item.outer_diameter || 0,
-              density: item.density || 0,
-              weight_per_unit: item.weight_per_unit || 0,
-              shape_type: item.shape_type || item.shape_name || item.shape || '',
-              shape_name: item.shape_name || item.shape_type || item.shape || ''
-            }));
+            .map(item => {
+              const itemOp = String(item.operation || '').trim().toLowerCase();
+              const hasLaser = itemOp.includes('laser') || Boolean(item.has_laser_cutting);
+              return {
+                drawing_no: item.item_code || '—',
+                material_name: item.name || item.material_name || '',
+                material_type: getCorrectMaterialType(item.item_code || item.drawing_no, item.material_type),
+                design_qty: parseFloat(item.quantity) || parseFloat(item.design_qty) || 0, // Prefer requested quantity
+                planned_qty: parseFloat(item.design_qty) || 0, // Keep actual design qty as planned_qty
+                quantity: parseFloat(item.quantity) || parseFloat(item.design_qty) || 0,
+                uom: item.uom || 'NOS',
+                unit_rate: item.unit_rate || item.rate || 0,
+                operation: item.operation || (hasLaser ? 'Laser Cutting' : ''),
+                has_laser_cutting: hasLaser,
+                laser_cutting: hasLaser ? 'With Material' : (item.laser_cutting || ''),
+                length: item.length || 0,
+                width: item.width || 0,
+                thickness: item.thickness || 0,
+                diameter: item.diameter || 0,
+                outer_diameter: item.outer_diameter || 0,
+                density: item.density || 0,
+                weight_per_unit: item.weight_per_unit || 0,
+                shape_type: item.shape_type || item.shape_name || item.shape || '',
+                shape_name: item.shape_name || item.shape_type || item.shape || ''
+              };
+            });
 
           setFormData(prev => ({
             ...prev,
@@ -1751,7 +1758,11 @@ const Quotations = () => {
         planned_qty: parseFloat(item.planned_qty) || 0,
         uom: item.uom || 'NOS',
         unit_rate: 0,
-        laser_cutting: item.laser_cutting || '',
+        operation: item.operation || null,
+        has_laser_cutting: Boolean(String(item.operation || '').trim().toLowerCase().includes('laser') || item.has_laser_cutting || (item.laser_cutting && item.laser_cutting !== 'Select')),
+        laser_cutting: (item.laser_cutting && item.laser_cutting !== 'Select')
+          ? item.laser_cutting
+          : (String(item.operation || '').trim().toLowerCase().includes('laser') || item.has_laser_cutting ? 'With Material' : ''),
         length: item.length || 0,
         width: item.width || 0,
         thickness: item.thickness || 0,
@@ -2617,7 +2628,14 @@ const Quotations = () => {
                           </>
                         )}
                         <td className="p-2 font-medium text-slate-800">{item.drawing_no || item.item_code || '—'}</td>
-                        <td className="p-2 text-slate-600">{item.material_name || item.description || '—'}</td>
+                        <td className="p-2 text-slate-600">
+                          <div>{item.material_name || item.description || '—'}</div>
+                          {(item.laser_cutting || String(item.operation || '').toLowerCase().includes('laser')) && (
+                            <span style={{ color: '#2563EB' }} className="block text-[10px] font-semibold mt-0.5">
+                              Operation: Laser Cutting {item.laser_cutting ? `(${item.laser_cutting})` : ''}
+                            </span>
+                          )}
+                        </td>
                         <td className="p-2 text-right font-medium text-slate-700">
                           {item.design_qty !== null && item.design_qty !== undefined ? item.design_qty : '—'} <span className="text-[10px] text-slate-400">{item.uom || item.unit || 'NOS'}</span>
                         </td>
@@ -3067,7 +3085,7 @@ const Quotations = () => {
                                 onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
                                 className={`col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                               />
-                              <div className="col-span-2">
+                              <div className="col-span-2 space-y-0.5">
                                 <select
                                   value={item.laser_cutting || ''}
                                   onChange={(e) => handleItemChange(idx, 'laser_cutting', e.target.value)}
@@ -3077,6 +3095,11 @@ const Quotations = () => {
                                   <option value="With Material">With Material</option>
                                   <option value="Without Material">Without Material</option>
                                 </select>
+                                {(item.laser_cutting || String(item.operation || '').trim().toLowerCase().includes('laser')) && (
+                                  <span style={{ color: '#2563EB' }} className="text-[11px] font-semibold block leading-tight">
+                                    Operation: Laser Cutting
+                                  </span>
+                                )}
                               </div>
                               <div className="col-span-1 flex flex-col items-center">
                                 <div className="text-xs text-slate-400 mb-0.5">
@@ -3435,6 +3458,11 @@ const Quotations = () => {
                                       <option value="With Material">With Material</option>
                                       <option value="Without Material">Without Material</option>
                                     </select>
+                                    {(item.laser_cutting || String(item.operation || '').trim().toLowerCase().includes('laser')) && (
+                                      <span style={{ color: '#2563EB' }} className="text-[11px] font-semibold block mt-0.5 leading-tight">
+                                        Operation: Laser Cutting
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="p-2 text-center">
                                     <input
@@ -3998,7 +4026,7 @@ const Quotations = () => {
                               }}
                               className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <div className="col-span-2">
+                            <div className="col-span-2 space-y-0.5">
                               <select
                                 value={item.laser_cutting || ''}
                                 onChange={(e) => {
@@ -4012,6 +4040,11 @@ const Quotations = () => {
                                 <option value="With Material">With Material</option>
                                 <option value="Without Material">Without Material</option>
                               </select>
+                              {(item.laser_cutting || String(item.operation || '').trim().toLowerCase().includes('laser')) && (
+                                <span style={{ color: '#2563EB' }} className="text-[11px] font-semibold block leading-tight">
+                                  Operation: Laser Cutting
+                                </span>
+                              )}
                             </div>
                             <div className="col-span-2 flex flex-col items-center">
                               <input
@@ -4109,7 +4142,7 @@ const Quotations = () => {
                               }}
                               className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <div className="col-span-2">
+                            <div className="col-span-2 space-y-0.5">
                               <select
                                 value={item.laser_cutting || ''}
                                 onChange={(e) => {
@@ -4123,6 +4156,11 @@ const Quotations = () => {
                                 <option value="With Material">With Material</option>
                                 <option value="Without Material">Without Material</option>
                               </select>
+                              {(item.laser_cutting || String(item.operation || '').trim().toLowerCase().includes('laser')) && (
+                                <span style={{ color: '#2563EB' }} className="text-[11px] font-semibold block leading-tight">
+                                  Operation: Laser Cutting
+                                </span>
+                              )}
                             </div>
                             <div className="col-span-1 flex flex-col items-center">
                               <input
