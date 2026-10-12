@@ -2378,8 +2378,37 @@ const CustomerDrawing = () => {
           }
         });
         if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || errData.message || 'Delete failed');
+          const errData = await response.json().catch(() => ({}));
+          const message = errData.error || errData.message || 'Delete failed';
+          // Work has started on this order: offer cancellation, which keeps its history
+          if (response.status === 409 && /cancel it instead/i.test(message)) {
+            const cancelChoice = await Swal.fire({
+              title: 'Cannot delete project',
+              text: `${message} Cancelling stops planning and procurement but keeps production, shipment and payment records.`,
+              icon: 'info',
+              input: 'text',
+              inputPlaceholder: 'Reason for cancellation',
+              inputValidator: value => (!value || !value.trim() ? 'A reason is required' : undefined),
+              showCancelButton: true,
+              confirmButtonText: 'Cancel order',
+              cancelButtonText: 'Keep order',
+              confirmButtonColor: '#dc2626'
+            });
+            if (!cancelChoice.isConfirmed) return;
+            const cancelRes = await fetch(`${API_BASE}/sales-orders/${projectId}/cancel`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reason: cancelChoice.value })
+            });
+            if (!cancelRes.ok) {
+              const cancelErr = await cancelRes.json().catch(() => ({}));
+              throw new Error(cancelErr.error || cancelErr.message || 'Cancel failed');
+            }
+            successToast(`Project "${projectName}" has been cancelled.`);
+            fetchRequirements();
+            return;
+          }
+          throw new Error(message);
         }
         successToast('Project and associated drawings have been deleted.');
         fetchRequirements();

@@ -3,6 +3,61 @@ const { postInventoryFromDispatch } = require('./inventoryPostingService');
 const { addStockLedgerEntry } = require('./stockService');
 const emailService = require('../utils/emailService');
 const puppeteer = require('puppeteer');
+const {
+  assertShipmentTransition,
+  SHIPMENT_DISPATCHED_STATUSES,
+  canTransitionSalesOrder,
+  salesOrderRank,
+  SALES_ORDER_STAGES,
+  workflowError
+} = require('../config/workflow');
+const { nextDocumentNumber } = require('../utils/documentNumber');
+
+// After a dispatch or delivery, move the sales order to PARTIALLY_SHIPPED,
+// SHIPPED or DELIVERED based on quantities actually dispatched.
+const syncSalesOrderShippingStatus = async (connection, salesOrderId) => {
+  if (!salesOrderId) return;
+  const [soRows] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [salesOrderId]);
+  if (!soRows.length) return;
+
+  const [[ordered]] = await connection.query(
+    `SELECT COALESCE(SUM(quantity), 0) AS qty FROM sales_order_items
+     WHERE sales_order_id = ? AND parent_bom_id IS NULL
+       AND (status IS NULL OR UPPER(status) NOT IN ('REJECTED', 'CANCELLED'))`,
+    [salesOrderId]
+  );
+  const [[dispatched]] = await connection.query(
+    `SELECT COALESCE(SUM(dci.quantity), 0) AS qty
+     FROM delivery_challan_items dci
+     JOIN delivery_challans dc ON dci.challan_id = dc.id
+     JOIN shipment_orders s ON dc.shipment_id = s.id
+     WHERE s.sales_order_id = ?`,
+    [salesOrderId]
+  );
+  const [[open]] = await connection.query(
+    `SELECT
+       SUM(status NOT IN ('DELIVERED', 'CLOSED', 'CANCELLED', 'REJECTED')) AS undelivered,
+       COUNT(*) AS total
+     FROM shipment_orders WHERE sales_order_id = ?`,
+    [salesOrderId]
+  );
+
+  const orderedQty = parseFloat(ordered.qty) || 0;
+  const dispatchedQty = parseFloat(dispatched.qty) || 0;
+  if (dispatchedQty <= 0) return;
+
+  const fullyShipped = orderedQty > 0 && dispatchedQty + 0.001 >= orderedQty;
+  let target = fullyShipped ? 'SHIPPED' : 'PARTIALLY_SHIPPED';
+  if (fullyShipped && Number(open.total) > 0 && Number(open.undelivered) === 0) target = 'DELIVERED';
+
+  const current = soRows[0].status;
+  if (salesOrderRank(target) > salesOrderRank(current) && canTransitionSalesOrder(current, target).ok) {
+    await connection.execute(
+      "UPDATE sales_orders SET status = ?, current_department = 'ACCOUNTS', updated_at = NOW() WHERE id = ?",
+      [target, salesOrderId]
+    );
+  }
+};
 
 const getShipmentOrders = async () => {
   const [rows] = await pool.query(`
@@ -238,13 +293,21 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Get current shipment data
-    const [currentRows] = await connection.query('SELECT * FROM shipment_orders WHERE id = ?', [shipmentOrderId]);
+    // 1. Get current shipment data (locked so two clicks can't dispatch twice)
+    const [currentRows] = await connection.query('SELECT * FROM shipment_orders WHERE id = ? FOR UPDATE', [shipmentOrderId]);
     if (currentRows.length === 0) {
       console.error(`Shipment not found for ID: ${shipmentOrderId}`);
       throw new Error(`Shipment order not found (ID: ${shipmentOrderId})`);
     }
     const shipment = currentRows[0];
+
+    let emailToTrigger = null;
+    status = assertShipmentTransition(shipment.status, status);
+    if (String(shipment.status || '').toUpperCase() === status) {
+      // Re-sending the current status is a no-op: no second stock movement or challan
+      await connection.commit();
+      return { success: true, status, unchanged: true };
+    }
 
     // 2. Update Shipment Order Status
     await connection.execute(
@@ -255,10 +318,15 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
     // 3. Handle specific status transitions
     if (status === 'ACCEPTED') {
       if (shipment.sales_order_id) {
-        await connection.execute(
-          "UPDATE sales_orders SET status = 'READY_FOR_SHIPMENT', updated_at = NOW() WHERE id = ?",
-          [shipment.sales_order_id]
-        );
+        // A later partial shipment must not pull a PARTIALLY_SHIPPED order back
+        const [soRows] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [shipment.sales_order_id]);
+        if (soRows.length && salesOrderRank(soRows[0].status) <= SALES_ORDER_STAGES.READY_FOR_SHIPMENT &&
+            canTransitionSalesOrder(soRows[0].status, 'READY_FOR_SHIPMENT').ok) {
+          await connection.execute(
+            "UPDATE sales_orders SET status = 'READY_FOR_SHIPMENT', updated_at = NOW() WHERE id = ?",
+            [shipment.sales_order_id]
+          );
+        }
       }
     } else if (status === 'DISPATCHED') {
       // Start Dispatch - Reduce stock
@@ -314,8 +382,25 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
 
         const [soItems] = await connection.query(queryStr, queryParams);
 
-        if (soItems.length > 0) {
-          items = soItems;
+        if (soItems.length > 0 && shipment.job_card_id && parseFloat(shipment.quantity) > 0) {
+          // A job-card shipment carries only the increment released for it,
+          // not the job card's cumulative dispatch quantity
+          items = soItems.map(item => ({ ...item, quantity: parseFloat(shipment.quantity) }));
+        } else if (soItems.length > 0) {
+          // Whole-order shipment: ship only what other shipments haven't already taken
+          const [alreadyRows] = await connection.query(
+            `SELECT dci.item_code, COALESCE(SUM(dci.quantity), 0) AS qty
+             FROM delivery_challan_items dci
+             JOIN delivery_challans dc ON dci.challan_id = dc.id
+             JOIN shipment_orders s ON dc.shipment_id = s.id
+             WHERE s.sales_order_id = ? AND s.id <> ?
+             GROUP BY dci.item_code`,
+            [shipment.sales_order_id, shipmentOrderId]
+          );
+          const already = new Map(alreadyRows.map(row => [String(row.item_code), parseFloat(row.qty) || 0]));
+          items = soItems
+            .map(item => ({ ...item, quantity: Math.max(0, (parseFloat(item.quantity) || 0) - (already.get(String(item.item_code)) || 0)) }))
+            .filter(item => item.quantity > 0);
         } else if (shipment.shipment_code && shipment.shipment_code.includes('-ORD')) {
           let ordQueryStr = `
             SELECT 
@@ -348,6 +433,12 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
         }
       }
 
+      if (items.length === 0) {
+        throw workflowError(
+          'Nothing to dispatch: no released quantity found for this shipment. Record the dispatch quantity on the shipment job card first.'
+        );
+      }
+
       if (items.length > 0) {
         for (const item of items) {
           const itemCode = item.item_code || item.drawing_no || 'UNKNOWN';
@@ -373,10 +464,8 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
         }
       }
 
-      // 4. Auto-create Delivery Challan
-      const [maxChallanRows] = await connection.query('SELECT MAX(id) as max_id FROM delivery_challans');
-      const nextId = (maxChallanRows[0].max_id || 0) + 1;
-      const challanNumber = `DC-${new Date().getFullYear()}-${String(nextId).padStart(5, '0')}`;
+      // 4. Auto-create Delivery Challan (number reserved under a row lock)
+      const challanNumber = await nextDocumentNumber(connection, 'DELIVERY_CHALLAN');
 
       const [challanResult] = await connection.execute(
         'INSERT INTO delivery_challans (challan_number, shipment_id, customer_id, delivery_status, dispatch_time) VALUES (?, ?, ?, ?, NOW())',
@@ -395,7 +484,7 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
       // 5. Trigger DISPATCHED Email
       // We do this after commit or here? Better after commit to be safe, but we need connection data.
       // Let's gather data and send after commit.
-      connection._emailToTrigger = {
+      emailToTrigger = {
         status: 'DISPATCHED',
         shipment,
         challan: {
@@ -417,7 +506,7 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
       };
 
     } else if (status === 'OUT_FOR_DELIVERY') {
-      connection._emailToTrigger = { status: 'OUT_FOR_DELIVERY', shipment };
+      emailToTrigger = { status: 'OUT_FOR_DELIVERY', shipment };
     } else if (status === 'DELIVERED') {
       // Logic for auto-creating Delivery Challan could go here
       // For now just update the date
@@ -425,14 +514,18 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
         'UPDATE shipment_orders SET actual_delivery_date = NOW(), updated_at = NOW() WHERE id = ?',
         [shipmentOrderId]
       );
-      connection._emailToTrigger = { status: 'DELIVERED', shipment };
+      emailToTrigger = { status: 'DELIVERED', shipment };
+    }
+
+    if (['DISPATCHED', 'DELIVERED', 'CLOSED'].includes(status)) {
+      await syncSalesOrderShippingStatus(connection, shipment.sales_order_id);
     }
 
     await connection.commit();
 
     // 6. Async Email Sending (Outside transaction)
-    if (connection._emailToTrigger) {
-      const { status: emailStatus, shipment: sData, challan } = connection._emailToTrigger;
+    if (emailToTrigger) {
+      const { status: emailStatus, shipment: sData, challan } = emailToTrigger;
 
       (async () => {
         try {
@@ -491,6 +584,18 @@ const updateShipmentPlanning = async (id, planningData) => {
     shipping_address,
     billing_address
   } = planningData;
+
+  // Planning may only move a shipment between planning states; dispatch and
+  // delivery go through updateShipmentStatus (stock movement + challan).
+  if (status) {
+    const planningStatuses = ['PLANNING', 'PLANNED', 'READY_TO_DISPATCH'];
+    if (!planningStatuses.includes(String(status).toUpperCase())) {
+      throw workflowError(`Status ${status} cannot be set from shipment planning`, 400);
+    }
+    const [rows] = await pool.query('SELECT status FROM shipment_orders WHERE id = ?', [id]);
+    if (!rows.length) throw workflowError('Shipment order not found', 404);
+    assertShipmentTransition(rows[0].status, status);
+  }
 
   const [result] = await pool.execute(
     `UPDATE shipment_orders SET 
@@ -749,8 +854,13 @@ const deleteShipmentOrder = async (id) => {
     await connection.beginTransaction();
 
     // 1. Get shipment info first to see if it's linked to a Sales Order
-    const [shipment] = await connection.query('SELECT sales_order_id, status, shipment_code FROM shipment_orders WHERE id = ?', [id]);
+    const [shipment] = await connection.query('SELECT sales_order_id, status, shipment_code FROM shipment_orders WHERE id = ? FOR UPDATE', [id]);
     if (!shipment.length) throw new Error('Shipment order not found');
+
+    // Dispatched shipments have moved stock and issued a challan; they are records now
+    if (SHIPMENT_DISPATCHED_STATUSES.includes(String(shipment[0].status || '').toUpperCase())) {
+      throw workflowError(`Shipment ${shipment[0].shipment_code} is ${shipment[0].status} and cannot be deleted. Use a return instead.`);
+    }
 
     // 2. Delete tracking logs
     await connection.execute('DELETE FROM shipment_tracking_logs WHERE shipment_id = ?', [id]);

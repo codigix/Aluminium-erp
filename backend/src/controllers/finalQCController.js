@@ -12,7 +12,7 @@ exports.getOrdersForFinalQC = async (req, res, next) => {
 exports.completeFinalQC = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const result = await finalQCService.completeFinalQC(id, req.body);
+    const result = await finalQCService.completeFinalQC(id, req.body, req.user?.id || null);
     res.json(result);
   } catch (error) {
     next(error);

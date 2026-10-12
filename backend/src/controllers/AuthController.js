@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
+const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/auth');
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -13,8 +14,8 @@ const generateToken = (user) => {
       role_id: user.role_id,
       role: user.role_code || user.role
     },
-    process.env.JWT_SECRET || 'your-secret-key',
-    { expiresIn: '24h' }
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
   );
 };
 
@@ -26,22 +27,34 @@ exports.register = async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    if (String(password).length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    // Self sign-up can never grant admin rights
+    const [roleRows] = await db.query('SELECT code FROM roles WHERE id = ?', [role_id]);
+    if (roleRows.length === 0) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+    if (roleRows[0].code === 'SYS_ADMIN') {
+      return res.status(403).json({ error: 'Administrator accounts can only be created by an administrator' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // New accounts start INACTIVE and must be activated by a user with USER_MANAGE
+    // (PUT /users/:id/reactivate). Login only accepts ACTIVE users.
     const query = `
       INSERT INTO users (username, email, password, first_name, last_name, department_id, role_id, phone, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'INACTIVE')
     `;
 
     const [results] = await db.query(query, [username, email, hashedPassword, first_name, last_name, department_id, role_id, phone || null]);
 
-    const user = { id: results.insertId, username, email, department_id, role_id };
-    const token = generateToken(user);
-
     res.status(201).json({
-      message: 'User created successfully',
-      token,
-      user: { id: user.id, username, email, first_name, last_name, department_id, role_id }
+      message: 'Account created. An administrator must activate it before you can log in.',
+      pendingApproval: true,
+      user: { id: results.insertId, username, email, first_name, last_name, department_id, role_id }
     });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -113,7 +126,7 @@ exports.verifyToken = (req, res) => {
       return res.status(401).json({ error: 'No token provided' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const decoded = jwt.verify(token, JWT_SECRET);
     res.json({ valid: true, user: decoded });
   } catch (error) {
     res.status(401).json({ error: 'Invalid token' });

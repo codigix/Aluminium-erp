@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { salesOrderAdvanceSql } = require('../config/workflow');
 
 const listDesignOrders = async (options = {}) => {
   const { includeAll = false } = options;
@@ -99,7 +100,7 @@ const updateDesignOrderStatus = async (designOrderId, status) => {
         const salesOrderId = doRows[0].sales_order_id;
 
         await connection.execute(
-          "UPDATE sales_orders SET status = 'DESIGN_Approved', current_department = 'PROCUREMENT', updated_at = NOW() WHERE id = ?",
+          `UPDATE sales_orders SET status = 'DESIGN_APPROVED', current_department = 'PROCUREMENT', updated_at = NOW() WHERE id = ? AND ${salesOrderAdvanceSql('DESIGN_APPROVED')}`,
           [salesOrderId]
         );
       }
@@ -206,8 +207,8 @@ const approveBulkRequest = async (id) => {
       const placeholders = salesOrderIds.map(() => '?').join(',');
 
       await connection.execute(
-        `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() 
-         WHERE id IN (${placeholders})`,
+        `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW()
+         WHERE id IN (${placeholders}) AND ${salesOrderAdvanceSql('DESIGN_IN_REVIEW')}`,
         ['DESIGN_IN_REVIEW', 'DESIGN_ENG', ...salesOrderIds]
       );
 
@@ -252,8 +253,8 @@ const rejectBulkRequest = async (id) => {
       const placeholders = salesOrderIds.map(() => '?').join(',');
 
       await connection.execute(
-        `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() 
-         WHERE id IN (${placeholders})`,
+        `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW()
+         WHERE id IN (${placeholders}) AND ${salesOrderAdvanceSql('DESIGN_QUERY')}`,
         ['DESIGN_QUERY', 'SALES', ...salesOrderIds]
       );
 

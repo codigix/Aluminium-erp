@@ -1,4 +1,8 @@
 const pool = require('../config/db');
+const { workflowError, normalizeSalesOrderStatus } = require('../config/workflow');
+
+// Sales order statuses that sit in the Final QC queue
+const FINAL_QC_STATUSES = ['PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_REJECTED', 'READY_FOR_SHIPMENT'];
 
 const getOrdersForFinalQC = async () => {
   const [rows] = await pool.query(`
@@ -17,23 +21,48 @@ const getOrdersForFinalQC = async () => {
   return rows;
 };
 
-const completeFinalQC = async (salesOrderId, inspectionData) => {
+const completeFinalQC = async (salesOrderId, inspectionData, userId = null) => {
   const { status, remarks, passedQty, failedQty } = inspectionData;
+  const result = String(status || '').toUpperCase();
+  if (!['PASSED', 'FAILED', 'REJECTED'].includes(result)) {
+    throw workflowError('QC result must be PASSED or FAILED', 400);
+  }
+  const passed = parseFloat(passedQty) || 0;
+  const failed = parseFloat(failedQty) || 0;
+  if (passed < 0 || failed < 0) throw workflowError('Quantities cannot be negative', 400);
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    // 1. Update Sales Order Status
-    const soStatus = status === 'PASSED' ? 'READY_FOR_SHIPMENT' : 'QC_REJECTED';
+    // 1. Only orders that finished production can be inspected
+    const [soRows] = await connection.query('SELECT status FROM sales_orders WHERE id = ? FOR UPDATE', [salesOrderId]);
+    if (soRows.length) {
+      const current = normalizeSalesOrderStatus(soRows[0].status);
+      if (!FINAL_QC_STATUSES.includes(current)) {
+        throw workflowError(`Order is ${current || 'not ready'}; Final QC is only possible after production is completed`);
+      }
+    }
+
+    // 2. Keep an inspection record (who, when, quantities, result)
     await connection.execute(
-      'UPDATE sales_orders SET status = ?, current_department = ?, updated_at = NOW() WHERE id = ?',
-      [soStatus, status === 'PASSED' ? 'SHIPMENT' : 'QUALITY', salesOrderId]
+      `INSERT INTO final_qc_inspections (sales_order_id, result, passed_qty, failed_qty, remarks, inspected_by)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [salesOrderId, result === 'PASSED' ? 'PASSED' : 'FAILED', passed, failed, remarks || null, userId]
     );
 
-    // 2. If PASSED, auto-create Shipment Order
-    if (status === 'PASSED') {
+    // 3. Update Sales Order Status
+    const soStatus = result === 'PASSED' ? 'READY_FOR_SHIPMENT' : 'QC_REJECTED';
+    await connection.execute(
+      'UPDATE sales_orders SET status = ?, current_department = ?, updated_at = NOW() WHERE id = ?',
+      [soStatus, result === 'PASSED' ? 'SHIPMENT' : 'QUALITY', salesOrderId]
+    );
+
+    // 4. If PASSED, auto-create a Shipment Order unless one already exists
+    //    (job-card dispatch may have created per-item shipments)
+    if (result === 'PASSED') {
       const [existingShipment] = await connection.query(
-        'SELECT id FROM shipment_orders WHERE sales_order_id = ? AND sales_order_item_id IS NULL',
+        "SELECT id FROM shipment_orders WHERE sales_order_id = ? AND status NOT IN ('CANCELLED', 'REJECTED')",
         [salesOrderId]
       );
 
@@ -146,9 +175,9 @@ const createShipmentOrder = async (salesOrderId) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Check if shipment order already exists
+    // 1. Check if shipment order already exists (whole-order or per-item from job cards)
     const [existingShipment] = await connection.query(
-      'SELECT id FROM shipment_orders WHERE sales_order_id = ? AND sales_order_item_id IS NULL',
+      "SELECT id FROM shipment_orders WHERE sales_order_id = ? AND status NOT IN ('CANCELLED', 'REJECTED')",
       [salesOrderId]
     );
 

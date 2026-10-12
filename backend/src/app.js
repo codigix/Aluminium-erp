@@ -82,24 +82,46 @@ app.use((req, res, next) => {
 
     // Split case-insensitively using regex to get the relative file name in its original casing
     const parts = originalUrl.split(/\/uploads\//i);
-    const fileName = decodeURIComponent(parts[parts.length - 1].split('?')[0]);
+    let fileName;
+    try {
+      fileName = decodeURIComponent(parts[parts.length - 1].split('?')[0]);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid file path' });
+    }
+
+    // Resolve inside an uploads root only; reject "../" or absolute paths that escape it
+    const resolveInside = (root) => {
+      const base = path.resolve(root);
+      const target = path.resolve(base, fileName);
+      return target.startsWith(base + path.sep) ? target : null;
+    };
+    const candidates = [
+      uploadsPath,
+      path.join(process.cwd(), 'uploads'),
+      path.join(process.cwd(), 'backend', 'uploads')
+    ].map(resolveInside);
+
+    if (!fileName || candidates.some(candidate => candidate === null)) {
+      return res.status(400).json({ error: 'Invalid file path' });
+    }
 
     // Set proper Content-Type for PDFs to help browser rendering
     if (fileName.toLowerCase().endsWith('.pdf')) {
+      const safeName = path.basename(fileName).replace(/["\r\n]/g, '');
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'inline; filename="' + fileName + '"');
+      res.setHeader('Content-Disposition', 'inline; filename="' + safeName + '"');
     }
 
     // Try serving directly from configured uploadsPath
-    return res.sendFile(path.join(uploadsPath, fileName), { headers: { 'X-Public-Upload': 'true' } }, (err) => {
+    return res.sendFile(candidates[0], { headers: { 'X-Public-Upload': 'true' } }, (err) => {
       if (!err) return;
 
       // Fallback 1: Root uploads folder
-      res.sendFile(path.join(process.cwd(), 'uploads', fileName), (err1) => {
+      res.sendFile(candidates[1], (err1) => {
         if (!err1) return;
 
         // Fallback 2: backend/uploads folder
-        res.sendFile(path.join(process.cwd(), 'backend', 'uploads', fileName), (err2) => {
+        res.sendFile(candidates[2], (err2) => {
           if (err2) {
             // If file really doesn't exist, return 404 immediately to prevent hitting Private API
             res.status(404).json({ error: 'File not found on server', path: fileName });
@@ -117,6 +139,16 @@ app.use(express.urlencoded({ extended: true }));
 
 // --- Route Grouping ---
 const publicRouter = express.Router();
+
+// Brute-force protection for credential endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please try again in 15 minutes.' }
+});
+publicRouter.use(['/auth/login', '/auth/register'], authLimiter);
 publicRouter.use('/auth', authRoutes);
 publicRouter.use('/departments', departmentRoutes);
 

@@ -22,12 +22,13 @@ router.post('/:id/approve-design', authorize(['STATUS_CHANGE']), salesOrderContr
 router.post('/:id/reject-design', authorize(['STATUS_CHANGE']), salesOrderController.rejectDesign);
 router.post('/:id/accept', authorize(['STATUS_CHANGE']), salesOrderController.acceptRequest);
 router.post('/:id/reject', authorize(['STATUS_CHANGE']), salesOrderController.rejectRequest);
+router.post('/:id/cancel', authorize(['STATUS_CHANGE']), salesOrderController.cancelSalesOrder);
 router.get('/items/:itemId', authorize(['ORDER_VIEW']), salesOrderController.getSalesOrderItem);
 router.patch('/items/:itemId', authorize(['ORDER_EDIT']), salesOrderController.updateSalesOrderItem);
 router.patch('/items/:itemId/status', authorize(['STATUS_CHANGE']), salesOrderController.updateSalesOrderItemStatus);
 router.get('/:id/items', authorize(['ORDER_VIEW']), salesOrderController.getOrderTimeline);
 router.get('/:id/timeline', authorize(['ORDER_VIEW']), salesOrderController.getOrderTimeline);
 router.get('/:id/pdf', authorize(['ORDER_VIEW']), salesOrderController.generateSalesOrderPDF);
-router.delete('/:id', authorize(['ORDER_EDIT', 'PAYMENT_EDIT']), salesOrderController.deleteSalesOrder);
+router.delete('/:id', authorize(['ORDER_EDIT']), salesOrderController.deleteSalesOrder);
 
 module.exports = router;

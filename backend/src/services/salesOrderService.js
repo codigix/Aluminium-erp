@@ -3,6 +3,51 @@ const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 const bomService = require('./bomService');
 const stockService = require('./stockService');
+const {
+  workflowError,
+  normalizeSalesOrderStatus,
+  assertSalesOrderTransition,
+  canTransitionSalesOrder,
+  salesOrderAdvanceSql,
+  isProductionStarted,
+  salesOrderRank,
+  SHIPPING_START_RANK
+} = require('../config/workflow');
+
+// Keeps sales_orders.net_total in line with its top-level items so that
+// Accounts bills the order value instead of the whole Customer PO value.
+const recalculateSalesOrderTotal = async (connection, salesOrderId) => {
+  await connection.execute(
+    `UPDATE sales_orders so
+     SET so.net_total = (
+       SELECT NULLIF(ROUND(COALESCE(SUM(COALESCE(soi.quantity, 0) * COALESCE(soi.rate, 0) + COALESCE(soi.tax_value, 0)), 0), 2), 0)
+       FROM sales_order_items soi
+       WHERE soi.sales_order_id = so.id
+         AND soi.parent_bom_id IS NULL
+         AND (soi.status IS NULL OR UPPER(soi.status) NOT IN ('REJECTED', 'CANCELLED'))
+     )
+     WHERE so.id = ?`,
+    [salesOrderId]
+  );
+};
+
+// Downstream documents that make an order's items immutable
+const getSalesOrderDependencies = async (connection, salesOrderId) => {
+  const [[row]] = await connection.query(
+    `SELECT
+       (SELECT COUNT(*) FROM production_plans WHERE sales_order_id = ?) AS plans,
+       (SELECT COUNT(*) FROM work_orders wo JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id WHERE soi.sales_order_id = ?) AS work_orders,
+       (SELECT COUNT(*) FROM shipment_orders WHERE sales_order_id = ?) AS shipments,
+       (SELECT COUNT(*) FROM customer_payments WHERE sales_order_id = ? AND sales_order_source = 'SALES_ORDER' AND status <> 'FAILED') AS payments`,
+    [salesOrderId, salesOrderId, salesOrderId, salesOrderId]
+  );
+  return {
+    plans: Number(row.plans) || 0,
+    workOrders: Number(row.work_orders) || 0,
+    shipments: Number(row.shipments) || 0,
+    payments: Number(row.payments) || 0
+  };
+};
 
 const numberToWords = (num) => {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -491,6 +536,8 @@ const createSalesOrder = async (orderData) => {
       }
     }
 
+    await recalculateSalesOrderTotal(connection, salesOrderId);
+
     await connection.commit();
     return { id: salesOrderId, public_id: publicId };
   } catch (error) {
@@ -538,47 +585,61 @@ const updateSalesOrder = async (id, orderData) => {
   try {
     await connection.beginTransaction();
 
-    await connection.execute(
-      `UPDATE sales_orders SET 
-        company_id = ?, 
-        customer_po_id = ?,
-        project_name = ?, 
-        drawing_required = ?, 
-        production_priority = ?, 
-        target_dispatch_date = ?, 
-        status = ?, 
-        cgst_rate = ?, 
-        sgst_rate = ?, 
-        profit_margin = ?, 
-        bom_id = ?, 
-        warehouse = ?,
-        quotation_id = ?,
-        source_type = ?,
-        host_company_id = ?,
-        updated_at = NOW()
-       WHERE id = ?`,
-      [
-        companyId || null,
-        validatedPoId,
-        projectName || null,
-        drawingRequired || 0,
-        productionPriority || 'NORMAL',
-        finalTargetDispatchDate || null,
-        status || null,
-        cgst_rate || 0,
-        sgst_rate || 0,
-        profit_margin || 0,
-        bom_id || null,
-        warehouse || null,
-        finalQuotationId,
-        source_type,
-        host_company_id || null,
-        id
-      ]
-    );
+    const [existingRows] = await connection.query('SELECT * FROM sales_orders WHERE id = ? FOR UPDATE', [id]);
+    if (existingRows.length === 0) {
+      throw workflowError('Sales order not found', 404);
+    }
+    const existing = existingRows[0];
 
-    // Update items - for simplicity, delete and re-insert if provided
+    // Only fields actually sent are changed; a partial payload (e.g. status only)
+    // must never wipe the customer, project or tax details.
+    const fields = [];
+    const params = [];
+    const setField = (column, value) => {
+      fields.push(`${column} = ?`);
+      params.push(value);
+    };
+
+    if (companyId !== undefined) setField('company_id', companyId || null);
+    if (customerPoId !== undefined || orderData.source_type !== undefined) {
+      const effectiveSource = orderData.source_type !== undefined ? source_type : existing.source_type;
+      const poId = customerPoId !== undefined ? customerPoId : existing.customer_po_id;
+      const linkedPoId = effectiveSource === 'PO' && poId && Number(poId) > 0 ? Number(poId) : null;
+      setField('customer_po_id', linkedPoId);
+    }
+    if (projectName !== undefined) setField('project_name', projectName || null);
+    if (drawingRequired !== undefined) setField('drawing_required', drawingRequired || 0);
+    if (productionPriority !== undefined) setField('production_priority', productionPriority || 'NORMAL');
+    if (targetDispatchDate !== undefined || delivery_date !== undefined) setField('target_dispatch_date', finalTargetDispatchDate || null);
+    if (cgst_rate !== undefined) setField('cgst_rate', cgst_rate || 0);
+    if (sgst_rate !== undefined) setField('sgst_rate', sgst_rate || 0);
+    if (profit_margin !== undefined) setField('profit_margin', profit_margin || 0);
+    if (bom_id !== undefined) setField('bom_id', bom_id || null);
+    if (warehouse !== undefined) setField('warehouse', warehouse || null);
+    if (orderData.quotation_id !== undefined) setField('quotation_id', finalQuotationId);
+    if (orderData.source_type !== undefined) setField('source_type', source_type);
+    if (orderData.host_company_id !== undefined) setField('host_company_id', host_company_id || null);
+
+    if (status !== undefined && status !== null && status !== '') {
+      const nextStatus = assertSalesOrderTransition(existing.status, status);
+      setField('status', nextStatus);
+    }
+
+    if (fields.length > 0) {
+      await connection.execute(
+        `UPDATE sales_orders SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`,
+        [...params, id]
+      );
+    }
+
     if (items && items.length > 0) {
+      // Plans, work orders, shipments and payments all point at item rows;
+      // once any exist the item list is frozen.
+      const deps = await getSalesOrderDependencies(connection, id);
+      if (isProductionStarted(existing.status) || deps.plans > 0 || deps.workOrders > 0 || deps.shipments > 0) {
+        throw workflowError('Items cannot be changed after production planning has started. Cancel the plan first or raise a new order.');
+      }
+
       await connection.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [id]);
 
       for (const item of items) {
@@ -613,6 +674,8 @@ const updateSalesOrder = async (id, orderData) => {
       }
     }
 
+    await recalculateSalesOrderTotal(connection, id);
+
     await connection.commit();
     return true;
   } catch (error) {
@@ -623,18 +686,28 @@ const updateSalesOrder = async (id, orderData) => {
   }
 };
 
-const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remarks = null) => {
-  status = (status || '').trim().toUpperCase();
+const updateSalesOrderStatus = async (salesOrderId, requestedStatus, userId = null, remarks = null) => {
+  const requested = String(requestedStatus || '').trim().toUpperCase();
+  const isBomRejection = requested === 'REJECTED_BOM';
+  const status = normalizeSalesOrderStatus(requested);
+  if (!status) throw workflowError('Status is required', 400);
+
   let department = null;
   if (status === 'BOM_APPROVED' || status === 'QUOTATION_SENT') {
     department = 'SALES';
   } else if (status === 'BOM_SUBMITTED') {
     department = 'SALES'; // Transition to SALES for BOM approval
+  } else if (isBomRejection) {
+    department = 'DESIGN_ENG';
   }
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    const [current] = await connection.query('SELECT status FROM sales_orders WHERE id = ? FOR UPDATE', [salesOrderId]);
+    if (current.length === 0) throw workflowError('Sales order not found', 404);
+    assertSalesOrderTransition(current[0].status, status);
 
     if (department) {
       await connection.execute('UPDATE sales_orders SET status = ?, current_department = ? WHERE id = ?', [status, department, salesOrderId]);
@@ -643,7 +716,7 @@ const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remar
     }
 
     // Log to BOM approval history if it's a BOM action
-    if (status === 'BOM_APPROVED' || status === 'QUOTATION_SENT' || status === 'REJECTED_BOM') {
+    if (status === 'BOM_APPROVED' || status === 'QUOTATION_SENT' || isBomRejection) {
       const action = (status === 'BOM_APPROVED' || status === 'QUOTATION_SENT') ? 'APPROVED' : 'REJECTED';
       if (userId) {
         await connection.execute(
@@ -693,20 +766,22 @@ const acceptRequest = async (salesOrderId, departmentCode) => {
   try {
     await connection.beginTransaction();
 
-    const [order] = await connection.query('SELECT * FROM sales_orders WHERE id = ?', [salesOrderId]);
-    if (!order.length) throw new Error('Order not found');
+    const [order] = await connection.query('SELECT * FROM sales_orders WHERE id = ? FOR UPDATE', [salesOrderId]);
+    if (!order.length) throw workflowError('Order not found', 404);
 
     const currentOrder = order[0];
-    let newStatus = currentOrder.status;
+    const current = normalizeSalesOrderStatus(currentOrder.status) || 'CREATED';
+    let newStatus = current;
     let nextDepartment = currentOrder.current_department;
+    let matched = true;
 
-    if (departmentCode === 'INVENTORY' && currentOrder.status === 'CREATED') {
+    if (departmentCode === 'INVENTORY' && current === 'CREATED') {
       newStatus = 'DESIGN_IN_REVIEW';
       nextDepartment = 'DESIGN_ENG';
-    } else if (departmentCode === 'DESIGN_ENG' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW')) {
+    } else if (departmentCode === 'DESIGN_ENG' && ['CREATED', 'DESIGN_IN_REVIEW'].includes(current)) {
       newStatus = 'DESIGN_IN_REVIEW';
       nextDepartment = 'DESIGN_ENG';
-    } else if (departmentCode === 'PROCUREMENT' && (currentOrder.status === 'CREATED' || currentOrder.status === 'DESIGN_IN_REVIEW' || currentOrder.status === 'DESIGN_Approved ' || currentOrder.status === 'PROCUREMENT_IN_PROGRESS')) {
+    } else if (departmentCode === 'PROCUREMENT' && ['CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'PROCUREMENT_IN_PROGRESS'].includes(current)) {
       if (currentOrder.material_available) {
         newStatus = 'MATERIAL_READY';
         nextDepartment = 'PRODUCTION';
@@ -714,16 +789,25 @@ const acceptRequest = async (salesOrderId, departmentCode) => {
         newStatus = 'MATERIAL_PURCHASE_IN_PROGRESS';
         nextDepartment = 'PROCUREMENT';
       }
-    } else if (departmentCode === 'PRODUCTION' && (currentOrder.status === 'MATERIAL_READY' || currentOrder.status === 'IN_PRODUCTION')) {
+    } else if (departmentCode === 'PRODUCTION' && current === 'MATERIAL_READY') {
+      // Accepting an order starts production; completion is a separate step
+      newStatus = 'IN_PRODUCTION';
+      nextDepartment = 'PRODUCTION';
+    } else if (departmentCode === 'PRODUCTION' && current === 'IN_PRODUCTION') {
       newStatus = 'PRODUCTION_COMPLETED';
       nextDepartment = 'QUALITY';
-    } else if ((departmentCode === 'QUALITY' || departmentCode === 'QC') && (currentOrder.status === 'PRODUCTION_COMPLETED' || currentOrder.status === 'QC_IN_PROGRESS' || currentOrder.status === 'QC_REJECTED')) {
+    } else if ((departmentCode === 'QUALITY' || departmentCode === 'QC') && ['PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_REJECTED'].includes(current)) {
       newStatus = 'QC_IN_PROGRESS';
       nextDepartment = 'QUALITY';
-    } else if (departmentCode === 'SHIPMENT' && (currentOrder.status === 'READY_FOR_SHIPMENT' || currentOrder.status === 'QC_APPROVED' || currentOrder.status === 'READY_FOR_DISPATCH')) {
+    } else if (departmentCode === 'SHIPMENT' && ['READY_FOR_SHIPMENT', 'QC_APPROVED'].includes(current)) {
       newStatus = 'READY_FOR_SHIPMENT';
       nextDepartment = 'SHIPMENT';
+    } else {
+      matched = false;
     }
+
+    // Unmatched: acknowledge the request without moving the order (previous behaviour)
+    if (matched) assertSalesOrderTransition(current, newStatus);
 
     await connection.execute(
       'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id = ?',
@@ -744,7 +828,30 @@ const acceptRequest = async (salesOrderId, departmentCode) => {
   }
 };
 
+// Throws if the order cannot move to `toStatus` from where it is now
+const guardSalesOrderStatus = async (executor, salesOrderId, toStatus) => {
+  const [rows] = await executor.query('SELECT status FROM sales_orders WHERE id = ?', [salesOrderId]);
+  if (rows.length === 0) throw workflowError('Sales order not found', 404);
+  return assertSalesOrderTransition(rows[0].status, toStatus);
+};
+
+// Bulk variant: validates every order first so a batch is all-or-nothing
+const guardSalesOrderStatuses = async (executor, salesOrderIds, toStatus) => {
+  if (!salesOrderIds.length) return;
+  const placeholders = salesOrderIds.map(() => '?').join(',');
+  const [rows] = await executor.query(
+    `SELECT id, so_number, status FROM sales_orders WHERE id IN (${placeholders})`,
+    salesOrderIds
+  );
+  const blocked = rows.filter(row => !canTransitionSalesOrder(row.status, toStatus).ok);
+  if (blocked.length > 0) {
+    const labels = blocked.map(row => `${row.so_number || `SO-${row.id}`} (${row.status})`).join(', ');
+    throw workflowError(`Cannot move to ${toStatus}: ${labels}`);
+  }
+};
+
 const rejectRequest = async (salesOrderId) => {
+  await guardSalesOrderStatus(pool, salesOrderId, 'DESIGN_QUERY');
   await pool.execute(
     'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() WHERE id = ?',
     ['DESIGN_QUERY', 'SALES', salesOrderId]
@@ -752,9 +859,10 @@ const rejectRequest = async (salesOrderId) => {
 };
 
 const transitionToDepartment = async (salesOrderId, toDepartment, newStatus) => {
+  const status = await guardSalesOrderStatus(pool, salesOrderId, newStatus);
   await pool.execute(
     'UPDATE sales_orders SET status = ?, current_department = ?, updated_at = NOW() WHERE id = ?',
-    [newStatus, toDepartment, salesOrderId]
+    [status, toDepartment, salesOrderId]
   );
 };
 
@@ -762,6 +870,8 @@ const sendOrderToDesign = async (salesOrderId) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    await guardSalesOrderStatus(connection, salesOrderId, 'DESIGN_IN_REVIEW');
 
     await connection.execute(
       'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() WHERE id = ?',
@@ -792,6 +902,7 @@ const approveDesignAndCreateQuotation = async (salesOrderId) => {
     if (!orders.length) throw new Error('Sales order not found');
 
     const order = orders[0];
+    assertSalesOrderTransition(order.status, 'DESIGN_IN_REVIEW');
 
     await connection.execute(
       'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id = ?',
@@ -931,7 +1042,7 @@ const updateSalesOrderItemStatus = async (itemId, status, reason) => {
           const order = orderRows[0];
           if (order.request_accepted === 0) {
             await connection.execute(
-              "UPDATE sales_orders SET request_accepted = 1, status = 'DESIGN_IN_REVIEW', current_department = 'DESIGN_ENG', updated_at = NOW() WHERE id = ?",
+              `UPDATE sales_orders SET request_accepted = 1, status = 'DESIGN_IN_REVIEW', current_department = 'DESIGN_ENG', updated_at = NOW() WHERE id = ? AND ${salesOrderAdvanceSql('DESIGN_IN_REVIEW')}`,
               [salesOrderId]
             );
 
@@ -955,6 +1066,8 @@ const rejectDesign = async (salesOrderId, reason) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    await guardSalesOrderStatus(connection, salesOrderId, 'DESIGN_QUERY');
 
     await connection.execute(
       'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() WHERE id = ?',
@@ -1000,6 +1113,8 @@ const bulkApproveDesigns = async (orderIds) => {
       console.error('[bulkApproveDesigns-service] No sales orders found for IDs:', orderIds);
       throw new Error('No sales orders found');
     }
+
+    await guardSalesOrderStatuses(connection, orderIds, 'DESIGN_IN_REVIEW');
 
     await connection.execute(
       `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id IN (${placeholders})`,
@@ -1047,6 +1162,8 @@ const bulkRejectDesigns = async (orderIds, reason) => {
     await connection.beginTransaction();
 
     const placeholders = orderIds.map(() => '?').join(',');
+
+    await guardSalesOrderStatuses(connection, orderIds, 'DESIGN_QUERY');
 
     await connection.execute(
       `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() WHERE id IN (${placeholders})`,
@@ -1888,12 +2005,24 @@ const deleteSalesOrder = async (salesOrderId) => {
     await connection.beginTransaction();
 
     // Check status first
-    const [order] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [salesOrderId]);
+    const [order] = await connection.query('SELECT status FROM sales_orders WHERE id = ? FOR UPDATE', [salesOrderId]);
     if (order.length > 0) {
       const statusUpper = (order[0].status || '').toUpperCase().replace(/_/g, ' ').trim();
       // QUOTATION SENT: updates are allowed
       if (statusUpper === 'BOM SUBMITTED') {
-        throw new Error('bom allready sent now cant update requirement');
+        throw workflowError('BOM already sent, the requirement can no longer be deleted');
+      }
+
+      // Hard delete is only safe before anything downstream exists.
+      // After that the order must be cancelled so history stays intact.
+      const deps = await getSalesOrderDependencies(connection, salesOrderId);
+      if (isProductionStarted(order[0].status) || deps.workOrders > 0 || deps.shipments > 0 || deps.payments > 0) {
+        const reasons = [];
+        if (isProductionStarted(order[0].status)) reasons.push(`status is ${order[0].status}`);
+        if (deps.workOrders > 0) reasons.push(`${deps.workOrders} work order(s)`);
+        if (deps.shipments > 0) reasons.push(`${deps.shipments} shipment(s)`);
+        if (deps.payments > 0) reasons.push(`${deps.payments} payment(s)`);
+        throw workflowError(`Sales order cannot be deleted (${reasons.join(', ')}). Cancel it instead.`);
       }
     }
 
@@ -1935,6 +2064,38 @@ const deleteSalesOrder = async (salesOrderId) => {
     await connection.execute('DELETE FROM sales_orders WHERE id = ?', [salesOrderId]);
 
     await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+// Cancels an order instead of deleting it: history (plans, payments, ledger) is kept,
+// but its items drop out of planning and procurement queues.
+const cancelSalesOrder = async (salesOrderId, reason = null, userId = null) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query('SELECT status FROM sales_orders WHERE id = ? FOR UPDATE', [salesOrderId]);
+    if (rows.length === 0) throw workflowError('Sales order not found', 404);
+    assertSalesOrderTransition(rows[0].status, 'CANCELLED');
+
+    await connection.execute(
+      "UPDATE sales_orders SET status = 'CANCELLED', current_department = 'SALES', updated_at = NOW() WHERE id = ?",
+      [salesOrderId]
+    );
+    await connection.execute(
+      `UPDATE sales_order_items SET status = 'CANCELLED', rejection_reason = COALESCE(?, rejection_reason)
+       WHERE sales_order_id = ? AND (status IS NULL OR UPPER(status) NOT IN ('REJECTED', 'CANCELLED'))`,
+      [reason ? `Cancelled: ${reason}` : null, salesOrderId]
+    );
+
+    await connection.commit();
+    console.log(`[cancelSalesOrder] SO ${salesOrderId} cancelled by user ${userId || 'unknown'}: ${reason || '-'}`);
+    return { id: salesOrderId, status: 'CANCELLED' };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -1992,11 +2153,13 @@ const bulkUpdateStatus = async (orderIds, status) => {
 
     const placeholders = orderIds.map(() => '?').join(',');
 
+    status = normalizeSalesOrderStatus(status);
+    await guardSalesOrderStatuses(connection, orderIds, status);
+
+    // Same department routing as updateSalesOrderStatus
     let department = null;
-    if (status === 'BOM_Approved') {
-      department = 'PROCUREMENT';
-    } else if (status === 'BOM_SUBMITTED') {
-      department = 'DESIGN_ENG';
+    if (['BOM_APPROVED', 'QUOTATION_SENT', 'BOM_SUBMITTED'].includes(status)) {
+      department = 'SALES';
     }
 
     if (department) {
@@ -2108,7 +2271,7 @@ const bulkUpdateItemStatus = async (itemIds, status, reason) => {
           const order = orderRows[0];
           if (order.request_accepted === 0) {
             await connection.execute(
-              "UPDATE sales_orders SET request_accepted = 1, status = 'DESIGN_IN_REVIEW', current_department = 'DESIGN_ENG', updated_at = NOW() WHERE id = ?",
+              `UPDATE sales_orders SET request_accepted = 1, status = 'DESIGN_IN_REVIEW', current_department = 'DESIGN_ENG', updated_at = NOW() WHERE id = ? AND ${salesOrderAdvanceSql('DESIGN_IN_REVIEW')}`,
               [salesOrderId]
             );
 
@@ -2191,7 +2354,7 @@ const bulkSendToDesign = async (salesOrderIds, sentBy) => {
 
       // Update sales order status and current department
       await connection.execute(
-        `UPDATE sales_orders SET status = 'DESIGN_IN_REVIEW', current_department = 'DESIGN_ENG', request_accepted = 0, updated_at = NOW() WHERE id = ?`,
+        `UPDATE sales_orders SET status = 'DESIGN_IN_REVIEW', current_department = 'DESIGN_ENG', request_accepted = 0, updated_at = NOW() WHERE id = ? AND ${salesOrderAdvanceSql('DESIGN_IN_REVIEW')}`,
         [soId]
       );
 
@@ -2237,5 +2400,7 @@ module.exports = {
   updateSalesOrderItemStatus,
   generateSalesOrderPDF,
   deleteSalesOrder,
-  bulkSendToDesign
+  cancelSalesOrder,
+  bulkSendToDesign,
+  recalculateSalesOrderTotal
 };

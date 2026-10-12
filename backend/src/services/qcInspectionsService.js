@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { salesOrderAdvanceSql } = require('../config/workflow');
 const stockService = require('./stockService');
 const emailService = require('./emailService');
 const puppeteer = require('puppeteer');
@@ -790,7 +791,12 @@ const updateQC = async (qcId, updates) => {
       if (linked.length) {
         if (linked[0].sales_order_id) {
           await connection.execute(
-            'UPDATE sales_orders SET status = ?, material_available = 1 WHERE id = ?',
+            'UPDATE sales_orders SET material_available = 1 WHERE id = ?',
+            [linked[0].sales_order_id]
+          );
+          // Forward only: an order already in production keeps its status
+          await connection.execute(
+            `UPDATE sales_orders SET status = ? WHERE id = ? AND ${salesOrderAdvanceSql('MATERIAL_READY')}`,
             ['MATERIAL_READY', linked[0].sales_order_id]
           );
         }
@@ -849,6 +855,33 @@ const updateQCItem = async (qcItemId, updates) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    // Inspected quantities can never exceed what was physically received
+    if (acceptedQty !== undefined || rejectedQty !== undefined) {
+      const [currentRows] = await connection.query(
+        `SELECT qci.accepted_qty, qci.rejected_qty,
+                COALESCE(NULLIF(qci.received_qty, 0), gi.receiving_qty, gi.received_qty, 0) AS received_qty
+         FROM qc_inspection_items qci
+         LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
+         WHERE qci.id = ? FOR UPDATE`,
+        [qcItemId]
+      );
+      if (currentRows.length) {
+        const accepted = parseFloat(acceptedQty !== undefined ? acceptedQty : currentRows[0].accepted_qty) || 0;
+        const rejected = parseFloat(rejectedQty !== undefined ? rejectedQty : currentRows[0].rejected_qty) || 0;
+        const received = parseFloat(currentRows[0].received_qty) || 0;
+        if (accepted < 0 || rejected < 0) {
+          const error = new Error('Accepted and rejected quantities cannot be negative');
+          error.statusCode = 400;
+          throw error;
+        }
+        if (received > 0 && accepted + rejected > received + 0.001) {
+          const error = new Error(`Accepted (${accepted}) + rejected (${rejected}) exceeds received quantity (${received})`);
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+    }
 
     values.push(qcItemId);
 
@@ -953,6 +986,18 @@ const getQCItems = async (qcId) => {
 };
 
 const deleteQC = async (qcId) => {
+  const [[posted]] = await pool.query(
+    `SELECT COUNT(*) AS cnt FROM stock_ledger sl
+     WHERE sl.qc_id = ?
+        OR sl.grn_item_id IN (SELECT grn_item_id FROM qc_inspection_items WHERE qc_inspection_id = ?)`,
+    [qcId, qcId]
+  );
+  if (Number(posted.cnt) > 0) {
+    const error = new Error('QC inspection cannot be deleted: accepted quantity has already been posted to stock.');
+    error.statusCode = 409;
+    throw error;
+  }
+
   const [result] = await pool.execute(
     'DELETE FROM qc_inspections WHERE id = ?',
     [qcId]

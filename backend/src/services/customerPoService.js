@@ -3,6 +3,13 @@ const mustache = require('mustache');
 const puppeteer = require('puppeteer');
 const pool = require('../config/db');
 const bomService = require('./bomService');
+const { workflowError, SALES_ORDER_STAGES, PRODUCTION_START_RANK } = require('../config/workflow');
+
+// SQL list of sales order statuses from production onwards (excluding CANCELLED)
+const PRODUCTION_STATUS_LIST = Object.entries(SALES_ORDER_STAGES)
+  .filter(([status, rank]) => rank >= PRODUCTION_START_RANK && status !== 'CANCELLED')
+  .map(([status]) => `'${status}'`)
+  .join(', ');
 
 const cleanAddress = (addr) => {
   if (!addr) return 'N/A';
@@ -44,6 +51,25 @@ const calculateAmounts = items => {
     item.igstAmount = igstAmount;
   }
   return { subtotal, taxTotal, netTotal: subtotal + taxTotal };
+};
+
+// What has already happened downstream on the sales orders linked to a Customer PO
+const getLinkedOrderActivity = async (connection, customerPoId) => {
+  const [[row]] = await connection.query(
+    `SELECT
+       COALESCE(SUM(so.status IN (${PRODUCTION_STATUS_LIST})), 0) AS in_production,
+       (SELECT COUNT(*) FROM shipment_orders sh JOIN sales_orders s2 ON sh.sales_order_id = s2.id WHERE s2.customer_po_id = ?) AS shipments,
+       (SELECT COUNT(*) FROM customer_payments cp JOIN sales_orders s3 ON cp.sales_order_id = s3.id
+         WHERE s3.customer_po_id = ? AND cp.sales_order_source = 'SALES_ORDER' AND cp.status <> 'FAILED') AS payments
+     FROM sales_orders so
+     WHERE so.customer_po_id = ?`,
+    [customerPoId, customerPoId, customerPoId]
+  );
+  return {
+    inProduction: Number(row.in_production) || 0,
+    shipments: Number(row.shipments) || 0,
+    payments: Number(row.payments) || 0
+  };
 };
 
 const numberToWords = (num) => {
@@ -118,6 +144,15 @@ const createCustomerPo = async payload => {
     }
 
     const trimmedPoNumber = header.poNumber.trim();
+
+    // A customer never issues the same PO number twice; a repeat is a duplicate entry
+    const [duplicate] = await connection.query(
+      'SELECT id FROM customer_pos WHERE company_id = ? AND TRIM(UPPER(po_number)) = TRIM(UPPER(?)) LIMIT 1',
+      [companyId, trimmedPoNumber]
+    );
+    if (duplicate.length > 0) {
+      throw workflowError(`Customer PO ${trimmedPoNumber} already exists for this customer`);
+    }
 
     const [poResult] = await connection.execute(
       `INSERT INTO customer_pos
@@ -582,13 +617,19 @@ const updateCustomerPo = async (id, payload) => {
 
     const trimmedPoNumber = header.poNumber.trim();
 
+    // Once goods have shipped against this PO its lines are a commercial record
+    const linked = await getLinkedOrderActivity(connection, id);
+    if (linked.shipments > 0) {
+      throw workflowError('Items cannot be changed: goods have already been dispatched against this Customer PO. Raise a PO amendment as a new version instead.');
+    }
+
     await connection.execute(
       `UPDATE customer_pos
        SET project_name = ?, po_number = ?, po_date = ?, po_version = ?, order_type = ?, plant = ?, currency = ?, 
            payment_terms = ?, credit_days = ?, freight_terms = ?, packing_forwarding = ?, 
            insurance_terms = ?, delivery_terms = ?, subtotal = ?, tax_total = ?, net_total = ?, 
            remarks = ?, terms_and_conditions = ?, special_notes = ?, inspection_clause = ?, 
-           test_certificate = ?, host_company_id = ?, pdf_path = ?,
+           test_certificate = ?, host_company_id = ?, pdf_path = COALESCE(?, pdf_path),
            contact_person = ?, email = ?, phone = ?, gstin = ?, billing_address = ?, shipping_address = ?
        WHERE id = ?`
       ,
@@ -717,7 +758,15 @@ const deleteCustomerPo = async id => {
   try {
     await connection.beginTransaction();
 
-    // Delete items first
+    const linked = await getLinkedOrderActivity(connection, id);
+    if (linked.inProduction > 0 || linked.shipments > 0 || linked.payments > 0) {
+      throw workflowError(
+        `Customer PO cannot be deleted: linked orders have ${linked.inProduction} in production, ${linked.shipments} shipment(s), ${linked.payments} payment(s).`
+      );
+    }
+
+    // Delete children first (sub-assemblies reference items)
+    await connection.execute('DELETE FROM customer_po_item_subassemblies WHERE po_item_id IN (SELECT id FROM customer_po_items WHERE customer_po_id = ?)', [id]);
     await connection.execute('DELETE FROM customer_po_items WHERE customer_po_id = ?', [id]);
 
     // Unlink sales orders instead of deleting them (which would cascade delete quotation requests, drawings, BOMs, etc.)

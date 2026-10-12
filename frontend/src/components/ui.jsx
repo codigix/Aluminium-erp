@@ -563,6 +563,9 @@ export const StatusBadge = ({ status }) => {
       case 'READY_FOR_SHIPMENT':
       case 'QC_APPROVED':
       case 'READY_TO_DISPATCH':
+      case 'SHIPPED':
+      case 'CLOSED':
+      case 'PAID':
         // Success style: Green
         return 'bg-emerald-50 border-emerald-100 text-emerald-600 shadow-sm border'
 
@@ -586,6 +589,9 @@ export const StatusBadge = ({ status }) => {
       case 'REVISED':
       case 'IN_TRANSIT':
       case 'RETURN_IN_TRANSIT':
+      case 'PARTIALLY_SHIPPED':
+      case 'PARTIAL':
+      case 'UNPAID':
         // Warning style: Orange/Yellow
         return 'bg-amber-50 border-amber-100 text-amber-600 shadow-sm border'
 

@@ -6,6 +6,38 @@ const mustache = require('mustache');
 const stockService = require('./stockService');
 const fs = require('fs');
 const path = require('path');
+const { workflowError, PO_SYSTEM_ONLY_STATUSES, PO_APPROVABLE_STATUSES, salesOrderAdvanceSql } = require('../config/workflow');
+const { nextDocumentNumber } = require('../utils/documentNumber');
+
+// Quantity received per PO line, from GRN items (same basis as poReceiptService)
+const getReceivedQtyByPoItem = async (connection, poId) => {
+  const [rows] = await connection.query(
+    `SELECT gi.po_item_id, COALESCE(SUM(COALESCE(gi.receiving_qty, gi.received_qty, gi.accepted_qty, 0)), 0) AS received
+     FROM grn_items gi
+     JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+     WHERE poi.purchase_order_id = ?
+     GROUP BY gi.po_item_id`,
+    [poId]
+  );
+  return new Map(rows.map(row => [Number(row.po_item_id), parseFloat(row.received) || 0]));
+};
+
+const getPoReceiptProgress = async (connection, poId) => {
+  const [items] = await connection.query(
+    `SELECT id, COALESCE(NULLIF(design_qty, 0), NULLIF(planned_qty, 0), quantity, 0) AS ordered
+     FROM purchase_order_items WHERE purchase_order_id = ?`,
+    [poId]
+  );
+  const receivedByItem = await getReceivedQtyByPoItem(connection, poId);
+  let ordered = 0;
+  let received = 0;
+  for (const item of items) {
+    const itemOrdered = parseFloat(item.ordered) || 0;
+    ordered += itemOrdered;
+    received += Math.min(receivedByItem.get(Number(item.id)) || 0, itemOrdered);
+  }
+  return { ordered: Number(ordered.toFixed(3)), received: Number(received.toFixed(3)) };
+};
 
 const formatAddressToTwoLines = (addressStr) => {
   if (!addressStr || addressStr === 'N/A' || String(addressStr).trim() === '') return 'N/A';
@@ -387,7 +419,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
     let poNumber = manualPoNumber;
 
     if (!poNumber) {
-      poNumber = await generatePONumber();
+      poNumber = await nextDocumentNumber(connection, 'PURCHASE_ORDER');
     }
 
     const poStatus = (actualMrId && !finalVendorId) ? 'PO_REQUEST' : 'DRAFT';
@@ -523,7 +555,8 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
 
     if (sales_order_id) {
       await connection.execute(
-        'UPDATE sales_orders SET status = ? WHERE id = ?',
+        // Forward only: buying extra material must not pull an order out of production
+        `UPDATE sales_orders SET status = ? WHERE id = ? AND ${salesOrderAdvanceSql('MATERIAL_PURCHASE_IN_PROGRESS')}`,
         ['MATERIAL_PURCHASE_IN_PROGRESS', sales_order_id]
       );
     }
@@ -607,7 +640,7 @@ const createDirectCompanyPurchaseOrder = async (data) => {
 
     let poNumber = (inputPoNumber && String(inputPoNumber).trim()) ? String(inputPoNumber).trim() : '';
     if (!poNumber) {
-      poNumber = await generatePONumber();
+      poNumber = await nextDocumentNumber(connection, 'PURCHASE_ORDER');
     } else {
       const [existingPO] = await connection.execute(
         'SELECT id FROM purchase_orders WHERE po_number = ? LIMIT 1',
@@ -1655,7 +1688,7 @@ const getPurchaseOrderById = async (poId) => {
 };
 
 const updatePurchaseOrder = async (poId, payload) => {
-  const { status, poNumber, expectedDeliveryDate, notes, items, vendorId, discount_type, discount_value, discount_amount } = payload;
+  const { status, poNumber, expectedDeliveryDate, notes, items, vendorId, discount_type, discount_value, discount_amount, shortClose, shortCloseReason } = payload;
 
   const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'APPROVED', 'PENDING_PAYMENT', 'PAID', 'COMPLETED', 'CLOSED', 'FULFILLED'];
   if (status && !validStatuses.includes(status)) {
@@ -1668,24 +1701,60 @@ const updatePurchaseOrder = async (poId, payload) => {
   try {
     await connection.beginTransaction();
 
-    const [existing] = await connection.query('SELECT * FROM purchase_orders WHERE id = ?', [poId]);
+    const [existing] = await connection.query('SELECT * FROM purchase_orders WHERE id = ? FOR UPDATE', [poId]);
     if (!existing.length) {
       throw new Error('Purchase Order not found');
     }
+    const currentStatus = String(existing[0].status || '').toUpperCase();
 
     const updates = [];
     const params = [];
 
-    if (status) {
+    if (status && status !== currentStatus) {
+      if (currentStatus === 'MERGED') {
+        throw workflowError('This PO was merged into another PO and can no longer change');
+      }
+      // PAID is set by Accounts when payments cover the PO, never by hand
+      if (PO_SYSTEM_ONLY_STATUSES.includes(status)) {
+        throw workflowError(`${status} is set automatically and cannot be chosen manually`);
+      }
+      if (['FULFILLED', 'COMPLETED', 'CLOSED'].includes(status)) {
+        const progress = await getPoReceiptProgress(connection, poId);
+        const fullyReceived = progress.ordered > 0 && progress.received + 0.001 >= progress.ordered;
+        if (!fullyReceived && !shortClose) {
+          throw workflowError(
+            `Only ${progress.received} of ${progress.ordered} received. Record the receipt (GRN) first, or short-close the PO with a reason.`
+          );
+        }
+        if (!fullyReceived && shortClose && !String(shortCloseReason || '').trim()) {
+          throw workflowError('A reason is required to short-close a PO', 400);
+        }
+        if (!fullyReceived && shortClose) {
+          updates.push('notes = CONCAT(COALESCE(notes, \'\'), ?)');
+          params.push(`\n[Short-closed ${new Date().toISOString().slice(0, 10)}] ${String(shortCloseReason).trim()}`);
+        }
+      }
       updates.push('status = ?');
       params.push(status);
+    }
 
-      if (status === 'FULFILLED') {
-        // Automatically mark all items as accepted when fulfilled
-        await connection.execute(
-          'UPDATE purchase_order_items SET accepted_quantity = quantity WHERE purchase_order_id = ?',
-          [poId]
-        );
+    // Lines on a paid PO are a financial record; quantities can't drop below what was received
+    if (items && Array.isArray(items)) {
+      const [[paid]] = await connection.query(
+        "SELECT COUNT(*) AS cnt FROM payments WHERE po_id = ? AND status = 'CONFIRMED'",
+        [poId]
+      );
+      if (Number(paid.cnt) > 0) {
+        throw workflowError('Items cannot be changed after a payment has been made against this PO');
+      }
+      const receivedByItem = await getReceivedQtyByPoItem(connection, poId);
+      for (const item of items) {
+        if (!item.id) continue;
+        const received = receivedByItem.get(Number(item.id)) || 0;
+        const newQty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
+        if (received > 0 && newQty + 0.001 < received) {
+          throw workflowError(`${item.item_code || item.description || 'Item'}: quantity ${newQty} is below the ${received} already received`);
+        }
       }
     }
     if (poNumber) {
@@ -1832,6 +1901,23 @@ const deletePurchaseOrder = async (poId) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    const [[usage]] = await connection.query(
+      `SELECT
+         (SELECT COUNT(*) FROM grn_items gi JOIN purchase_order_items poi ON gi.po_item_id = poi.id WHERE poi.purchase_order_id = ?) AS grn_lines,
+         (SELECT COUNT(*) FROM po_receipts WHERE po_id = ?) AS receipts,
+         (SELECT COUNT(*) FROM payments WHERE po_id = ? AND status <> 'FAILED') AS payments,
+         (SELECT COUNT(*) FROM vendor_invoices WHERE po_id = ?) AS invoices`,
+      [poId, poId, poId, poId]
+    );
+    const blockers = [];
+    if (Number(usage.grn_lines) > 0 || Number(usage.receipts) > 0) blockers.push('material has been received');
+    if (Number(usage.invoices) > 0) blockers.push('it was forwarded to Accounts');
+    if (Number(usage.payments) > 0) blockers.push('payments exist');
+    if (blockers.length > 0) {
+      throw workflowError(`PO cannot be deleted because ${blockers.join(', ')}. Close it instead.`);
+    }
+
     await connection.execute('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [poId]);
     await connection.execute('DELETE FROM purchase_orders WHERE id = ?', [poId]);
     await connection.commit();
@@ -1937,11 +2023,20 @@ const approvePurchaseOrder = async (poId, userId) => {
   try {
     await connection.beginTransaction();
 
-    const [po] = await connection.query('SELECT mr_id, vendor_id FROM purchase_orders WHERE id = ?', [poId]);
+    const [po] = await connection.query('SELECT mr_id, vendor_id, status, po_number, total_amount FROM purchase_orders WHERE id = ? FOR UPDATE', [poId]);
     if (!po.length) throw new Error('Purchase Order not found');
 
     if (!po[0].vendor_id) {
       throw new Error('Cannot approve PO without a vendor. Please edit the PO to assign a vendor first.');
+    }
+
+    // Approving an already-ordered / received PO would reset its progress to ORDERED
+    const currentStatus = String(po[0].status || '').toUpperCase();
+    if (!PO_APPROVABLE_STATUSES.includes(currentStatus)) {
+      throw workflowError(`PO ${po[0].po_number} is already ${currentStatus} and cannot be approved again`);
+    }
+    if (!(parseFloat(po[0].total_amount) > 0)) {
+      throw workflowError(`PO ${po[0].po_number} has no value; add item rates before approval`);
     }
 
     await connection.execute(
@@ -3288,7 +3383,7 @@ const mergePurchaseOrders = async (payload) => {
     }
 
     // 2. Generate new PO Number
-    const poNumber = await generatePONumber();
+    const poNumber = await nextDocumentNumber(connection, 'PURCHASE_ORDER');
     const publicId = crypto.randomUUID();
 
     // 3. Create consolidated PO Header
@@ -3412,14 +3507,25 @@ const forwardToAccounts = async (poId, receiptId = null) => {
       const poReceiptService = require('./poReceiptService');
       const receipt = await poReceiptService.getPOReceiptById(receiptId);
       if (receipt && receipt.items && receipt.items.length > 0) {
+        // Value the receipt at each PO line's own rate and GST, not a flat 18%
+        const [lines] = await connection.query(
+          `SELECT pri.received_quantity, pri.received_weight, poi.unit_rate,
+                  COALESCE(poi.cgst_percent, 0) + COALESCE(poi.sgst_percent, 0) AS gst_percent
+           FROM po_receipt_items pri
+           LEFT JOIN purchase_order_items poi ON pri.po_item_id = poi.id
+           WHERE pri.receipt_id = ?`,
+          [receiptId]
+        );
         let subtotal = 0;
-        receipt.items.forEach(it => {
-          const recQty = parseFloat(it.received_qty || 0);
-          const recWt = parseFloat(it.received_weight || 0);
-          const rate = parseFloat(it.unit_rate || 0);
-          subtotal += recWt > 0 ? (recWt * rate) : (recQty * rate);
+        let gst = 0;
+        lines.forEach(line => {
+          const recQty = parseFloat(line.received_quantity || 0);
+          const recWt = parseFloat(line.received_weight || 0);
+          const rate = parseFloat(line.unit_rate || 0);
+          const lineValue = recWt > 0 ? (recWt * rate) : (recQty * rate);
+          subtotal += lineValue;
+          gst += lineValue * (parseFloat(line.gst_percent) || 0) / 100;
         });
-        const gst = subtotal * 0.18;
         poAmount = Number((subtotal + gst).toFixed(2));
         grnNumber = `GRN-${String(receipt.id).padStart(4, '0')}`;
       }

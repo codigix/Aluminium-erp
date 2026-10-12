@@ -635,10 +635,13 @@ function App() {
         throw new Error(errorBody.error || 'Registration failed')
       }
       const data = await res.json()
-      localStorage.setItem('authToken', data.token)
-      localStorage.setItem('authUser', JSON.stringify(data.user))
-      setToken(data.token)
-      setUser(data.user)
+      // New accounts are created inactive; an administrator activates them
+      if (data.token) {
+        localStorage.setItem('authToken', data.token)
+        localStorage.setItem('authUser', JSON.stringify(data.user))
+        setToken(data.token)
+        setUser(data.user)
+      }
       setSignupForm({
         username: '',
         email: '',
@@ -651,7 +654,9 @@ function App() {
         phone: ''
       })
       setAuthMode('login')
-      showToast(`Welcome, ${data.user.first_name}!`)
+      showToast(data.pendingApproval
+        ? (data.message || 'Account created. An administrator must activate it before you can log in.')
+        : `Welcome, ${data.user.first_name}!`)
     } catch (error) {
       showToast(error.message)
     } finally {

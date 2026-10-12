@@ -5,13 +5,65 @@ const path = require('path');
 const fs = require('fs');
 const emailService = require('./emailService');
 
-const generatePaymentVoucherNo = async () => {
-  const [rows] = await pool.query(
-    'SELECT COUNT(*) as count FROM payments WHERE YEAR(created_at) = YEAR(NOW())'
+const { nextDocumentNumber } = require('../utils/documentNumber');
+
+const AMOUNT_TOLERANCE = 1; // rupees; absorbs rounding between documents
+
+const httpError = (message, statusCode = 400) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
+
+// Only CONFIRMED payments reduce what we owe the vendor (CREDIT entries)
+const syncVendorLedgerForPayment = async (connection, payment, referenceNo = '') => {
+  await connection.execute(
+    "DELETE FROM vendor_ledger WHERE reference_doc_type = 'PAYMENT' AND reference_doc_id = ?",
+    [payment.id]
   );
-  const count = rows[0].count + 1;
-  const year = new Date().getFullYear();
-  return `PV-${year}-${String(count).padStart(5, '0')}`;
+  if (payment.status !== 'CONFIRMED') return;
+  const label = payment.invoice_id
+    ? `Invoice ${payment.invoice_id}`
+    : (payment.po_id ? `PO ${referenceNo}` : `Job Card ${referenceNo}`);
+  await connection.execute(
+    `INSERT INTO vendor_ledger (vendor_id, reference_doc_id, reference_doc_type, transaction_type, amount, description, ledger_date)
+     VALUES (?, ?, 'PAYMENT', 'CREDIT', ?, ?, ?)`,
+    [payment.vendor_id, payment.id, parseFloat(payment.payment_amount), `Payment against ${label}`, payment.payment_date]
+  );
+};
+
+// PO / sub-contract status follows the payments actually confirmed against it
+const syncPayableStatus = async (connection, payment) => {
+  if (payment.po_id) {
+    const [poRows] = await connection.query('SELECT total_amount, status FROM purchase_orders WHERE id = ?', [payment.po_id]);
+    const [paymentRows] = await connection.query(
+      "SELECT COALESCE(SUM(payment_amount), 0) AS total_paid FROM payments WHERE po_id = ? AND status = 'CONFIRMED'",
+      [payment.po_id]
+    );
+    if (!poRows.length) return;
+    const total = parseFloat(poRows[0].total_amount) || 0;
+    const paid = parseFloat(paymentRows[0].total_paid) || 0;
+    if (total > 0 && paid + AMOUNT_TOLERANCE >= total) {
+      await connection.execute("UPDATE purchase_orders SET status = 'PAID' WHERE id = ?", [payment.po_id]);
+    } else if (poRows[0].status === 'PAID') {
+      // A reversed payment re-opens the PO for payment
+      await connection.execute("UPDATE purchase_orders SET status = 'PENDING_PAYMENT' WHERE id = ?", [payment.po_id]);
+    }
+  } else if (payment.job_card_quality_log_id) {
+    const [qlRows] = await connection.query('SELECT grand_total, status FROM job_card_quality_logs WHERE id = ?', [payment.job_card_quality_log_id]);
+    const [paymentRows] = await connection.query(
+      "SELECT COALESCE(SUM(payment_amount), 0) AS total_paid FROM payments WHERE job_card_quality_log_id = ? AND status = 'CONFIRMED'",
+      [payment.job_card_quality_log_id]
+    );
+    if (!qlRows.length) return;
+    const total = parseFloat(qlRows[0].grand_total) || 0;
+    const paid = parseFloat(paymentRows[0].total_paid) || 0;
+    if (total > 0 && paid + AMOUNT_TOLERANCE >= total) {
+      await connection.execute("UPDATE job_card_quality_logs SET status = 'PAID' WHERE id = ?", [payment.job_card_quality_log_id]);
+    } else if (qlRows[0].status === 'PAID') {
+      await connection.execute("UPDATE job_card_quality_logs SET status = 'APPROVED' WHERE id = ?", [payment.job_card_quality_log_id]);
+    }
+  }
 };
 
 const processPayment = async (payload) => {
@@ -38,34 +90,69 @@ const processPayment = async (payload) => {
   } = payload;
 
   if ((!poId && !jobCardQualityLogId) || !vendorId || !paymentAmount || !paymentDate || !paymentMode) {
-    const error = new Error('Missing required payment fields');
-    error.statusCode = 400;
-    throw error;
+    throw httpError('Missing required payment fields');
   }
+  const amount = parseFloat(paymentAmount);
+  if (!Number.isFinite(amount) || amount <= 0) throw httpError('Payment amount must be greater than zero');
 
-  const voucherNo = await generatePaymentVoucherNo();
-
+  const connection = await pool.getConnection();
   try {
-    // Get Reference Number
+    await connection.beginTransaction();
+
+    // Lock the payable and check the amount against what is still owed.
+    // For a PO the payable is the verified vendor invoice value (GRN based);
+    // the PO total is only used when no invoice has been verified yet.
     let referenceNo = invoiceId || '';
-    if (!invoiceId) {
-      if (poId) {
-        const [poRows] = await pool.query('SELECT po_number FROM purchase_orders WHERE id = ?', [poId]);
-        if (poRows.length > 0) {
-          referenceNo = poRows[0].po_number;
-        }
-      } else if (jobCardQualityLogId) {
-        const [qlRows] = await pool.query(`
-          SELECT jc.job_card_no, ql.vendor_invoice_no 
-          FROM job_card_quality_logs ql
-          JOIN job_cards jc ON ql.job_card_id = jc.id
-          WHERE ql.id = ?
-        `, [jobCardQualityLogId]);
-        if (qlRows.length > 0) {
-          referenceNo = qlRows[0].vendor_invoice_no || qlRows[0].job_card_no;
-        }
+    let payableTotal = 0;
+    let alreadyPaid = 0;
+
+    if (poId) {
+      const [poRows] = await connection.query('SELECT po_number, vendor_id, total_amount FROM purchase_orders WHERE id = ? FOR UPDATE', [poId]);
+      if (!poRows.length) throw httpError('Purchase order not found', 404);
+      if (poRows[0].vendor_id && String(poRows[0].vendor_id) !== String(vendorId)) {
+        throw httpError('This PO belongs to a different vendor');
       }
+      if (!invoiceId) referenceNo = poRows[0].po_number;
+
+      const [[invoiceTotals]] = await connection.query(
+        `SELECT COALESCE(SUM(COALESCE(NULLIF(invoice_amount, 0), po_amount)), 0) AS verified_total, COUNT(*) AS cnt
+         FROM vendor_invoices WHERE po_id = ? AND status IN ('VERIFIED', 'COMPLETED')`,
+        [poId]
+      );
+      payableTotal = Number(invoiceTotals.cnt) > 0
+        ? parseFloat(invoiceTotals.verified_total) || 0
+        : parseFloat(poRows[0].total_amount) || 0;
+
+      const [[paidRow]] = await connection.query(
+        "SELECT COALESCE(SUM(payment_amount), 0) AS paid FROM payments WHERE po_id = ? AND status = 'CONFIRMED'",
+        [poId]
+      );
+      alreadyPaid = parseFloat(paidRow.paid) || 0;
+    } else {
+      const [qlRows] = await connection.query(`
+        SELECT jc.job_card_no, ql.vendor_invoice_no, ql.grand_total
+        FROM job_card_quality_logs ql
+        JOIN job_cards jc ON ql.job_card_id = jc.id
+        WHERE ql.id = ? FOR UPDATE
+      `, [jobCardQualityLogId]);
+      if (!qlRows.length) throw httpError('Sub-contract record not found', 404);
+      if (!invoiceId) referenceNo = qlRows[0].vendor_invoice_no || qlRows[0].job_card_no;
+      payableTotal = parseFloat(qlRows[0].grand_total) || 0;
+      const [[paidRow]] = await connection.query(
+        "SELECT COALESCE(SUM(payment_amount), 0) AS paid FROM payments WHERE job_card_quality_log_id = ? AND status = 'CONFIRMED'",
+        [jobCardQualityLogId]
+      );
+      alreadyPaid = parseFloat(paidRow.paid) || 0;
     }
+
+    if (payableTotal > 0 && alreadyPaid + amount > payableTotal + AMOUNT_TOLERANCE) {
+      throw httpError(
+        `Payment of ${amount.toFixed(2)} exceeds the outstanding amount of ${Math.max(0, payableTotal - alreadyPaid).toFixed(2)}`,
+        409
+      );
+    }
+
+    const voucherNo = await nextDocumentNumber(connection, 'PAYMENT_VOUCHER');
 
     let bankAccountId = null;
     let manualBankAccount = null;
@@ -73,7 +160,7 @@ const processPayment = async (payload) => {
     if (bankAccount) {
       const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
       if (isNumericId) {
-        const [banks] = await pool.query('SELECT id FROM bank_accounts WHERE id = ?', [parseInt(bankAccount)]);
+        const [banks] = await connection.query('SELECT id FROM bank_accounts WHERE id = ?', [parseInt(bankAccount)]);
         if (banks.length > 0) {
           bankAccountId = parseInt(bankAccount);
         } else {
@@ -84,7 +171,7 @@ const processPayment = async (payload) => {
       }
     }
 
-    const [result] = await pool.execute(
+    const [result] = await connection.execute(
       `INSERT INTO payments (
         payment_voucher_no,
         invoice_id,
@@ -115,7 +202,7 @@ const processPayment = async (payload) => {
         poId || null,
         jobCardQualityLogId || null,
         vendorId,
-        parseFloat(paymentAmount),
+        amount,
         paymentDate,
         paymentMode,
         transactionRefNo || null,
@@ -136,8 +223,18 @@ const processPayment = async (payload) => {
     );
 
     const paymentId = result.insertId;
+    const payment = {
+      id: paymentId,
+      vendor_id: vendorId,
+      po_id: poId || null,
+      job_card_quality_log_id: jobCardQualityLogId || null,
+      invoice_id: invoiceId || null,
+      payment_amount: amount,
+      payment_date: paymentDate,
+      status: 'CONFIRMED'
+    };
 
-    await pool.execute(
+    await connection.execute(
       `INSERT INTO payment_vouchers (
         voucher_no,
         voucher_date,
@@ -151,48 +248,15 @@ const processPayment = async (payload) => {
         paymentDate,
         paymentId,
         vendorId,
-        parseFloat(paymentAmount),
+        amount,
         `Payment for ${invoiceId ? 'Invoice ' + invoiceId : (poId ? 'PO ' + referenceNo : 'Job Card ' + referenceNo)}: ${remarks || ''}`
       ]
     );
 
-    await pool.execute(
-      `INSERT INTO vendor_ledger (
-        vendor_id,
-        reference_doc_id,
-        reference_doc_type,
-        transaction_type,
-        amount,
-        description,
-        ledger_date
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        vendorId,
-        paymentId,
-        'PAYMENT',
-        'CREDIT',
-        parseFloat(paymentAmount),
-        `Payment against ${invoiceId ? 'Invoice ' + invoiceId : (poId ? 'PO ' + referenceNo : 'Job Card ' + referenceNo)}`,
-        paymentDate
-      ]
-    );
+    await syncVendorLedgerForPayment(connection, payment, referenceNo);
+    await syncPayableStatus(connection, payment);
 
-    // Update status if fully paid
-    if (poId) {
-      const [poRows] = await pool.query('SELECT total_amount FROM purchase_orders WHERE id = ?', [poId]);
-      const [paymentRows] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM payments WHERE po_id = ? AND status = ?', [poId, 'CONFIRMED']);
-
-      if (poRows.length > 0 && paymentRows[0].total_paid >= poRows[0].total_amount) {
-        await pool.execute('UPDATE purchase_orders SET status = ? WHERE id = ?', ['PAID', poId]);
-      }
-    } else if (jobCardQualityLogId) {
-      const [qlRows] = await pool.query('SELECT grand_total FROM job_card_quality_logs WHERE id = ?', [jobCardQualityLogId]);
-      const [paymentRows] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM payments WHERE job_card_quality_log_id = ? AND status = ?', [jobCardQualityLogId, 'CONFIRMED']);
-
-      if (qlRows.length > 0 && paymentRows[0].total_paid >= qlRows[0].grand_total) {
-        await pool.execute('UPDATE job_card_quality_logs SET status = ? WHERE id = ?', ['PAID', jobCardQualityLogId]);
-      }
-    }
+    await connection.commit();
 
     return {
       id: paymentId,
@@ -201,8 +265,11 @@ const processPayment = async (payload) => {
       message: 'Payment processed successfully'
     };
   } catch (error) {
+    await connection.rollback();
     console.error('Error processing payment:', error);
     throw error;
+  } finally {
+    connection.release();
   }
 };
 
@@ -305,21 +372,33 @@ const getVendorBalance = async (vendorId) => {
 
 const getPendingPayments = async () => {
   const [poPayments] = await pool.query(
-    `SELECT 
-      vi.po_id as id,
-      vi.id as vendor_invoice_id,
-      vi.po_number,
-      vi.po_amount as total_amount,
-      vi.created_at,
-      vi.po_pdf_path as invoice_url,
+    // One row per PO: all verified invoices (GRNs) of the PO against all its payments.
+    // Previously each GRN invoice subtracted every payment made on the whole PO.
+    `SELECT
+      inv.po_id as id,
+      inv.vendor_invoice_id,
+      inv.po_number,
+      inv.total_amount,
+      inv.created_at,
+      inv.invoice_url,
       v.vendor_name,
       v.id as vendor_id,
       'PURCHASE_ORDER' as type,
-      COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = vi.po_id AND status = 'CONFIRMED'), 0) as already_paid,
-      (vi.po_amount - COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = vi.po_id AND status = 'CONFIRMED'), 0)) as outstanding
-    FROM vendor_invoices vi
-    LEFT JOIN vendors v ON vi.vendor_id = v.id
-    WHERE vi.status IN ('VERIFIED', 'COMPLETED')
+      COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = inv.po_id AND status = 'CONFIRMED'), 0) as already_paid,
+      (inv.total_amount - COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = inv.po_id AND status = 'CONFIRMED'), 0)) as outstanding
+    FROM (
+      SELECT vi.po_id,
+             MAX(vi.id) AS vendor_invoice_id,
+             MAX(vi.po_number) AS po_number,
+             MAX(vi.vendor_id) AS vendor_id,
+             SUM(COALESCE(NULLIF(vi.invoice_amount, 0), vi.po_amount)) AS total_amount,
+             MAX(vi.created_at) AS created_at,
+             SUBSTRING_INDEX(GROUP_CONCAT(COALESCE(vi.invoice_pdf_path, vi.po_pdf_path) ORDER BY vi.id DESC), ',', 1) AS invoice_url
+      FROM vendor_invoices vi
+      WHERE vi.status IN ('VERIFIED', 'COMPLETED')
+      GROUP BY vi.po_id
+    ) inv
+    LEFT JOIN vendors v ON inv.vendor_id = v.id
     HAVING outstanding >= 0`
   );
 
@@ -347,26 +426,59 @@ const getPendingPayments = async () => {
   return allPayments;
 };
 
+// Changing a payment's status keeps the vendor ledger and PO status in step
 const updatePaymentStatus = async (paymentId, status) => {
   const validStatuses = ['PENDING', 'CONFIRMED', 'FAILED'];
 
   if (!validStatuses.includes(status)) {
-    const error = new Error('Invalid payment status');
-    error.statusCode = 400;
-    throw error;
+    throw httpError('Invalid payment status');
   }
 
-  await pool.execute(
-    'UPDATE payments SET status = ?, updated_at = NOW() WHERE id = ?',
-    [status, paymentId]
-  );
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query('SELECT * FROM payments WHERE id = ? FOR UPDATE', [paymentId]);
+    if (!rows.length) throw httpError('Payment not found', 404);
 
-  return { id: paymentId, status };
+    await connection.execute(
+      'UPDATE payments SET status = ?, updated_at = NOW() WHERE id = ?',
+      [status, paymentId]
+    );
+    const payment = { ...rows[0], status };
+    await syncVendorLedgerForPayment(connection, payment, rows[0].invoice_id || '');
+    await syncPayableStatus(connection, payment);
+
+    await connection.commit();
+    return { id: paymentId, status };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
+// Deleting a payment removes its voucher and ledger entry and re-opens the payable
 const deletePayment = async (paymentId) => {
-  await pool.execute('DELETE FROM payments WHERE id = ?', [paymentId]);
-  return { id: paymentId, message: 'Payment deleted successfully' };
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query('SELECT * FROM payments WHERE id = ? FOR UPDATE', [paymentId]);
+    if (!rows.length) throw httpError('Payment not found', 404);
+
+    await connection.execute("DELETE FROM vendor_ledger WHERE reference_doc_type = 'PAYMENT' AND reference_doc_id = ?", [paymentId]);
+    await connection.execute('DELETE FROM payment_vouchers WHERE payment_id = ?', [paymentId]);
+    await connection.execute('DELETE FROM payments WHERE id = ?', [paymentId]);
+    await syncPayableStatus(connection, rows[0]);
+
+    await connection.commit();
+    return { id: paymentId, message: 'Payment deleted successfully' };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const generatePaymentVoucherPDF = async (paymentId) => {

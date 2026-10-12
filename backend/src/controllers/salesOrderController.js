@@ -218,6 +218,15 @@ const deleteSalesOrder = async (req, res, next) => {
   }
 };
 
+const cancelSalesOrder = async (req, res, next) => {
+  try {
+    const result = await salesOrderService.cancelSalesOrder(req.params.id, req.body?.reason || null, req.user?.id);
+    res.json({ message: 'Sales order cancelled', ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const updateSalesOrderItem = async (req, res, next) => {
   try {
     const { itemId } = req.params;
@@ -284,5 +293,6 @@ module.exports = {
   updateSalesOrderItem,
   updateSalesOrderItemStatus,
   generateSalesOrderPDF,
-  deleteSalesOrder
+  deleteSalesOrder,
+  cancelSalesOrder
 };

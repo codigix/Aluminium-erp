@@ -1,6 +1,96 @@
 const crypto = require('crypto');
 const pool = require('../config/db');
 const generateJobCardQcPdf = require('../utils/generateJobCardQcPdf');
+const stockService = require('./stockService');
+const { canTransitionSalesOrder, salesOrderRank, SALES_ORDER_STAGES } = require('../config/workflow');
+
+// Finished goods leave production and enter stock when the dispatch operation
+// releases quantity to Shipment. Idempotent per shipment order.
+const postFinishedGoodsToStock = async (connection, { jobCardId, salesOrderItemId, quantity, shipmentId, shipmentCode }) => {
+  const qty = parseFloat(quantity) || 0;
+  if (qty <= 0) return;
+
+  const [already] = await connection.query(
+    "SELECT id FROM stock_ledger WHERE reference_doc_type = 'PRODUCTION_OUTPUT' AND reference_doc_id = ? LIMIT 1",
+    [shipmentId]
+  );
+  if (already.length) return;
+
+  // Same item code expression as the dispatch OUT in shipmentService
+  let itemCode = null;
+  if (salesOrderItemId) {
+    const [soiRows] = await connection.query(
+      "SELECT COALESCE(NULLIF(TRIM(item_code), ''), drawing_no) AS item_code FROM sales_order_items WHERE id = ?",
+      [salesOrderItemId]
+    );
+    itemCode = soiRows[0]?.item_code || null;
+    if (!itemCode) {
+      const [oiRows] = await connection.query(
+        "SELECT COALESCE(NULLIF(TRIM(item_code), ''), drawing_no) AS item_code FROM order_items WHERE id = ?",
+        [salesOrderItemId]
+      );
+      itemCode = oiRows[0]?.item_code || null;
+    }
+  }
+  if (!itemCode) {
+    console.warn(`[FG Stock] No item code for job card ${jobCardId}; finished goods not posted for ${shipmentCode}`);
+    return;
+  }
+
+  const [whRows] = await connection.query(
+    `SELECT jc.target_warehouse_id, COALESCE(w.warehouse_name, 'MAIN STORE') AS warehouse_name
+     FROM job_cards jc LEFT JOIN warehouses w ON jc.target_warehouse_id = w.id
+     WHERE jc.id = ?`,
+    [jobCardId]
+  );
+  const warehouse = whRows[0]?.target_warehouse_id || whRows[0]?.warehouse_name || 'MAIN STORE';
+
+  await stockService.addStockLedgerEntry(
+    itemCode,
+    'IN',
+    qty,
+    'PRODUCTION_OUTPUT',
+    shipmentId,
+    shipmentCode,
+    {
+      connection,
+      remarks: `Finished goods from job card ${jobCardId} released for ${shipmentCode}`,
+      warehouse
+    }
+  );
+};
+
+// When every work order of a sales order is complete, the order moves to
+// PRODUCTION_COMPLETED so it appears in the Final QC queue.
+const markSalesOrderProductionCompleted = async (connection, workOrderId) => {
+  const [woRows] = await connection.query(
+    `SELECT COALESCE(soi.sales_order_id, wo.sales_order_id) AS sales_order_id
+     FROM work_orders wo LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     WHERE wo.id = ?`,
+    [workOrderId]
+  );
+  const salesOrderId = woRows[0]?.sales_order_id;
+  if (!salesOrderId) return;
+
+  const [[pending]] = await connection.query(
+    `SELECT COUNT(*) AS cnt
+     FROM work_orders wo LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     WHERE COALESCE(soi.sales_order_id, wo.sales_order_id) = ?
+       AND wo.status NOT IN ('COMPLETED', 'CANCELLED')`,
+    [salesOrderId]
+  );
+  if (Number(pending.cnt) > 0) return;
+
+  const [soRows] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [salesOrderId]);
+  if (!soRows.length) return;
+  if (salesOrderRank(soRows[0].status) < SALES_ORDER_STAGES.PRODUCTION_COMPLETED &&
+      canTransitionSalesOrder(soRows[0].status, 'PRODUCTION_COMPLETED').ok) {
+    await connection.execute(
+      "UPDATE sales_orders SET status = 'PRODUCTION_COMPLETED', current_department = 'QUALITY', updated_at = NOW() WHERE id = ?",
+      [salesOrderId]
+    );
+  }
+};
 
 const checkProductionPlanFulfilled = async (connectionOrPool, { jobCardId, workOrderId }) => {
   let planId = null;
@@ -1102,7 +1192,7 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
 
           const dispatchIncrement = newDispatchQtyVal - prevDispatchQty;
 
-          await connection.execute(
+          const [shipmentInsert] = await connection.execute(
             `INSERT INTO shipment_orders (
               shipment_code, sales_order_id, sales_order_item_id, job_card_id, customer_id, customer_name, 
               customer_phone, customer_email, shipping_address, billing_address,
@@ -1126,10 +1216,26 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
             ]
           );
 
-          await connection.execute(
-            "UPDATE sales_orders SET status = 'READY_FOR_SHIPMENT', current_department = 'SHIPMENT', updated_at = NOW() WHERE id = ?",
-            [salesOrderId]
-          );
+          // Finished goods handed from production to dispatch enter FG stock here.
+          // Uses the same item code / warehouse keys that the shipment's DISPATCHED
+          // stock OUT uses, so the two movements balance.
+          await postFinishedGoodsToStock(connection, {
+            jobCardId: id,
+            salesOrderItemId,
+            quantity: dispatchIncrement,
+            shipmentId: shipmentInsert.insertId,
+            shipmentCode
+          });
+
+          // Never pull an order that has already shipped back to "ready"
+          const [soStatusRows] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [salesOrderId]);
+          if (soStatusRows.length && canTransitionSalesOrder(soStatusRows[0].status, 'READY_FOR_SHIPMENT').ok &&
+              salesOrderRank(soStatusRows[0].status) <= SALES_ORDER_STAGES.READY_FOR_SHIPMENT) {
+            await connection.execute(
+              "UPDATE sales_orders SET status = 'READY_FOR_SHIPMENT', current_department = 'SHIPMENT', updated_at = NOW() WHERE id = ?",
+              [salesOrderId]
+            );
+          }
         }
       }
     }
@@ -1222,6 +1328,8 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
             }
           }
         }
+
+        await markSalesOrderProductionCompleted(connection, woId);
       }
     }
 

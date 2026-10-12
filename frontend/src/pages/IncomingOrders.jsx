@@ -1,22 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '../components/ui.jsx';
+import OrderFlowStepper from '../components/OrderFlowStepper.jsx';
+import { errorToast } from '../utils/toast';
+import { getSalesOrderStatusInfo, TONE_CLASSES } from '../constants/workflow';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE.replace(/\/api$/, '');
 
-const statusColors = {
-  CREATED: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', label: 'Created' },
-  DESIGN_IN_REVIEW: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', label: 'Design Review' },
-  DESIGN_Approved: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', label: 'Design Approved' },
-  BOM_Approved: { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-700', label: 'BOM Approved' },
-  BOM_SUBMITTED: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', label: 'BOM Submitted' },
-  DESIGN_QUERY: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', label: 'Design Query' },
-  PROCUREMENT_IN_PROGRESS: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', label: 'Procurement Active' },
-  MATERIAL_PURCHASE_IN_PROGRESS: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600', label: 'Material Purchase' },
-  MATERIAL_READY: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', label: 'Material Ready' },
-  IN_PRODUCTION: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-600', label: 'In Production' },
-  PRODUCTION_COMPLETED: { bg: 'bg-lime-50', border: 'border-lime-200', text: 'text-lime-600', label: 'Production Done' },
-};
+
 
 const priorityColors = {
   LOW: 'text-slate-500',
@@ -34,8 +25,7 @@ const formatOrderCode = (id) => {
 };
 
 const SalesOrderRow = ({ order, onAction, actionLoading }) => {
-  const normalizedStatus = (order.status || 'CREATED').trim();
-  const currentStatus = statusColors[normalizedStatus] || statusColors.CREATED;
+  const currentStatus = getSalesOrderStatusInfo(order.status);
   const isProcessing = actionLoading === order.id;
   const rejectedItems = (order.items || []).filter(item => item.status === 'REJECTED');
 
@@ -64,9 +54,12 @@ const SalesOrderRow = ({ order, onAction, actionLoading }) => {
           </span>
         </td>
         <td className="px-5 py-4">
-          <span className={`px-2 py-1 rounded text-xs   border ${currentStatus.bg} ${currentStatus.border} ${currentStatus.text}  whitespace-nowrap`}>
+          <span className={`px-2 py-1 rounded text-xs border ${TONE_CLASSES[currentStatus.tone] || TONE_CLASSES.slate} whitespace-nowrap`}>
             {currentStatus.label}
           </span>
+          <div className="mt-1.5">
+            <OrderFlowStepper status={order.status} />
+          </div>
           {order.status === 'DESIGN_QUERY' && order.rejection_reason && (
             <div className="mt-1.5 p-2 bg-amber-50 border border-amber-100 roundedtext-xs  text-amber-700 leading-relaxed max-w-[200px]">
               <span className="">Rejection Reason:</span> {order.rejection_reason}
@@ -166,9 +159,14 @@ const IncomingOrders = ({ userDepartment = 'DESIGN_ENG' }) => {
       });
       if (response.ok) {
         setOrders(orders.filter(o => o.id !== orderId));
+      } else {
+        // e.g. workflow rule: an order in production cannot be sent back to design
+        const err = await response.json().catch(() => ({}));
+        errorToast(err.message || err.error || `Could not ${endpoint} the order`);
       }
     } catch (error) {
       console.error('Error:', error);
+      errorToast(error.message);
     } finally {
       setActionLoading(null);
     }

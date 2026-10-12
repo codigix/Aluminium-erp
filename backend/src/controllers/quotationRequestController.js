@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { salesOrderAdvanceSql } = require('../config/workflow');
 const emailService = require('../utils/emailService');
 const designOrderService = require('../services/designOrderService');
 const bomService = require('../services/bomService');
@@ -824,10 +825,16 @@ const sendQuotationViaEmail = async (req, res, next) => {
     if (uniqueOrderIds.length > 0 && (status || 'SENT').toUpperCase() !== 'DRAFT') {
       // Link SO to the first quotation ID in the batch to mark it as quoted
       const firstQuoteId = quotationIds[0];
+      const orderPlaceholders = uniqueOrderIds.map(() => '?').join(',');
       await connection.execute(
-        `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, quotation_id = ?, updated_at = NOW() 
-         WHERE id IN (${uniqueOrderIds.map(() => '?').join(',')})`,
-        ['QUOTATION_SENT', 'SALES', firstQuoteId, ...uniqueOrderIds]
+        `UPDATE sales_orders SET quotation_id = ?, updated_at = NOW() WHERE id IN (${orderPlaceholders})`,
+        [firstQuoteId, ...uniqueOrderIds]
+      );
+      // A revised quotation for an order already in production must not move it back
+      await connection.execute(
+        `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1
+         WHERE id IN (${orderPlaceholders}) AND ${salesOrderAdvanceSql('QUOTATION_SENT')}`,
+        ['QUOTATION_SENT', 'SALES', ...uniqueOrderIds]
       );
     }
 

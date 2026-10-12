@@ -3,13 +3,100 @@ const puppeteer = require('puppeteer');
 const mustache = require('mustache');
 const emailService = require('./emailService');
 
-const generatePaymentReceiptNo = async () => {
-  const [rows] = await pool.query(
-    'SELECT COUNT(*) as count FROM customer_payments WHERE YEAR(created_at) = YEAR(NOW())'
+const { nextDocumentNumber } = require('../utils/documentNumber');
+
+const AMOUNT_TOLERANCE = 1; // rupees; absorbs rounding between documents
+
+const httpError = (message, statusCode = 400) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
+
+// Order value used for receivables: the order's own total first, then its
+// items, and only as a last resort the Customer PO total.
+const SALES_ORDER_TOTAL_SQL = `COALESCE(
+  NULLIF(so.net_total, 0),
+  NULLIF((SELECT SUM(COALESCE(quantity, 0) * COALESCE(rate, 0) + COALESCE(tax_value, 0)) FROM sales_order_items
+          WHERE sales_order_id = so.id AND parent_bom_id IS NULL
+            AND (status IS NULL OR UPPER(status) NOT IN ('REJECTED', 'CANCELLED'))), 0),
+  NULLIF(cp_pos.net_total, 0),
+  0)`;
+
+const SALES_ORDER_PAID_SQL = `COALESCE((SELECT SUM(payment_amount) FROM customer_payments
+  WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0)`;
+
+// Billable once goods are ready / gone, or whenever an advance was received
+const RECEIVABLE_SO_FILTER = `(so.status IN ('READY_FOR_SHIPMENT', 'PARTIALLY_SHIPPED', 'SHIPPED', 'DELIVERED', 'CLOSED')
+  OR EXISTS (SELECT 1 FROM customer_payments cpx WHERE cpx.sales_order_id = so.id AND cpx.sales_order_source = 'SALES_ORDER' AND cpx.status = 'CONFIRMED'))`;
+
+const getSalesOrderAmounts = async (connection, salesOrderId) => {
+  const [rows] = await connection.query(
+    `SELECT ${SALES_ORDER_TOTAL_SQL} AS total, ${SALES_ORDER_PAID_SQL} AS paid
+     FROM sales_orders so
+     LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
+     WHERE so.id = ?`,
+    [salesOrderId]
   );
-  const count = rows[0].count + 1;
-  const year = new Date().getFullYear();
-  return `PR-${year}-${String(count).padStart(5, '0')}`;
+  if (!rows.length) return null;
+  return { total: parseFloat(rows[0].total) || 0, paid: parseFloat(rows[0].paid) || 0 };
+};
+
+// Payment progress lives in payment_status / paid_amount, never in the
+// workflow status, so paying in advance does not pull an order out of
+// production or shipment queues.
+const syncSalesOrderPaymentStatus = async (connection, salesOrderId) => {
+  const amounts = await getSalesOrderAmounts(connection, salesOrderId);
+  if (!amounts) return;
+  let paymentStatus = 'UNPAID';
+  if (amounts.paid > 0) {
+    paymentStatus = amounts.total > 0 && amounts.paid + AMOUNT_TOLERANCE >= amounts.total ? 'PAID' : 'PARTIAL';
+  }
+  await connection.execute(
+    'UPDATE sales_orders SET paid_amount = ?, payment_status = ? WHERE id = ?',
+    [Number(amounts.paid.toFixed(2)), paymentStatus, salesOrderId]
+  );
+};
+
+const syncDirectOrderPaymentStatus = async (connection, orderId) => {
+  const [orders] = await connection.query('SELECT grand_total FROM orders WHERE id = ?', [orderId]);
+  const [payments] = await connection.query(
+    "SELECT COALESCE(SUM(payment_amount), 0) AS total_paid FROM customer_payments WHERE sales_order_id = ? AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'",
+    [orderId]
+  );
+  if (orders.length > 0 && parseFloat(orders[0].grand_total) > 0 &&
+      parseFloat(payments[0].total_paid) + AMOUNT_TOLERANCE >= parseFloat(orders[0].grand_total)) {
+    await connection.execute('UPDATE orders SET status = ? WHERE id = ?', ['Paid', orderId]);
+  }
+};
+
+const syncOrderPaymentStatus = async (connection, payment) => {
+  if (!payment.sales_order_id) return;
+  if (payment.sales_order_source === 'DIRECT_ORDER') {
+    await syncDirectOrderPaymentStatus(connection, payment.sales_order_id);
+  } else {
+    await syncSalesOrderPaymentStatus(connection, payment.sales_order_id);
+  }
+};
+
+// Only CONFIRMED receipts reduce the customer's balance (CREDIT entries)
+const syncCustomerLedgerForPayment = async (connection, payment) => {
+  await connection.execute(
+    "DELETE FROM customer_ledger WHERE reference_doc_type = 'PAYMENT' AND reference_doc_id = ?",
+    [payment.id]
+  );
+  if (payment.status !== 'CONFIRMED') return;
+  await connection.execute(
+    `INSERT INTO customer_ledger (customer_id, reference_doc_id, reference_doc_type, transaction_type, amount, description, ledger_date)
+     VALUES (?, ?, 'PAYMENT', 'CREDIT', ?, ?, ?)`,
+    [
+      payment.customer_id,
+      payment.id,
+      parseFloat(payment.payment_amount),
+      payment.invoice_id ? `Payment received against invoice ${payment.invoice_id}` : 'Payment received',
+      payment.payment_date
+    ]
+  );
 };
 
 const recordPaymentReceived = async (payload) => {
@@ -36,34 +123,76 @@ const recordPaymentReceived = async (payload) => {
     createdBy
   } = payload;
 
-  const receiptNo = await generatePaymentReceiptNo();
+  const amount = parseFloat(paymentAmount);
+  if (!customerId) throw httpError('Customer is required');
+  if (!Number.isFinite(amount) || amount <= 0) throw httpError('Payment amount must be greater than zero');
+  if (!paymentDate) throw httpError('Payment date is required');
+  if (!paymentMode) throw httpError('Payment mode is required');
 
-  // Logic to handle bank account: either a numeric ID from bank_accounts or a manual string
-  let bankAccountId = null;
-  let actualManualBankAccount = null;
-
-  if (bankAccount) {
-    const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
-    if (isNumericId) {
-      // Check if this ID actually exists in bank_accounts table
-      const [banks] = await pool.query('SELECT id FROM bank_accounts WHERE id = ?', [parseInt(bankAccount)]);
-      if (banks.length > 0) {
-        bankAccountId = parseInt(bankAccount);
-        actualManualBankAccount = manualBankAccount || null;
-      } else {
-        // If it's numeric but not in DB, treat it as manual bank account info
-        bankAccountId = null;
-        actualManualBankAccount = bankAccount;
-      }
-    } else {
-      // Non-numeric means it's manual bank info
-      bankAccountId = null;
-      actualManualBankAccount = bankAccount;
-    }
-  }
+  const source = salesOrderSource || 'SALES_ORDER';
+  const connection = await pool.getConnection();
 
   try {
-    const [result] = await pool.execute(
+    await connection.beginTransaction();
+
+    // Lock the order so two receipts entered at once can't both pass the outstanding check
+    if (salesOrderId) {
+      let total = 0;
+      let paid = 0;
+      if (source === 'DIRECT_ORDER') {
+        const [orders] = await connection.query('SELECT client_id, grand_total FROM orders WHERE id = ? FOR UPDATE', [salesOrderId]);
+        if (!orders.length) throw httpError('Order not found', 404);
+        if (orders[0].client_id && String(orders[0].client_id) !== String(customerId)) {
+          throw httpError('This order belongs to a different customer');
+        }
+        total = parseFloat(orders[0].grand_total) || 0;
+        const [[p]] = await connection.query(
+          "SELECT COALESCE(SUM(payment_amount), 0) AS paid FROM customer_payments WHERE sales_order_id = ? AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'",
+          [salesOrderId]
+        );
+        paid = parseFloat(p.paid) || 0;
+      } else {
+        const [orders] = await connection.query('SELECT company_id FROM sales_orders WHERE id = ? FOR UPDATE', [salesOrderId]);
+        if (!orders.length) throw httpError('Sales order not found', 404);
+        if (orders[0].company_id && String(orders[0].company_id) !== String(customerId)) {
+          throw httpError('This sales order belongs to a different customer');
+        }
+        const amounts = await getSalesOrderAmounts(connection, salesOrderId);
+        total = amounts.total;
+        paid = amounts.paid;
+      }
+
+      if (total > 0 && paid + amount > total + AMOUNT_TOLERANCE) {
+        const outstanding = Math.max(0, total - paid);
+        throw httpError(`Payment of ${amount.toFixed(2)} exceeds the outstanding amount of ${outstanding.toFixed(2)}`, 409);
+      }
+    }
+
+    const receiptNo = await nextDocumentNumber(connection, 'PAYMENT_RECEIPT');
+
+    // Logic to handle bank account: either a numeric ID from bank_accounts or a manual string
+    let bankAccountId = null;
+    let actualManualBankAccount = null;
+
+    if (bankAccount) {
+      const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
+      if (isNumericId) {
+        // Check if this ID actually exists in bank_accounts table
+        const [banks] = await connection.query('SELECT id FROM bank_accounts WHERE id = ?', [parseInt(bankAccount)]);
+        if (banks.length > 0) {
+          bankAccountId = parseInt(bankAccount);
+          actualManualBankAccount = manualBankAccount || null;
+        } else {
+          // If it's numeric but not in DB, treat it as manual bank account info
+          actualManualBankAccount = bankAccount;
+        }
+      } else {
+        // Non-numeric means it's manual bank info
+        actualManualBankAccount = bankAccount;
+      }
+    }
+
+    const [result] = await connection.execute(
       `INSERT INTO customer_payments (
         payment_receipt_no,
         invoice_id,
@@ -92,9 +221,9 @@ const recordPaymentReceived = async (payload) => {
         receiptNo,
         invoiceId || null,
         salesOrderId || null,
-        salesOrderSource || 'SALES_ORDER',
+        source,
         customerId,
-        parseFloat(paymentAmount),
+        amount,
         paymentDate,
         paymentMode,
         transactionRefNo || null,
@@ -115,30 +244,20 @@ const recordPaymentReceived = async (payload) => {
     );
 
     const paymentId = result.insertId;
+    const payment = {
+      id: paymentId,
+      customer_id: customerId,
+      sales_order_id: salesOrderId || null,
+      sales_order_source: source,
+      payment_amount: amount,
+      payment_date: paymentDate,
+      invoice_id: invoiceId || null,
+      status: 'CONFIRMED'
+    };
 
-    // Check if fully paid and update status
-    if (salesOrderId) {
-      if (salesOrderSource === 'DIRECT_ORDER') {
-        const [orders] = await pool.query('SELECT grand_total FROM orders WHERE id = ?', [salesOrderId]);
-        const [payments] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM customer_payments WHERE sales_order_id = ? AND sales_order_source = ? AND status = ?', [salesOrderId, 'DIRECT_ORDER', 'CONFIRMED']);
-        if (orders.length > 0 && payments[0].total_paid >= orders[0].grand_total) {
-          await pool.execute('UPDATE orders SET status = ? WHERE id = ?', ['Paid', salesOrderId]);
-        }
-      } else {
-        // SALES_ORDER
-        const [so] = await pool.query(`
-          SELECT COALESCE(NULLIF(so.net_total, 0), NULLIF(cp.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as net_total 
-          FROM sales_orders so 
-          LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id 
-          WHERE so.id = ?`, [salesOrderId]);
-        const [payments] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM customer_payments WHERE sales_order_id = ? AND sales_order_source = ? AND status = ?', [salesOrderId, 'SALES_ORDER', 'CONFIRMED']);
-        if (so.length > 0 && so[0].net_total > 0 && payments[0].total_paid >= so[0].net_total) {
-          await pool.execute('UPDATE sales_orders SET status = ? WHERE id = ?', ['PAID', salesOrderId]);
-        }
-      }
-    }
+    await syncOrderPaymentStatus(connection, payment);
 
-    await pool.execute(
+    await connection.execute(
       `INSERT INTO payment_receipts (
         receipt_no,
         receipt_date,
@@ -152,31 +271,14 @@ const recordPaymentReceived = async (payload) => {
         paymentDate,
         paymentId,
         customerId,
-        parseFloat(paymentAmount),
+        amount,
         invoiceId ? `Payment received against invoice ${invoiceId}: ${remarks || ''}` : `Advance payment received: ${remarks || ''}`
       ]
     );
 
-    await pool.execute(
-      `INSERT INTO customer_ledger (
-        customer_id,
-        reference_doc_id,
-        reference_doc_type,
-        transaction_type,
-        amount,
-        description,
-        ledger_date
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        customerId,
-        paymentId,
-        'PAYMENT',
-        'DEBIT',
-        parseFloat(paymentAmount),
-        invoiceId ? `Payment received against invoice ${invoiceId}` : `Advance payment received`,
-        paymentDate
-      ]
-    );
+    await syncCustomerLedgerForPayment(connection, payment);
+
+    await connection.commit();
 
     return {
       id: paymentId,
@@ -185,8 +287,11 @@ const recordPaymentReceived = async (payload) => {
       message: 'Payment received and recorded successfully'
     };
   } catch (error) {
+    await connection.rollback();
     console.error('Error recording payment received:', error);
     throw error;
+  } finally {
+    connection.release();
   }
 };
 
@@ -332,9 +437,61 @@ const getPaymentReceivedById = async (paymentId) => {
   return payment;
 };
 
+// Receivables per order. Sales orders appear once goods are ready/shipped or an
+// advance was taken; payment progress comes from payment_status, so fully paid
+// orders stay visible with outstanding 0 (as before).
+const outstandingInvoicesQuery = (customerFilter) => `SELECT * FROM (
+      -- From sales_orders (Design based)
+      SELECT
+        so.id,
+        so.company_id as company_id,
+        CONVERT(COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0'))) USING utf8mb4) as so_number,
+        c.company_name as company_name,
+        con.email as customer_email,
+        COALESCE(NULLIF(so.project_name, ''), NULLIF(cp_pos.project_name, ''), 'General Project') as project_name,
+        ${SALES_ORDER_TOTAL_SQL} as total_amount,
+        ${SALES_ORDER_PAID_SQL} as paid_amount,
+        (${SALES_ORDER_TOTAL_SQL} - ${SALES_ORDER_PAID_SQL}) as outstanding,
+        CONVERT('SALES_ORDER' USING utf8mb4) as source,
+        CONVERT(so.status USING utf8mb4) as order_status,
+        CONVERT(so.payment_status USING utf8mb4) as payment_status,
+        so.created_at
+      FROM sales_orders so
+      LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
+      LEFT JOIN companies c ON so.company_id = c.id
+      LEFT JOIN contacts con ON con.id = (SELECT MIN(id) FROM contacts WHERE company_id = c.id AND contact_type = 'PRIMARY')
+      WHERE ${customerFilter ? 'so.company_id = ? AND ' : ''}${RECEIVABLE_SO_FILTER}
+        AND so.status <> 'CANCELLED'
+
+      UNION ALL
+
+      -- From orders (Direct based)
+      SELECT
+        o.id,
+        o.client_id as company_id,
+        CONVERT(o.order_no USING utf8mb4) as so_number,
+        c.company_name as company_name,
+        con.email as customer_email,
+        COALESCE(NULLIF(o.project_name, ''), 'General Project') as project_name,
+        o.grand_total as total_amount,
+        COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
+        (o.grand_total - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
+        CONVERT('DIRECT_ORDER' USING utf8mb4) as source,
+        CONVERT(o.status USING utf8mb4) as order_status,
+        CONVERT(CASE WHEN o.status = 'Paid' THEN 'PAID' ELSE NULL END USING utf8mb4) as payment_status,
+        o.created_at
+      FROM orders o
+      LEFT JOIN companies c ON o.client_id = c.id
+      LEFT JOIN contacts con ON con.id = (SELECT MIN(id) FROM contacts WHERE company_id = c.id AND contact_type = 'PRIMARY')
+      WHERE ${customerFilter ? 'o.client_id = ? AND ' : ''}o.status NOT IN ('Closed', 'Cancelled', 'CANCELLED', 'CLOSED')
+    ) combined
+    WHERE outstanding >= 0
+    ORDER BY created_at DESC`;
+
 const getCustomerBalance = async (customerId) => {
+  // Receipts are CREDIT entries, so a negative balance means the customer has an advance with us
   const [rows] = await pool.query(
-    `SELECT 
+    `SELECT
       SUM(CASE WHEN transaction_type = 'DEBIT' THEN amount ELSE -amount END) as outstanding
     FROM customer_ledger
     WHERE customer_id = ?`,
@@ -348,100 +505,16 @@ const getCustomerBalance = async (customerId) => {
 };
 
 const getOutstandingInvoices = async (customerId) => {
-  const [invoices] = await pool.query(
-    `SELECT * FROM (
-      -- From sales_orders (Design based)
-      SELECT 
-        so.id,
-        so.company_id as company_id,
-        CONVERT(COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0'))) USING utf8mb4) as so_number,
-        c.company_name as company_name,
-        COALESCE(NULLIF(so.project_name, ''), NULLIF(cp_pos.project_name, ''), 'General Project') as project_name,
-        COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as total_amount,
-        COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
-        (COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
-        CONVERT('SALES_ORDER' USING utf8mb4) as source,
-        so.created_at
-      FROM sales_orders so
-      LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
-      LEFT JOIN companies c ON so.company_id = c.id
-      WHERE so.company_id = ? AND so.status IN ('READY_FOR_SHIPMENT', 'SHIPPED', 'PAID')
-
-      UNION ALL
-
-      -- From orders (Direct based)
-      SELECT 
-        o.id,
-        o.client_id as company_id,
-        CONVERT(o.order_no USING utf8mb4) as so_number,
-        c.company_name as company_name,
-        COALESCE(NULLIF(o.project_name, ''), 'General Project') as project_name,
-        o.grand_total as total_amount,
-        COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
-        (o.grand_total - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
-        CONVERT('DIRECT_ORDER' USING utf8mb4) as source,
-        o.created_at
-      FROM orders o
-      LEFT JOIN companies c ON o.client_id = c.id
-      WHERE o.client_id = ? AND o.status NOT IN ('Closed', 'Cancelled', 'CANCELLED', 'CLOSED')
-    ) combined
-    WHERE outstanding >= 0
-    ORDER BY created_at DESC`,
-    [customerId, customerId]
-  );
-
+  const [invoices] = await pool.query(outstandingInvoicesQuery(true), [customerId, customerId]);
   return invoices;
 };
 
 const getAllOutstandingInvoices = async () => {
-  const [invoices] = await pool.query(
-    `SELECT * FROM (
-      -- From sales_orders (Design based)
-      SELECT 
-        so.id,
-        so.company_id as company_id,
-        CONVERT(COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0'))) USING utf8mb4) as so_number,
-        c.company_name as company_name,
-        con.email as customer_email,
-        COALESCE(NULLIF(so.project_name, ''), NULLIF(cp_pos.project_name, ''), 'General Project') as project_name,
-        COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as total_amount,
-        COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
-        (COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
-        CONVERT('SALES_ORDER' USING utf8mb4) as source,
-        so.created_at
-      FROM sales_orders so
-      LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
-      LEFT JOIN companies c ON so.company_id = c.id
-      LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
-      WHERE so.status IN ('READY_FOR_SHIPMENT', 'SHIPPED', 'PAID')
-
-      UNION ALL
-
-      -- From orders (Direct based)
-      SELECT 
-        o.id,
-        o.client_id as company_id,
-        CONVERT(o.order_no USING utf8mb4) as so_number,
-        c.company_name as company_name,
-        con.email as customer_email,
-        COALESCE(NULLIF(o.project_name, ''), 'General Project') as project_name,
-        o.grand_total as total_amount,
-        COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
-        (o.grand_total - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
-        CONVERT('DIRECT_ORDER' USING utf8mb4) as source,
-        o.created_at
-      FROM orders o
-      LEFT JOIN companies c ON o.client_id = c.id
-      LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
-      WHERE o.status NOT IN ('Closed', 'Cancelled', 'CANCELLED', 'CLOSED')
-    ) combined
-    WHERE outstanding >= 0
-    ORDER BY created_at DESC`
-  );
-
+  const [invoices] = await pool.query(outstandingInvoicesQuery(false));
   return invoices;
 };
 
+// Changing a receipt's status keeps the ledger and the order's payment status in step
 const updatePaymentStatus = async (paymentId, status) => {
   const validStatuses = ['PENDING', 'CONFIRMED', 'FAILED'];
   if (!validStatuses.includes(status)) {
@@ -449,16 +522,53 @@ const updatePaymentStatus = async (paymentId, status) => {
     error.statusCode = 400;
     throw error;
   }
-  await pool.execute(
-    'UPDATE customer_payments SET status = ?, updated_at = NOW() WHERE id = ?',
-    [status, paymentId]
-  );
-  return { id: paymentId, status };
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query('SELECT * FROM customer_payments WHERE id = ? FOR UPDATE', [paymentId]);
+    if (!rows.length) throw httpError('Payment not found', 404);
+
+    await connection.execute(
+      'UPDATE customer_payments SET status = ?, updated_at = NOW() WHERE id = ?',
+      [status, paymentId]
+    );
+    const payment = { ...rows[0], status };
+    await syncCustomerLedgerForPayment(connection, payment);
+    await syncOrderPaymentStatus(connection, payment);
+
+    await connection.commit();
+    return { id: paymentId, status };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
+// Deleting a receipt also removes its ledger entry and receipt document and
+// recalculates what the order still owes
 const deletePayment = async (paymentId) => {
-  await pool.execute('DELETE FROM customer_payments WHERE id = ?', [paymentId]);
-  return { id: paymentId, message: 'Payment deleted successfully' };
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query('SELECT * FROM customer_payments WHERE id = ? FOR UPDATE', [paymentId]);
+    if (!rows.length) throw httpError('Payment not found', 404);
+
+    await connection.execute("DELETE FROM customer_ledger WHERE reference_doc_type = 'PAYMENT' AND reference_doc_id = ?", [paymentId]);
+    await connection.execute('DELETE FROM payment_receipts WHERE payment_id = ?', [paymentId]);
+    await connection.execute('DELETE FROM customer_payments WHERE id = ?', [paymentId]);
+    await syncOrderPaymentStatus(connection, rows[0]);
+
+    await connection.commit();
+    return { id: paymentId, message: 'Payment deleted successfully' };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const generateCustomerPaymentReceiptPDF = async (paymentId) => {

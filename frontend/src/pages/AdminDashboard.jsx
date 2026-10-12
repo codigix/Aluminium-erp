@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PendingUserApprovals from '../components/PendingUserApprovals.jsx';
 import { Card, DataTable, StatusBadge, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
 import {
   ShoppingCart, Users, Clock, RefreshCw, FileText, Factory, Palette, Package, Truck,
@@ -170,6 +171,9 @@ const AdminDashboard = () => {
           </button>
         </div>
       </div>
+
+      {/* Self sign-ups waiting for activation */}
+      <PendingUserApprovals />
 
       {/* KPI Grid 1 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

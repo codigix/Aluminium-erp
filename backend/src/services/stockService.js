@@ -724,6 +724,13 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
       if (!shapeType && existingBalance.shape_type) shapeType = existingBalance.shape_type;
     }
 
+    // Re-read the balance row under a lock so two concurrent issues can't both
+    // pass the negative-stock check on the same stale balance
+    if (existingBalance && existingBalance.id) {
+      const [lockedRows] = await useConnection.query('SELECT * FROM stock_balance WHERE id = ? FOR UPDATE', [existingBalance.id]);
+      if (lockedRows.length > 0) existingBalance = lockedRows[0];
+    }
+
     let currentBalance = existingBalance ? parseFloat(existingBalance.current_balance) || 0 : 0;
     let newBalance = 0;
     const qty = parseFloat(quantity) || 0;

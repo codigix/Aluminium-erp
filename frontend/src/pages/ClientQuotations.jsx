@@ -1763,6 +1763,7 @@ const ClientQuotations = () => {
       try {
         const token = localStorage.getItem('authToken');
         let updateCount = 0;
+        let lastError = '';
 
         for (const order of clientData.orders) {
           try {
@@ -1777,12 +1778,20 @@ const ClientQuotations = () => {
 
             if (response.ok) {
               updateCount++;
+            } else {
+              const errData = await response.json().catch(() => ({}));
+              lastError = errData.message || errData.error || `HTTP ${response.status}`;
             }
           } catch (err) {
             console.error('Error updating order:', err);
+            lastError = err.message;
           }
         }
 
+        if (updateCount === 0 && lastError) {
+          errorToast(`Could not dismiss orders: ${lastError}`);
+          return;
+        }
         successToast(`Dismissed ${updateCount} approved orders`);
         setExpandedClientName(null);
         setQuotePricesMap(prev => ({

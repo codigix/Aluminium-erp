@@ -133,13 +133,45 @@ const PaymentProcessing = () => {
       }
 
       if (shouldVerify) {
-        const verifyRes = await fetch(`${API_BASE}/vendor-invoices/${verifyInvoiceId}/verify`, {
+        const verify = (body = {}) => fetch(`${API_BASE}/vendor-invoices/${verifyInvoiceId}/verify`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`
-          }
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
         });
-        if (!verifyRes.ok) throw new Error('Failed to verify PO and GRN');
+
+        let verifyRes = await verify();
+        if (!verifyRes.ok) {
+          const err = await verifyRes.json().catch(() => ({}));
+          // 3-way match failed: bill is higher than PO rate x GRN qty.
+          // Allow approval only with a recorded reason.
+          if (err.code === 'INVOICE_VARIANCE') {
+            const decision = await Swal.fire({
+              title: 'Invoice does not match receipt',
+              text: err.message,
+              icon: 'warning',
+              input: 'textarea',
+              inputPlaceholder: 'Reason for accepting the difference (freight, rate revision, ...)',
+              inputValidator: value => (!value || !value.trim() ? 'A reason is required' : undefined),
+              showCancelButton: true,
+              confirmButtonText: 'Approve difference',
+              confirmButtonColor: '#d97706'
+            });
+            if (!decision.isConfirmed) {
+              fetchInvoices();
+              return;
+            }
+            verifyRes = await verify({ override: true, reason: decision.value });
+            if (!verifyRes.ok) {
+              const retryErr = await verifyRes.json().catch(() => ({}));
+              throw new Error(retryErr.message || retryErr.error || 'Failed to verify PO and GRN');
+            }
+          } else {
+            throw new Error(err.message || err.error || 'Failed to verify PO and GRN');
+          }
+        }
         successToast('Purchase Order has been forwarded to accounts and verified successfully.');
       } else {
         successToast('Vendor invoice details saved successfully.');

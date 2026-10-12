@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const mysql = require('mysql2/promise');
+const { SALES_ORDER_STATUSES } = require('./workflow');
 
 const baseConfig = {
   host: process.env.DB_HOST,
@@ -1224,21 +1225,69 @@ const ensureSalesOrderStatuses = async () => {
     const [columns] = await connection.query("SHOW COLUMNS FROM sales_orders LIKE 'status'");
     if (columns.length > 0) {
       const type = columns[0].Type;
-      if (!type.includes('QUOTATION_SENT') || !type.includes('BOM_SUBMITTED') || !type.includes('BOM_APPROVED') || !type.includes('READY_FOR_SHIPMENT')) {
-        await connection.query(`
-          ALTER TABLE sales_orders 
-          MODIFY COLUMN status ENUM(
-            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'DESIGN_QUERY', 'QUOTATION_SENT',
-            'BOM_SUBMITTED', 'BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 
-            'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 
-            'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT', 'SHIPPED', 'CLOSED'
-          ) DEFAULT 'CREATED'
-        `);
-        console.log('Sales order statuses updated');
+      const missing = SALES_ORDER_STATUSES.filter(status => !type.includes(`'${status}'`));
+      if (missing.length > 0) {
+        // Superset of the previous ENUM, so existing rows stay valid
+        const enumValues = SALES_ORDER_STATUSES.map(status => `'${status}'`).join(', ');
+        await connection.query(
+          `ALTER TABLE sales_orders MODIFY COLUMN status ENUM(${enumValues}) DEFAULT 'CREATED'`
+        );
+        console.log('Sales order statuses updated:', missing.join(', '));
       }
     }
   } catch (error) {
     console.error('Sales order status sync failed', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+// Columns / tables needed by the workflow hardening (payment status, numbering).
+// Additive only: never drops or narrows existing structures.
+const ensureWorkflowHardening = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    const [soColumns] = await connection.query('SHOW COLUMNS FROM sales_orders');
+    const soExisting = new Set(soColumns.map(column => column.Field));
+    const soRequired = [
+      { name: 'net_total', definition: 'DECIMAL(14, 2) NULL' },
+      { name: 'paid_amount', definition: 'DECIMAL(14, 2) NOT NULL DEFAULT 0' },
+      { name: 'payment_status', definition: "ENUM('UNPAID', 'PARTIAL', 'PAID') NOT NULL DEFAULT 'UNPAID'" }
+    ];
+    const soMissing = soRequired.filter(column => !soExisting.has(column.name));
+    if (soMissing.length > 0) {
+      await connection.query(
+        `ALTER TABLE sales_orders ${soMissing.map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`).join(', ')}`
+      );
+      console.log('Sales order payment columns synchronized');
+    }
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS document_sequences (
+        sequence_key VARCHAR(100) PRIMARY KEY,
+        current_value INT NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Audit trail of Final QC decisions (previously only the SO status changed)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS final_qc_inspections (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sales_order_id INT NOT NULL,
+        result ENUM('PASSED', 'FAILED') NOT NULL,
+        passed_qty DECIMAL(12, 3) NOT NULL DEFAULT 0,
+        failed_qty DECIMAL(12, 3) NOT NULL DEFAULT 0,
+        remarks TEXT NULL,
+        inspected_by INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_final_qc_so (sales_order_id)
+      )
+    `);
+  } catch (error) {
+    console.error('Workflow hardening sync failed', error.message);
   } finally {
     if (connection) connection.release();
   }
@@ -3108,6 +3157,7 @@ const bootstrapDatabase = async () => {
   await ensureOutwardChallanTables();
   await ensureReturnsTable();
   await ensureStockIdentityIndex();
+  await ensureWorkflowHardening();
 };
 
 bootstrapDatabase();

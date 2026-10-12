@@ -3,9 +3,12 @@ const errorHandler = (err, req, res, next) => {
     return;
   }
   console.error(err);
-  const status = err.status || 500;
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || 'Internal Server Error';
   res.status(status).json({
-    message: err.message || 'Internal Server Error',
+    message,
+    error: message,
+    code: err.code && typeof err.code === 'string' && !err.code.startsWith('ER_') ? err.code : undefined,
     details: err.details || null
   });
 };

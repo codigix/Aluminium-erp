@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
+const { JWT_SECRET } = require('../config/auth');
 const { DEPARTMENT_ACCESS_RULES, DEPARTMENT_CODES } = require('../config/departmentAccessConfig');
 
 exports.authenticate = (req, res, next) => {
@@ -10,7 +11,7 @@ exports.authenticate = (req, res, next) => {
       return res.status(401).json({ error: 'No token provided' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {

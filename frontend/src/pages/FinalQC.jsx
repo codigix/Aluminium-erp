@@ -32,14 +32,38 @@ const FinalQC = () => {
   }, [fetchOrders]);
 
   const handleQCAction = async (orderId, status) => {
+    const isPass = status === 'PASSED';
+    // Inspection is recorded with quantities so there is a trail of what was checked
     const result = await Swal.fire({
-      title: `${status === 'PASSED' ? 'Approve' : 'Reject'} Final QC?`,
-      text: status === 'PASSED' ? 'This will mark the order as Ready for Dispatch.' : 'Please provide a reason for rejection.',
-      input: status === 'FAILED' ? 'textarea' : undefined,
-      inputPlaceholder: 'Reason...',
+      title: `${isPass ? 'Approve' : 'Reject'} Final QC?`,
+      html: `
+        <p style="font-size:13px;color:#64748b;margin-bottom:12px">
+          ${isPass ? 'This will mark the order as Ready for Dispatch.' : 'The order goes back to Quality for rework.'}
+        </p>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <input id="qc-passed" type="number" min="0" step="any" class="swal2-input" style="width:45%;margin:0" placeholder="Passed qty" />
+          <input id="qc-failed" type="number" min="0" step="any" class="swal2-input" style="width:45%;margin:0" placeholder="Failed qty" />
+        </div>
+        <textarea id="qc-remarks" class="swal2-textarea" placeholder="${isPass ? 'Remarks (optional)' : 'Reason for rejection (required)'}"></textarea>
+      `,
+      focusConfirm: false,
       showCancelButton: true,
-      confirmButtonText: status === 'PASSED' ? 'Approve' : 'Reject',
-      confirmButtonColor: status === 'PASSED' ? '#10b981' : '#ef4444',
+      confirmButtonText: isPass ? 'Approve' : 'Reject',
+      confirmButtonColor: isPass ? '#10b981' : '#ef4444',
+      preConfirm: () => {
+        const passedQty = parseFloat(document.getElementById('qc-passed').value || '0');
+        const failedQty = parseFloat(document.getElementById('qc-failed').value || '0');
+        const remarks = document.getElementById('qc-remarks').value.trim();
+        if (passedQty < 0 || failedQty < 0) {
+          Swal.showValidationMessage('Quantities cannot be negative');
+          return false;
+        }
+        if (!isPass && !remarks) {
+          Swal.showValidationMessage('Please give a reason for rejection');
+          return false;
+        }
+        return { passedQty, failedQty, remarks };
+      }
     });
 
     if (result.isConfirmed) {
@@ -53,7 +77,9 @@ const FinalQC = () => {
           },
           body: JSON.stringify({
             status,
-            remarks: result.value || ''
+            passedQty: result.value.passedQty,
+            failedQty: result.value.failedQty,
+            remarks: result.value.remarks
           })
         });
 
@@ -61,7 +87,8 @@ const FinalQC = () => {
           Swal.fire('Success', `QC ${status} successfully`, 'success');
           fetchOrders();
         } else {
-          throw new Error('Action failed');
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.message || err.error || 'Action failed');
         }
       } catch (error) {
         Swal.fire('Error', error.message, 'error');

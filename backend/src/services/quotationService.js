@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { salesOrderAdvanceSql } = require('../config/workflow');
 const emailService = require('./emailService');
 const purchaseOrderService = require('./purchaseOrderService');
 const puppeteer = require('puppeteer');
@@ -131,7 +132,7 @@ const createQuotation = async (payload) => {
     // Update Sales Order status and quotation_id if salesOrderId is provided
     if (salesOrderId) {
       await connection.execute(
-        "UPDATE sales_orders SET status = 'QUOTATION_SENT', quotation_id = ?, updated_at = NOW() WHERE id = ?",
+        `UPDATE sales_orders SET status = 'QUOTATION_SENT', quotation_id = ?, updated_at = NOW() WHERE id = ? AND ${salesOrderAdvanceSql('QUOTATION_SENT')}`,
         [quotationId, salesOrderId]
       );
     }

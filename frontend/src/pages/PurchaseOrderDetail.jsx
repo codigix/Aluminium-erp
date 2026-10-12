@@ -96,7 +96,38 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
     navigate('/procurement/po-receipts', { state: { poId: po.id, autoOpen: true } });
   };
 
+  // Material is received through a PO Receipt -> GRN -> QC, which posts stock.
+  // Marking the PO fulfilled directly would skip all three, so the button opens
+  // the receipt form; closing a PO with a shortfall needs an explicit reason.
   const handleReceiveMaterial = async () => {
+    const choice = await Swal.fire({
+      title: 'Receive Material',
+      text: 'Record the quantities received against this PO. Stock is updated after GRN / QC.',
+      icon: 'question',
+      showCancelButton: true,
+      showDenyButton: true,
+      confirmButtonText: 'Create Receipt',
+      denyButtonText: 'Short-close PO',
+      confirmButtonColor: '#2563eb',
+      denyButtonColor: '#64748b'
+    });
+
+    if (choice.isConfirmed) {
+      handleCreateReceipt();
+      return;
+    }
+    if (!choice.isDenied) return;
+
+    const reason = await Swal.fire({
+      title: 'Short-close PO',
+      input: 'textarea',
+      inputLabel: 'Why will the remaining quantity not be received?',
+      inputValidator: value => (!value || !value.trim() ? 'A reason is required' : undefined),
+      showCancelButton: true,
+      confirmButtonText: 'Close PO'
+    });
+    if (!reason.isConfirmed) return;
+
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/purchase-orders/${po.id}`, {
@@ -105,18 +136,20 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ status: 'FULFILLED' })
+        body: JSON.stringify({ status: 'FULFILLED', shortClose: true, shortCloseReason: reason.value })
       });
 
-      if (response.ok) {
-        if (onRefresh) {
-          onRefresh();
-        } else {
-          window.location.reload();
-        }
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || err.error || 'Could not close the PO');
+      }
+      if (onRefresh) {
+        onRefresh();
+      } else {
+        window.location.reload();
       }
     } catch (error) {
-      console.error('Error updating status:', error);
+      Swal.fire('Error', error.message, 'error');
     }
   };
 

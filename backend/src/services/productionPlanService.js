@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const bomService = require('./bomService');
+const { salesOrderAdvanceSql } = require('../config/workflow');
 
 /**
  * Ensures that every Part and Assembly Production Plan contains Shipment as the final default operation.
@@ -496,14 +497,15 @@ const createProductionPlan = async (planData, createdBy) => {
         // Update Sales Order status
         const currentSOId = item.salesOrderId || finalSalesOrderId;
         if (currentSOId) {
-          // Try updating sales_orders
-          const [soResult] = await connection.execute(
-            `UPDATE sales_orders SET status = 'IN_PRODUCTION', current_department = 'PRODUCTION' WHERE id = ?`,
-            [currentSOId]
-          );
-
-          // If no rows affected, it might be a DIRECT order in orders table
-          if (soResult.affectedRows === 0) {
+          const [soExists] = await connection.query('SELECT id FROM sales_orders WHERE id = ?', [currentSOId]);
+          if (soExists.length > 0) {
+            // Forward only: an order that is already further along keeps its status
+            await connection.execute(
+              `UPDATE sales_orders SET status = 'IN_PRODUCTION', current_department = 'PRODUCTION' WHERE id = ? AND ${salesOrderAdvanceSql('IN_PRODUCTION')}`,
+              [currentSOId]
+            );
+          } else {
+            // Not a sales order: it is a DIRECT order in the orders table
             await connection.execute(
               `UPDATE orders SET status = 'In Production' WHERE id = ?`,
               [currentSOId]
@@ -2918,6 +2920,23 @@ const deleteProductionPlan = async (id) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    // A plan whose shop-floor work or material movement has begun is history, not a draft
+    const [[activity]] = await connection.query(
+      `SELECT
+         (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id
+           WHERE wo.plan_id = ? AND (UPPER(jc.status) IN ('IN_PROGRESS', 'COMPLETED') OR COALESCE(jc.produced_qty, 0) > 0)) AS started_job_cards,
+         (SELECT COUNT(*) FROM material_requests
+           WHERE plan_id = ? AND UPPER(COALESCE(status, '')) IN ('COMPLETED', 'FULFILLED', 'PO_CREATED', 'ISSUED', 'PARTIALLY_RELEASED')) AS processed_mrs`,
+      [id, id]
+    );
+    if (Number(activity.started_job_cards) > 0 || Number(activity.processed_mrs) > 0) {
+      const error = new Error(
+        `Production plan cannot be deleted: ${activity.started_job_cards} job card(s) started and ${activity.processed_mrs} material request(s) already processed.`
+      );
+      error.statusCode = 409;
+      throw error;
+    }
 
     // 1. Delete related Job Cards first
     await connection.execute(

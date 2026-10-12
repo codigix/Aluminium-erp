@@ -53,7 +53,7 @@ const updateInvoiceDetails = async (req, res, next) => {
 const verifyInvoice = async (req, res, next) => {
   try {
     const id = req.params.id;
-    const invoice = await vendorInvoiceService.verifyInvoice(id);
+    const invoice = await vendorInvoiceService.verifyInvoice(id, { override: req.body?.override === true, reason: req.body?.reason || "" });
     res.json({
       message: 'Vendor Invoice verified successfully.',
       data: invoice

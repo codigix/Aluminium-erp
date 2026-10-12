@@ -504,7 +504,7 @@ const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, 
   }
 
   if (status !== undefined) {
-    const validStatuses = ['DRAFT', 'Sent ', 'RECEIVED', 'ACKNOWLEDGED', 'CLOSED'];
+    const validStatuses = ['DRAFT', 'SENT', 'Sent ', 'RECEIVED', 'ACKNOWLEDGED', 'CLOSED'];
     if (!validStatuses.includes(status)) {
       const error = new Error('Invalid status');
       error.statusCode = 400;
@@ -514,9 +514,13 @@ const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, 
     updateValues.push(status);
   }
 
+  const connection = await pool.getConnection();
+  try {
+  await connection.beginTransaction();
+
   if (updateFields.length > 0) {
     updateValues.push(receiptId);
-    await pool.execute(
+    await connection.execute(
       `UPDATE po_receipts SET ${updateFields.join(', ')} WHERE id = ?`,
       updateValues
     );
@@ -526,7 +530,42 @@ const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, 
   if (Array.isArray(items) && items.length > 0) {
     for (const item of items) {
       if (!item.id) continue; // must have a po_receipt_items id
-      await pool.execute(
+
+      // Same over-receipt rule as createPOReceipt: total received across all
+      // receipts can't exceed the ordered quantity
+      const [currentRows] = await connection.query(
+        `SELECT pri.po_item_id, COALESCE(NULLIF(poi.design_qty, 0), NULLIF(poi.planned_qty, 0), poi.quantity, 0) AS ordered_qty
+         FROM po_receipt_items pri
+         LEFT JOIN purchase_order_items poi ON pri.po_item_id = poi.id
+         WHERE pri.id = ? AND pri.receipt_id = ?`,
+        [item.id, receiptId]
+      );
+      if (currentRows.length === 0) continue;
+      const poItemId = currentRows[0].po_item_id;
+      const newReceived = parseFloat(item.received_quantity ?? item.received_qty ?? 0) || 0;
+      if (newReceived < 0) {
+        const error = new Error('Received quantity cannot be negative');
+        error.statusCode = 400;
+        throw error;
+      }
+      if (poItemId) {
+        const requestedOrdered = parseFloat(item.planned_qty ?? item.design_qty ?? NaN);
+        const orderedQty = Number.isFinite(requestedOrdered) && requestedOrdered > 0
+          ? requestedOrdered
+          : parseFloat(currentRows[0].ordered_qty) || 0;
+        const [[others]] = await connection.query(
+          'SELECT COALESCE(SUM(received_quantity), 0) AS qty FROM po_receipt_items WHERE po_item_id = ? AND id <> ?',
+          [poItemId, item.id]
+        );
+        const otherReceived = parseFloat(others.qty) || 0;
+        if (orderedQty > 0 && newReceived + otherReceived > orderedQty + 0.001) {
+          const error = new Error(`Cannot receive ${newReceived} for '${item.item_code || ''}'. Maximum allowed is ${Math.max(0, orderedQty - otherReceived)}.`);
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
+      await connection.execute(
         `UPDATE po_receipt_items SET
           received_quantity = ?,
           po_qty = ?,
@@ -565,7 +604,7 @@ const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, 
           if (dQty !== null) { poItemFields.push('planned_qty = ?, design_qty = ?'); poItemValues.push(dQty, dQty); }
           if (rQty !== null) { poItemFields.push('quantity = ?'); poItemValues.push(rQty); }
           poItemValues.push(item.po_item_id);
-          await pool.execute(
+          await connection.execute(
             `UPDATE purchase_order_items SET ${poItemFields.join(', ')} WHERE id = ?`,
             poItemValues
           );
@@ -574,11 +613,35 @@ const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, 
     }
   }
 
+  await connection.commit();
   return { id: receiptId };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const deletePOReceipt = async (receiptId) => {
   await getPOReceiptById(receiptId);
+
+  // Once a GRN from this receipt has posted stock, deleting it would leave
+  // inventory with no source document
+  const [[posted]] = await pool.query(
+    `SELECT COUNT(*) AS cnt
+     FROM stock_ledger sl
+     JOIN grn_items gi ON sl.grn_item_id = gi.id
+     JOIN grns g ON gi.grn_id = g.id
+     WHERE g.po_receipt_id = ?`,
+    [receiptId]
+  );
+  if (Number(posted.cnt) > 0) {
+    const error = new Error('Receipt cannot be deleted: stock has already been posted from its GRN/QC. Use a stock adjustment or return instead.');
+    error.statusCode = 409;
+    throw error;
+  }
+
   await pool.execute('DELETE FROM po_receipts WHERE id = ?', [receiptId]);
 };
 

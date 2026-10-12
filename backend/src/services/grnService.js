@@ -332,6 +332,18 @@ const updateGRN = async (grnId, updates) => {
 };
 
 const deleteGRN = async (grnId) => {
+  const [[posted]] = await pool.query(
+    `SELECT COUNT(*) AS cnt FROM stock_ledger sl
+     JOIN grn_items gi ON sl.grn_item_id = gi.id
+     WHERE gi.grn_id = ?`,
+    [grnId]
+  );
+  if (Number(posted.cnt) > 0) {
+    const error = new Error('GRN cannot be deleted: accepted material has already been posted to stock.');
+    error.statusCode = 409;
+    throw error;
+  }
+
   const [result] = await pool.execute(
     'DELETE FROM grns WHERE id = ?',
     [grnId]

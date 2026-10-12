@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Package, RefreshCw, Plus, Calendar, CreditCard, User, FileText, Download, Trash2, Send } from 'lucide-react';
+import { Package, RefreshCw, Plus, Calendar, CreditCard, User, FileText, Download, Send } from 'lucide-react';
 import { DataTable, Button } from '../components/ui.jsx';
 import PaymentReceivedModal from '../components/PaymentReceivedModal.jsx';
 import SendEmailModal from '../components/SendEmailModal.jsx';
 import { errorToast, successToast } from '../utils/toast';
-import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -176,45 +175,6 @@ const PaymentReceived = () => {
     }
   };
 
-  const handleDeleteInvoice = async (row) => {
-    const result = await Swal.fire({
-      title: 'Are you sure?',
-      text: `Do you want to delete this invoice (${row.so_number || `ID: ${row.id}`})?`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Yes, delete it!'
-    });
-
-    if (result.isConfirmed) {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem('authToken');
-        const endpoint = row.source === 'SALES_ORDER'
-          ? `${API_BASE}/sales-orders/${row.id}`
-          : `${API_BASE}/order/${row.id}`;
-
-        const response = await fetch(endpoint, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (response.ok) {
-          successToast('Invoice has been deleted');
-          fetchOutstandingInvoices();
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.message || errData.error || 'Failed to delete invoice');
-        }
-      } catch (err) {
-        errorToast(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
   const columns = [
     {
       label: 'Order Details',
@@ -314,26 +274,41 @@ const PaymentReceived = () => {
       render: (_, row) => {
         const outstanding = parseFloat(row.outstanding) || 0;
         const received = parseFloat(row.paid_amount) || 0;
-        if (outstanding === 0) {
+        // Shows where the order is in the flow, so an advance on an unshipped order is obvious
+        const stage = row.order_status ? (
+          <div className="text-[10px] text-slate-400 mt-1 uppercase tracking-wide">
+            Order: {String(row.order_status).replace(/_/g, ' ')}
+          </div>
+        ) : null;
+        if (outstanding <= 0) {
           return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              COMPLETED
-            </span>
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                PAID
+              </span>
+              {stage}
+            </div>
           );
-        } else if (outstanding > 0 && received > 0) {
+        } else if (received > 0) {
           return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 font-medium border border-amber-100">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-              Partial Paid
-            </span>
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 font-medium border border-amber-100">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                Partial Paid
+              </span>
+              {stage}
+            </div>
           );
         } else {
           return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-rose-50 text-rose-700 font-medium border border-rose-100">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-              Pending Payment
-            </span>
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-rose-50 text-rose-700 font-medium border border-rose-100">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                Pending Payment
+              </span>
+              {stage}
+            </div>
           );
         }
       }
@@ -367,13 +342,6 @@ const PaymentReceived = () => {
               <CreditCard className="w-4 h-4 group-hover:scale-110" />
             </button>
           )}
-          <button
-            onClick={() => handleDeleteInvoice(row)}
-            className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
-            title="Delete Invoice"
-          >
-            <Trash2 className="w-4 h-4 group-hover:scale-110" />
-          </button>
         </div>
       )
     }
