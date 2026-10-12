@@ -1,0 +1,99 @@
+const salesInvoiceService = require('../services/salesInvoiceService');
+
+const getAvailableSalesOrders = async (req, res, next) => {
+  try {
+    const orders = await salesInvoiceService.getAvailableSalesOrders();
+    res.json(orders);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getOrderDetailsForInvoice = async (req, res, next) => {
+  try {
+    const orderId = req.params.orderId;
+    const details = await salesInvoiceService.getOrderDetailsForInvoice(orderId);
+    res.json(details);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getNextInvoiceNo = async (req, res, next) => {
+  try {
+    const nextNo = await salesInvoiceService.getNextInvoiceNo();
+    res.json({ invoiceNo: nextNo });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const createSalesInvoice = async (req, res, next) => {
+  try {
+    const userId = req.user?.id || null;
+    const result = await salesInvoiceService.createSalesInvoice(req.body, userId);
+    res.status(201).json({
+      success: true,
+      message: 'Sales Invoice created successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const listSalesInvoices = async (req, res, next) => {
+  try {
+    const filters = {
+      search: req.query.search,
+      status: req.query.status
+    };
+    const invoices = await salesInvoiceService.listSalesInvoices(filters);
+    res.json(invoices);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getSalesInvoiceById = async (req, res, next) => {
+  try {
+    const invoice = await salesInvoiceService.getSalesInvoiceById(req.params.id);
+    if (!invoice) {
+      return res.status(404).json({ message: 'Sales Invoice not found' });
+    }
+    res.json(invoice);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteSalesInvoice = async (req, res, next) => {
+  try {
+    await salesInvoiceService.deleteSalesInvoice(req.params.id);
+    res.json({ success: true, message: 'Sales Invoice deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const generateSalesInvoicePDF = async (req, res, next) => {
+  try {
+    const pdf = await salesInvoiceService.generateSalesInvoicePDF(req.params.id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="tax-invoice-${req.params.id}.pdf"`);
+    res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  getAvailableSalesOrders,
+  getOrderDetailsForInvoice,
+  getNextInvoiceNo,
+  createSalesInvoice,
+  listSalesInvoices,
+  getSalesInvoiceById,
+  deleteSalesInvoice,
+  generateSalesInvoicePDF
+};

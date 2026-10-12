@@ -28,7 +28,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DESIGN],
-    allowedModules: ['dashboard', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'sales-report'],
+    allowedModules: ['dashboard', 'customer-po', 'sales-order', 'sales-invoice', 'customer-drawing', 'client-quotations', 'sales-report'],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
@@ -222,7 +222,7 @@ const DEPARTMENT_ACCESS_RULES = {
       'dashboard', 'active-clients', 'suppliers', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'quality-reports', 
       'payment-history', 'customer-payment-history', 'accounts-report', 'shipment-tracking', 
       'shipment-reports', 'project-analysis', 'material-consumption', 
-      'oee-analysis', 'machine-analysis', 'admin-company-master'
+      'oee-analysis', 'machine-analysis', 'admin-company-master', 'sales-invoice'
     ],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT', 'PO_DELETE',
