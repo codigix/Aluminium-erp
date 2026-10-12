@@ -4,8 +4,8 @@ const drawingController = require('../controllers/drawingController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 const upload = require('../middleware/upload');
 
-router.get('/', authorize(['DESIGN_VIEW', 'PROD_VIEW']), drawingController.listDrawings);
-router.get('/approved', authorize(['DESIGN_VIEW', 'PROD_VIEW']), drawingController.getApprovedDrawings);
+router.get('/', authorize(['DESIGN_VIEW', 'PROD_VIEW', 'PURCHASE_ORDER_VIEW', 'PURCHASE_ORDER_CREATE']), drawingController.listDrawings);
+router.get('/approved', authorize(['DESIGN_VIEW', 'PROD_VIEW', 'PURCHASE_ORDER_VIEW', 'PURCHASE_ORDER_CREATE']), drawingController.getApprovedDrawings);
 router.get('/:id/autofetch-details', authorize(['DESIGN_VIEW', 'PROD_VIEW']), drawingController.getDrawingAutofetchDetails);
 router.get('/:id', authorize(['DESIGN_VIEW', 'PROD_VIEW']), drawingController.getDrawingById);
 router.post('/', authorize(['DESIGN_MANAGE']), upload.fields([{ name: 'file', maxCount: 20 }, { name: 'zipFile', maxCount: 1 }]), drawingController.createDrawing);

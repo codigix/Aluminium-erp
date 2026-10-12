@@ -549,6 +549,10 @@ const createDirectCompanyPurchaseOrder = async (data) => {
     companyId,
     companyName,
     vendorId,
+    poNumber: inputPoNumber,
+    customerPoNo,
+    customer_po_no,
+    invoice_url,
     orderDate,
     expectedDeliveryDate,
     notes,
@@ -558,6 +562,9 @@ const createDirectCompanyPurchaseOrder = async (data) => {
     discount_amount,
     currency
   } = data;
+
+  const finalCustomerPoNo = (customerPoNo || customer_po_no) ? String(customerPoNo || customer_po_no).trim() : null;
+  const finalInvoiceUrl = invoice_url ? String(invoice_url).trim() : null;
 
   const resolvedCompanyName = companyName ? String(companyName).trim() : (typeof companyId === 'string' && isNaN(parseInt(companyId)) ? String(companyId).trim() : null);
   const parsedCompanyId = companyId && !isNaN(parseInt(companyId)) ? parseInt(companyId) : null;
@@ -598,7 +605,18 @@ const createDirectCompanyPurchaseOrder = async (data) => {
       }
     }
 
-    const poNumber = await generatePONumber();
+    let poNumber = (inputPoNumber && String(inputPoNumber).trim()) ? String(inputPoNumber).trim() : '';
+    if (!poNumber) {
+      poNumber = await generatePONumber();
+    } else {
+      const [existingPO] = await connection.execute(
+        'SELECT id FROM purchase_orders WHERE po_number = ? LIMIT 1',
+        [poNumber]
+      );
+      if (existingPO.length > 0) {
+        throw new Error(`PO Number "${poNumber}" already exists. Please enter a unique PO number.`);
+      }
+    }
     const publicId = crypto.randomUUID();
 
     const formattedItems = items.map(item => {
@@ -615,6 +633,7 @@ const createDirectCompanyPurchaseOrder = async (data) => {
         item_code: item.item_code,
         material_name: item.material_name || item.description || item.item_code,
         description: item.description || item.material_name || item.item_code,
+        drawing_no: item.drawing_no ? String(item.drawing_no).trim() : null,
         design_qty: parseFloat(item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : item.quantity) || 0,
         quantity: qty,
         unit: item.unit || item.uom || 'NOS',
@@ -651,12 +670,17 @@ const createDirectCompanyPurchaseOrder = async (data) => {
     const sgstTotal = Number((taxableAmount * 0.09).toFixed(2));
     const actualTotalAmount = Number((taxableAmount + cgstTotal + sgstTotal).toFixed(2));
 
+    const createdAtValue = (orderDate && !isNaN(new Date(orderDate).getTime()))
+      ? new Date(`${orderDate}T12:00:00`)
+      : new Date();
+
     const [result] = await connection.execute(
       `INSERT INTO purchase_orders (
         po_number, public_id, po_type, company_id, vendor_id, 
         quotation_id, mr_id, sales_order_id, status, total_amount, 
-        expected_delivery_date, notes, discount_type, discount_value, discount_amount
-      ) VALUES (?, ?, 'DIRECT_COMPANY', ?, ?, NULL, NULL, NULL, 'DRAFT', ?, ?, ?, ?, ?, ?)`,
+        expected_delivery_date, notes, discount_type, discount_value, discount_amount,
+        customer_po_no, invoice_url, created_at
+      ) VALUES (?, ?, 'DIRECT_COMPANY', ?, ?, NULL, NULL, NULL, 'DRAFT', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         poNumber,
         publicId,
@@ -667,7 +691,10 @@ const createDirectCompanyPurchaseOrder = async (data) => {
         notes || null,
         discType,
         discVal,
-        discAmt
+        discAmt,
+        finalCustomerPoNo,
+        finalInvoiceUrl,
+        createdAtValue
       ]
     );
 
@@ -676,16 +703,17 @@ const createDirectCompanyPurchaseOrder = async (data) => {
     for (const item of formattedItems) {
       await connection.execute(
         `INSERT INTO purchase_order_items (
-          purchase_order_id, item_code, description, material_name, 
+          purchase_order_id, item_code, description, material_name, drawing_no,
           design_qty, planned_qty, quantity, unit, unit_rate, amount, cgst_percent, cgst_amount, 
           sgst_percent, sgst_amount, total_amount, length, width, thickness, 
           diameter, outer_diameter, density, weight_per_unit, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`,
         [
           poId,
           item.item_code,
           item.description,
           item.material_name,
+          item.drawing_no || null,
           item.design_qty,
           item.design_qty,
           item.quantity,
@@ -1365,6 +1393,7 @@ const getPurchaseOrderById = async (poId) => {
         'Stock/Internal'
       ) as project_name,
       COALESCE(
+        po.customer_po_no,
         (SELECT cp.po_number FROM material_requests mr_inner JOIN production_plans pp ON mr_inner.plan_id = pp.id JOIN orders o ON pp.sales_order_id = o.id JOIN customer_pos cp ON o.quotation_id = cp.id WHERE mr_inner.id = po.mr_id LIMIT 1),
         (SELECT cp.po_number FROM material_requests mr_inner JOIN production_plans pp ON mr_inner.plan_id = pp.id JOIN sales_orders so2 ON pp.sales_order_id = so2.id JOIN customer_pos cp ON so2.customer_po_id = cp.id WHERE mr_inner.id = po.mr_id LIMIT 1),
         (SELECT cp2.po_number FROM sales_orders so2 JOIN customer_pos cp2 ON so2.customer_po_id = cp2.id WHERE so2.id = po.sales_order_id LIMIT 1),
@@ -3349,7 +3378,25 @@ const forwardToAccounts = async (poId, receiptId = null) => {
   }
 };
 
+const getAvailableDrawingNumbers = async () => {
+  const [rows] = await pool.query(`
+    SELECT DISTINCT TRIM(drawing_no) as drawing_no, description 
+    FROM (
+      SELECT drawing_no, description FROM customer_drawings WHERE drawing_no IS NOT NULL AND TRIM(drawing_no) != ''
+      UNION
+      SELECT drawing_no, description FROM customer_po_items WHERE drawing_no IS NOT NULL AND TRIM(drawing_no) != ''
+      UNION
+      SELECT drawing_no, description FROM purchase_order_items WHERE drawing_no IS NOT NULL AND TRIM(drawing_no) != ''
+    ) combined
+    WHERE drawing_no IS NOT NULL AND TRIM(drawing_no) != ''
+    ORDER BY drawing_no ASC
+  `);
+  return rows;
+};
+
 module.exports = {
+  getAvailableDrawingNumbers,
+  generatePONumber,
   createPurchaseOrder,
   createDirectCompanyPurchaseOrder,
   previewPurchaseOrder,

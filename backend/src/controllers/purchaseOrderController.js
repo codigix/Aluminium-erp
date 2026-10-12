@@ -11,7 +11,20 @@ const createPurchaseOrder = async (req, res, next) => {
 
 const createDirectCompanyPurchaseOrder = async (req, res, next) => {
   try {
-    const result = await purchaseOrderService.createDirectCompanyPurchaseOrder(req.body);
+    let body = { ...req.body };
+    if (typeof body.items === 'string') {
+      try {
+        body.items = JSON.parse(body.items);
+      } catch (e) {
+        // preserve as-is if parsing fails
+      }
+    }
+    const files = req.files || [];
+    if (files.length > 0) {
+      const filePaths = files.map(f => f.path.replace(/\\/g, '/')).join(',');
+      body.invoice_url = filePaths;
+    }
+    const result = await purchaseOrderService.createDirectCompanyPurchaseOrder(body);
     res.status(201).json({ message: 'Direct Company Purchase Order created', data: result });
   } catch (error) {
     next(error);
@@ -244,7 +257,27 @@ const forwardToAccounts = async (req, res, next) => {
   }
 };
 
+const getNextPONumber = async (req, res, next) => {
+  try {
+    const poNumber = await purchaseOrderService.generatePONumber();
+    res.json({ po_number: poNumber });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getAvailableDrawingNumbers = async (req, res, next) => {
+  try {
+    const drawings = await purchaseOrderService.getAvailableDrawingNumbers();
+    res.json(drawings);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
+  getNextPONumber,
+  getAvailableDrawingNumbers,
   createPurchaseOrder,
   createDirectCompanyPurchaseOrder,
   previewPurchaseOrder,

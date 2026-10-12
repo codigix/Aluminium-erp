@@ -14,9 +14,11 @@ router.post('/:poId/store-acceptance', authorize(['PURCHASE_ORDER_EDIT']), purch
 router.post('/:poId/approve', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.approvePurchaseOrder);
 router.get('/:poId/pdf', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrderPDF);
 router.post('/:poId/send-email', authorize(['PURCHASE_ORDER_EDIT', 'PURCHASE_ORDER_VIEW', 'PAYMENT_PROCESS']), purchaseOrderController.sendPurchaseOrderEmail);
+router.get('/next-number', authorize(['PURCHASE_ORDER_CREATE', 'PURCHASE_ORDER_VIEW']), purchaseOrderController.getNextPONumber);
+router.get('/drawing-numbers', authorize(['PURCHASE_ORDER_CREATE', 'PURCHASE_ORDER_VIEW']), purchaseOrderController.getAvailableDrawingNumbers);
 router.get('/preview/:quotationId', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.previewPurchaseOrder);
 router.post('/merge', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.mergePurchaseOrders);
-router.post('/direct-company', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.createDirectCompanyPurchaseOrder);
+router.post('/direct-company', authorize(['PURCHASE_ORDER_CREATE']), upload.array('attachments', 10), purchaseOrderController.createDirectCompanyPurchaseOrder);
 router.post('/', authorize(['PURCHASE_ORDER_CREATE']), purchaseOrderController.createPurchaseOrder);
 router.get('/stats', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrderStats);
 router.get('/', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrders);

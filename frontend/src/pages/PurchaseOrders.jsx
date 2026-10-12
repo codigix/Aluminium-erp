@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, RefreshCw, Package, Clock, CheckCircle2,
-  AlertCircle, Truck, FileText, LayoutGrid, List, Filter, GitMerge, X
+  AlertCircle, Truck, FileText, LayoutGrid, List, Filter, GitMerge, X, Lock, Upload,
+  Pencil, Trash2
 } from 'lucide-react';
 import { Card, SearchableSelect, Button, Tabs } from '../components/ui.jsx';
 import DataTable from '../components/DataTable.jsx';
@@ -183,6 +184,9 @@ const PurchaseOrders = () => {
   const [manualFormData, setManualFormData] = useState({
     id: null,
     poType: 'DRAWING',
+    poNumber: '',
+    customerPoNo: '',
+    orderDate: new Date().toISOString().split('T')[0],
     companyId: '',
     vendorId: '',
     quotationId: '',
@@ -197,10 +201,13 @@ const PurchaseOrders = () => {
   const [materials, setMaterials] = useState([]);
   const [shapes, setShapes] = useState([]);
   const [itemGroups, setItemGroups] = useState([]);
+  const [availableDrawings, setAvailableDrawings] = useState([]);
 
   const [showAddPoItem, setShowAddPoItem] = useState(false);
+  const [editingPoItemIndex, setEditingPoItemIndex] = useState(null);
   const [newPoItem, setNewPoItem] = useState({
     item_code: '',
+    drawing_no: '',
     material_name: '',
     description: '',
     quantity: 1,
@@ -252,6 +259,7 @@ const PurchaseOrders = () => {
         fetchMaterials();
         fetchShapes();
         fetchItemGroups();
+        fetchDrawings();
       }
     } else {
       fetchPOs();
@@ -264,8 +272,15 @@ const PurchaseOrders = () => {
       fetchMaterials();
       fetchShapes();
       fetchItemGroups();
+      fetchDrawings();
     }
   }, []);
+
+  useEffect(() => {
+    if (manualFormData.poType === 'DIRECT_COMPANY' && !manualFormData.poNumber) {
+      fetchNextPONumber();
+    }
+  }, [manualFormData.poType]);
 
   const fetchCompanies = async () => {
     try {
@@ -280,6 +295,25 @@ const PurchaseOrders = () => {
     } catch (error) {
       console.error('Error fetching companies:', error);
     }
+  };
+
+  const fetchNextPONumber = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/next-number`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'X-ERP-Request': 'true' }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.po_number) {
+          setManualFormData(prev => ({ ...prev, poNumber: data.po_number }));
+          return data.po_number;
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching next PO number:', error);
+    }
+    return null;
   };
 
   const fetchVendors = async () => {
@@ -361,6 +395,29 @@ const PurchaseOrders = () => {
     }
   };
 
+  const fetchDrawings = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/drawing-numbers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableDrawings(Array.isArray(data) ? data : []);
+      } else {
+        const fallbackRes = await fetch(`${API_BASE}/drawings`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json();
+          setAvailableDrawings(Array.isArray(fallbackData) ? fallbackData : []);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching drawings:', e);
+    }
+  };
+
   const handleManualQuotationChange = async (quotationId) => {
     if (!quotationId) {
       setManualFormData(prev => ({ ...prev, quotationId: '', vendorId: '', items: [] }));
@@ -431,6 +488,24 @@ const PurchaseOrders = () => {
     return opts;
   }, [stockItems]);
 
+  const drawingOptions = React.useMemo(() => {
+    const seen = new Set();
+    const opts = [];
+    (availableDrawings || []).forEach(d => {
+      const dwgNo = (typeof d === 'string' ? d : (d.drawing_no || '')).trim();
+      if (!dwgNo || seen.has(dwgNo.toLowerCase())) return;
+      seen.add(dwgNo.toLowerCase());
+      const desc = typeof d === 'object' ? (d.description || d.drawing_description || '') : '';
+      opts.push({
+        value: dwgNo,
+        label: dwgNo,
+        drawing_no: dwgNo,
+        description: desc
+      });
+    });
+    return opts;
+  }, [availableDrawings]);
+
   const companyOptions = React.useMemo(() => {
     return (companies || []).map(c => ({
       label: c.company_name || c.name || '',
@@ -449,7 +524,38 @@ const PurchaseOrders = () => {
 
   const handleAddManualItem = () => {
     if (manualFormData.poType === 'DIRECT_COMPANY') {
-      setShowAddPoItem(prev => !prev);
+      if (showAddPoItem) {
+        setShowAddPoItem(false);
+        setEditingPoItemIndex(null);
+      } else {
+        setEditingPoItemIndex(null);
+        setNewPoItem({
+          item_code: '',
+          drawing_no: '',
+          material_name: '',
+          description: '',
+          quantity: 1,
+          unit: 'NOS',
+          item_group: '',
+          material_id: '',
+          material_type: '',
+          density: 0,
+          shape_id: '',
+          shape_type: '',
+          weight_per_unit: 0,
+          total_weight: 0,
+          length: '',
+          width: '',
+          thickness: '',
+          diameter: '',
+          outer_diameter: '',
+          thread_pitch: '',
+          rate: 0,
+          amount: 0,
+          remarks: ''
+        });
+        setShowAddPoItem(true);
+      }
     } else {
       setManualFormData({
         ...manualFormData,
@@ -553,11 +659,14 @@ const PurchaseOrders = () => {
     const rate = parseFloat(item.valuation_rate) || parseFloat(item.standard_rate) || parseFloat(item.rate) || 0;
     const qty = 1;
 
-    setNewPoItem({
+    setNewPoItem(prev => ({
+      ...prev,
+      drawing_no: prev.drawing_no ? String(prev.drawing_no).trim() : '',
+      remarks: prev.remarks || '',
       item_code: item.item_code,
       material_name: item.material_name || item.item_description || item.description || '',
       description: item.item_description || item.description || item.material_name || '',
-      quantity: qty,
+      quantity: prev.quantity && parseFloat(prev.quantity) > 0 ? prev.quantity : qty,
       unit: unit,
       item_group: itemGroupName,
       material_id: materialId,
@@ -566,7 +675,7 @@ const PurchaseOrders = () => {
       shape_id: shapeId,
       shape_type: shapeType,
       weight_per_unit: wPerUnit,
-      total_weight: wPerUnit * qty,
+      total_weight: wPerUnit * (prev.quantity && parseFloat(prev.quantity) > 0 ? parseFloat(prev.quantity) : qty),
       length: len,
       width: wid,
       thickness: thk,
@@ -574,9 +683,8 @@ const PurchaseOrders = () => {
       outer_diameter: od,
       thread_pitch: pitch,
       rate: rate,
-      amount: (unit.toUpperCase() === 'KG' && wPerUnit > 0 ? wPerUnit * qty : qty) * rate,
-      remarks: ''
-    });
+      amount: (unit.toUpperCase() === 'KG' && wPerUnit > 0 ? wPerUnit * (prev.quantity && parseFloat(prev.quantity) > 0 ? parseFloat(prev.quantity) : qty) : (prev.quantity && parseFloat(prev.quantity) > 0 ? parseFloat(prev.quantity) : qty)) * rate
+    }));
   };
 
   const handleCommitAddPoItem = () => {
@@ -597,8 +705,9 @@ const PurchaseOrders = () => {
     const rate = parseFloat(newPoItem.rate) || 0;
     const amt = parseFloat(newPoItem.amount) || Number((finalQty * rate).toFixed(2));
 
-    const itemToAdd = {
+    const committedItem = {
       item_code: newPoItem.item_code,
+      drawing_no: newPoItem.drawing_no ? String(newPoItem.drawing_no).trim() : '',
       material_name: newPoItem.material_name,
       description: newPoItem.description || newPoItem.material_name,
       quantity: finalQty,
@@ -620,13 +729,25 @@ const PurchaseOrders = () => {
       thread_pitch: parseFloat(newPoItem.thread_pitch) || 0
     };
 
-    setManualFormData(prev => ({
-      ...prev,
-      items: [...prev.items, itemToAdd]
-    }));
+    if (editingPoItemIndex !== null) {
+      setManualFormData(prev => {
+        const updated = [...prev.items];
+        updated[editingPoItemIndex] = committedItem;
+        return { ...prev, items: updated };
+      });
+      successToast('Item updated successfully');
+    } else {
+      setManualFormData(prev => ({
+        ...prev,
+        items: [...prev.items, committedItem]
+      }));
+      successToast('Material added to Purchase Order');
+    }
 
+    setEditingPoItemIndex(null);
     setNewPoItem({
       item_code: '',
+      drawing_no: '',
       material_name: '',
       description: '',
       quantity: 1,
@@ -650,7 +771,6 @@ const PurchaseOrders = () => {
       remarks: ''
     });
     setShowAddPoItem(false);
-    successToast('Material added to Purchase Order');
   };
 
   const handleManualItemChange = (index, field, value) => {
@@ -722,6 +842,38 @@ const PurchaseOrders = () => {
   const handleRemoveManualItem = (index) => {
     const newItems = manualFormData.items.filter((_, i) => i !== index);
     setManualFormData({ ...manualFormData, items: newItems });
+  };
+
+  const handleStartEditPoItem = (index) => {
+    const item = manualFormData.items[index];
+    if (!item) return;
+    setEditingPoItemIndex(index);
+    setNewPoItem({
+      item_code: item.item_code || '',
+      drawing_no: item.drawing_no || '',
+      material_name: item.material_name || '',
+      description: item.description || item.remarks || '',
+      quantity: item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : (item.quantity || 1),
+      unit: item.unit || 'NOS',
+      item_group: item.item_group || '',
+      material_id: item.material_id || '',
+      material_type: item.material_type || '',
+      density: parseFloat(item.density) || 0,
+      shape_id: item.shape_id || '',
+      shape_type: item.shape_type || '',
+      weight_per_unit: parseFloat(item.weight_per_unit) || 0,
+      total_weight: parseFloat(item.total_weight) || 0,
+      length: item.length !== undefined && item.length !== null ? item.length : '',
+      width: item.width !== undefined && item.width !== null ? item.width : '',
+      thickness: item.thickness !== undefined && item.thickness !== null ? item.thickness : '',
+      diameter: item.diameter !== undefined && item.diameter !== null ? item.diameter : '',
+      outer_diameter: item.outer_diameter !== undefined && item.outer_diameter !== null ? item.outer_diameter : '',
+      thread_pitch: item.thread_pitch !== undefined && item.thread_pitch !== null ? item.thread_pitch : '',
+      rate: item.rate !== undefined && item.rate !== null ? item.rate : 0,
+      amount: item.amount !== undefined && item.amount !== null ? item.amount : 0,
+      remarks: item.remarks || item.description || ''
+    });
+    setShowAddPoItem(true);
   };
 
   const handleOpenMergeModal = () => {
@@ -884,6 +1036,9 @@ const PurchaseOrders = () => {
         const rawComp = manualFormData.companyId;
         const isNumComp = rawComp !== null && rawComp !== undefined && !isNaN(parseInt(rawComp)) && String(parseInt(rawComp)) === String(rawComp).trim();
         const payload = {
+          poNumber: manualFormData.poNumber ? manualFormData.poNumber.trim() : null,
+          customerPoNo: manualFormData.customerPoNo ? manualFormData.customerPoNo.trim() : null,
+          orderDate: manualFormData.orderDate || null,
           companyId: isNumComp ? parseInt(rawComp) : null,
           companyName: !isNumComp ? String(rawComp).trim() : (companies.find(c => String(c.id) === String(rawComp))?.company_name || null),
           vendorId: parseInt(manualFormData.vendorId),
@@ -894,6 +1049,7 @@ const PurchaseOrders = () => {
           discount_value: discVal,
           items: manualFormData.items.map(item => ({
             item_code: item.item_code,
+            drawing_no: item.drawing_no ? String(item.drawing_no).trim() : null,
             description: item.description || item.material_name || item.item_code,
             material_name: item.material_name || item.description || item.item_code,
             design_qty: item.design_qty !== undefined && item.design_qty !== null ? parseFloat(item.design_qty) : (parseFloat(item.quantity) || 0),
@@ -968,6 +1124,7 @@ const PurchaseOrders = () => {
         items: manualFormData.items.map(item => ({
           id: item.id || undefined,
           item_code: item.item_code,
+          drawing_no: item.drawing_no ? String(item.drawing_no).trim() : null,
           description: item.description,
           material_name: item.material_name,
           quantity: parseFloat(item.quantity) || 0,
@@ -1379,6 +1536,7 @@ const PurchaseOrders = () => {
             .map(item => ({
               id: item.id,
               item_code: item.item_code || '',
+              drawing_no: item.drawing_no ? String(item.drawing_no).trim() : (item.drawing_number ? String(item.drawing_number).trim() : ''),
               description: item.description || '',
               quantity: item.quantity || 0,
               unit: item.unit || 'NOS',
@@ -2361,13 +2519,16 @@ const PurchaseOrders = () => {
                       name="poType"
                       value="DIRECT_COMPANY"
                       checked={manualFormData.poType === 'DIRECT_COMPANY'}
-                      onChange={() => setManualFormData(prev => ({
-                        ...prev,
-                        poType: 'DIRECT_COMPANY',
-                        quotationId: '',
-                        vendorId: '',
-                        items: []
-                      }))}
+                      onChange={() => {
+                        setManualFormData(prev => ({
+                          ...prev,
+                          poType: 'DIRECT_COMPANY',
+                          quotationId: '',
+                          vendorId: '',
+                          items: []
+                        }));
+                        fetchNextPONumber();
+                      }}
                       className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
                     Direct Company Purchase
@@ -2385,30 +2546,102 @@ const PurchaseOrders = () => {
                 </div>
                 <div className="p-3 space-y-4">
                   {manualFormData.poType === 'DIRECT_COMPANY' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 ml-1">Company *</label>
-                        <SearchableSelect
-                          options={companyOptions}
-                          value={manualFormData.companyId}
-                          onChange={(e) => setManualFormData(prev => ({ ...prev, companyId: e.target.value }))}
-                          placeholder="Search or enter company name..."
-                          allowCustom={true}
-                          showSearchIcon={true}
-                        />
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 ml-1">Company *</label>
+                          <SearchableSelect
+                            options={companyOptions}
+                            value={manualFormData.companyId}
+                            onChange={(e) => setManualFormData(prev => ({ ...prev, companyId: e.target.value }))}
+                            placeholder="Search or enter company name..."
+                            allowCustom={true}
+                            showSearchIcon={true}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 ml-1">Supplier *</label>
+                          <SearchableSelect
+                            options={vendorOptions}
+                            value={manualFormData.vendorId}
+                            onChange={(e) => setManualFormData(prev => ({ ...prev, vendorId: e.target.value }))}
+                            placeholder="Search & select supplier..."
+                            allowCustom={false}
+                            showSearchIcon={true}
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-700 ml-1">Supplier *</label>
-                        <SearchableSelect
-                          options={vendorOptions}
-                          value={manualFormData.vendorId}
-                          onChange={(e) => setManualFormData(prev => ({ ...prev, vendorId: e.target.value }))}
-                          placeholder="Search & select supplier..."
-                          allowCustom={false}
-                          showSearchIcon={true}
-                        />
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 ml-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              PO Number *
+                              <span className="text-[10px] text-slate-400 font-normal">(Auto / Manual)</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={fetchNextPONumber}
+                              className="text-[10px] text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                              title="Fetch latest sequence number"
+                            >
+                              <RefreshCw size={10} className="inline" /> Auto-fill
+                            </button>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={manualFormData.poNumber || ''}
+                              onChange={(e) => setManualFormData(prev => ({ ...prev, poNumber: e.target.value }))}
+                              placeholder="e.g. PO-2026-0138"
+                              className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 font-mono font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all pr-8"
+                              required
+                            />
+                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                              <FileText size={13} />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 ml-1">Order Date *</label>
+                          <input
+                            type="date"
+                            value={manualFormData.orderDate || new Date().toISOString().split('T')[0]}
+                            onChange={(e) => setManualFormData(prev => ({ ...prev, orderDate: e.target.value }))}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            required
+                          />
+                        </div>
                       </div>
-                    </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 ml-1">Expected Delivery *</label>
+                          <input
+                            type="date"
+                            value={manualFormData.expectedDeliveryDate}
+                            onChange={(e) => setManualFormData(prev => ({ ...prev, expectedDeliveryDate: e.target.value }))}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 ml-1 flex items-center justify-between">
+                            <span>Customer PO Number</span>
+                            <span className="text-[10px] text-slate-400 font-normal">(Optional Manual Ref)</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={manualFormData.customerPoNo || ''}
+                              onChange={(e) => setManualFormData(prev => ({ ...prev, customerPoNo: e.target.value }))}
+                              placeholder="e.g. CUST-PO-2026-0421"
+                              className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </>
                   ) : (
                     <>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2462,30 +2695,30 @@ const PurchaseOrders = () => {
                           </div>
                         );
                       })()}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 ml-1">Order Date *</label>
+                          <input
+                            type="date"
+                            defaultValue={new Date().toISOString().split('T')[0]}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 ml-1">Expected Delivery *</label>
+                          <input
+                            type="date"
+                            value={manualFormData.expectedDeliveryDate}
+                            onChange={(e) => setManualFormData({ ...manualFormData, expectedDeliveryDate: e.target.value })}
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            required
+                          />
+                        </div>
+                      </div>
                     </>
                   )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700 ml-1">Order Date *</label>
-                      <input
-                        type="date"
-                        defaultValue={new Date().toISOString().split('T')[0]}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700 ml-1">Expected Delivery *</label>
-                      <input
-                        type="date"
-                        value={manualFormData.expectedDeliveryDate}
-                        onChange={(e) => setManualFormData({ ...manualFormData, expectedDeliveryDate: e.target.value })}
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        required
-                      />
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -2502,10 +2735,27 @@ const PurchaseOrders = () => {
                     <button
                       type="button"
                       onClick={handleAddManualItem}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all shadow-sm active:scale-95 ${
+                        showAddPoItem && editingPoItemIndex !== null
+                          ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
                     >
-                      <Plus size={14} />
-                      {showAddPoItem ? 'Close Form' : 'Add Item'}
+                      {showAddPoItem ? (
+                        editingPoItemIndex !== null ? (
+                          <>
+                            <X size={14} />
+                            Cancel Edit
+                          </>
+                        ) : (
+                          'Close Form'
+                        )
+                      ) : (
+                        <>
+                          <Plus size={14} />
+                          Add Item
+                        </>
+                      )}
                     </button>
                   )}
                 </div>
@@ -2527,8 +2777,10 @@ const PurchaseOrders = () => {
 
                   const resetPoItemForm = () => {
                     setShowAddPoItem(false);
+                    setEditingPoItemIndex(null);
                     setNewPoItem({
                       item_code: '',
+                      drawing_no: '',
                       material_name: '',
                       description: '',
                       quantity: 1,
@@ -2554,11 +2806,11 @@ const PurchaseOrders = () => {
                   };
 
                   return (
-                    <div className="p-4 bg-slate-50 border-b border-slate-200 space-y-3 animate-in fade-in duration-150">
+                    <div className={`p-4 ${editingPoItemIndex !== null ? 'bg-amber-50/40 border-amber-200' : 'bg-slate-50 border-slate-200'} border-b space-y-3 animate-in fade-in duration-150`}>
                       <div className="flex justify-between items-center pb-2 border-b border-slate-200">
                         <h5 className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                          <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
-                          Add Purchase Order Item
+                          <span className={`w-2 h-2 rounded-full ${editingPoItemIndex !== null ? 'bg-amber-500' : 'bg-blue-600'}`}></span>
+                          {editingPoItemIndex !== null ? `Edit Purchase Order Item (Item #${editingPoItemIndex + 1})` : 'Add Purchase Order Item'}
                         </h5>
                         <button
                           type="button"
@@ -2570,9 +2822,42 @@ const PurchaseOrders = () => {
                         </button>
                       </div>
 
-                      {/* Row 1: Material Selection, Quantity, UOM, Item Group */}
+                      {/* Row 1: Drawing No (Optional), Material Selection, Quantity, UOM, Item Group */}
                       <div className="grid grid-cols-12 gap-3 items-end">
-                        <div className="col-span-12 md:col-span-5 space-y-1">
+                        <div className="col-span-12 md:col-span-3 space-y-1">
+                          <label className="text-xs text-slate-600 font-semibold block">
+                            Drawing No. <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
+                          </label>
+                          <SearchableSelect
+                            placeholder="Search or enter Drawing No..."
+                            options={drawingOptions}
+                            value={newPoItem.drawing_no || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const matchedDwg = drawingOptions.find(d => String(d.value).toLowerCase() === String(val || '').toLowerCase());
+                              setNewPoItem(prev => ({
+                                ...prev,
+                                drawing_no: val,
+                                remarks: (!prev.remarks && matchedDwg?.description) ? matchedDwg.description : prev.remarks
+                              }));
+                            }}
+                            allowCustom={true}
+                            showSearchIcon={true}
+                            className="font-mono"
+                            renderOption={(opt) => (
+                              <div className="flex flex-col py-0.5">
+                                <span className="font-bold text-slate-800 font-mono text-xs">{opt.value}</span>
+                                {opt.description && (
+                                  <span className="text-[11px] text-slate-500 font-normal truncate max-w-[280px]">
+                                    {opt.description}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          />
+                        </div>
+
+                        <div className="col-span-12 md:col-span-4 space-y-1">
                           <label className="text-xs text-slate-600 font-semibold block">
                             Material Selection <span className="text-rose-500">*</span>
                           </label>
@@ -2611,7 +2896,7 @@ const PurchaseOrders = () => {
                           />
                         </div>
 
-                        <div className="col-span-6 md:col-span-2 space-y-1">
+                        <div className="col-span-6 md:col-span-1 space-y-1">
                           <label className="text-xs text-slate-600 font-semibold block">UOM</label>
                           <select
                             className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
@@ -2624,7 +2909,7 @@ const PurchaseOrders = () => {
                           </select>
                         </div>
 
-                        <div className="col-span-12 md:col-span-3 space-y-1">
+                        <div className="col-span-12 md:col-span-2 space-y-1">
                           <label className="text-xs text-slate-600 font-semibold block">Item Group</label>
                           <select
                             className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none font-medium"
@@ -3034,16 +3319,27 @@ const PurchaseOrders = () => {
                             type="button"
                             onClick={handleCommitAddPoItem}
                             disabled={!newPoItem.item_code || parseFloat(newPoItem.quantity) <= 0 || !shapeValidation.isValid}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded text-xs font-semibold shadow-sm transition-all active:scale-95 flex items-center gap-1.5"
+                            className={`px-4 py-2 ${
+                              editingPoItemIndex !== null ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'
+                            } disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded text-xs font-semibold shadow-sm transition-all active:scale-95 flex items-center gap-1.5`}
                           >
-                            <Plus size={14} />
-                            Add Material
+                            {editingPoItemIndex !== null ? (
+                              <>
+                                <CheckCircle2 size={14} />
+                                Update Item
+                              </>
+                            ) : (
+                              <>
+                                <Plus size={14} />
+                                Add Material
+                              </>
+                            )}
                           </button>
                           <button
                             type="button"
                             onClick={resetPoItemForm}
                             className="p-2 border border-slate-200 hover:bg-slate-100 text-slate-500 rounded text-xs transition-all"
-                            title="Cancel"
+                            title={editingPoItemIndex !== null ? 'Cancel Edit' : 'Cancel'}
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -3060,13 +3356,14 @@ const PurchaseOrders = () => {
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
                         {manualFormData.poType === 'DIRECT_COMPANY' ? (
                           <>
+                            <th className="px-4 p-2 text-left w-32">Drawing No.</th>
                             <th className="px-4 p-2 text-left min-w-[200px]">Material Name & Code</th>
                             <th className="px-4 p-2 text-left">Remarks / Description</th>
                             <th className="px-4 p-2 text-center w-28">Design Qty</th>
                             <th className="px-4 p-2 text-center w-28">Weight</th>
                             <th className="px-4 p-2 text-center w-28">Rate</th>
                             <th className="px-4 p-2 text-right w-32">Amount</th>
-                            <th className="px-4 p-2 text-center w-12"></th>
+                            <th className="px-4 p-2 text-center w-16">Action</th>
                           </>
                         ) : (
                           <>
@@ -3086,6 +3383,15 @@ const PurchaseOrders = () => {
                         <tr key={idx} className="group hover:bg-slate-50/50 transition-all">
                           {manualFormData.poType === 'DIRECT_COMPANY' ? (
                             <>
+                              <td className="px-4 p-2 w-32">
+                                {item.drawing_no ? (
+                                  <span className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                    {item.drawing_no}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 text-xs">—</span>
+                                )}
+                              </td>
                               <td className="px-4 p-2 min-w-[200px]">
                                 <div className="flex flex-col gap-0.5">
                                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -3162,15 +3468,25 @@ const PurchaseOrders = () => {
                               <td className="px-4 p-2 text-right font-bold text-xs text-slate-800 w-32">
                                 {formatCurrency(item.amount)}
                               </td>
-                              <td className="px-4 p-2 text-center w-12">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveManualItem(idx)}
-                                  className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-all"
-                                  title="Remove item"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                </button>
+                              <td className="px-4 p-2 text-center w-16">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditPoItem(idx)}
+                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                                    title="Edit item"
+                                  >
+                                    <Pencil size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveManualItem(idx)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded transition-all"
+                                    title="Remove item"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
                               </td>
                             </>
                           ) : (
@@ -3426,6 +3742,7 @@ const PurchaseOrders = () => {
           </div>
         </div>
       )}
+
 
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 overflow-y-auto">
