@@ -390,7 +390,32 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   };
 
   const renderDimensions = (dims) => {
-    const formatted = formatDimensions(dims);
+    if (!dims) return null;
+    let effectiveDims = dims;
+    if (newPlan?.items?.length) {
+      const allBomMats = newPlan.items.flatMap(item => item.materials || []);
+      const cleanName = (str) => (str || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const targetName = cleanName(dims.material_name || dims.description || dims.item_name);
+      const matched = allBomMats.find(bm => {
+        const bmName = cleanName(bm.material_name || bm.description || bm.item_name);
+        return bmName && (bmName === targetName || (targetName && (bmName.includes(targetName) || targetName.includes(bmName))));
+      });
+      if (matched) {
+        effectiveDims = {
+          ...dims,
+          shape_type: matched.shape_type || matched.shape_name || matched.shape || dims.shape_type,
+          shape_name: matched.shape_name || matched.shape_type || matched.shape || dims.shape_name,
+          shape: matched.shape || matched.shape_type || dims.shape,
+          length: dims.length || matched.length,
+          width: dims.width || matched.width,
+          thickness: dims.thickness || matched.thickness,
+          diameter: dims.diameter || matched.diameter,
+          outer_diameter: dims.outer_diameter || matched.outer_diameter,
+          thread_pitch: matched.thread_pitch || dims.thread_pitch
+        };
+      }
+    }
+    const formatted = formatDimensions(effectiveDims);
     if (!formatted) return null;
     return (
       <div className="flex flex-wrap items-center gap-1 mt-0.5 text-xs text-slate-500">
@@ -729,6 +754,33 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           };
         }));
 
+        // Enrich materials with authentic BOM shapes & dimensions
+        const allBomMaterials = itemsWithBom.flatMap(item => item.materials || []);
+        const cleanName = (str) => (str || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const enrichedMaterials = (data.materials || []).map(mat => {
+          const matNameClean = cleanName(mat.material_name || mat.description || '');
+          const matchedBomMat = allBomMaterials.find(bm => {
+            const bmNameClean = cleanName(bm.material_name || bm.description || '');
+            return bmNameClean && (bmNameClean === matNameClean || (matNameClean && (bmNameClean.includes(matNameClean) || matNameClean.includes(bmNameClean))));
+          });
+          if (matchedBomMat) {
+            return {
+              ...mat,
+              shape_type: matchedBomMat.shape_type || matchedBomMat.shape_name || matchedBomMat.shape,
+              shape_name: matchedBomMat.shape_name || matchedBomMat.shape_type || matchedBomMat.shape,
+              shape: matchedBomMat.shape || matchedBomMat.shape_type,
+              dimensions: matchedBomMat.dimensions || mat.dimensions,
+              length: mat.length || matchedBomMat.length,
+              width: mat.width || matchedBomMat.width,
+              thickness: mat.thickness || matchedBomMat.thickness,
+              diameter: mat.diameter || matchedBomMat.diameter,
+              outer_diameter: mat.outer_diameter || matchedBomMat.outer_diameter,
+              thread_pitch: matchedBomMat.thread_pitch || mat.thread_pitch
+            };
+          }
+          return mat;
+        });
+
         setNewPlan({
           id: data.id,
           planCode: data.plan_code,
@@ -741,7 +793,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           targetQuantity: data.target_qty,
           items: itemsWithBom,
           subAssemblies: data.subAssemblies,
-          materials: data.materials,
+          materials: enrichedMaterials,
           operations: data.operations
         });
 
@@ -814,6 +866,33 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           };
         }));
 
+        // Enrich materials with authentic BOM shapes & dimensions
+        const allBomMaterials = itemsWithBom.flatMap(item => item.materials || []);
+        const cleanName = (str) => (str || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        const enrichedMaterials = (data.materials || []).map(mat => {
+          const matNameClean = cleanName(mat.material_name || mat.description || '');
+          const matchedBomMat = allBomMaterials.find(bm => {
+            const bmNameClean = cleanName(bm.material_name || bm.description || '');
+            return bmNameClean && (bmNameClean === matNameClean || (matNameClean && (bmNameClean.includes(matNameClean) || matNameClean.includes(bmNameClean))));
+          });
+          if (matchedBomMat) {
+            return {
+              ...mat,
+              shape_type: matchedBomMat.shape_type || matchedBomMat.shape_name || matchedBomMat.shape,
+              shape_name: matchedBomMat.shape_name || matchedBomMat.shape_type || matchedBomMat.shape,
+              shape: matchedBomMat.shape || matchedBomMat.shape_type,
+              dimensions: matchedBomMat.dimensions || mat.dimensions,
+              length: mat.length || matchedBomMat.length,
+              width: mat.width || matchedBomMat.width,
+              thickness: mat.thickness || matchedBomMat.thickness,
+              diameter: mat.diameter || matchedBomMat.diameter,
+              outer_diameter: mat.outer_diameter || matchedBomMat.outer_diameter,
+              thread_pitch: matchedBomMat.thread_pitch || mat.thread_pitch
+            };
+          }
+          return mat;
+        });
+
         setNewPlan({
           id: data.id,
           planCode: data.plan_code,
@@ -826,7 +905,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           targetQuantity: data.target_qty,
           items: itemsWithBom,
           subAssemblies: data.subAssemblies,
-          materials: data.materials,
+          materials: enrichedMaterials,
           operations: data.operations
         });
 
@@ -1418,10 +1497,28 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     });
 
     // 4. Combine into final Material list (all direct materials + direct bought-out items)
-    let materialsToDisplay = isViewing ? (newPlan.materials || []).map(m => ({
-      ...m,
-      bomQty: m.bom_qty || (parseFloat(m.design_qty || newPlan.targetQuantity || 1) > 0 ? parseFloat(m.required_qty || 0) / parseFloat(m.design_qty || newPlan.targetQuantity || 1) : 0)
-    })) : allMaterials;
+    let materialsToDisplay = isViewing ? (newPlan.materials || []).map(m => {
+      const allBomMats = newPlan.items.flatMap(it => it.materials || []);
+      const cleanName = (str) => (str || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const matNameClean = cleanName(m.material_name || m.description || '');
+      const matchedBomMat = allBomMats.find(bm => {
+        const bmName = cleanName(bm.material_name || bm.description || '');
+        return bmName && (bmName === matNameClean || (matNameClean && (bmName.includes(matNameClean) || matNameClean.includes(bmName))));
+      });
+      return {
+        ...m,
+        shape_type: matchedBomMat?.shape_type || matchedBomMat?.shape_name || matchedBomMat?.shape || m.shape_type,
+        shape_name: matchedBomMat?.shape_name || matchedBomMat?.shape_type || matchedBomMat?.shape || m.shape_name,
+        shape: matchedBomMat?.shape || matchedBomMat?.shape_type || m.shape,
+        length: m.length || matchedBomMat?.length,
+        width: m.width || matchedBomMat?.width,
+        thickness: m.thickness || matchedBomMat?.thickness,
+        diameter: m.diameter || matchedBomMat?.diameter,
+        outer_diameter: m.outer_diameter || matchedBomMat?.outer_diameter,
+        thread_pitch: matchedBomMat?.thread_pitch || m.thread_pitch,
+        bomQty: m.bom_qty || (parseFloat(m.design_qty || newPlan.targetQuantity || 1) > 0 ? parseFloat(m.required_qty || 0) / parseFloat(m.design_qty || newPlan.targetQuantity || 1) : 0)
+      };
+    }) : allMaterials;
 
     // Merge direct bought-out items into materials if not already present
     componentsAsMaterials.forEach(cam => {
