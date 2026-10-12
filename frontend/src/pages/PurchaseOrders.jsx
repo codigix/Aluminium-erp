@@ -1050,6 +1050,7 @@ const PurchaseOrders = () => {
           items: manualFormData.items.map(item => ({
             item_code: item.item_code,
             drawing_no: item.drawing_no ? String(item.drawing_no).trim() : null,
+            shape_type: item.shape_type ? String(item.shape_type).trim() : null,
             description: item.description || item.material_name || item.item_code,
             material_name: item.material_name || item.description || item.item_code,
             design_qty: item.design_qty !== undefined && item.design_qty !== null ? parseFloat(item.design_qty) : (parseFloat(item.quantity) || 0),
@@ -1125,6 +1126,7 @@ const PurchaseOrders = () => {
           id: item.id || undefined,
           item_code: item.item_code,
           drawing_no: item.drawing_no ? String(item.drawing_no).trim() : null,
+          shape_type: item.shape_type ? String(item.shape_type).trim() : null,
           description: item.description,
           material_name: item.material_name,
           quantity: parseFloat(item.quantity) || 0,
@@ -2965,10 +2967,33 @@ const PurchaseOrders = () => {
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   const shapeObj = shapes.find(s => String(s.id) === String(val) || String(s.name).toLowerCase() === String(val).toLowerCase());
+                                  const sName = shapeObj ? shapeObj.name : val;
+                                  const sLower = String(sName || '').toLowerCase();
+
+                                  let cleanDims = {};
+                                  if (sLower === 'round' || (sLower.includes('round') || sLower.includes('rod') || sLower.includes('bar')) && !sLower.includes('hex') && !sLower.includes('threaded') && !sLower.includes('thread') && !sLower.includes('square')) {
+                                    cleanDims = { width: '', thickness: '', outer_diameter: '', thread_pitch: '' };
+                                  } else if (sLower.includes('plate') || sLower.includes('sheet') || sLower.includes('flat')) {
+                                    cleanDims = { diameter: '', outer_diameter: '', thread_pitch: '' };
+                                  } else if (sLower === 'hexagonal bar' || sLower.includes('hex')) {
+                                    cleanDims = { thickness: '', diameter: '', outer_diameter: '', thread_pitch: '' };
+                                  } else if (sLower.includes('square bar')) {
+                                    cleanDims = { thickness: '', diameter: '', outer_diameter: '', thread_pitch: '' };
+                                  } else if (sLower.includes('square tube')) {
+                                    cleanDims = { diameter: '', outer_diameter: '', thread_pitch: '' };
+                                  } else if (sLower.includes('rectangular tube')) {
+                                    cleanDims = { diameter: '', thread_pitch: '' };
+                                  } else if (sLower.includes('pipe') || sLower.includes('tube')) {
+                                    cleanDims = { width: '', diameter: '', thread_pitch: '' };
+                                  } else if (sLower.includes('threaded') || sLower.includes('thread')) {
+                                    cleanDims = { width: '', thickness: '' };
+                                  }
+
                                   setNewPoItem(prev => ({
                                     ...prev,
                                     shape_id: shapeObj ? shapeObj.id : val,
-                                    shape_type: shapeObj ? shapeObj.name : val
+                                    shape_type: sName,
+                                    ...cleanDims
                                   }));
                                 }}
                               >

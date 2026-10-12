@@ -634,6 +634,7 @@ const createDirectCompanyPurchaseOrder = async (data) => {
         material_name: item.material_name || item.description || item.item_code,
         description: item.description || item.material_name || item.item_code,
         drawing_no: item.drawing_no ? String(item.drawing_no).trim() : null,
+        shape_type: item.shape_type ? String(item.shape_type).trim() : null,
         design_qty: parseFloat(item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : item.quantity) || 0,
         quantity: qty,
         unit: item.unit || item.uom || 'NOS',
@@ -706,8 +707,8 @@ const createDirectCompanyPurchaseOrder = async (data) => {
           purchase_order_id, item_code, description, material_name, drawing_no,
           design_qty, planned_qty, quantity, unit, unit_rate, amount, cgst_percent, cgst_amount, 
           sgst_percent, sgst_amount, total_amount, length, width, thickness, 
-          diameter, outer_diameter, density, weight_per_unit, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`,
+          diameter, outer_diameter, density, weight_per_unit, shape_type, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`,
         [
           poId,
           item.item_code,
@@ -731,7 +732,8 @@ const createDirectCompanyPurchaseOrder = async (data) => {
           item.diameter,
           item.outer_diameter,
           item.density,
-          item.weight_per_unit
+          item.weight_per_unit,
+          item.shape_type || null
         ]
       );
     }
@@ -2033,6 +2035,153 @@ const handleStoreAcceptance = async (poId, payload) => {
   }
 };
 
+// Standardized dimension formatting helper mirroring ItemsMaster / formatters.js across all shapes
+const formatItemDimensions = (item) => {
+  if (!item) return '—';
+
+  const len = parseFloat(item.length || 0);
+  const wid = parseFloat(item.width || 0);
+  const thk = parseFloat(item.thickness || 0);
+  const dia = parseFloat(item.diameter || 0);
+  const od = parseFloat(item.outer_diameter || item.outerDiameter || 0);
+
+  if (len === 0 && wid === 0 && thk === 0 && dia === 0 && od === 0) {
+    return '—';
+  }
+
+  const explicitShape = (item.shape_type || item.shape_name || item.shape || '').toLowerCase().trim();
+  const matNameStr = (item.material_name || item.name || item.item_name || item.description || '').toLowerCase().trim();
+  const hasPlateDims = wid > 0 || thk > 0;
+  const isPlateMaterial = !explicitShape && (matNameStr.includes('plate') || matNameStr.includes('sheet')) && hasPlateDims;
+
+  let shape = (
+    explicitShape ? explicitShape :
+      (isPlateMaterial ? matNameStr : (matNameStr || item.item_code || ''))
+  ).toLowerCase();
+
+  let matchedShape = '';
+  if (shape.includes('threaded') || shape.includes('thread')) {
+    matchedShape = 'threaded rod';
+  } else if (shape.includes('square tube') || (shape.includes('square') && shape.includes('tube'))) {
+    matchedShape = 'square tube';
+  } else if (shape.includes('square bar') || (shape.includes('square') && !shape.includes('tube'))) {
+    matchedShape = 'square bar';
+  } else if (shape.includes('rectangular tube') || shape.includes('rect tube') || (shape.includes('rect') && shape.includes('tube'))) {
+    matchedShape = 'rectangular tube';
+  } else if (shape.includes('rectangular bar') || (shape.includes('rect') && shape.includes('bar'))) {
+    matchedShape = 'rectangular bar';
+  } else if (shape.includes('hex') || shape.includes('hexagonal')) {
+    matchedShape = 'hexagonal bar';
+  } else if (shape.includes('unequal angle') || shape.includes('ua ')) {
+    matchedShape = 'unequal angle';
+  } else if (shape.includes('equal angle') || shape.includes('ea ')) {
+    matchedShape = 'equal angle';
+  } else if (shape.includes('angle')) {
+    matchedShape = 'angle';
+  } else if (shape.includes('flat') || shape === 'fl' || shape.startsWith('fl ')) {
+    matchedShape = 'flat bar';
+  } else if (shape.includes('plate') || shape.includes('sheet')) {
+    matchedShape = 'plate';
+  } else if (shape.includes('pipe') || shape.includes('tube')) {
+    matchedShape = 'pipe';
+  } else if (shape.includes('round') || shape.includes('rod') || shape.includes('bar')) {
+    if (thk > 0 && !shape.includes('round') && !shape.includes('bar')) {
+      matchedShape = 'threaded rod';
+    } else {
+      matchedShape = 'round bar';
+    }
+  } else {
+    // Fallback detection by dimension values
+    if (dia > 0) {
+      matchedShape = 'round bar';
+    } else if (od > 0 && thk > 0) {
+      matchedShape = 'pipe';
+    } else if (wid > 0 && od > 0 && thk > 0 && len > 0) {
+      matchedShape = 'rectangular tube';
+    } else if (wid > 0 && thk > 0 && len > 0) {
+      matchedShape = 'plate';
+    } else if (wid > 0 && len > 0) {
+      matchedShape = 'hexagonal bar';
+    } else {
+      matchedShape = 'plate';
+    }
+  }
+
+  const n = (val) => {
+    if (val === undefined || val === null || val === '' || isNaN(parseFloat(val)) || parseFloat(val) === 0) return null;
+    const num = parseFloat(val);
+    return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1);
+  };
+
+  let prefix = '';
+  let dimStr = '';
+
+  if (matchedShape === 'plate') {
+    prefix = 'PL';
+    const parts = [n(wid), n(len), n(thk)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'flat bar') {
+    prefix = 'FL';
+    const hOrT = thk > 0 ? thk : (od > 0 ? od : 0);
+    const parts = [n(wid), n(hOrT), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'round bar') {
+    prefix = 'RB';
+    const dVal = dia > 0 ? dia : (od > 0 ? od : wid);
+    const parts = [`Ø${n(dVal)}`, n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'hexagonal bar') {
+    prefix = 'HEX';
+    const parts = [`AF${n(wid)}`, n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'square bar') {
+    prefix = 'SB';
+    const parts = [n(wid), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'rectangular bar') {
+    prefix = 'REC';
+    const parts = [n(wid), n(od), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'pipe') {
+    prefix = 'PIPE';
+    const odVal = od > 0 ? od : dia;
+    const parts = [`OD${n(odVal)}`, n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'square tube') {
+    prefix = 'SQT';
+    const parts = [n(wid), n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'rectangular tube') {
+    prefix = 'RCT';
+    const parts = [n(wid), n(od), n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'threaded rod') {
+    prefix = 'TR';
+    const dVal = dia > 0 ? dia : od;
+    const pVal = parseFloat(item.thread_pitch || item.threadPitch || thk || 0);
+    const parts = [`M${n(dVal)}`, pVal > 0 ? n(pVal) : null, n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'angle') {
+    prefix = 'L';
+    const parts = [n(wid), n(od || thk), n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'equal angle') {
+    prefix = 'EA';
+    const parts = [n(wid), n(wid), n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'unequal angle') {
+    prefix = 'UA';
+    const parts = [n(wid), n(od), n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else {
+    const parts = [n(wid), n(od), n(thk), n(dia), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  }
+
+  if (!dimStr) return '—';
+  return `${prefix} ${dimStr} mm`.trim();
+};
+
 const generatePurchaseOrderPDF = async (poId) => {
   const po = await getPurchaseOrderById(poId);
   const [vendorRows] = await pool.query('SELECT * FROM vendors WHERE id = ?', [po.vendor_id]);
@@ -2896,15 +3045,18 @@ const generatePurchaseOrderPDF = async (poId) => {
         isWeightEmpty = isBoughtOutItem;
       }
 
+      const hasDirectDwg = i.drawing_no && i.drawing_no !== '—' && i.drawing_no !== 'Merged Drawings' && String(i.drawing_no).trim() !== '' && i.drawing_no !== i.item_code;
       const isItemDwgValid = i.drawing_no && !/^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(i.drawing_no) && i.drawing_no !== 'Merged Drawings' && i.drawing_no !== '—';
-      let resolvedDrawingNo = isDirectCompany ? '—' : (isItemDwgValid ? i.drawing_no : (await getItemParentDrawingNumber(pool, i)));
+      let resolvedDrawingNo = hasDirectDwg
+        ? String(i.drawing_no).trim()
+        : (isDirectCompany ? null : (isItemDwgValid ? i.drawing_no : (await getItemParentDrawingNumber(pool, i))));
       if (resolvedDrawingNo) {
         const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(resolvedDrawingNo);
         if (isItemCodePattern || resolvedDrawingNo === 'Merged Drawings') {
           resolvedDrawingNo = null;
         }
       }
-      if (!resolvedDrawingNo) {
+      if (!resolvedDrawingNo && !isDirectCompany) {
         resolvedDrawingNo = (po.drawing_no !== 'Merged Drawings' ? po.drawing_no : null) || i.drawing_no;
       }
 
@@ -2913,57 +3065,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         resolvedDrawingNo = null;
       }
 
-      const len = parseFloat(i.length || 0);
-      const wid = parseFloat(i.width || 0);
-      const thk = parseFloat(i.thickness || 0);
-      const dia = parseFloat(i.diameter || 0);
-      const od = parseFloat(i.outer_diameter || 0);
-
-      const nf = (v) => { if (!v || isNaN(parseFloat(v)) || parseFloat(v) === 0) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
-      const shapeRaw = (i.shape_type || i.shape_name || i.shape || i.material_name || '').toLowerCase();
-
-      let ms = '';
-      if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) ms = 'threaded rod';
-      else if (shapeRaw.includes('square tube') || (shapeRaw.includes('square') && shapeRaw.includes('tube'))) ms = 'square tube';
-      else if (shapeRaw.includes('rectangular tube') || shapeRaw.includes('rect tube') || (shapeRaw.includes('rect') && shapeRaw.includes('tube'))) ms = 'rectangular tube';
-      else if (shapeRaw.includes('square bar') || (shapeRaw.includes('square') && shapeRaw.includes('bar'))) ms = 'square bar';
-      else if (shapeRaw.includes('rectangular bar') || (shapeRaw.includes('rect') && shapeRaw.includes('bar'))) ms = 'rectangular bar';
-      else if (shapeRaw.includes('hex')) ms = 'hexagonal bar';
-      else if (shapeRaw.includes('unequal angle')) ms = 'unequal angle';
-      else if (shapeRaw.includes('equal angle')) ms = 'equal angle';
-      else if (shapeRaw.includes('angle')) ms = 'angle';
-      else if (shapeRaw.includes('plate') || shapeRaw.includes('sheet')) ms = 'plate';
-      else if (shapeRaw.includes('flat')) ms = 'flat bar';
-      else if (shapeRaw.includes('pipe') || shapeRaw.includes('tube')) ms = 'pipe';
-      else if (shapeRaw.includes('round') || shapeRaw.includes('rod') || shapeRaw.includes('bar')) {
-        if (thk > 0) ms = 'threaded rod';
-        else ms = 'round bar';
-      }
-      else if (dia > 0) {
-        if (thk > 0) ms = 'threaded rod';
-        else ms = 'round bar';
-      }
-      else if (od > 0 && thk > 0) ms = 'pipe';
-      else if (wid > 0 && thk > 0 && len > 0) ms = 'plate';
-      else ms = 'plate';
-
-      let pfx = '', dp = [];
-      if (ms === 'plate')              { pfx = 'PL';   dp = [nf(wid), nf(len), nf(thk)]; }
-      else if (ms === 'flat bar')      { pfx = 'FL';   dp = [nf(wid), nf(thk), nf(len)]; }
-      else if (ms === 'round bar')     { pfx = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dp = [`Ø${nf(dv)}`, nf(len)]; }
-      else if (ms === 'hexagonal bar') { pfx = 'HEX';  dp = [`AF${nf(wid)}`, nf(len)]; }
-      else if (ms === 'square bar')    { pfx = 'SQ';   dp = [nf(wid), nf(len)]; }
-      else if (ms === 'rectangular bar') { pfx = 'REC'; dp = [nf(wid), nf(od), nf(len)]; }
-      else if (ms === 'pipe')          { pfx = 'PIPE'; const ov = od > 0 ? od : dia; dp = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
-      else if (ms === 'square tube')   { pfx = 'SQT';  dp = [nf(wid), nf(thk), nf(len)]; }
-      else if (ms === 'rectangular tube') { pfx = 'RCT'; dp = [nf(wid), nf(od), nf(thk), nf(len)]; }
-      else if (ms === 'threaded rod')  { pfx = 'TR';   const dv = dia > 0 ? dia : od; const pv = parseFloat(i.thread_pitch || i.threadPitch || thk || i.thickness || 0); dp = [`M${nf(dv)}`, pv > 0 ? nf(pv) : null, nf(len)]; }
-      else if (ms === 'angle')         { pfx = 'L';    dp = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
-      else if (ms === 'equal angle')   { pfx = 'EA';   dp = [nf(wid), nf(wid), nf(thk), nf(len)]; }
-      else if (ms === 'unequal angle') { pfx = 'UA';   dp = [nf(wid), nf(od), nf(thk), nf(len)]; }
-      else { dp = [nf(wid), nf(od), nf(thk), nf(dia), nf(len)]; }
-
-      const sizeStr = isBoughtOutItem ? '—' : (dp.filter(Boolean).length > 0 ? `${pfx} ${dp.filter(Boolean).join(' × ')} mm`.trim() : '—');
+      const sizeStr = isBoughtOutItem ? '—' : formatItemDimensions(i);
 
       let gradeBomRef = null;
       let itemPlanId = i.plan_id;
