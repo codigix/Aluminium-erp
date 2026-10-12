@@ -99,9 +99,9 @@ export const formatDimensions = (item) => {
     }
   }
 
-  // Format a numeric value (omit decimal if whole number)
+  // Format a numeric value (omit decimal if whole number, omit if 0)
   const n = (val) => {
-    if (val === undefined || val === null || val === '' || isNaN(parseFloat(val))) return null;
+    if (val === undefined || val === null || val === '' || isNaN(parseFloat(val)) || parseFloat(val) === 0) return null;
     const num = parseFloat(val);
     return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1);
   };

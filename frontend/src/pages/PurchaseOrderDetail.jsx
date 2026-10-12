@@ -415,6 +415,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                     <tr className="border-b border-slate-100 text-left bg-slate-50/50 text-[11px] text-slate-500 font-semibold uppercase">
                       <th className="p-2">Drawing No</th>
                       <th className="p-2">Item / Description</th>
+                      <th className="p-2">Shape / Dimensions</th>
                       <th className="p-2 text-center">Design Qty</th>
                       <th className="p-2 text-center">{po?.po_type === 'DIRECT_COMPANY' || po?.source === 'DIRECT_COMPANY_PURCHASE' ? 'Design Weight' : 'Required Weight'}</th>
                       <th className="p-2 text-center">Received Qty</th>
@@ -489,8 +490,10 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                           : ((recQty > 0 || recWeight > 0) && !isFulfilled);
                       }
 
-                      const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no || '');
-                      const cleanDwgNo = isDirectCompany ? '—' : (isDwgCodePattern ? '—' : (item.drawing_no || '—'));
+                      const rawDwg = (item.drawing_no || '').trim();
+                      const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(rawDwg);
+                      const hasValidDwg = rawDwg && rawDwg !== '—' && rawDwg !== '_' && !isDwgCodePattern;
+                      const cleanDwgNo = hasValidDwg ? rawDwg : '—';
 
                       return (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
@@ -504,6 +507,18 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                                 {item.item_code}
                               </span>
                             )}
+                          </td>
+                          <td className="p-2">
+                            <div className="flex flex-col gap-1 items-start">
+                              {item.shape_type && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] uppercase font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                  {item.shape_type}
+                                </span>
+                              )}
+                              <span className="font-mono text-xs font-semibold text-slate-800">
+                                {formatDimensions(item) || '—'}
+                              </span>
+                            </div>
                           </td>
                           <td className="p-2 text-center">
                             <span className="font-semibold text-slate-800">
@@ -900,8 +915,10 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
             <tbody className="divide-y divide-slate-200">
               {filteredItems.map((item, idx) => {
                 const isDirect = po?.po_type === 'DIRECT_COMPANY' || po?.source === 'DIRECT_COMPANY_PURCHASE';
-                const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no || '');
-                const cleanDwgNo = isDirect ? '—' : (isDwgCodePattern ? '—' : (item.drawing_no || '—'));
+                const rawDwg = (item.drawing_no || '').trim();
+                const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(rawDwg);
+                const hasValidDwg = rawDwg && rawDwg !== '—' && rawDwg !== '_' && !isDwgCodePattern;
+                const cleanDwgNo = hasValidDwg ? rawDwg : '—';
 
                 let dQtyStr, wtStr, amtVal;
                 if (isDirect) {

@@ -1642,6 +1642,8 @@ const getPurchaseOrderById = async (poId) => {
   if (po.is_merged === 1 || po.is_merged === true || uniqueDwgNos.size > 1) {
     po.drawing_no = 'Merged Drawings';
     po.finished_good = `${uniqueDwgNos.size} Drawings`;
+  } else if (uniqueDwgNos.size === 1 && (!po.drawing_no || po.drawing_no === '—')) {
+    po.drawing_no = Array.from(uniqueDwgNos)[0];
   }
 
   // Use the total_amount stored in po if available, otherwise calculate from filtered items
