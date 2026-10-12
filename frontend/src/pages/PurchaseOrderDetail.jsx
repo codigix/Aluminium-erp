@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatDimensions } from '../utils/formatters';
+import { formatDimensions, isWeightBasedItem, getItemEffectiveBillingQty, calculateItemAmount } from '../utils/formatters';
 import {
   ArrowLeft,
   ChevronRight,
@@ -157,33 +157,11 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
   });
 
   const pureSubtotal = filteredItems.reduce((sum, item) => {
-    if (item.amount && parseFloat(item.amount) > 0) {
-      return sum + parseFloat(item.amount);
-    }
-    const designQty = parseFloat(item.design_qty) || 0;
-    const reqWeight = parseFloat(item.quantity) || 0;
-    const rate = parseFloat(item.unit_rate) || 0;
-    const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
-    const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
-                    lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
-                    lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
-    const effectiveQty = isLaser ? designQty : reqWeight;
-    return sum + (effectiveQty * rate);
+    return sum + calculateItemAmount(item);
   }, 0) || 0;
 
   const taxInclusiveSubtotal = filteredItems.reduce((sum, item) => {
-    if (item.total_amount && parseFloat(item.total_amount) > 0) {
-      return sum + parseFloat(item.total_amount);
-    }
-    const designQty = parseFloat(item.design_qty) || 0;
-    const reqWeight = parseFloat(item.quantity) || 0;
-    const rate = parseFloat(item.unit_rate) || 0;
-    const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
-    const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
-                    lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
-                    lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
-    const effectiveQty = isLaser ? designQty : reqWeight;
-    const amt = effectiveQty * rate;
+    const amt = calculateItemAmount(item);
     const cgst = amt * (parseFloat(item.cgst_percent || 9) / 100);
     const sgst = amt * (parseFloat(item.sgst_percent || 9) / 100);
     return sum + (amt + cgst + sgst);
@@ -203,9 +181,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
     }
   }
 
-  const grandTotal = (po.total_amount && parseFloat(po.total_amount) > 0) 
-    ? parseFloat(po.total_amount) 
-    : (taxInclusiveSubtotal - discountAmount);
+  const grandTotal = Math.max(0, taxInclusiveSubtotal - discountAmount);
 
   return (
     <>
@@ -597,29 +573,12 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                           </td>
                           <td className="p-2 text-center text-slate-700">
                             {formatCurrency(item.unit_rate, po.currency)}
-                            {isDirectCompany && (
-                              <span className="text-[10px] text-slate-400 ml-0.5">
-                                /{hasWeight && designWeight && Math.abs(designWeight * (parseFloat(item.unit_rate) || 0) - (parseFloat(item.amount) || 0)) < 0.5 ? 'Kg' : qtyUom}
-                              </span>
-                            )}
+                            <span className="text-[10px] text-slate-400 ml-0.5">
+                              /{isWeightBasedItem(item) ? 'Kg' : (qtyUom || 'NOS')}
+                            </span>
                           </td>
                           <td className="p-2 text-right font-medium text-slate-900">
-                            {(() => {
-                              if (item.amount && parseFloat(item.amount) > 0) {
-                                return formatCurrency(parseFloat(item.amount), po.currency);
-                              }
-                              if (isDirectCompany) {
-                                const effVal = (hasWeight && designWeight && qtyUom !== 'KG') ? designWeight : designQty;
-                                return formatCurrency(effVal * (parseFloat(item.unit_rate) || 0), po.currency);
-                              }
-                              const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
-                              const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
-                              const isLaser = item.laser_cutting === "With Material" || item.laser_cutting === "Without Material" || 
-                                              lcStr === "WITH_MATERIAL" || lcStr === "WITHOUT_MATERIAL" ||
-                                              lcStr.includes("WITH MATERIAL") || lcStr.includes("WITHOUT MATERIAL");
-                              const effectiveQty = (isLaser || isBoughtOut) ? designQty : reqWeight;
-                              return formatCurrency(effectiveQty * (parseFloat(item.unit_rate) || 0), po.currency);
-                            })()}
+                            {formatCurrency(calculateItemAmount(item), po.currency)}
                           </td>
                           <td className="p-2 text-center">
                             <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider ${
@@ -938,11 +897,11 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                   else if (qUom === 'KG') dWt = dQty;
 
                   wtStr = dWt !== null ? `${dWt.toFixed(3)} Kg` : '—';
-                  amtVal = parseFloat(item.amount) > 0 ? parseFloat(item.amount) : ((dWt !== null && qUom !== 'KG' ? dWt : dQty) * (parseFloat(item.unit_rate) || 0));
+                  amtVal = calculateItemAmount(item);
                 } else {
                   dQtyStr = `${Number(item.planned_qty || item.design_qty || 0).toFixed(3)} NOS`;
                   wtStr = `${Number(item.quantity || 0).toFixed(3)} ${item.unit || item.uom}`;
-                  amtVal = (parseFloat(item.design_qty) || parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0);
+                  amtVal = calculateItemAmount(item);
                 }
 
                 return (
@@ -964,9 +923,14 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                     <td className="p-2 text-center border-r border-slate-200 font-semibold">
                       {wtStr}
                     </td>
-                    <td className="p-2 text-center border-r border-slate-200">{formatCurrency(item.unit_rate, po.currency)}</td>
+                    <td className="p-2 text-center border-r border-slate-200">
+                      {formatCurrency(item.unit_rate, po.currency)}
+                      <span className="text-[9px] text-slate-500 block">
+                        /{isWeightBasedItem(item) ? 'Kg' : (item.unit || item.uom || 'NOS')}
+                      </span>
+                    </td>
                     <td className="p-2 text-right border-r border-slate-200">{formatCurrency(amtVal, po.currency)}</td>
-                    <td className="p-2 text-right font-bold">{formatCurrency(amtVal * 1.18, po.currency)}</td>
+                    <td className="p-2 text-right font-bold">{formatCurrency(amtVal * (1 + ((parseFloat(item.cgst_percent) || 9) + (parseFloat(item.sgst_percent) || 9)) / 100), po.currency)}</td>
                   </tr>
                 );
               })}
