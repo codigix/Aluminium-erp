@@ -165,6 +165,25 @@ const createCustomerPo = async payload => {
     const customerPoId = poResult.insertId;
 
     for (const item of items) {
+      let resolvedDrawingId = item.drawingId ? Number(item.drawingId) : null;
+      if (!resolvedDrawingId && item.drawingNo && String(item.drawingNo).trim()) {
+        try {
+          const [matchedDwgRows] = await connection.execute(
+            'SELECT id FROM customer_drawings WHERE TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) LIMIT 1',
+            [String(item.drawingNo).trim()]
+          );
+          if (matchedDwgRows.length > 0) {
+            resolvedDrawingId = matchedDwgRows[0].id;
+          }
+        } catch (_e) {
+          // ignore lookup error
+        }
+      }
+
+      const isMatched = Boolean(resolvedDrawingId || (item.status && ['MATCHED', 'ACTIVE', 'APPROVED'].includes(String(item.status).toUpperCase())));
+      const finalStatus = isMatched ? 'MATCHED' : (item.status || 'PENDING_DESIGN');
+      const finalDesignStatus = isMatched ? null : (item.designStatus || 'PENDING_DESIGN');
+
       const [itemResult] = await connection.execute(
         `INSERT INTO customer_po_items
           (customer_po_id, item_code, description, hsn_code, drawing_no, revision_no, quantity,
@@ -193,9 +212,9 @@ const createCustomerPo = async payload => {
           item.deliveryDate || null,
           item.purchaseReqNo || null,
           item.customerReference || null,
-          item.drawingId ? Number(item.drawingId) : null,
-          item.status || (item.drawingId ? 'ACTIVE' : 'PENDING_DESIGN'),
-          item.designStatus || (item.drawingId ? null : 'PENDING_DESIGN')
+          resolvedDrawingId,
+          finalStatus,
+          finalDesignStatus
         ]
       );
 
@@ -422,8 +441,17 @@ const getCustomerPoById = async id => {
   const [items] = await pool.query(
     `SELECT cpi.id, cpi.item_code, cpi.drawing_no, cpi.description, cpi.quantity, cpi.unit, cpi.rate, cpi.basic_amount, cpi.discount, 
             cpi.cgst_percent, cpi.sgst_percent, cpi.igst_percent, cpi.cgst_amount, cpi.sgst_amount, cpi.igst_amount, cpi.hsn_code, cpi.delivery_date,
-            cpi.drawing_id, cpi.status, cpi.design_status
+            COALESCE(cpi.drawing_id, cd.id) as drawing_id,
+            CASE 
+              WHEN COALESCE(cpi.drawing_id, cd.id) IS NOT NULL OR UPPER(TRIM(COALESCE(cpi.status, ''))) IN ('MATCHED', 'ACTIVE', 'APPROVED') THEN 'MATCHED'
+              ELSE cpi.status 
+            END as status,
+            CASE 
+              WHEN COALESCE(cpi.drawing_id, cd.id) IS NOT NULL OR UPPER(TRIM(COALESCE(cpi.status, ''))) IN ('MATCHED', 'ACTIVE', 'APPROVED') THEN NULL
+              ELSE cpi.design_status 
+            END as design_status
      FROM customer_po_items cpi
+     LEFT JOIN customer_drawings cd ON TRIM(UPPER(cpi.drawing_no)) = TRIM(UPPER(cd.drawing_no))
      WHERE cpi.customer_po_id = ?
      ORDER BY cpi.id ASC`,
     [id]
@@ -631,6 +659,25 @@ const updateCustomerPo = async (id, payload) => {
     await connection.execute('DELETE FROM customer_po_items WHERE customer_po_id = ?', [id]);
 
     for (const item of items) {
+      let resolvedDrawingId = item.drawingId ? Number(item.drawingId) : null;
+      if (!resolvedDrawingId && item.drawingNo && String(item.drawingNo).trim()) {
+        try {
+          const [matchedDwgRows] = await connection.execute(
+            'SELECT id FROM customer_drawings WHERE TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) LIMIT 1',
+            [String(item.drawingNo).trim()]
+          );
+          if (matchedDwgRows.length > 0) {
+            resolvedDrawingId = matchedDwgRows[0].id;
+          }
+        } catch (_e) {
+          // ignore lookup error
+        }
+      }
+
+      const isMatched = Boolean(resolvedDrawingId || (item.status && ['MATCHED', 'ACTIVE', 'APPROVED'].includes(String(item.status).toUpperCase())));
+      const finalStatus = isMatched ? 'MATCHED' : (item.status || 'PENDING_DESIGN');
+      const finalDesignStatus = isMatched ? null : (item.designStatus || 'PENDING_DESIGN');
+
       const [itemResult] = await connection.execute(
         `INSERT INTO customer_po_items
           (customer_po_id, item_code, description, hsn_code, drawing_no, revision_no, quantity,
@@ -659,9 +706,9 @@ const updateCustomerPo = async (id, payload) => {
           item.deliveryDate || null,
           item.purchaseReqNo || null,
           item.customerReference || null,
-          item.drawingId ? Number(item.drawingId) : null,
-          item.status || (item.drawingId ? 'ACTIVE' : 'PENDING_DESIGN'),
-          item.designStatus || (item.drawingId ? null : 'PENDING_DESIGN')
+          resolvedDrawingId,
+          finalStatus,
+          finalDesignStatus
         ]
       );
 
@@ -2438,9 +2485,41 @@ const getBulkDrawingDetails = async (drawingNumbers = []) => {
     return { matched: [], unmatched: [], items: [], totalCount: 0, matchedCount: 0, unmatchedCount: 0 };
   }
 
-  // Clean and preserve input array
-  const cleanedList = drawingNumbers.map(d => (d !== null && d !== undefined ? String(d).trim() : ''));
-  const uniqueNumbers = [...new Set(cleanedList.filter(d => d.length > 0))];
+  // Support both array of strings and array of item objects
+  const inputItems = drawingNumbers.map((d, index) => {
+    if (typeof d === 'object' && d !== null) {
+      return {
+        drawingNo: String(d.drawingNo || d.itemCode || d.drawing_no || '').trim(),
+        quantity: (d.quantity !== undefined && d.quantity !== null && !isNaN(Number(d.quantity)) && Number(d.quantity) > 0) ? Number(d.quantity) : 1,
+        rate: (d.rate !== undefined && d.rate !== null && !isNaN(Number(d.rate))) ? Number(d.rate) : null,
+        unit: d.unit || null,
+        hsnCode: d.hsnCode || null,
+        deliveryDate: d.deliveryDate || null,
+        purchaseReqNo: d.purchaseReqNo || null,
+        description: d.description || null,
+        cgstPercent: (d.cgstPercent !== undefined && d.cgstPercent !== null && !isNaN(Number(d.cgstPercent))) ? Number(d.cgstPercent) : null,
+        sgstPercent: (d.sgstPercent !== undefined && d.sgstPercent !== null && !isNaN(Number(d.sgstPercent))) ? Number(d.sgstPercent) : null,
+        igstPercent: (d.igstPercent !== undefined && d.igstPercent !== null && !isNaN(Number(d.igstPercent))) ? Number(d.igstPercent) : null,
+        slNo: d.slNo || (index + 1)
+      };
+    }
+    return {
+      drawingNo: String(d !== null && d !== undefined ? d : '').trim(),
+      quantity: 1,
+      rate: null,
+      unit: null,
+      hsnCode: null,
+      deliveryDate: null,
+      purchaseReqNo: null,
+      description: null,
+      cgstPercent: null,
+      sgstPercent: null,
+      igstPercent: null,
+      slNo: index + 1
+    };
+  });
+
+  const uniqueNumbers = [...new Set(inputItems.map(i => i.drawingNo).filter(d => d.length > 0))];
 
   if (uniqueNumbers.length === 0) {
     return { matched: [], unmatched: [], items: [], totalCount: 0, matchedCount: 0, unmatchedCount: 0 };
@@ -2579,8 +2658,9 @@ const getBulkDrawingDetails = async (drawingNumbers = []) => {
   const unmatched = [];
   const items = [];
 
-  for (let idx = 0; idx < cleanedList.length; idx++) {
-    const rawDwg = cleanedList[idx];
+  for (let idx = 0; idx < inputItems.length; idx++) {
+    const rawItem = inputItems[idx];
+    const rawDwg = rawItem.drawingNo;
     if (!rawDwg) continue;
 
     const key = rawDwg.toUpperCase();
@@ -2591,23 +2671,30 @@ const getBulkDrawingDetails = async (drawingNumbers = []) => {
 
     const isMatched = !!(dwgRecord || itemRecord || soRecord);
 
+    let rate = 0;
+    if (rawItem.rate !== null && rawItem.rate > 0) {
+      rate = rawItem.rate;
+    } else if (soRecord && Number(soRecord.bom_cost) > 0) {
+      rate = Number(soRecord.bom_cost);
+    } else if (itemRecord && Number(itemRecord.selling_rate) > 0) {
+      rate = Number(itemRecord.selling_rate);
+    } else if (itemRecord && Number(itemRecord.valuation_rate) > 0) {
+      rate = Number(itemRecord.valuation_rate);
+    }
+
+    const drawingId = dwgRecord?.id || soRecord?.drawing_id || null;
+    const drawingNo = dwgRecord?.drawing_no || itemRecord?.item_code || soRecord?.drawing_no || rawDwg;
+    const description = rawItem.description || dwgRecord?.description || itemRecord?.description || soRecord?.description || `Item ${rawDwg}`;
+    const hsnCode = rawItem.hsnCode || dwgRecord?.hsn_code || '';
+    const unit = rawItem.unit || itemRecord?.uom || soRecord?.unit || 'NOS';
+    const quantity = rawItem.quantity || 1;
+    const deliveryDate = rawItem.deliveryDate || dwgRecord?.delivery_date || null;
+    const purchaseReqNo = rawItem.purchaseReqNo || null;
+    const cgstPercent = rawItem.cgstPercent !== null ? rawItem.cgstPercent : 9;
+    const sgstPercent = rawItem.sgstPercent !== null ? rawItem.sgstPercent : 9;
+    const igstPercent = rawItem.igstPercent !== null ? rawItem.igstPercent : 0;
+
     if (isMatched) {
-      const drawingId = dwgRecord?.id || soRecord?.drawing_id || null;
-      const drawingNo = dwgRecord?.drawing_no || itemRecord?.item_code || soRecord?.drawing_no || rawDwg;
-      const description = dwgRecord?.description || itemRecord?.description || soRecord?.description || `Item ${rawDwg}`;
-      const hsnCode = dwgRecord?.hsn_code || '';
-      const unit = itemRecord?.uom || soRecord?.unit || 'NOS';
-
-      // Authoritative ERP costing source (BOM Cost if available, else selling/valuation rate)
-      let rate = 0;
-      if (soRecord && Number(soRecord.bom_cost) > 0) {
-        rate = Number(soRecord.bom_cost);
-      } else if (itemRecord && Number(itemRecord.selling_rate) > 0) {
-        rate = Number(itemRecord.selling_rate);
-      } else if (itemRecord && Number(itemRecord.valuation_rate) > 0) {
-        rate = Number(itemRecord.valuation_rate);
-      }
-
       const itemPayload = {
         drawingNo,
         drawingId,
@@ -2616,10 +2703,12 @@ const getBulkDrawingDetails = async (drawingNumbers = []) => {
         hsnCode,
         unit,
         rate,
-        quantity: 1,
-        cgstPercent: 9,
-        sgstPercent: 9,
-        igstPercent: 0,
+        quantity,
+        deliveryDate,
+        purchaseReqNo,
+        cgstPercent,
+        sgstPercent,
+        igstPercent,
         sub_assemblies: subAssemblies,
         status: 'MATCHED',
         isUnmatched: false,
@@ -2634,14 +2723,16 @@ const getBulkDrawingDetails = async (drawingNumbers = []) => {
         drawingNo: rawDwg,
         drawingId: null,
         itemCode: rawDwg,
-        description: `Item ${rawDwg}`,
-        hsnCode: '',
-        unit: 'NOS',
-        rate: 0,
-        quantity: 1,
-        cgstPercent: 9,
-        sgstPercent: 9,
-        igstPercent: 0,
+        description,
+        hsnCode,
+        unit,
+        rate,
+        quantity,
+        deliveryDate,
+        purchaseReqNo,
+        cgstPercent,
+        sgstPercent,
+        igstPercent,
         sub_assemblies: [],
         status: 'PENDING_DESIGN',
         isUnmatched: true,

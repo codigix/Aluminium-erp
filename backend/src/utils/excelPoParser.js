@@ -140,25 +140,35 @@ const parseExcelPo = async fileBuffer => {
       drawingNo: -1,
       description: -1,
       quantity: -1,
-      rate: -1
+      rate: -1,
+      unit: -1,
+      hsnCode: -1,
+      deliveryDate: -1
     };
 
     for (let i = 0; i < Math.min(50, rawData.length); i++) {
-      const row = rawData[i].map(v => String(v || '').toLowerCase());
+      const row = rawData[i].map(v => String(v || '').toLowerCase().trim());
+      const hasDrawing = row.some(v => v.includes('drawing') || v.includes('drg') || v.includes('part') || v.includes('item') || v.includes('code') || v.includes('material'));
       const hasDescription = row.some(v => v.includes('description') || v.includes('particulars'));
-      const hasQty = row.some(v => v.includes('qty') || v.includes('quantity'));
+      const hasQty = row.some(v => v === 'qty' || v.includes('qty') || v.includes('quantity'));
       
-      if (hasDescription && hasQty) {
+      if ((hasDrawing || hasDescription) && hasQty) {
         headerRowIndex = i;
         row.forEach((cell, idx) => {
-          if (cell.includes('drawing') || cell.includes('item') || cell.includes('code') || cell.includes('material') || cell.includes('part')) {
+          if (cell.includes('drawing') || cell.includes('drg') || cell.includes('part') || cell.includes('item') || cell.includes('code') || cell.includes('material')) {
             if (columnMap.drawingNo === -1) columnMap.drawingNo = idx;
           } else if (cell.includes('description') || cell.includes('particulars')) {
             if (columnMap.description === -1) columnMap.description = idx;
-          } else if (cell.includes('qty') || cell.includes('quantity')) {
+          } else if (cell === 'qty' || cell.includes('qty') || cell.includes('quantity')) {
             if (columnMap.quantity === -1) columnMap.quantity = idx;
           } else if (cell.includes('rate') || cell.includes('price') || cell.includes('unit cost')) {
             if (columnMap.rate === -1) columnMap.rate = idx;
+          } else if (cell === 'uom' || cell.includes('unit') || cell.includes('uom')) {
+            if (columnMap.unit === -1) columnMap.unit = idx;
+          } else if (cell.includes('hsn')) {
+            if (columnMap.hsnCode === -1) columnMap.hsnCode = idx;
+          } else if (cell.includes('delivery') || cell.includes('dlv')) {
+            if (columnMap.deliveryDate === -1) columnMap.deliveryDate = idx;
           }
         });
         break;
@@ -196,23 +206,26 @@ const parseExcelPo = async fileBuffer => {
         const rowText = row.join(' ').toLowerCase();
         if (EXCLUDE_PATTERNS.some(p => p.test(rowText))) continue;
 
+        const drawingNo = columnMap.drawingNo !== -1 ? cleanup(row[columnMap.drawingNo]).toUpperCase() : '';
         const description = columnMap.description !== -1 ? cleanup(row[columnMap.description]) : '';
-        const drawingNo = columnMap.drawingNo !== -1 ? cleanup(row[columnMap.drawingNo]) : '';
         const quantity = columnMap.quantity !== -1 ? toNumber(row[columnMap.quantity]) : 0;
         const rate = columnMap.rate !== -1 ? toNumber(row[columnMap.rate]) : 0;
+        const unit = columnMap.unit !== -1 ? cleanup(row[columnMap.unit]).toUpperCase() : 'NOS';
+        const hsnCode = columnMap.hsnCode !== -1 ? cleanup(row[columnMap.hsnCode]) : '';
+        const deliveryDate = columnMap.deliveryDate !== -1 ? (normalizeDate(row[columnMap.deliveryDate]) || cleanup(row[columnMap.deliveryDate])) : '';
 
-        if (description && (quantity > 0 || rate > 0)) {
+        if ((drawingNo || description) && (quantity > 0 || rate > 0)) {
           items.push({
             drawingNo: drawingNo || `DRW-${items.length + 1}`,
-            description: description.substring(0, 150),
-            quantity: quantity || 1,
-            unit: 'NOS',
+            description: description || `Item ${drawingNo || items.length + 1}`,
+            quantity: quantity > 0 ? quantity : 1,
+            unit: unit || 'NOS',
             rate: rate || 0,
-            cgstPercent: 0,
-            sgstPercent: 0,
+            cgstPercent: 9,
+            sgstPercent: 9,
             igstPercent: 0,
-            deliveryDate: '',
-            hsnCode: '',
+            deliveryDate: deliveryDate || '',
+            hsnCode: hsnCode || '',
             discount: 0
           });
         }

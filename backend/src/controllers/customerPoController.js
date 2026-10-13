@@ -179,7 +179,11 @@ const parseCustomerPoPdf = async (req, res, next) => {
       ? insights.drawingNumbers
       : (Array.isArray(insights.items) ? insights.items.map(i => i.drawingNo).filter(Boolean) : []);
 
-    const enriched = await customerPoService.getBulkDrawingDetails(drawingNumbers);
+    const itemsToEnrich = (Array.isArray(insights.items) && insights.items.length > 0)
+      ? insights.items
+      : drawingNumbers;
+
+    const enriched = await customerPoService.getBulkDrawingDetails(itemsToEnrich);
 
     res.json({
       header,
