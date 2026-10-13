@@ -1370,38 +1370,32 @@ const BOMFormPage = () => {
     });
 
     const groupedMap = new Map();
-    const nonRawOptions = [];
 
     filtered.forEach(item => {
+      const rawCode = (item.item_code || '').trim().toUpperCase();
+      const rawName = (item.material_name || '').trim().toUpperCase();
       const type = (item.material_type || item.item_group || '').toLowerCase();
-      const code = (item.item_code || '').toUpperCase();
-      const isRaw = type.includes('raw') || type === 'rm' || code.startsWith('RAW-') || code.startsWith('RM-');
+      const isRaw = (type.includes('raw') || type === 'rm' || rawCode.startsWith('RAW-') || rawCode.startsWith('RM-')) &&
+                    !rawCode.startsWith('CON-') && !rawCode.startsWith('BO-') && !rawCode.startsWith('PAC-') && !rawCode.startsWith('TOOL-') && !rawCode.startsWith('SER-');
 
-      if (!isRaw) {
-        // Non-raw items (Consumables, Bought-out, etc.): Preserve as-is without grouping
-        const dims = getDimensionString(item);
-        nonRawOptions.push({
-          label: item.material_name || '',
-          value: item.item_code || '',
-          subLabel: `${dims ? `${dims}\n` : ''}${item.item_code || ''}${item.drawing_no && item.drawing_no !== 'N/A' ? ` [Drg: ${item.drawing_no}]` : ''}`,
-          item: item,
-          variants: [item],
-          variantCodes: [item.item_code || '']
-        });
-        return;
+      let compositeKey = '';
+      if (isRaw) {
+        // Grouping key strictly preserving meaningful raw material differences:
+        // Material Name + Material Grade + Drawing No + Type
+        const gradeKey = (item.material_grade || '').trim().toUpperCase();
+        const dwgKey = (item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== '—') ? item.drawing_no.trim().toUpperCase() : '';
+        const typeKey = (item.material_type || 'RAW_MATERIAL').trim().toUpperCase();
+        compositeKey = `RAW:::${rawName}:::${gradeKey}:::${typeKey}:::${dwgKey}`;
+      } else {
+        // Grouping key for Consumables, Bought-out, Packaging, etc.:
+        // Deduplicate records sharing the same item_code or material_name
+        compositeKey = `NONRAW:::${rawCode || rawName}`;
       }
-
-      // Grouping key strictly preserving meaningful differences:
-      // Material Name + Material Grade + Drawing No + Type
-      const nameKey = (item.material_name || '').trim().toUpperCase();
-      const gradeKey = (item.material_grade || '').trim().toUpperCase();
-      const dwgKey = (item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== '—') ? item.drawing_no.trim().toUpperCase() : '';
-      const typeKey = (item.material_type || 'RAW_MATERIAL').trim().toUpperCase();
-      const compositeKey = `${nameKey}:::${gradeKey}:::${typeKey}:::${dwgKey}`;
 
       if (!groupedMap.has(compositeKey)) {
         groupedMap.set(compositeKey, {
           compositeKey,
+          isRaw,
           label: (item.material_name || '').trim(),
           primaryItem: item,
           variants: [item],
@@ -1423,20 +1417,20 @@ const BOMFormPage = () => {
       }
     });
 
-    const rawOptions = [];
+    const resultOptions = [];
     groupedMap.forEach(group => {
       const primary = group.primaryItem;
       const dims = getDimensionString(primary);
       const variantCount = group.variants.length;
 
       let subText = '';
-      if (variantCount > 1) {
+      if (group.isRaw && variantCount > 1) {
         subText = `${primary.item_code || ''} • ${variantCount} stock sizes available`;
       } else {
         subText = `${dims ? `${dims}\n` : ''}${primary.item_code || ''}${primary.drawing_no && primary.drawing_no !== 'N/A' ? ` [Drg: ${primary.drawing_no}]` : ''}`;
       }
 
-      rawOptions.push({
+      resultOptions.push({
         label: group.label,
         value: primary.item_code || '',
         subLabel: subText,
@@ -1447,7 +1441,7 @@ const BOMFormPage = () => {
       });
     });
 
-    return [...rawOptions, ...nonRawOptions].sort((a, b) => (a.label || '').localeCompare(b.label || ''));
+    return resultOptions.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
   }, [stockItems, materialForm.itemGroup]);
 
   // Resolves the parent/grouped option value for SearchableSelect even when materialForm.itemCode holds a specific variant code
