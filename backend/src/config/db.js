@@ -1935,6 +1935,13 @@ const ensureWorkOrderTables = async () => {
 
     console.log('Work Order and Job Card tables synchronized');
 
+    try {
+      const { cleanUnnecessaryChildPartShipments } = require('../services/workOrderService');
+      await cleanUnnecessaryChildPartShipments(connection);
+    } catch (cleanErr) {
+      console.error('Error during child part shipment cleanup:', cleanErr.message);
+    }
+
     await connection.query(`
       CREATE TABLE IF NOT EXISTS material_issues (
         id INT AUTO_INCREMENT PRIMARY KEY,

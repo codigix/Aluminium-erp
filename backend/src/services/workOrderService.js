@@ -463,6 +463,27 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
   const isPart = (wo.source_type === 'PART' || targetCode.startsWith('PART-') || woDrawingType === 'PART');
   const isFG = wo.source_type === 'FG' || (!isPart && !wo.parent_wo_id);
 
+  // Determine if this Work Order is an internal child component within an assembly
+  let isInternalChildPart = Boolean(
+    wo.parent_wo_id || 
+    wo.source_type === 'SA' ||
+    (wo.source_fg && targetSourceFg !== targetCode && targetSourceFg !== targetName)
+  );
+
+  if (!isInternalChildPart && wo.plan_id) {
+    const [planItems] = await connection.query(
+      `SELECT 'FG' as type, item_code FROM production_plan_items WHERE plan_id = ?
+       UNION
+       SELECT 'SA' as type, item_code FROM production_plan_sub_assemblies WHERE plan_id = ?`,
+      [wo.plan_id, wo.plan_id]
+    );
+    const hasOtherFg = planItems.some(pi => pi.type === 'FG' && (pi.item_code || '').toUpperCase().trim() !== targetCode);
+    const hasSa = planItems.some(pi => pi.type === 'SA');
+    if ((hasOtherFg || hasSa) && (isPart || wo.source_type === 'PART' || wo.source_type === 'SA')) {
+      isInternalChildPart = true;
+    }
+  }
+
   if (providedOperations && Array.isArray(providedOperations) && providedOperations.length > 0) {
     // 1. Check if operations in providedOperations explicitly target this item
     const specificToThisWo = providedOperations.filter(op => {
@@ -479,11 +500,14 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
 
     if (specificToThisWo.length > 0) {
       operationsToUse = specificToThisWo;
-      // Also append any generic operations (e.g. Shipment, Main Item) if not already present
+      // Also append any generic operations (e.g. Main Item) if not already present
+      // BUT do NOT append Shipment or Dispatch to internal child parts!
       const genericOps = providedOperations.filter(op => {
         const opSource = (op.source_item || op.sourceItem || '').toUpperCase().trim();
         const opName = (op.operation_name || op.operationName || '').toUpperCase().trim();
-        const isGeneric = !opSource || opSource === 'MAIN ITEM' || opName === 'SHIPMENT' || opName === 'DISPATCH';
+        const isShipment = opName === 'SHIPMENT' || opName === 'DISPATCH';
+        if (isInternalChildPart && isShipment) return false;
+        const isGeneric = (!opSource || opSource === 'MAIN ITEM') || (!isInternalChildPart && isShipment);
         return isGeneric && !operationsToUse.some(o => (o.operation_name || o.operationName) === (op.operation_name || op.operationName));
       });
       operationsToUse = [...operationsToUse, ...genericOps];
@@ -491,6 +515,13 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
       // If no operation explicitly mentions this item code, check if operations are generic for the entire plan
       // E.g. for a single-item plan, all operations belong to this item
       operationsToUse = providedOperations;
+    }
+
+    if (isInternalChildPart) {
+      operationsToUse = operationsToUse.filter(op => {
+        const name = (op.operation_name || op.operationName || '').toLowerCase().trim();
+        return name !== 'shipment' && name !== 'dispatch';
+      });
     }
 
     operationsToUse = operationsToUse.map(op => ({
@@ -518,7 +549,14 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
       fallbackOps = await bomService.getItemOperations(null, wo.item_code, wo.bom_no);
     }
     if (fallbackOps && fallbackOps.length > 0) {
-      operationsToUse = fallbackOps.map(op => ({
+      let filteredFallback = fallbackOps;
+      if (isInternalChildPart) {
+        filteredFallback = fallbackOps.filter(op => {
+          const name = (op.operation_name || '').toLowerCase().trim();
+          return name !== 'shipment' && name !== 'dispatch';
+        });
+      }
+      operationsToUse = filteredFallback.map(op => ({
         ...op,
         operation_name: op.operation_name,
         execution_type: op.operation_type || 'In-House'
@@ -526,15 +564,29 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     }
   }
 
-  // Ensure every Part and Assembly Work Order has Shipment as the final default operation
-  // If missing -> Add Shipment. If already exists -> Move to final position. Never create duplicate Shipment.
-  const { ensureShipmentAsFinalOperation } = require('./productionPlanService');
-  operationsToUse = ensureShipmentAsFinalOperation(operationsToUse, {
-    sourceItem: targetCode || 'Main Item',
-    isPartPlan: isPart,
-    itemGroup: isPart ? 'Part' : 'Assembly',
-    itemType: isPart ? 'PART' : 'FG'
-  });
+  // Ensure Shipment as final operation ONLY for parent Assembly/FG or standalone customer parts
+  if (!isInternalChildPart) {
+    const { ensureShipmentAsFinalOperation } = require('./productionPlanService');
+    operationsToUse = ensureShipmentAsFinalOperation(operationsToUse, {
+      sourceItem: targetCode || 'Main Item',
+      isPartPlan: isPart,
+      itemGroup: isPart ? 'Part' : 'Assembly',
+      itemType: isPart ? 'PART' : 'FG',
+      isInternalChildPart: false
+    });
+  } else {
+    // For internal child parts, eliminate Shipment and re-index steps sequentially
+    operationsToUse = operationsToUse
+      .filter(op => {
+        const name = (op.operation_name || op.operationName || '').toLowerCase().trim();
+        return name !== 'shipment' && name !== 'dispatch';
+      })
+      .map((op, idx) => ({
+        ...op,
+        step_no: idx + 1,
+        step: String(idx + 1).padStart(2, '0')
+      }));
+  }
 
   // 4. Create Job Cards for each defined operation
   for (let i = 0; i < operationsToUse.length; i++) {
@@ -565,6 +617,12 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
         [targetWhName]
       );
       if (whRows.length > 0) targetWarehouseId = whRows[0].id;
+    } else if (isInternalChildPart && sequenceNo === operationsToUse.length) {
+      // Completed internal child parts transfer to Assembly Staging / Store warehouse
+      const [stagingWh] = await connection.query(
+        "SELECT id FROM warehouses WHERE LOWER(TRIM(warehouse_name)) LIKE '%staging%' OR LOWER(TRIM(warehouse_name)) LIKE '%assembly%' OR LOWER(TRIM(warehouse_name)) LIKE '%store%' LIMIT 1"
+      );
+      if (stagingWh.length > 0) targetWarehouseId = stagingWh[0].id;
     }
 
     const jcNo = await generateJobCardNo(connection);
@@ -755,6 +813,54 @@ const generateWoNumber = async (connection) => {
   return `WO-${String(count).padStart(5, '0')}-${random}`;
 };
 
+const cleanUnnecessaryChildPartShipments = async (connectionOrPool = null) => {
+  const conn = connectionOrPool || pool;
+  try {
+    const [redundantJcs] = await conn.query(`
+      SELECT 
+        jc.id,
+        jc.job_card_no,
+        jc.work_order_id,
+        wo.wo_number,
+        wo.item_code
+      FROM job_cards jc
+      JOIN work_orders wo ON jc.work_order_id = wo.id
+      WHERE LOWER(TRIM(jc.operation_name)) IN ('shipment', 'dispatch')
+        AND (
+          wo.parent_wo_id IS NOT NULL 
+          OR wo.source_type = 'SA'
+          OR (
+            wo.source_fg IS NOT NULL 
+            AND UPPER(TRIM(wo.source_fg)) != UPPER(TRIM(wo.item_code))
+            AND UPPER(TRIM(wo.source_fg)) != UPPER(TRIM(wo.item_name))
+          )
+          OR EXISTS (
+            SELECT 1 FROM work_orders pwo 
+            WHERE pwo.plan_id = wo.plan_id 
+              AND pwo.source_type = 'FG' 
+              AND pwo.id != wo.id
+          )
+        )
+        AND COALESCE(jc.produced_qty, 0) = 0
+        AND COALESCE(jc.accepted_qty, 0) = 0
+        AND COALESCE(jc.dispatch_qty, 0) = 0
+        AND NOT EXISTS (
+          SELECT 1 FROM shipment_orders so WHERE so.job_card_id = jc.id
+        )
+    `);
+
+    if (redundantJcs.length > 0) {
+      const ids = redundantJcs.map(j => j.id);
+      console.log(`[cleanUnnecessaryChildPartShipments] Safely removing ${ids.length} redundant child-part shipment job cards:`, ids);
+      await conn.query('DELETE FROM job_cards WHERE id IN (?)', [ids]);
+    }
+    return { success: true, cleanedCount: redundantJcs.length };
+  } catch (error) {
+    console.error('[cleanUnnecessaryChildPartShipments] Error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
   listWorkOrders,
   createWorkOrdersFromPlan,
@@ -765,5 +871,6 @@ module.exports = {
   deleteAllWorkOrders,
   generateWoNumber,
   getWorkOrderMaterialRequirements,
-  updateMaterialConsumption
+  updateMaterialConsumption,
+  cleanUnnecessaryChildPartShipments
 };
