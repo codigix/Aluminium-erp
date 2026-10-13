@@ -625,7 +625,7 @@ export default function SalesInvoice() {
             </div>
 
             <div className="flex items-center gap-1.5 flex-wrap">
-              {['ALL', 'Created', 'Sent to Accounts', 'Paid', 'Cancelled'].map(st => (
+              {['ALL', 'Created', 'Sent to Accounts'].map(st => (
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}

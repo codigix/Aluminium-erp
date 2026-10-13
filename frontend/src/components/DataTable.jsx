@@ -245,7 +245,8 @@ const CustomDataTable = ({
             </div>
           </div>
           
-          <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          {/* Action buttons (Filters, Saved Views, List/Grid View toggle) hidden as requested */}
+          {/* <div className="flex items-center gap-2 w-full md:w-auto justify-end">
              {advancedFilters && (
                 <button 
                   type="button"
@@ -273,7 +274,7 @@ const CustomDataTable = ({
                    <LayoutGrid className="w-4 h-4" />
                 </button>
              </div>
-          </div>
+          </div> */}
         </div>
       )}
 
