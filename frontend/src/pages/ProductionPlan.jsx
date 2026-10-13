@@ -619,6 +619,163 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     }
   };
 
+  const mrMaterialOptions = useMemo(() => {
+    const groupedMap = new Map();
+
+    (allStockItems || []).forEach(item => {
+      const rawCode = (item.item_code ? String(item.item_code).trim() : '').toUpperCase();
+      const rawName = (item.material_name || item.item_name || item.item_description || item.description || '').trim();
+      const type = (item.material_type || item.item_group || '').toLowerCase();
+      const isRaw = (type.includes('raw') || type === 'rm' || rawCode.startsWith('RAW-') || rawCode.startsWith('RM-')) &&
+                    !rawCode.startsWith('CON-') && !rawCode.startsWith('BO-') && !rawCode.startsWith('PAC-') && !rawCode.startsWith('TOOL-') && !rawCode.startsWith('SER-');
+      const isConsumable = (type.includes('consum') || type.includes('hardware') || type.includes('packing') || rawCode.startsWith('CON-') || rawCode.startsWith('PAC-'));
+
+      let compositeKey = '';
+      if (isRaw) {
+        // Grouping key strictly preserving meaningful raw material differences:
+        // Material Name + Material Grade + Drawing No
+        const gradeKey = (item.material_grade || '').trim().toUpperCase();
+        const dwgKey = (item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== '—') ? item.drawing_no.trim().toUpperCase() : '';
+        compositeKey = `RAW:::${rawName.toUpperCase()}:::${gradeKey}:::${dwgKey}`;
+      } else if (isConsumable) {
+        // Group consumables by material_name (or item_code if no name)
+        compositeKey = `CON:::${rawName.toUpperCase() || rawCode}`;
+      } else {
+        // Bought-out, parts, and other items
+        compositeKey = `OTHER:::${rawCode || rawName.toUpperCase()}`;
+      }
+
+      if (!groupedMap.has(compositeKey)) {
+        groupedMap.set(compositeKey, {
+          compositeKey,
+          isRaw,
+          isConsumable,
+          material_name: rawName,
+          primaryItem: item,
+          variants: [item],
+          variantCodes: rawCode ? [rawCode] : []
+        });
+      } else {
+        const group = groupedMap.get(compositeKey);
+        group.variants.push(item);
+        if (rawCode && !group.variantCodes.includes(rawCode)) {
+          group.variantCodes.push(rawCode);
+        }
+        if (!group.primaryItem.shape_id && item.shape_id) {
+          group.primaryItem = item;
+        }
+        if (!group.primaryItem.item_code?.startsWith('RM-') && item.item_code?.startsWith('RM-')) {
+          group.primaryItem = item;
+        }
+        if (item.item_code && group.primaryItem.item_code && item.item_code < group.primaryItem.item_code) {
+          group.primaryItem = item;
+        }
+      }
+    });
+
+    const opts = [];
+    groupedMap.forEach(group => {
+      const primary = group.primaryItem;
+      const dims = formatDimensions(primary);
+      const variantCount = group.variants.length;
+      const matName = group.material_name || primary.material_name || primary.item_code || '';
+
+      let sub = '';
+      if ((group.isRaw || group.isConsumable) && variantCount > 1) {
+        sub = `${primary.item_code || ''} • ${variantCount} stock sizes available`;
+      } else {
+        sub = `${dims ? `${dims}\n` : ''}${primary.item_code || ''}${primary.drawing_no && primary.drawing_no !== 'N/A' ? ` [Drg: ${primary.drawing_no}]` : ''}`;
+      }
+
+      opts.push({
+        label: matName,
+        value: primary.item_code || '',
+        subLabel: sub,
+        description: `${group.variantCodes.join(' ')} ${primary.item_description || ''}`,
+        isRaw: group.isRaw,
+        isConsumable: group.isConsumable,
+        variants: group.variants,
+        variantCodes: group.variantCodes,
+        primaryItem: primary
+      });
+    });
+
+    return opts.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
+  }, [allStockItems]);
+
+  const selectedMrMaterialValue = useMemo(() => {
+    if (!selectedNewItem?.item_code) return '';
+    const matched = mrMaterialOptions.find(opt =>
+      opt.value === selectedNewItem.item_code ||
+      opt.variantCodes?.includes(selectedNewItem.item_code)
+    );
+    return matched ? matched.value : selectedNewItem.item_code;
+  }, [mrMaterialOptions, selectedNewItem]);
+
+  const currentMrMaterialVariants = useMemo(() => {
+    if (!selectedNewItem?.item_code) return [];
+    const matched = mrMaterialOptions.find(opt =>
+      opt.value === selectedNewItem.item_code ||
+      opt.variantCodes?.includes(selectedNewItem.item_code)
+    );
+    return matched?.variants || [];
+  }, [mrMaterialOptions, selectedNewItem]);
+
+  const handleSelectMrItem = useCallback((itemCode) => {
+    const item = allStockItems.find(i => i.item_code === itemCode);
+    setSelectedNewItem(item || null);
+    if (item) {
+      setNewItemQty(1);
+      setNewItemUnit(item.unit || item.uom || 'Nos');
+
+      // Group mapping
+      const ig = (item.material_type || item.item_group || "").toLowerCase().replace(/_/g, ' ').trim();
+      const matchingGroup = itemGroups.find(g => {
+        const gName = g.name.toLowerCase().replace(/_/g, ' ').trim();
+        return gName === ig || ig.includes(gName) || gName.includes(ig);
+      });
+      setNewItemItemGroup(matchingGroup ? matchingGroup.name : item.material_type || item.item_group || '');
+
+      setNewItemWeight(parseFloat(item.weight_per_unit || 0));
+
+      // Material Type
+      const materialObj = materials.find(m => String(m.id) === String(item.material_id));
+      setNewItemMaterialId(item.material_id || '');
+      setNewItemMaterialType(materialObj ? materialObj.name : item.material_grade || '');
+      setNewItemDensity(materialObj ? parseFloat(materialObj.density) : parseFloat(item.density || 0));
+
+      // Shape Type
+      const shapeObj = shapes.find(s => String(s.id) === String(item.shape_id));
+      setNewItemShapeId(item.shape_id || '');
+      setNewItemShapeType(shapeObj ? shapeObj.name : '');
+
+      setNewItemLength(item.length || '');
+      setNewItemWidth(item.width || '');
+      setNewItemThickness(item.thickness || '');
+      setNewItemDiameter(item.diameter || '');
+      setNewItemOuterDiameter(item.outer_diameter || '');
+      setNewItemThreadPitch(item.thread_pitch || item.threadPitch || '');
+      setNewItemRate(item.valuation_rate || 0);
+    } else {
+      setNewItemQty(1);
+      setNewItemUnit('');
+      setNewItemItemGroup('');
+      setNewItemWeight('');
+      setNewItemMaterialId('');
+      setNewItemMaterialType('');
+      setNewItemDensity(0);
+      setNewItemShapeId('');
+      setNewItemShapeType('');
+      setNewItemLength('');
+      setNewItemWidth('');
+      setNewItemThickness('');
+      setNewItemDiameter('');
+      setNewItemOuterDiameter('');
+      setNewItemThreadPitch('');
+      setNewItemRate('');
+    }
+  }, [allStockItems, itemGroups, materials, shapes]);
+
   const handleAddNewMrItem = () => {
     if (!selectedNewItem || newItemQty <= 0) return;
 
@@ -3834,75 +3991,41 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
                 <div className="grid grid-cols-12 gap-3 items-end">
                   <div className="col-span-4 space-y-1">
-                    <label className="text-xs text-slate-500 ml-1 block font-medium">Material Selection <span className="text-rose-500">*</span></label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs text-slate-500 ml-1 block font-medium">
+                        Material Selection <span className="text-rose-500">*</span>
+                      </label>
+                      {currentMrMaterialVariants.length > 1 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-slate-400 font-medium">Stock Size:</span>
+                          <select
+                            className="text-[10px] bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
+                            value={selectedNewItem?.item_code || ''}
+                            onChange={(e) => handleSelectMrItem(e.target.value)}
+                          >
+                            {currentMrMaterialVariants.map(v => {
+                              const dims = [
+                                v.length ? `L:${v.length}` : '',
+                                v.width ? `W:${v.width}` : '',
+                                v.thickness ? `T:${v.thickness}` : '',
+                                v.diameter ? `Ø:${v.diameter}` : ''
+                              ].filter(Boolean).join('×');
+                              return (
+                                <option key={v.id || v.item_code} value={v.item_code}>
+                                  {v.item_code} {dims ? `(${dims} mm)` : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                      )}
+                    </div>
                     <SearchableSelect
                       placeholder="Select material..."
                       onFocus={fetchAllStockItems}
-                      options={allStockItems.map(item => {
-                        const dims = formatDimensions(item);
-
-                        return {
-                          label: item.material_name || '',
-                          value: item.item_code || '',
-                          subLabel: `${dims ? `${dims}\n` : ''}${item.item_code || ''}${item.drawing_no && item.drawing_no !== 'N/A' ? ` [Drg: ${item.drawing_no}]` : ''}`
-                        };
-                      })}
-                      value={selectedNewItem?.item_code || ''}
-                      onChange={(e) => {
-                        const item = allStockItems.find(i => i.item_code === e.target.value);
-                        setSelectedNewItem(item || null);
-                        if (item) {
-                          setNewItemQty(1);
-                          setNewItemUnit(item.unit || item.uom || 'Nos');
-
-                          // Group mapping
-                          const ig = (item.material_type || item.item_group || "").toLowerCase().replace(/_/g, ' ').trim();
-                          const matchingGroup = itemGroups.find(g => {
-                            const gName = g.name.toLowerCase().replace(/_/g, ' ').trim();
-                            return gName === ig || ig.includes(gName) || gName.includes(ig);
-                          });
-                          setNewItemItemGroup(matchingGroup ? matchingGroup.name : item.material_type || item.item_group || '');
-
-                          setNewItemWeight(parseFloat(item.weight_per_unit || 0));
-
-                          // Material Type
-                          const materialObj = materials.find(m => String(m.id) === String(item.material_id));
-                          setNewItemMaterialId(item.material_id || '');
-                          setNewItemMaterialType(materialObj ? materialObj.name : item.material_grade || '');
-                          setNewItemDensity(materialObj ? parseFloat(materialObj.density) : parseFloat(item.density || 0));
-
-                          // Shape Type
-                          const shapeObj = shapes.find(s => String(s.id) === String(item.shape_id));
-                          setNewItemShapeId(item.shape_id || '');
-                          setNewItemShapeType(shapeObj ? shapeObj.name : '');
-
-                          setNewItemLength('');
-                          setNewItemWidth('');
-                          setNewItemThickness('');
-                          setNewItemDiameter('');
-                          setNewItemOuterDiameter('');
-                          setNewItemThreadPitch('');
-                          setNewItemThreadPitch(item.thread_pitch || item.threadPitch || '');
-                          setNewItemRate(item.valuation_rate || 0);
-                        } else {
-                          setNewItemQty(1);
-                          setNewItemUnit('');
-                          setNewItemItemGroup('');
-                          setNewItemWeight('');
-                          setNewItemMaterialId('');
-                          setNewItemMaterialType('');
-                          setNewItemDensity(0);
-                          setNewItemShapeId('');
-                          setNewItemShapeType('');
-                          setNewItemLength('');
-                          setNewItemWidth('');
-                          setNewItemThickness('');
-                          setNewItemDiameter('');
-                          setNewItemOuterDiameter('');
-                          setNewItemThreadPitch('');
-                          setNewItemRate('');
-                        }
-                      }}
+                      options={mrMaterialOptions}
+                      value={selectedMrMaterialValue}
+                      onChange={(e) => handleSelectMrItem(e.target.value)}
                       subLabelField="subLabel"
                     />
                   </div>

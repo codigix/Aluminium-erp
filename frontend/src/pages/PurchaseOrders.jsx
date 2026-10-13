@@ -465,25 +465,108 @@ const PurchaseOrders = () => {
   };
 
   const directItemOptions = React.useMemo(() => {
-    const seen = new Set();
-    const opts = [];
+    const groupedMap = new Map();
+
     (stockItems || []).forEach(si => {
-      const code = si.item_code ? String(si.item_code).trim() : '';
-      if (!code || seen.has(code)) return;
-      seen.add(code);
-      const matName = si.material_name || si.item_description || si.description || '';
+      const rawCode = (si.item_code ? String(si.item_code).trim() : '').toUpperCase();
+      const rawName = (si.material_name || si.item_description || si.description || '').trim();
+      const type = (si.material_type || si.item_group || '').toLowerCase();
+      const isRaw = (type.includes('raw') || type === 'rm' || rawCode.startsWith('RAW-') || rawCode.startsWith('RM-')) &&
+                    !rawCode.startsWith('CON-') && !rawCode.startsWith('BO-') && !rawCode.startsWith('PAC-') && !rawCode.startsWith('TOOL-') && !rawCode.startsWith('SER-');
+      const isConsumable = (type.includes('consum') || type.includes('hardware') || type.includes('packing') || rawCode.startsWith('CON-') || rawCode.startsWith('PAC-'));
+
+      let compositeKey = '';
+      if (isRaw) {
+        // Grouping key strictly preserving meaningful raw material differences:
+        // Material Name + Material Grade + Drawing No
+        const gradeKey = (si.material_grade || '').trim().toUpperCase();
+        const dwgKey = (si.drawing_no && si.drawing_no !== 'N/A' && si.drawing_no !== '—') ? si.drawing_no.trim().toUpperCase() : '';
+        compositeKey = `RAW:::${rawName.toUpperCase()}:::${gradeKey}:::${dwgKey}`;
+      } else if (isConsumable) {
+        // Group consumables by material_name (or item_code if no name)
+        compositeKey = `CON:::${rawName.toUpperCase() || rawCode}`;
+      } else {
+        // Bought-out, parts, and other items
+        compositeKey = `OTHER:::${rawCode || rawName.toUpperCase()}`;
+      }
+
+      if (!groupedMap.has(compositeKey)) {
+        groupedMap.set(compositeKey, {
+          compositeKey,
+          isRaw,
+          isConsumable,
+          material_name: rawName,
+          primaryItem: si,
+          variants: [si],
+          variantCodes: rawCode ? [rawCode] : []
+        });
+      } else {
+        const group = groupedMap.get(compositeKey);
+        group.variants.push(si);
+        if (rawCode && !group.variantCodes.includes(rawCode)) {
+          group.variantCodes.push(rawCode);
+        }
+        // Prefer canonical item with shape_id or RM- code
+        if (!group.primaryItem.shape_id && si.shape_id) {
+          group.primaryItem = si;
+        }
+        if (!group.primaryItem.item_code?.startsWith('RM-') && si.item_code?.startsWith('RM-')) {
+          group.primaryItem = si;
+        }
+        if (si.item_code && group.primaryItem.item_code && si.item_code < group.primaryItem.item_code) {
+          group.primaryItem = si;
+        }
+      }
+    });
+
+    const opts = [];
+    groupedMap.forEach(group => {
+      const primary = group.primaryItem;
+      const code = primary.item_code ? String(primary.item_code).trim() : '';
+      const matName = group.material_name || primary.material_name || primary.item_description || primary.description || code;
+      const variantCount = group.variants.length;
+
+      let label = matName ? `${code} - ${matName}` : code;
+      if ((group.isRaw || group.isConsumable) && variantCount > 1) {
+        label = `${code} - ${matName} (${variantCount} sizes)`;
+      }
+
       opts.push({
         value: code,
-        label: matName ? `${code} - ${matName}` : code,
+        label,
         item_code: code,
         material_name: matName,
-        description: si.item_description || si.description || '',
-        unit: si.unit || 'Kg',
-        rate: parseFloat(si.valuation_rate) || parseFloat(si.standard_rate) || parseFloat(si.rate) || 0
+        description: `${primary.item_description || primary.description || ''} ${group.variantCodes.join(' ')}`,
+        unit: primary.unit || 'Kg',
+        rate: parseFloat(primary.valuation_rate) || parseFloat(primary.standard_rate) || parseFloat(primary.rate) || 0,
+        isRaw: group.isRaw,
+        isConsumable: group.isConsumable,
+        variants: group.variants,
+        variantCodes: group.variantCodes,
+        primaryItem: primary
       });
     });
+
     return opts;
   }, [stockItems]);
+
+  const selectedPoMaterialValue = React.useMemo(() => {
+    if (!newPoItem.item_code) return '';
+    const matched = directItemOptions.find(opt => 
+      opt.value === newPoItem.item_code ||
+      opt.variantCodes?.includes(newPoItem.item_code)
+    );
+    return matched ? matched.value : newPoItem.item_code;
+  }, [directItemOptions, newPoItem.item_code]);
+
+  const currentPoMaterialVariants = React.useMemo(() => {
+    if (!newPoItem.item_code) return [];
+    const matched = directItemOptions.find(opt => 
+      opt.value === newPoItem.item_code ||
+      opt.variantCodes?.includes(newPoItem.item_code)
+    );
+    return matched?.variants || [];
+  }, [directItemOptions, newPoItem.item_code]);
 
   const drawingOptions = React.useMemo(() => {
     const seen = new Set();
@@ -2981,13 +3064,41 @@ const PurchaseOrders = () => {
                         </div>
 
                         <div className="col-span-12 md:col-span-4 space-y-1">
-                          <label className="text-xs text-slate-600 font-semibold block">
-                            Material Selection <span className="text-rose-500">*</span>
-                          </label>
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs text-slate-600 font-semibold block">
+                              Material Selection <span className="text-rose-500">*</span>
+                            </label>
+                            {currentPoMaterialVariants.length > 1 && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-slate-400 font-medium">Stock Size:</span>
+                                <select
+                                  className="text-[10px] bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                                  value={newPoItem.item_code || ''}
+                                  onChange={(e) => {
+                                    handleSelectMaterialForPo(e.target.value);
+                                  }}
+                                >
+                                  {currentPoMaterialVariants.map(v => {
+                                    const dims = [
+                                      v.length ? `L:${v.length}` : '',
+                                      v.width ? `W:${v.width}` : '',
+                                      v.thickness ? `T:${v.thickness}` : '',
+                                      v.diameter ? `Ø:${v.diameter}` : ''
+                                    ].filter(Boolean).join('×');
+                                    return (
+                                      <option key={v.id || v.item_code} value={v.item_code}>
+                                        {v.item_code} {dims ? `(${dims} mm)` : ''}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              </div>
+                            )}
+                          </div>
                           <SearchableSelect
                             placeholder="Search Item Code or Material Name..."
                             options={directItemOptions}
-                            value={newPoItem.item_code}
+                            value={selectedPoMaterialValue}
                             onChange={(e) => {
                               handleSelectMaterialForPo(e.target.value);
                             }}
@@ -2995,10 +3106,17 @@ const PurchaseOrders = () => {
                             allowCustom={false}
                             className="font-semibold"
                             renderOption={(opt) => (
-                              <div className="flex items-center gap-2 py-0.5">
-                                <span className="font-bold text-slate-800 tracking-wide shrink-0">{opt.item_code}</span>
-                                <span className="text-slate-400 font-normal shrink-0">-</span>
-                                <span className="text-slate-700 font-medium truncate">{opt.material_name || opt.description}</span>
+                              <div className="flex items-center justify-between gap-2 py-0.5 w-full">
+                                <div className="flex items-center gap-2 truncate">
+                                  <span className="font-bold text-slate-800 tracking-wide shrink-0">{opt.item_code}</span>
+                                  <span className="text-slate-400 font-normal shrink-0">-</span>
+                                  <span className="text-slate-700 font-medium truncate">{opt.material_name || opt.description}</span>
+                                </div>
+                                {opt.variants && opt.variants.length > 1 && (
+                                  <span className="text-[10px] bg-indigo-50 text-indigo-600 font-semibold px-1.5 py-0.5 rounded border border-indigo-100 whitespace-nowrap shrink-0">
+                                    {opt.variants.length} sizes
+                                  </span>
+                                )}
                               </div>
                             )}
                           />
