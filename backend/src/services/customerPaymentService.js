@@ -117,6 +117,18 @@ const recordPaymentReceived = async (payload) => {
     const paymentId = result.insertId;
 
     // Check if fully paid and update status
+    if (invoiceId || salesOrderSource === 'SALES_INVOICE') {
+      const invTargetId = invoiceId || salesOrderId;
+      const [inv] = await pool.query('SELECT total_amount FROM sales_invoices WHERE id = ?', [invTargetId]);
+      const [payments] = await pool.query(
+        'SELECT COALESCE(SUM(payment_amount), 0) as total_paid FROM customer_payments WHERE (invoice_id = ? OR (sales_order_id = ? AND sales_order_source = ?)) AND status = ?',
+        [invTargetId, invTargetId, 'SALES_INVOICE', 'CONFIRMED']
+      );
+      if (inv.length > 0 && payments[0].total_paid >= parseFloat(inv[0].total_amount)) {
+        await pool.execute('UPDATE sales_invoices SET status = ?, updated_at = NOW() WHERE id = ?', ['Paid', invTargetId]);
+      }
+    }
+
     if (salesOrderId) {
       if (salesOrderSource === 'DIRECT_ORDER') {
         const [orders] = await pool.query('SELECT grand_total FROM orders WHERE id = ?', [salesOrderId]);
@@ -124,8 +136,7 @@ const recordPaymentReceived = async (payload) => {
         if (orders.length > 0 && payments[0].total_paid >= orders[0].grand_total) {
           await pool.execute('UPDATE orders SET status = ? WHERE id = ?', ['Paid', salesOrderId]);
         }
-      } else {
-        // SALES_ORDER
+      } else if (salesOrderSource === 'SALES_ORDER') {
         const [so] = await pool.query(`
           SELECT COALESCE(NULLIF(so.net_total, 0), NULLIF(cp.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as net_total 
           FROM sales_orders so 
@@ -195,6 +206,7 @@ const getPaymentsReceived = async (filters = {}) => {
     SELECT 
       cp.*,
       CASE 
+        WHEN cp.sales_order_source = 'SALES_INVOICE' THEN COALESCE(si.invoice_no, o.order_no)
         WHEN cp.sales_order_source = 'DIRECT_ORDER' THEN o.order_no
         ELSE COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0')))
       END as so_number,
@@ -204,9 +216,10 @@ const getPaymentsReceived = async (filters = {}) => {
       ba.account_number,
       cp.manual_bank_account
     FROM customer_payments cp
+    LEFT JOIN sales_invoices si ON (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE'))
     LEFT JOIN sales_orders so ON cp.sales_order_id = so.id AND cp.sales_order_source = 'SALES_ORDER'
     LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
-    LEFT JOIN orders o ON cp.sales_order_id = o.id AND cp.sales_order_source = 'DIRECT_ORDER'
+    LEFT JOIN orders o ON (cp.sales_order_id = o.id AND cp.sales_order_source = 'DIRECT_ORDER') OR si.order_id = o.id
     LEFT JOIN companies c ON cp.customer_id = c.id
     LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
     LEFT JOIN bank_accounts ba ON cp.bank_account_id = ba.id
@@ -234,7 +247,10 @@ const getPaymentsReceived = async (filters = {}) => {
     params.push(filters.startDate, filters.endDate);
   }
 
-  if (filters.salesOrderId) {
+  if (filters.invoiceId) {
+    query += ' AND (cp.invoice_id = ? OR (cp.sales_order_id = ? AND cp.sales_order_source = \'SALES_INVOICE\'))';
+    params.push(filters.invoiceId, filters.invoiceId);
+  } else if (filters.salesOrderId) {
     query += ' AND cp.sales_order_id = ?';
     params.push(filters.salesOrderId);
   }
@@ -349,45 +365,28 @@ const getCustomerBalance = async (customerId) => {
 
 const getOutstandingInvoices = async (customerId) => {
   const [invoices] = await pool.query(
-    `SELECT * FROM (
-      -- From sales_orders (Design based)
-      SELECT 
-        so.id,
-        so.company_id as company_id,
-        CONVERT(COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0'))) USING utf8mb4) as so_number,
-        c.company_name as company_name,
-        COALESCE(NULLIF(so.project_name, ''), NULLIF(cp_pos.project_name, ''), 'General Project') as project_name,
-        COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as total_amount,
-        COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
-        (COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
-        CONVERT('SALES_ORDER' USING utf8mb4) as source,
-        so.created_at
-      FROM sales_orders so
-      LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
-      LEFT JOIN companies c ON so.company_id = c.id
-      WHERE so.company_id = ? AND so.status IN ('READY_FOR_SHIPMENT', 'SHIPPED', 'PAID')
-
-      UNION ALL
-
-      -- From orders (Direct based)
-      SELECT 
-        o.id,
-        o.client_id as company_id,
-        CONVERT(o.order_no USING utf8mb4) as so_number,
-        c.company_name as company_name,
-        COALESCE(NULLIF(o.project_name, ''), 'General Project') as project_name,
-        o.grand_total as total_amount,
-        COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
-        (o.grand_total - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
-        CONVERT('DIRECT_ORDER' USING utf8mb4) as source,
-        o.created_at
-      FROM orders o
-      LEFT JOIN companies c ON o.client_id = c.id
-      WHERE o.client_id = ? AND o.status NOT IN ('Closed', 'Cancelled', 'CANCELLED', 'CLOSED')
-    ) combined
-    WHERE outstanding >= 0
-    ORDER BY created_at DESC`,
-    [customerId, customerId]
+    `SELECT 
+      si.id as id,
+      si.id as invoice_id,
+      si.order_id as sales_order_id,
+      si.client_id as company_id,
+      CONVERT(si.invoice_no USING utf8mb4) as invoice_no,
+      CONVERT(COALESCE(o.order_no, CONCAT('ORD-', si.order_id)) USING utf8mb4) as so_number,
+      c.company_name as company_name,
+      COALESCE(NULLIF(si.project_name, ''), NULLIF(o.project_name, ''), 'General Project') as project_name,
+      si.total_amount as total_amount,
+      COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE (invoice_id = si.id OR (sales_order_id = si.id AND sales_order_source = 'SALES_INVOICE')) AND status = 'CONFIRMED'), 0) as paid_amount,
+      (si.total_amount - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE (invoice_id = si.id OR (sales_order_id = si.id AND sales_order_source = 'SALES_INVOICE')) AND status = 'CONFIRMED'), 0)) as outstanding,
+      CONVERT('SALES_INVOICE' USING utf8mb4) as source,
+      si.created_at,
+      si.invoice_date
+    FROM sales_invoices si
+    JOIN orders o ON o.id = si.order_id
+    JOIN companies c ON si.client_id = c.id
+    WHERE si.client_id = ? AND si.sent_to_accounts = 1 AND si.status != 'Cancelled'
+    HAVING outstanding >= 0
+    ORDER BY si.created_at DESC`,
+    [customerId]
   );
 
   return invoices;
@@ -395,48 +394,29 @@ const getOutstandingInvoices = async (customerId) => {
 
 const getAllOutstandingInvoices = async () => {
   const [invoices] = await pool.query(
-    `SELECT * FROM (
-      -- From sales_orders (Design based)
-      SELECT 
-        so.id,
-        so.company_id as company_id,
-        CONVERT(COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0'))) USING utf8mb4) as so_number,
-        c.company_name as company_name,
-        con.email as customer_email,
-        COALESCE(NULLIF(so.project_name, ''), NULLIF(cp_pos.project_name, ''), 'General Project') as project_name,
-        COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as total_amount,
-        COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
-        (COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
-        CONVERT('SALES_ORDER' USING utf8mb4) as source,
-        so.created_at
-      FROM sales_orders so
-      LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
-      LEFT JOIN companies c ON so.company_id = c.id
-      LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
-      WHERE so.status IN ('READY_FOR_SHIPMENT', 'SHIPPED', 'PAID')
-
-      UNION ALL
-
-      -- From orders (Direct based)
-      SELECT 
-        o.id,
-        o.client_id as company_id,
-        CONVERT(o.order_no USING utf8mb4) as so_number,
-        c.company_name as company_name,
-        con.email as customer_email,
-        COALESCE(NULLIF(o.project_name, ''), 'General Project') as project_name,
-        o.grand_total as total_amount,
-        COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
-        (o.grand_total - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
-        CONVERT('DIRECT_ORDER' USING utf8mb4) as source,
-        o.created_at
-      FROM orders o
-      LEFT JOIN companies c ON o.client_id = c.id
-      LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
-      WHERE o.status NOT IN ('Closed', 'Cancelled', 'CANCELLED', 'CLOSED')
-    ) combined
-    WHERE outstanding >= 0
-    ORDER BY created_at DESC`
+    `SELECT 
+      si.id as id,
+      si.id as invoice_id,
+      si.order_id as sales_order_id,
+      si.client_id as company_id,
+      CONVERT(si.invoice_no USING utf8mb4) as invoice_no,
+      CONVERT(COALESCE(o.order_no, CONCAT('ORD-', si.order_id)) USING utf8mb4) as so_number,
+      c.company_name as company_name,
+      con.email as customer_email,
+      COALESCE(NULLIF(si.project_name, ''), NULLIF(o.project_name, ''), 'General Project') as project_name,
+      si.total_amount as total_amount,
+      COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE (invoice_id = si.id OR (sales_order_id = si.id AND sales_order_source = 'SALES_INVOICE')) AND status = 'CONFIRMED'), 0) as paid_amount,
+      (si.total_amount - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE (invoice_id = si.id OR (sales_order_id = si.id AND sales_order_source = 'SALES_INVOICE')) AND status = 'CONFIRMED'), 0)) as outstanding,
+      CONVERT('SALES_INVOICE' USING utf8mb4) as source,
+      si.created_at,
+      si.invoice_date
+    FROM sales_invoices si
+    JOIN orders o ON o.id = si.order_id
+    JOIN companies c ON si.client_id = c.id
+    LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
+    WHERE si.sent_to_accounts = 1 AND si.status != 'Cancelled'
+    HAVING outstanding >= 0
+    ORDER BY si.created_at DESC`
   );
 
   return invoices;

@@ -51,12 +51,15 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   const [installments, setInstallments] = useState([]);
   const [fetchingInstallments, setFetchingInstallments] = useState(false);
 
-  const fetchInstallmentHistory = async (soId, source) => {
-    if (!soId) return;
+  const fetchInstallmentHistory = async (soId, source, invId) => {
+    if (!soId && !invId) return;
     try {
       setFetchingInstallments(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/customer-payments?salesOrderId=${soId}&salesOrderSource=${source}`, {
+      const param = source === 'SALES_INVOICE'
+        ? `invoiceId=${invId || soId}&salesOrderSource=${source}`
+        : `salesOrderId=${soId}&salesOrderSource=${source}`;
+      const response = await fetch(`${API_BASE}/customer-payments?${param}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -84,13 +87,16 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
     }
   }, [isOpen, invoice]);
 
-  const fetchFullSODetail = async (soId, source = 'SALES_ORDER') => {
-    if (!soId) return;
+  const fetchFullSODetail = async (soId, source = 'SALES_ORDER', invId) => {
+    if (!soId && !invId) return;
     try {
       setFetchingDetail(true);
       const token = localStorage.getItem('authToken');
-      // Fix endpoint for DIRECT_ORDER to use singular /order/
-      const endpoint = source === 'DIRECT_ORDER' ? `${API_BASE}/order/${soId}` : `${API_BASE}/sales-orders/${soId}`;
+      const endpoint = source === 'SALES_INVOICE'
+        ? `${API_BASE}/sales-invoices/${invId || soId}`
+        : source === 'DIRECT_ORDER'
+        ? `${API_BASE}/order/${soId}`
+        : `${API_BASE}/sales-orders/${soId}`;
       const response = await fetch(endpoint, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -117,13 +123,15 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         const custId = invoice.customer_id || invoice.company_id || invoice.client_id || '';
         const soId = invoice.sales_order_id || invoice.id || '';
         const source = invoice.sales_order_source || invoice.source || 'SALES_ORDER';
+        const invId = invoice.invoice_id || (source === 'SALES_INVOICE' ? invoice.id : null);
         
-        fetchFullSODetail(soId, source);
-        fetchInstallmentHistory(soId, source);
+        fetchFullSODetail(soId, source, invId);
+        fetchInstallmentHistory(soId, source, invId);
 
         setFormData({
           customerId: custId,
           salesOrderId: soId,
+          invoiceId: invId,
           soId: invoice.soId || (source && soId ? `${source}_${soId}` : ''),
           salesOrderSource: source,
           paymentAmount: invoice.outstanding ? parseFloat(invoice.outstanding).toFixed(2) : (invoice.total_amount ? parseFloat(invoice.total_amount).toFixed(2) : ''),
@@ -360,7 +368,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       const token = localStorage.getItem('authToken');
 
       const paymentPayload = {
-        invoiceId: formData.salesOrderId || null,
+        invoiceId: formData.invoiceId || (formData.salesOrderSource === 'SALES_INVOICE' ? (invoice?.id || formData.salesOrderId) : formData.salesOrderId) || null,
         salesOrderId: formData.salesOrderId || null,
         salesOrderSource: formData.salesOrderSource,
         customerId: formData.customerId,
@@ -495,7 +503,9 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                 <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase font-semibold">Invoice Details</span>
-                    <h3 className="text-slate-900 font-bold text-sm mt-0.5">{fullSODetail?.so_number || fullSODetail?.order_no || invoice?.po_number || invoice?.so_number || 'N/A'}</h3>
+                    <h3 className="text-slate-900 font-bold text-sm mt-0.5">
+                      {fullSODetail?.invoice_no ? `${fullSODetail.invoice_no} (${fullSODetail.order_no || invoice?.so_number || ''})` : (fullSODetail?.so_number || fullSODetail?.order_no || invoice?.po_number || invoice?.so_number || 'N/A')}
+                    </h3>
                   </div>
                   <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">Collection View</span>
                 </div>
@@ -582,47 +592,83 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {(fullSODetail.items || fullSODetail.order_items || []).map((item, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="p-2">
-                              <p className="text-[11px]  text-slate-800 leading-tight">{item.description || item.material_name || 'N/A'}</p>
-                              {item.item_code && <span className="text-[9px] text-slate-400 uppercase er">{item.item_code}</span>}
-                            </td>
-                            <td className="p-2 text-[11px] text-slate-600 text-center">
-                              {item.quantity} {item.unit || item.type || 'Nos'}
-                            </td>
-                            <td className="p-2 text-[11px] text-slate-600 text-right">
-                              {formatCurrency(item.rate || item.unit_rate)}
-                            </td>
-                            <td className="p-2 text-[11px]  text-slate-900 text-right">
-                              {formatCurrency(item.total_amount || item.amount || (item.quantity || 0) * (item.rate || item.unit_rate || 0))}
-                            </td>
-                          </tr>
-                        ))}
+                        {(fullSODetail.items || fullSODetail.order_items || []).map((item, idx) => {
+                          const rawQty = item.invoice_qty !== undefined && item.invoice_qty !== null 
+                            ? item.invoice_qty 
+                            : (item.quantity !== undefined && item.quantity !== null ? item.quantity : (item.ordered_qty || 0));
+                          const qtyNum = parseFloat(rawQty);
+                          const formattedQty = isNaN(qtyNum) ? '0' : (qtyNum % 1 === 0 ? qtyNum.toString() : qtyNum.toFixed(2));
+                          const unit = item.uom || item.unit || item.type || 'Nos';
+                          const rate = item.unit_rate !== undefined && item.unit_rate !== null ? item.unit_rate : (item.rate || 0);
+                          const amt = item.amount !== undefined && item.amount !== null ? item.amount : (item.total_amount || (parseFloat(rawQty) * parseFloat(rate)));
+
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="p-2">
+                                <p className="text-[11px] text-slate-800 leading-tight font-medium">
+                                  {item.description || item.material_name || 'N/A'}
+                                </p>
+                                {(item.drawing_no || item.item_code) && (
+                                  <span className="text-[9px] text-slate-400 uppercase font-mono block">
+                                    {item.drawing_no || item.item_code}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2 text-[11px] text-slate-700 text-center font-mono font-semibold">
+                                {formattedQty} {unit}
+                              </td>
+                              <td className="p-2 text-[11px] text-slate-600 text-right font-mono">
+                                {formatCurrency(rate)}
+                              </td>
+                              <td className="p-2 text-[11px] text-slate-900 text-right font-mono font-bold">
+                                {formatCurrency(amt)}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                       <tfoot className="bg-slate-50/50 border-t border-slate-100">
-                        {(fullSODetail.subtotal || fullSODetail.gst) && (
-                          <>
-                            <tr>
-                              <td colSpan="3" className="p-2 text-[10px] font-semibold text-slate-500 text-right">Subtotal</td>
-                              <td className="p-2 text-[11px]  text-slate-700 text-right">
-                                {formatCurrency(fullSODetail.subtotal)}
-                              </td>
-                            </tr>
-                            <tr>
-                              <td colSpan="3" className="p-2 text-[10px] font-semibold text-slate-500 text-right">GST</td>
-                              <td className="p-2 text-[11px]  text-slate-700 text-right">
-                                {formatCurrency(fullSODetail.gst)}
-                              </td>
-                            </tr>
-                          </>
-                        )}
-                        <tr>
-                          <td colSpan="3" className="p-2 text-[10px] font-semibold text-slate-500 text-right">Total Amount (Incl. Taxes)</td>
-                          <td className="p-2 text-[11px]  text-slate-900 text-right">
-                            {formatCurrency(fullSODetail.grand_total || fullSODetail.total_amount || fullSODetail.net_total || fullSODetail.po_net_total)}
-                          </td>
-                        </tr>
+                        {(() => {
+                          const subtotal = fullSODetail.subtotal ?? fullSODetail.net_total;
+                          const calculatedTax = (parseFloat(fullSODetail.cgst_amount || 0) + parseFloat(fullSODetail.sgst_amount || 0) + parseFloat(fullSODetail.igst_amount || 0));
+                          const totalTax = fullSODetail.gst ?? fullSODetail.tax_amount ?? (calculatedTax > 0 ? calculatedTax : undefined);
+                          const grandTotal = fullSODetail.grand_total || fullSODetail.total_amount || fullSODetail.net_total || fullSODetail.po_net_total;
+
+                          const gstLabel = fullSODetail.igst_rate && parseFloat(fullSODetail.igst_rate) > 0
+                            ? `GST (IGST ${fullSODetail.igst_rate}%)`
+                            : fullSODetail.cgst_rate && parseFloat(fullSODetail.cgst_rate) > 0
+                            ? `GST (CGST+SGST ${(parseFloat(fullSODetail.cgst_rate) || 0) + (parseFloat(fullSODetail.sgst_rate) || 0)}%)`
+                            : 'GST';
+
+                          return (
+                            <>
+                              {subtotal !== undefined && (
+                                <tr>
+                                  <td colSpan="3" className="p-2 text-[10px] font-semibold text-slate-500 text-right">Subtotal</td>
+                                  <td className="p-2 text-[11px] font-mono text-slate-700 text-right">
+                                    {formatCurrency(subtotal)}
+                                  </td>
+                                </tr>
+                              )}
+                              {totalTax !== undefined && (
+                                <tr>
+                                  <td colSpan="3" className="p-2 text-[10px] font-semibold text-slate-500 text-right">
+                                    {gstLabel}
+                                  </td>
+                                  <td className="p-2 text-[11px] font-mono text-slate-700 text-right">
+                                    {formatCurrency(totalTax)}
+                                  </td>
+                                </tr>
+                              )}
+                              <tr>
+                                <td colSpan="3" className="p-2 text-[10px] font-bold text-slate-700 text-right">Total Amount (Incl. Taxes)</td>
+                                <td className="p-2 text-[11px] font-mono font-bold text-slate-900 text-right">
+                                  {formatCurrency(grandTotal)}
+                                </td>
+                              </tr>
+                            </>
+                          );
+                        })()}
                       </tfoot>
                     </table>
                   </div>

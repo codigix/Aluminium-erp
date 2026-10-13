@@ -87,6 +87,16 @@ const generateSalesInvoicePDF = async (req, res, next) => {
   }
 };
 
+const sendInvoiceToAccounts = async (req, res, next) => {
+  try {
+    const userId = req.user?.id || null;
+    const result = await salesInvoiceService.sendInvoiceToAccounts(req.params.id, userId);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAvailableSalesOrders,
   getOrderDetailsForInvoice,
@@ -95,5 +105,6 @@ module.exports = {
   listSalesInvoices,
   getSalesInvoiceById,
   deleteSalesInvoice,
-  generateSalesInvoicePDF
+  generateSalesInvoicePDF,
+  sendInvoiceToAccounts
 };

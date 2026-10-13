@@ -1178,6 +1178,47 @@ const generateSalesInvoicePDF = async (invoiceId) => {
   }
 };
 
+const sendInvoiceToAccounts = async (invoiceId, userId = null) => {
+  const [rows] = await pool.query('SELECT * FROM sales_invoices WHERE id = ?', [invoiceId]);
+  if (rows.length === 0) {
+    throw new Error('Sales Invoice not found');
+  }
+
+  const invoice = rows[0];
+  if (invoice.sent_to_accounts) {
+    return {
+      success: true,
+      alreadySent: true,
+      message: `Invoice ${invoice.invoice_no} was already sent to Accounts`,
+      data: invoice
+    };
+  }
+
+  await pool.query(
+    `UPDATE sales_invoices 
+     SET sent_to_accounts = 1,
+         sent_to_accounts_at = NOW(),
+         status = 'Sent to Accounts',
+         updated_at = NOW()
+     WHERE id = ?`,
+    [invoiceId]
+  );
+
+  const [updatedRows] = await pool.query(`
+    SELECT si.*, o.order_no, c.company_name AS client_name
+    FROM sales_invoices si
+    JOIN orders o ON o.id = si.order_id
+    JOIN companies c ON c.id = si.client_id
+    WHERE si.id = ?
+  `, [invoiceId]);
+
+  return {
+    success: true,
+    message: `Invoice ${invoice.invoice_no} has been transferred to Accounts Customer Receivables`,
+    data: updatedRows[0]
+  };
+};
+
 module.exports = {
   getNextInvoiceNo,
   getAvailableSalesOrders,
@@ -1186,5 +1227,6 @@ module.exports = {
   listSalesInvoices,
   getSalesInvoiceById,
   deleteSalesInvoice,
-  generateSalesInvoicePDF
+  generateSalesInvoicePDF,
+  sendInvoiceToAccounts
 };

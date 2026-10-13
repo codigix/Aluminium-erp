@@ -2795,6 +2795,8 @@ model sales_invoices {
   shipping_address    String?               @db.Text
   gstin               String?               @db.VarChar(20)
   status              String                @default("Created") @db.VarChar(50)
+  sent_to_accounts    Boolean               @default(false)
+  sent_to_accounts_at DateTime?
   subtotal            Decimal               @default(0.00) @db.Decimal(14, 2)
   cgst_rate           Decimal               @default(9.00) @db.Decimal(5, 2)
   cgst_amount         Decimal               @default(0.00) @db.Decimal(14, 2)

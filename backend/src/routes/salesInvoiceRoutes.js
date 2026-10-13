@@ -9,6 +9,7 @@ router.get('/next-number', authorize(['ORDER_VIEW', 'PAYMENT_VIEW']), salesInvoi
 router.get('/', authorize(['ORDER_VIEW', 'PAYMENT_VIEW']), salesInvoiceController.listSalesInvoices);
 router.post('/', authorize(['ORDER_CREATE', 'ORDER_EDIT', 'PAYMENT_PROCESS']), salesInvoiceController.createSalesInvoice);
 router.get('/:id/pdf', authorize(['ORDER_VIEW', 'PAYMENT_VIEW']), salesInvoiceController.generateSalesInvoicePDF);
+router.post('/:id/send-to-accounts', authorize(['ORDER_CREATE', 'ORDER_EDIT', 'PAYMENT_PROCESS', 'ORDER_VIEW']), salesInvoiceController.sendInvoiceToAccounts);
 router.get('/:id', authorize(['ORDER_VIEW', 'PAYMENT_VIEW']), salesInvoiceController.getSalesInvoiceById);
 router.delete('/:id', authorize(['ORDER_EDIT', 'PAYMENT_EDIT']), salesInvoiceController.deleteSalesInvoice);
 

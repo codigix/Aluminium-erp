@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   FileText, Plus, Search, Calendar, CheckCircle2, Eye, Printer, Trash2,
-  ArrowLeft, Building, Hash, Layers, ShieldCheck, AlertCircle, ShoppingBag,
+  ArrowLeft, ArrowRight, Building, Hash, Layers, ShieldCheck, AlertCircle, ShoppingBag,
   Download, Clock, X, ChevronRight, Check, RefreshCw, AlertTriangle,
-  Receipt, DollarSign, User, MapPin, Package
+  Receipt, DollarSign, User, MapPin, Package, Send
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { SearchableSelect, Card } from '../components/ui.jsx';
@@ -60,6 +60,7 @@ export default function SalesInvoice() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [removedItems, setRemovedItems] = useState([]);
+  const [sendingId, setSendingId] = useState(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -480,6 +481,51 @@ export default function SalesInvoice() {
     }
   };
 
+  // Transfer Sales Invoice to Accounts (Customer Receivables)
+  const handleSendToAccounts = async (invoice) => {
+    const result = await Swal.fire({
+      title: 'Send to Accounts?',
+      html: `Transfer <b>${invoice.invoice_no}</b> (Amount: <b>${formatINR(invoice.total_amount)}</b>) to <b>Customer Receivables</b> in Accounts?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#4f46e5',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: 'Yes, Send to Accounts',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setSendingId(invoice.id);
+        const res = await fetch(`${API_BASE}/sales-invoices/${invoice.id}/send-to-accounts`, {
+          method: 'POST',
+          headers: getAuthHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || 'Failed to transfer invoice to Accounts');
+        }
+        Swal.fire({
+          icon: 'success',
+          title: 'Sent to Accounts!',
+          text: `Invoice ${invoice.invoice_no} has been transferred to Customer Receivables.`,
+          timer: 2000,
+          showConfirmButton: false
+        });
+        fetchInvoices();
+      } catch (err) {
+        console.error('Error sending invoice to accounts:', err);
+        Swal.fire({
+          icon: 'error',
+          title: 'Transfer Failed',
+          text: err.message || 'Unable to transfer invoice to Accounts.'
+        });
+      } finally {
+        setSendingId(null);
+      }
+    }
+  };
+
   // Filtered Invoices
   const filteredInvoices = useMemo(() => {
     return invoices.filter(inv => {
@@ -578,8 +624,8 @@ export default function SalesInvoice() {
               />
             </div>
 
-            <div className="flex items-center gap-1.5">
-              {['ALL', 'Created', 'Paid', 'Cancelled'].map(st => (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {['ALL', 'Created', 'Sent to Accounts', 'Paid', 'Cancelled'].map(st => (
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}
@@ -662,13 +708,15 @@ export default function SalesInvoice() {
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : inv.status === 'Cancelled'
                               ? 'bg-slate-100 text-slate-600 border-slate-200'
+                              : (inv.sent_to_accounts || inv.status === 'Sent to Accounts')
+                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                               : 'bg-blue-50 text-blue-700 border-blue-200'
                           }`}>
                             {inv.status || 'Created'}
                           </span>
                         </td>
                         <td className="py-2.5 px-3 text-center">
-                          <div className="inline-flex items-center gap-1">
+                          <div className="inline-flex items-center gap-1.5 justify-center">
                             <button
                               type="button"
                               onClick={() => handleViewInvoice(inv)}
@@ -677,6 +725,29 @@ export default function SalesInvoice() {
                             >
                               <Eye className="w-3.5 h-3.5" />
                             </button>
+
+                            {/* Send to Accounts Button / Sent Badge */}
+                            {inv.sent_to_accounts || inv.status === 'Sent to Accounts' || inv.status === 'Paid' ? (
+                              <span 
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
+                                title={`Transferred to Accounts on ${formatDate(inv.sent_to_accounts_at || inv.updated_at)}`}
+                              >
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>Sent</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleSendToAccounts(inv)}
+                                disabled={sendingId === inv.id}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded text-indigo-600 hover:text-white bg-indigo-50 hover:bg-indigo-600 border border-indigo-200 hover:border-indigo-600 text-[11px] font-semibold transition shadow-2xs group cursor-pointer disabled:opacity-50"
+                                title="Send to Accounts (Customer Receivables)"
+                              >
+                                <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                <span>Send</span>
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => handleDownloadInvoice(inv.id)}
