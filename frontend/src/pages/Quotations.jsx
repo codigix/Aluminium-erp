@@ -3908,7 +3908,7 @@ const Quotations = () => {
               <div>
                 <div className="flex justify-between items-center my-2">
                   <label className="block text-sm  text-slate-700">Line Items</label>
-                  <button
+                  {/* <button
                     type="button"
                     onClick={() => {
                       setEditFormData({
@@ -3919,7 +3919,7 @@ const Quotations = () => {
                     className="p-2  bg-blue-600 text-white text-xs rounded  hover:bg-blue-700"
                   >
                     + Add Item
-                  </button>
+                  </button> */}
                 </div>
                 {editFormData.items.length === 0 ? (
                   <p className="text-xs text-slate-500 p-2 text-center border border-dashed border-slate-200 rounded">
