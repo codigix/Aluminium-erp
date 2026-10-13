@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
-import { formatDimensions, validateShapeDimensions } from '../utils/formatters';
+import { formatDimensions, validateShapeDimensions, calculateWeight } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -159,53 +159,19 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   // Auto-calculate Weight per Unit for Material Request Item
   useEffect(() => {
     if (!newItemShapeType) return;
-    const shape = newItemShapeType.toLowerCase();
     const density = parseFloat(newItemDensity) || 0;
-    let calculatedWeight = 0;
+    if (density <= 0) return;
 
-    if (density > 0) {
-      if (shape === 'plate') {
-        const l = parseFloat(newItemLength) || 0;
-        const w = parseFloat(newItemWidth) || 0;
-        const t = parseFloat(newItemThickness) || 0;
-        calculatedWeight = (l * w * t * density) / 1000000;
-      } else if (shape === 'round') {
-        const d = parseFloat(newItemDiameter) || 0;
-        const l = parseFloat(newItemLength) || 0;
-        calculatedWeight = (Math.PI * Math.pow(d, 2) / 4 * l * density) / 1000000;
-      } else if (shape === 'pipe') {
-        const od = parseFloat(newItemOuterDiameter) || 0;
-        const t = parseFloat(newItemThickness) || 0;
-        const l = parseFloat(newItemLength) || 0;
-        const id = od - (2 * t);
-        if (id >= 0) {
-          calculatedWeight = (Math.PI * (Math.pow(od, 2) - Math.pow(id, 2)) / 4 * l * density) / 1000000;
-        }
-      } else if (shape.includes('square tube')) {
-        const a = parseFloat(newItemWidth) || 0;
-        const t = parseFloat(newItemThickness) || 0;
-        const l = parseFloat(newItemLength) || 0;
-        calculatedWeight = ((a * a - Math.pow(a - 2 * t, 2)) * l * density) / 1000000;
-      } else if (shape.includes('rectangular tube')) {
-        const b = parseFloat(newItemWidth) || 0;
-        const h = parseFloat(newItemOuterDiameter) || 0;
-        const t = parseFloat(newItemThickness) || 0;
-        const l = parseFloat(newItemLength) || 0;
-        calculatedWeight = ((b * h - (b - 2 * t) * (h - 2 * t)) * l * density) / 1000000;
-      } else if (shape === 'hexagonal bar') {
-        const af = parseFloat(newItemWidth) || 0;
-        const l = parseFloat(newItemLength) || 0;
-        calculatedWeight = ((Math.sqrt(3) / 2) * af * af * l * density) / 1000000;
-      } else if (shape.includes('threaded') || shape.includes('thread')) {
-        const d = parseFloat(newItemDiameter) || 0;
-        const p = parseFloat(newItemThreadPitch) || 0;
-        const l = parseFloat(newItemLength) || 0;
-        if (d > 0 && p > 0 && p < d && l > 0) {
-          const tensileArea = 0.7854 * Math.pow(d - (0.9382 * p), 2);
-          calculatedWeight = (tensileArea * l * density) / 1000000;
-        }
-      }
-    }
+    const calculatedWeight = calculateWeight({
+      shape: newItemShapeType,
+      density: newItemDensity,
+      length: newItemLength,
+      width: newItemWidth,
+      thickness: newItemThickness,
+      diameter: newItemDiameter,
+      outerDiameter: newItemOuterDiameter,
+      threadPitch: newItemThreadPitch
+    });
 
     if (calculatedWeight > 0) {
       setNewItemWeight(parseFloat(calculatedWeight.toFixed(3)));
@@ -391,27 +357,38 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
   const renderDimensions = (dims) => {
     if (!dims) return null;
-    let effectiveDims = dims;
-    if (newPlan?.items?.length) {
+    let effectiveDims = {
+      ...dims,
+      ...(dims.dimensions && typeof dims.dimensions === 'object' ? dims.dimensions : {}),
+      shape_type: dims.shape_type || dims.shape_name || dims.shape || dims.dimensions?.shape_type || dims.dimensions?.shape_name || dims.dimensions?.shape || '',
+      length: dims.length !== undefined && dims.length !== null && dims.length !== '' ? dims.length : (dims.dimensions?.length ?? 0),
+      width: dims.width !== undefined && dims.width !== null && dims.width !== '' ? dims.width : (dims.dimensions?.width ?? 0),
+      thickness: dims.thickness !== undefined && dims.thickness !== null && dims.thickness !== '' ? dims.thickness : (dims.dimensions?.thickness ?? 0),
+      diameter: dims.diameter !== undefined && dims.diameter !== null && dims.diameter !== '' ? dims.diameter : (dims.dimensions?.diameter ?? 0),
+      outer_diameter: dims.outer_diameter !== undefined && dims.outer_diameter !== null && dims.outer_diameter !== '' ? dims.outer_diameter : (dims.dimensions?.outer_diameter ?? dims.dimensions?.outerDiameter ?? 0),
+      thread_pitch: dims.thread_pitch !== undefined && dims.thread_pitch !== null && dims.thread_pitch !== '' ? dims.thread_pitch : (dims.dimensions?.thread_pitch ?? dims.dimensions?.threadPitch ?? 0)
+    };
+
+    if (!dims.is_manual && newPlan?.items?.length) {
       const allBomMats = newPlan.items.flatMap(item => item.materials || []);
       const cleanName = (str) => (str || '').replace(/\s+/g, ' ').trim().toLowerCase();
-      const targetName = cleanName(dims.material_name || dims.description || dims.item_name);
+      const targetName = cleanName(effectiveDims.material_name || effectiveDims.description || effectiveDims.item_name);
       const matched = allBomMats.find(bm => {
         const bmName = cleanName(bm.material_name || bm.description || bm.item_name);
         return bmName && (bmName === targetName || (targetName && (bmName.includes(targetName) || targetName.includes(bmName))));
       });
       if (matched) {
         effectiveDims = {
-          ...dims,
-          shape_type: matched.shape_type || matched.shape_name || matched.shape || dims.shape_type,
-          shape_name: matched.shape_name || matched.shape_type || matched.shape || dims.shape_name,
-          shape: matched.shape || matched.shape_type || dims.shape,
-          length: dims.length || matched.length,
-          width: dims.width || matched.width,
-          thickness: dims.thickness || matched.thickness,
-          diameter: dims.diameter || matched.diameter,
-          outer_diameter: dims.outer_diameter || matched.outer_diameter,
-          thread_pitch: matched.thread_pitch || dims.thread_pitch
+          ...effectiveDims,
+          shape_type: effectiveDims.shape_type || matched.shape_type || matched.shape_name || matched.shape,
+          shape_name: effectiveDims.shape_name || matched.shape_name || matched.shape_type || matched.shape,
+          shape: effectiveDims.shape || matched.shape || matched.shape_type,
+          length: effectiveDims.length || matched.length,
+          width: effectiveDims.width || matched.width,
+          thickness: effectiveDims.thickness || matched.thickness,
+          diameter: effectiveDims.diameter || matched.diameter,
+          outer_diameter: effectiveDims.outer_diameter || matched.outer_diameter,
+          thread_pitch: effectiveDims.thread_pitch || matched.thread_pitch
         };
       }
     }
@@ -785,11 +762,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
     // Build a dimension signature for the incoming item
     const incomingDimSig = [
-      selectedNewItem.length || '',
-      selectedNewItem.width || '',
-      selectedNewItem.thickness || '',
-      selectedNewItem.diameter || '',
-      selectedNewItem.outer_diameter || ''
+      newItemLength || selectedNewItem.length || '',
+      newItemWidth || selectedNewItem.width || '',
+      newItemThickness || selectedNewItem.thickness || '',
+      newItemDiameter || selectedNewItem.diameter || '',
+      newItemOuterDiameter || selectedNewItem.outer_diameter || ''
     ].join('|');
 
     // Allow same material code but different dimensions. Block only exact duplicates.
@@ -824,12 +801,15 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       is_fulfilled: false,
       request_exists: false,
       is_manual: true,
+      weight_per_unit: parseFloat(newItemWeight || selectedNewItem.weight_per_unit || 0),
+      shape_type: newItemShapeType || selectedNewItem.shape_type || '',
+      material_grade: newItemMaterialType || selectedNewItem.material_grade || '',
       dimensions: {
-        length: selectedNewItem.length,
-        width: selectedNewItem.width,
-        thickness: selectedNewItem.thickness,
-        diameter: selectedNewItem.diameter,
-        outer_diameter: selectedNewItem.outer_diameter
+        length: newItemLength || selectedNewItem.length || '',
+        width: newItemWidth || selectedNewItem.width || '',
+        thickness: newItemThickness || selectedNewItem.thickness || '',
+        diameter: newItemDiameter || selectedNewItem.diameter || '',
+        outer_diameter: newItemOuterDiameter || selectedNewItem.outer_diameter || ''
       }
     };
 
@@ -4139,7 +4119,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       {newItemShapeType} Dimensions (All in mm)
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                      {newItemShapeType.toLowerCase() === 'plate' && (
+                      {(newItemShapeType.toLowerCase() === 'plate' || newItemShapeType.toLowerCase().includes('plate') || newItemShapeType.toLowerCase().includes('sheet') || newItemShapeType.toLowerCase() === 'flat' || newItemShapeType.toLowerCase().includes('flat')) && (
                         <>
                           <div className="space-y-1">
                             <label className="text-[10px] text-slate-400 font-medium">Length (mm)</label>
@@ -4169,6 +4149,30 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                               className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
                               value={newItemThickness}
                               onChange={(e) => setNewItemThickness(e.target.value)}
+                            />
+                          </div>
+                        </>
+                      )}
+                      {(newItemShapeType.toLowerCase() === 'square bar' || (newItemShapeType.toLowerCase().includes('square') && !newItemShapeType.toLowerCase().includes('tube'))) && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Outside Side (A) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemWidth}
+                              onChange={(e) => setNewItemWidth(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Length (L) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemLength}
+                              onChange={(e) => setNewItemLength(e.target.value)}
                             />
                           </div>
                         </>
@@ -4413,12 +4417,19 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         const exists = mrItems.some(item => {
                           if (item.item_code !== itemCode) return false;
                           if (isKg) {
-                            return String(item.length || '') === String(newItemLength || '') &&
-                              String(item.width || '') === String(newItemWidth || '') &&
-                              String(item.thickness || '') === String(newItemThickness || '') &&
-                              String(item.diameter || '') === String(newItemDiameter || '') &&
-                              String(item.outer_diameter || '') === String(newItemOuterDiameter || '') &&
-                              String(item.thread_pitch || item.threadPitch || '') === String(newItemThreadPitch || '');
+                            const itemLen = item.length !== undefined && item.length !== null && item.length !== '' ? item.length : (item.dimensions?.length ?? '');
+                            const itemWid = item.width !== undefined && item.width !== null && item.width !== '' ? item.width : (item.dimensions?.width ?? '');
+                            const itemThk = item.thickness !== undefined && item.thickness !== null && item.thickness !== '' ? item.thickness : (item.dimensions?.thickness ?? '');
+                            const itemDia = item.diameter !== undefined && item.diameter !== null && item.diameter !== '' ? item.diameter : (item.dimensions?.diameter ?? '');
+                            const itemOd = item.outer_diameter !== undefined && item.outer_diameter !== null && item.outer_diameter !== '' ? item.outer_diameter : (item.dimensions?.outer_diameter ?? item.dimensions?.outerDiameter ?? '');
+                            const itemPitch = item.thread_pitch || item.threadPitch || item.dimensions?.thread_pitch || item.dimensions?.threadPitch || '';
+
+                            return String(itemLen) === String(newItemLength || '') &&
+                              String(itemWid) === String(newItemWidth || '') &&
+                              String(itemThk) === String(newItemThickness || '') &&
+                              String(itemDia) === String(newItemDiameter || '') &&
+                              String(itemOd) === String(newItemOuterDiameter || '') &&
+                              String(itemPitch) === String(newItemThreadPitch || '');
                           }
                           return true;
                         });
@@ -4437,14 +4448,17 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
                         if (isKg) {
                           const shape = (newItemShapeType || '').toLowerCase().trim();
-                          if (shape === 'plate') {
+                          if (shape === 'plate' || shape.includes('plate') || shape.includes('sheet') || shape === 'flat' || shape.includes('flat')) {
                             finalLen = parseFloat(newItemLength) || 0;
                             finalWid = parseFloat(newItemWidth) || 0;
                             finalThk = parseFloat(newItemThickness) || 0;
-                          } else if (shape === 'round') {
+                          } else if (shape === 'square bar' || (shape.includes('square') && !shape.includes('tube'))) {
+                            finalLen = parseFloat(newItemLength) || 0;
+                            finalWid = parseFloat(newItemWidth) || 0;
+                          } else if (shape === 'round' || shape.includes('round') || (shape.includes('rod') && !shape.includes('threaded'))) {
                             finalLen = parseFloat(newItemLength) || 0;
                             finalDia = parseFloat(newItemDiameter) || 0;
-                          } else if (shape === 'pipe') {
+                          } else if (shape === 'pipe' || shape.includes('pipe')) {
                             finalLen = parseFloat(newItemLength) || 0;
                             finalThk = parseFloat(newItemThickness) || 0;
                             finalOd = parseFloat(newItemOuterDiameter) || 0;
@@ -4457,7 +4471,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                             finalWid = parseFloat(newItemWidth) || 0;
                             finalThk = parseFloat(newItemThickness) || 0;
                             finalOd = parseFloat(newItemOuterDiameter) || 0;
-                          } else if (shape === 'hexagonal bar') {
+                          } else if (shape.includes('rectangular bar') || (shape.includes('rect') && shape.includes('bar'))) {
+                            finalLen = parseFloat(newItemLength) || 0;
+                            finalWid = parseFloat(newItemWidth) || 0;
+                            finalOd = parseFloat(newItemOuterDiameter) || 0;
+                          } else if (shape === 'hexagonal bar' || shape.includes('hex')) {
                             finalLen = parseFloat(newItemLength) || 0;
                             finalWid = parseFloat(newItemWidth) || 0;
                           } else if (shape.includes('threaded') || shape.includes('thread')) {
@@ -4466,6 +4484,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                             finalPitch = parseFloat(newItemThreadPitch) || 0;
                             finalThk = finalPitch;
                           }
+
+                          // Defensive fallback: if values are entered, keep them
+                          if (finalLen === 0 && newItemLength) finalLen = parseFloat(newItemLength) || 0;
+                          if (finalWid === 0 && newItemWidth) finalWid = parseFloat(newItemWidth) || 0;
+                          if (finalThk === 0 && newItemThickness) finalThk = parseFloat(newItemThickness) || 0;
+                          if (finalDia === 0 && newItemDiameter) finalDia = parseFloat(newItemDiameter) || 0;
+                          if (finalOd === 0 && newItemOuterDiameter) finalOd = parseFloat(newItemOuterDiameter) || 0;
+                          if (finalPitch === 0 && newItemThreadPitch) finalPitch = parseFloat(newItemThreadPitch) || 0;
                         }
 
                         const payload = {
