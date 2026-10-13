@@ -3,7 +3,7 @@ const pool = require('../config/db');
 const getActiveCompany = async () => {
   try {
     const [rows] = await pool.query(
-      "SELECT * FROM company_master WHERE status = 'ACTIVE' LIMIT 1"
+      "SELECT * FROM company_master WHERE status = 'ACTIVE' ORDER BY updated_at DESC, id DESC LIMIT 1"
     );
     return rows[0] || null;
   } catch (error) {
@@ -97,6 +97,13 @@ const createCompany = async (payload) => {
         status
       ]
     );
+
+    if (status === 'ACTIVE') {
+      await connection.execute(
+        "UPDATE company_master SET status = 'INACTIVE' WHERE id != ?",
+        [result.insertId]
+      );
+    }
 
     await connection.commit();
 
@@ -213,6 +220,13 @@ const updateCompany = async (id, payload) => {
       await connection.execute(
         `UPDATE company_master SET ${updates.join(', ')} WHERE id = ?`,
         params
+      );
+    }
+
+    if (status === 'ACTIVE') {
+      await connection.execute(
+        "UPDATE company_master SET status = 'INACTIVE' WHERE id != ?",
+        [id]
       );
     }
 

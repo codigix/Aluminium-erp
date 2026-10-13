@@ -58,6 +58,7 @@ const AdminCompanyMaster = () => {
   // File Preview URL State (for local selection previews)
   const [logoPreview, setLogoPreview] = useState('');
   const [signaturePreview, setSignaturePreview] = useState('');
+  const [logoError, setLogoError] = useState(false);
 
   // Fetch Companies
   const fetchCompanies = async () => {
@@ -96,6 +97,7 @@ const AdminCompanyMaster = () => {
     if (file) {
       setCompanyLogoFile(file);
       setLogoPreview(URL.createObjectURL(file));
+      setLogoError(false);
     }
   };
 
@@ -135,6 +137,7 @@ const AdminCompanyMaster = () => {
     setAuthorizedSignatureFile(null);
     setLogoPreview('');
     setSignaturePreview('');
+    setLogoError(false);
     setViewOnly(false);
     setIsEditing(false);
     setSelectedCompany(null);
@@ -172,6 +175,9 @@ const AdminCompanyMaster = () => {
       }
       if (authorizedSignatureFile) {
         apiFormData.append('authorizedSignature', authorizedSignatureFile);
+      }
+      if (!logoPreview) {
+        apiFormData.append('removeLogo', 'true');
       }
       if (!signaturePreview) {
         apiFormData.append('removeSignature', 'true');
@@ -225,6 +231,7 @@ const AdminCompanyMaster = () => {
     });
     setLogoPreview(company.company_logo ? getFileUrl(company.company_logo) : '');
     setSignaturePreview(company.authorized_signature ? getFileUrl(company.authorized_signature) : '');
+    setLogoError(false);
     setViewOnly(true);
     setIsEditing(false);
     setShowModal(true);
@@ -249,6 +256,7 @@ const AdminCompanyMaster = () => {
     });
     setLogoPreview(company.company_logo ? getFileUrl(company.company_logo) : '');
     setSignaturePreview(company.authorized_signature ? getFileUrl(company.authorized_signature) : '');
+    setLogoError(false);
     setViewOnly(false);
     setIsEditing(true);
     setShowModal(true);
@@ -749,20 +757,35 @@ const AdminCompanyMaster = () => {
                 <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider self-start">Company Logo</p>
                 
                 <div className="h-28 w-full border border-dashed border-slate-200 rounded-lg flex flex-col items-center justify-center bg-white p-2 overflow-hidden relative">
-                  {logoPreview ? (
+                  {logoPreview && !logoError ? (
                     <div className="relative group w-full h-full flex items-center justify-center">
                       <img 
                         src={logoPreview} 
                         alt="Logo Preview" 
                         className="max-h-full max-w-full object-contain"
+                        onError={() => setLogoError(true)}
                       />
                       {!viewOnly && (
                         <button
                           type="button"
-                          onClick={() => { setCompanyLogoFile(null); setLogoPreview(''); }}
+                          onClick={() => { setCompanyLogoFile(null); setLogoPreview(''); setLogoError(false); }}
                           className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[11px] font-bold transition-opacity"
                         >
-                          Remove / Change
+                          Remove Logo
+                        </button>
+                      )}
+                    </div>
+                  ) : logoError ? (
+                    <div className="flex flex-col items-center gap-1 text-amber-600 p-2 text-center">
+                      <ShieldAlert size={20} />
+                      <span className="text-[11px] font-semibold">Image not found / broken</span>
+                      {!viewOnly && (
+                        <button
+                          type="button"
+                          onClick={() => { setCompanyLogoFile(null); setLogoPreview(''); setLogoError(false); }}
+                          className="mt-1 text-[10px] text-red-600 underline font-medium hover:text-red-700"
+                        >
+                          Clear broken reference
                         </button>
                       )}
                     </div>
@@ -775,16 +798,29 @@ const AdminCompanyMaster = () => {
                 </div>
 
                 {!viewOnly && (
-                  <label className="w-full flex items-center justify-center gap-1.5 p-1.5 border border-slate-200 rounded-md bg-white hover:bg-slate-50 cursor-pointer transition text-xs font-semibold text-slate-600">
-                    <Upload size={13} />
-                    <span>Upload Logo</span>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleLogoChange} 
-                      className="hidden" 
-                    />
-                  </label>
+                  <div className="w-full flex items-center gap-2">
+                    <label className="flex-1 flex items-center justify-center gap-1.5 p-1.5 border border-slate-200 rounded-md bg-white hover:bg-slate-50 cursor-pointer transition text-xs font-semibold text-slate-600">
+                      <Upload size={13} />
+                      <span>{logoPreview ? 'Change Logo' : 'Upload Logo'}</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleLogoChange} 
+                        className="hidden" 
+                      />
+                    </label>
+                    {logoPreview && (
+                      <button
+                        type="button"
+                        onClick={() => { setCompanyLogoFile(null); setLogoPreview(''); setLogoError(false); }}
+                        className="p-1.5 px-3 border border-red-200 text-red-600 rounded-md bg-red-50 hover:bg-red-100 transition text-xs font-semibold flex items-center gap-1"
+                        title="Remove Logo"
+                      >
+                        <Trash2 size={13} />
+                        <span>Remove</span>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 

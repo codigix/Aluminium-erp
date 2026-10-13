@@ -101,6 +101,7 @@ const updateCompany = async (req, res, next) => {
       phone,
       contactPerson,
       status,
+      removeLogo,
       removeSignature
     } = req.body;
 
@@ -127,6 +128,10 @@ const updateCompany = async (req, res, next) => {
       if (req.files.authorizedSignature && req.files.authorizedSignature[0]) {
         payload.authorizedSignature = `uploads/${req.files.authorizedSignature[0].filename}`;
       }
+    }
+
+    if (removeLogo === 'true') {
+      payload.companyLogo = null;
     }
 
     if (removeSignature === 'true') {

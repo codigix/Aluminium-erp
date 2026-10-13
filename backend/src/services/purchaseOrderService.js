@@ -2427,37 +2427,9 @@ const generatePurchaseOrderPDF = async (poId) => {
   const hostCIN = activeCompany?.cin || 'U29309PN2021PTC201234';
   const hostPAN = activeCompany?.pan || 'N/A';
 
-  const fs = require('fs');
-  const path = require('path');
-  let logoBase64 = null;
-  let signatureBase64 = null;
-
-  if (activeCompany && activeCompany.company_logo) {
-    const logoPath = path.join(__dirname, '../../', activeCompany.company_logo);
-    if (fs.existsSync(logoPath)) {
-      logoBase64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
-    }
-  }
-  if (!logoBase64) {
-    const defaultLogoPaths = [
-      path.join(__dirname, '../../../frontend/src/assets/sp_techpioneer_logo.png'),
-      path.join(__dirname, '../../../frontend/src/assets/sp_techpioneer_logo.jpg'),
-      path.join(__dirname, '../../uploads/sp_techpioneer_logo.png'),
-      path.join(__dirname, '../../uploads/sp_techpioneer_logo.jpg')
-    ];
-    for (const dlp of defaultLogoPaths) {
-      if (fs.existsSync(dlp)) {
-        logoBase64 = `data:image/png;base64,${fs.readFileSync(dlp).toString('base64')}`;
-        break;
-      }
-    }
-  }
-  if (activeCompany && activeCompany.authorized_signature) {
-    const signaturePath = path.join(__dirname, '../../', activeCompany.authorized_signature);
-    if (fs.existsSync(signaturePath)) {
-      signatureBase64 = `data:image/png;base64,${fs.readFileSync(signaturePath).toString('base64')}`;
-    }
-  }
+  const { getHostCompanyLogoBase64, getHostCompanySignatureBase64 } = require('../utils/hostCompanyLogoHelper');
+  const logoBase64 = getHostCompanyLogoBase64(activeCompany);
+  const signatureBase64 = getHostCompanySignatureBase64(activeCompany);
 
   const htmlTemplate = `
 <!DOCTYPE html>

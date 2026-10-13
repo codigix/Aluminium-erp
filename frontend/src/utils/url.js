@@ -27,17 +27,15 @@ export const getFileUrl = (path) => {
   
   if (base.endsWith('/')) base = base.slice(0, -1);
   
-  // 2. Clean the incoming path (remove leading slash and "uploads/" if redundant)
-  let cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  // 2. Clean incoming path (normalize backslashes and strip leading redundant 'uploads/')
+  let cleanPath = String(path).replace(/\\/g, '/').replace(/^\/+/, '');
   
-  // Check if base already ends with /uploads and path starts with uploads/
-  if (base.toLowerCase().endsWith('/uploads') && cleanPath.toLowerCase().startsWith('uploads/')) {
+  if (cleanPath.toLowerCase().startsWith('uploads/')) {
     cleanPath = cleanPath.slice(8);
   }
+  cleanPath = cleanPath.replace(/^\/+/, '');
   
-  // Ensure we don't have multiple slashes
-  const finalPath = cleanPath.startsWith('/') ? cleanPath.slice(1) : cleanPath;
-  const url = `${base}/${finalPath}`;
+  const url = `${base}/${cleanPath}`;
   
   // 3. Final URL absolute construction for production
   if (url.startsWith('http')) return url;

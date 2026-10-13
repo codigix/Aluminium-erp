@@ -108,24 +108,9 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
     })
     .join('');
 
-  const fs = require('fs');
-  const path = require('path');
-  let logoBase64 = null;
-  let signatureBase64 = null;
-
-  if (hostCompany && hostCompany.company_logo) {
-    const logoPath = path.join(__dirname, '../../', hostCompany.company_logo);
-    if (fs.existsSync(logoPath)) {
-      logoBase64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
-    }
-  }
-
-  if (hostCompany && hostCompany.authorized_signature) {
-    const signaturePath = path.join(__dirname, '../../', hostCompany.authorized_signature);
-    if (fs.existsSync(signaturePath)) {
-      signatureBase64 = `data:image/png;base64,${fs.readFileSync(signaturePath).toString('base64')}`;
-    }
-  }
+  const { getHostCompanyLogoBase64, getHostCompanySignatureBase64 } = require('./hostCompanyLogoHelper');
+  const logoBase64 = getHostCompanyLogoBase64(hostCompany);
+  const signatureBase64 = getHostCompanySignatureBase64(hostCompany);
 
   const hostCompanyName = hostCompany?.company_name || 'SP TECHPIONEER PVT. LTD.';
   const hostCompanyAddress = hostCompany?.company_address || 'Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026';
