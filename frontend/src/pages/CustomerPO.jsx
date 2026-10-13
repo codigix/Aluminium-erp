@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import * as XLSX from 'xlsx'
 import {
   Loader2, ChevronRight, Eye, Plus, Trash2, X, Download, Pencil, Send,
   Search, RefreshCw, Filter, FileText, Calendar, Building2,
-  DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch, Upload, MapPin, User, ArrowLeft, Check
+  DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch, Upload, MapPin, User, ArrowLeft, Check,
+  FileSpreadsheet, FileDown
 } from 'lucide-react'
 import { Card, SearchableSelect } from '../components/ui.jsx'
 import DataTable from '../components/DataTable.jsx'
@@ -348,8 +350,10 @@ const CustomerPO = ({
   const [emailPoData, setEmailPoData] = useState(null)
   const [allDrawings, setAllDrawings] = useState([])
   const [pdfParsingLoading, setPdfParsingLoading] = useState(false)
+  const [excelParsingLoading, setExcelParsingLoading] = useState(false)
   const [parsedPdfSummary, setParsedPdfSummary] = useState(null)
   const poPdfInputRef = React.useRef(null)
+  const poExcelInputRef = React.useRef(null)
   const isSubmittingRef = React.useRef(false)
   const [itemSearchQuery, setItemSearchQuery] = useState('')
   const [itemStatusFilter, setItemStatusFilter] = useState('ALL') // 'ALL' | 'MATCHED' | 'PENDING'
@@ -1157,10 +1161,11 @@ const CustomerPO = ({
           itemCode: item.itemCode || item.drawingNo || `ITEM-${idx + 1}`,
           description: item.description || `Item ${item.drawingNo || idx + 1}`,
           hsnCode: item.hsnCode || '',
-          deliveryDate: item.deliveryDate || updatedHeader.poDate || prev.poDate || '',
-          quantity: item.quantity || 1,
+          deliveryDate: item.deliveryDate ? (String(item.deliveryDate).includes('T') ? String(item.deliveryDate).split('T')[0] : String(item.deliveryDate)) : (updatedHeader.poDate || prev.poDate || ''),
+          quantity: (item.quantity !== undefined && item.quantity !== null && !isNaN(Number(item.quantity)) && Number(item.quantity) > 0) ? Number(item.quantity) : 1,
           unit: item.unit || 'NOS',
-          rate: (item.rate !== undefined && item.rate !== null) ? item.rate : 0,
+          rate: (item.rate !== undefined && item.rate !== null && !isNaN(Number(item.rate))) ? Number(item.rate) : 0,
+          purchaseReqNo: item.purchaseReqNo || '',
           cgstPercent: item.cgstPercent !== undefined ? item.cgstPercent : 9,
           sgstPercent: item.sgstPercent !== undefined ? item.sgstPercent : 9,
           igstPercent: item.igstPercent !== undefined ? item.igstPercent : 0,
@@ -1196,6 +1201,194 @@ const CustomerPO = ({
     }
   };
 
+  const handleDownloadExcelTemplate = () => {
+    try {
+      const templateData = [
+        {
+          'Drawing No *': '1BZ7020010',
+          'Qty *': 200,
+          'Description': 'Sample Item 1',
+          'Unit': 'NOS',
+          'Rate': 0,
+          'HSN Code': '84779000',
+          'Delivery Date': '2026-10-15'
+        },
+        {
+          'Drawing No *': '1BZ7020020',
+          'Qty *': 50,
+          'Description': 'Sample Item 2',
+          'Unit': 'NOS',
+          'Rate': 0,
+          'HSN Code': '84779000',
+          'Delivery Date': '2026-10-15'
+        },
+        {
+          'Drawing No *': 'A00Y315W',
+          'Qty *': 36,
+          'Description': 'Sample Item 3',
+          'Unit': 'NOS',
+          'Rate': 0,
+          'HSN Code': '84779000',
+          'Delivery Date': '2026-10-15'
+        },
+        {
+          'Drawing No *': 'A00Y316W',
+          'Qty *': 36,
+          'Description': 'Sample Item 4',
+          'Unit': 'NOS',
+          'Rate': 0,
+          'HSN Code': '84779000',
+          'Delivery Date': '2026-10-15'
+        }
+      ];
+
+      const ws = XLSX.utils.json_to_sheet(templateData);
+      ws['!cols'] = [
+        { wch: 18 }, // Drawing No
+        { wch: 10 }, // Qty
+        { wch: 30 }, // Description
+        { wch: 10 }, // Unit
+        { wch: 12 }, // Rate
+        { wch: 14 }, // HSN Code
+        { wch: 16 }  // Delivery Date
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Customer PO Items');
+      XLSX.writeFile(wb, 'Customer_PO_Template.xlsx');
+      showToast('Customer PO Excel template downloaded successfully');
+    } catch (err) {
+      console.error('Template download error:', err);
+      showToast('Failed to download Excel template');
+    }
+  };
+
+  const handleBulkExcelUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const lowerName = file.name.toLowerCase();
+    if (!lowerName.endsWith('.xlsx') && !lowerName.endsWith('.xls')) {
+      showToast('Please upload an Excel file (.xlsx or .xls)');
+      if (poExcelInputRef.current) poExcelInputRef.current.value = '';
+      return;
+    }
+
+    setExcelParsingLoading(true);
+    setParsedPdfSummary(null);
+
+    try {
+      showToast('Reading and importing Customer PO Excel...');
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+      const token = localStorage.getItem('authToken');
+
+      const formData = new FormData();
+      formData.append('poPdf', file);
+
+      const response = await fetch(`${baseUrl}/customer-pos/parse`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.message || 'Failed to parse Customer PO Excel');
+      }
+
+      const { header = {}, items = [], matched = [], unmatched = [] } = resData;
+
+      if (!items || items.length === 0) {
+        showToast('No drawing line items could be detected from the Excel. Please verify the template columns.');
+        setExcelParsingLoading(false);
+        if (poExcelInputRef.current) poExcelInputRef.current.value = '';
+        return;
+      }
+
+      // Automatically stage the uploaded Excel file into attachments
+      setAttachments(prev => {
+        const exists = prev.some(f => f.name === file.name && f.size === file.size);
+        return exists ? prev : [...prev, file];
+      });
+
+      setPoForm(prev => {
+        let updatedHeader = { ...prev };
+        if (header.poNumber && (!prev.poNumber || prev.poNumber.startsWith('PO'))) {
+          updatedHeader.poNumber = header.poNumber;
+        }
+        if (header.poDate) {
+          updatedHeader.poDate = header.poDate;
+        }
+        if (header.paymentTerms && !prev.paymentTerms) {
+          updatedHeader.paymentTerms = header.paymentTerms;
+        }
+        if (header.creditDays && !prev.creditDays) {
+          updatedHeader.creditDays = header.creditDays;
+        }
+        if (header.currency && !prev.currency) {
+          updatedHeader.currency = header.currency;
+        }
+
+        if (!prev.companyId && (header.companyCode || header.companyName)) {
+          const searchName = (header.companyName || '').trim().toUpperCase();
+          const targetPool = activeCompanies?.length ? activeCompanies : (companiesList || []);
+          const comp = targetPool.find(c => {
+            const cName = (c.company_name || '').toUpperCase();
+            return searchName && cName.includes(searchName);
+          });
+          if (comp) {
+            updatedHeader.companyId = comp.id;
+          }
+        }
+
+        const populatedItems = items.map((item, idx) => ({
+          drawingNo: (item.drawingNo || `ITEM-${idx + 1}`).trim().toUpperCase(),
+          drawingId: item.drawingId || null,
+          itemCode: item.itemCode || item.drawingNo || `ITEM-${idx + 1}`,
+          description: item.description || `Item ${item.drawingNo || idx + 1}`,
+          hsnCode: item.hsnCode || '',
+          deliveryDate: item.deliveryDate ? (String(item.deliveryDate).includes('T') ? String(item.deliveryDate).split('T')[0] : String(item.deliveryDate)) : (updatedHeader.poDate || prev.poDate || ''),
+          quantity: (item.quantity !== undefined && item.quantity !== null && !isNaN(Number(item.quantity)) && Number(item.quantity) > 0) ? Number(item.quantity) : 1,
+          unit: item.unit || 'NOS',
+          rate: (item.rate !== undefined && item.rate !== null && !isNaN(Number(item.rate))) ? Number(item.rate) : 0,
+          purchaseReqNo: item.purchaseReqNo || '',
+          cgstPercent: item.cgstPercent !== undefined ? item.cgstPercent : 9,
+          sgstPercent: item.sgstPercent !== undefined ? item.sgstPercent : 9,
+          igstPercent: item.igstPercent !== undefined ? item.igstPercent : 0,
+          sub_assemblies: item.sub_assemblies || [],
+          status: item.status || (item.drawingId ? 'MATCHED' : 'PENDING_DESIGN'),
+          isUnmatched: item.isUnmatched !== undefined ? item.isUnmatched : !item.drawingId,
+          needsReview: false
+        }));
+
+        const matchedCount = matched.length || populatedItems.filter(i => !i.isUnmatched).length;
+        const unmatchedCount = unmatched.length || populatedItems.filter(i => i.isUnmatched).length;
+
+        setParsedPdfSummary({
+          fileName: file.name,
+          totalExtracted: items.length,
+          matchedCount,
+          unmatchedCount
+        });
+
+        return {
+          ...updatedHeader,
+          items: populatedItems
+        };
+      });
+
+      showToast(`Imported ${items.length} line items from Excel (${matched.length} Matched, ${unmatched.length} Pending Design)`);
+    } catch (err) {
+      console.error('Excel parsing error:', err);
+      showToast(err.message || 'Failed to import Excel file');
+    } finally {
+      setExcelParsingLoading(false);
+      if (poExcelInputRef.current) poExcelInputRef.current.value = '';
+    }
+  };
+
   const handleItemChange = (index, field, value) => {
     const newItems = [...poForm.items]
     newItems[index][field] = value
@@ -1219,6 +1412,9 @@ const CustomerPO = ({
       if (matchedQuoteDwg) {
         newItems[index].isUnmatched = false;
         newItems[index].needsReview = false;
+        newItems[index].drawingId = matchedQuoteDwg.drawing_id || matchedQuoteDwg.drawingId || matchedQuoteDwg.id || null;
+        newItems[index].status = 'MATCHED';
+        newItems[index].design_status = null;
 
         const masterDwg = allDrawings.find(d =>
           String(d.drawing_no).trim().toUpperCase() === String(value).trim().toUpperCase()
@@ -1280,6 +1476,9 @@ const CustomerPO = ({
         if (matchedDwg) {
           newItems[index].isUnmatched = false;
           newItems[index].needsReview = false;
+          newItems[index].drawingId = matchedDwg.id || matchedDwg.drawing_id || null;
+          newItems[index].status = 'MATCHED';
+          newItems[index].design_status = null;
           newItems[index].description = matchedDwg.drawing_description || matchedDwg.description || newItems[index].description || '';
           newItems[index].hsnCode = matchedDwg.hsn_code || newItems[index].hsnCode || '';
           newItems[index].unit = matchedDwg.unit || newItems[index].unit || 'NOS';
@@ -1311,6 +1510,9 @@ const CustomerPO = ({
           }
         } else {
           newItems[index].isUnmatched = true;
+          newItems[index].drawingId = null;
+          newItems[index].status = 'PENDING_DESIGN';
+          newItems[index].design_status = 'PENDING_DESIGN';
         }
       }
 
@@ -1343,10 +1545,12 @@ const CustomerPO = ({
     isSubmittingRef.current = false
     setParsedPdfSummary(null)
     setPdfParsingLoading(false)
+    setExcelParsingLoading(false)
     setItemSearchQuery('')
     setItemStatusFilter('ALL')
     setViewItemModal(null)
     if (poPdfInputRef.current) poPdfInputRef.current.value = ''
+    if (poExcelInputRef.current) poExcelInputRef.current.value = ''
     if (window.location.pathname !== '/sales/customer-po') {
       window.history.pushState({}, '', '/sales/customer-po');
     }
@@ -1432,24 +1636,30 @@ const CustomerPO = ({
           customerGstin: data.gstin || '',
           customerBillingAddress: data.billing_address || '',
           customerShippingAddress: data.shipping_address || '',
-          items: data.items.map(item => ({
-            id: item.id,
-            itemCode: item.item_code || item.drawing_no || '',
-            drawingNo: item.drawing_no || '',
-            drawingId: item.drawing_id || null,
-            status: item.status || (item.drawing_id ? 'MATCHED' : (item.design_status || 'PENDING_DESIGN')),
-            isUnmatched: item.status === 'PENDING_DESIGN' || item.design_status === 'PENDING_DESIGN' || (!item.drawing_id && item.status !== 'MATCHED' && item.status !== 'ACTIVE'),
-            description: item.description || '',
-            hsnCode: item.hsn_code || '',
-            deliveryDate: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
-            quantity: item.quantity || '',
-            unit: item.unit || 'NOS',
-            rate: item.rate || '',
-            cgstPercent: item.cgst_percent || 0,
-            sgstPercent: item.sgst_percent || 0,
-            igstPercent: item.igst_percent || 0,
-            dispatched_qty: item.dispatched_qty || 0,
-            sub_assemblies: (() => {
+          items: data.items.map(item => {
+            const cleanDwg = String(item.drawing_no || item.drawingNo || '').trim().toUpperCase();
+            const matchedMaster = allDrawings.find(d => String(d.drawing_no || d.drawingNo || '').trim().toUpperCase() === cleanDwg);
+            const resolvedDwgId = item.drawing_id || item.drawingId || (matchedMaster ? (matchedMaster.id || matchedMaster.drawing_id) : null);
+            const isMatched = Boolean(resolvedDwgId || matchedMaster || ['MATCHED', 'ACTIVE', 'APPROVED'].includes(String(item.status || '').trim().toUpperCase()));
+
+            return {
+              id: item.id,
+              itemCode: item.item_code || item.drawing_no || '',
+              drawingNo: item.drawing_no || '',
+              drawingId: resolvedDwgId || null,
+              status: isMatched ? 'MATCHED' : (item.status || 'PENDING_DESIGN'),
+              isUnmatched: !isMatched,
+              description: item.description || '',
+              hsnCode: item.hsn_code || '',
+              deliveryDate: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
+              quantity: item.quantity || '',
+              unit: item.unit || 'NOS',
+              rate: item.rate || '',
+              cgstPercent: item.cgst_percent || 0,
+              sgstPercent: item.sgst_percent || 0,
+              igstPercent: item.igst_percent || 0,
+              dispatched_qty: item.dispatched_qty || 0,
+              sub_assemblies: (() => {
               const seen = new Set();
               return (item.sub_assemblies || []).filter(sa => {
                 const code = String(sa.component_code || sa.item_code || (sa.description && sa.description.toUpperCase() !== 'SUB-ASSEMBLY' && sa.description.toUpperCase() !== 'SUB_ASSEMBLY' ? sa.description : '') || sa.drawing_no || sa.drawingNo || sa.description || '').trim().toLowerCase();
@@ -1470,8 +1680,9 @@ const CustomerPO = ({
                 is_assembly: !!(sa.is_assembly || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASM') || (sa.item_group || sa.drawing_type || '').toUpperCase().includes('ASSEMBLY'))
               }));
             })()
-          }))
-        });
+          };
+        })
+      });
         const hasContact = (data.contact_person && data.contact_person !== '—') ||
           (data.email && data.email !== '—') ||
           (data.phone && data.phone !== '—');
@@ -1662,23 +1873,32 @@ const CustomerPO = ({
       formData.append('billingAddress', poForm.customerBillingAddress || '');
       formData.append('shippingAddress', poForm.customerShippingAddress || '');
 
-      const mappedItems = poForm.items.map(item => ({
-        ...item,
-        drawingNo: (item.drawingNo || '').toUpperCase(),
-        drawingId: item.drawingId || null,
-        status: item.status || (item.drawingId ? 'ACTIVE' : 'PENDING_DESIGN'),
-        hsn_code: item.hsnCode,
-        delivery_date: item.deliveryDate,
-        sub_assemblies: (item.sub_assemblies || []).map(sa => ({
-          drawingNo: (sa.drawingNo || '').toUpperCase(),
-          description: sa.description,
-          hsn_code: sa.hsnCode,
-          delivery_date: sa.deliveryDate,
-          quantity: sa.quantity,
-          unit: sa.unit,
-          rate: sa.rate
-        }))
-      }));
+      const mappedItems = poForm.items.map(item => {
+        const cleanNo = String(item.drawingNo || '').trim().toUpperCase();
+        const matchedMaster = allDrawings.find(d => String(d.drawing_no || d.drawingNo || '').trim().toUpperCase() === cleanNo);
+        const resolvedDrawingId = item.drawingId || item.drawing_id || (matchedMaster ? (matchedMaster.id || matchedMaster.drawing_id) : null);
+        const isMatched = Boolean(resolvedDrawingId || matchedMaster || ['MATCHED', 'ACTIVE', 'APPROVED'].includes(String(item.status || '').trim().toUpperCase()));
+
+        return {
+          ...item,
+          drawingNo: cleanNo,
+          drawingId: resolvedDrawingId || null,
+          status: isMatched ? 'MATCHED' : (item.status || 'PENDING_DESIGN'),
+          designStatus: isMatched ? null : (item.designStatus || 'PENDING_DESIGN'),
+          isUnmatched: !isMatched,
+          hsn_code: item.hsnCode,
+          delivery_date: item.deliveryDate,
+          sub_assemblies: (item.sub_assemblies || []).map(sa => ({
+            drawingNo: (sa.drawingNo || '').toUpperCase(),
+            description: sa.description,
+            hsn_code: sa.hsnCode,
+            delivery_date: sa.deliveryDate,
+            quantity: sa.quantity,
+            unit: sa.unit,
+            rate: sa.rate
+          }))
+        };
+      });
       formData.append('items', JSON.stringify(mappedItems));
 
       if (formMode === 'EDIT') {
@@ -2008,33 +2228,40 @@ const CustomerPO = ({
                   customerGstin: data.gstin || '',
                   customerBillingAddress: data.billing_address || '',
                   customerShippingAddress: data.shipping_address || '',
-                  items: (data.items || []).map(item => ({
-                    id: item.id,
-                    itemCode: item.item_code || item.drawing_no || '',
-                    drawingNo: item.drawing_no || '',
-                    drawingId: item.drawing_id || null,
-                    status: item.status || (item.drawing_id ? 'MATCHED' : (item.design_status || 'PENDING_DESIGN')),
-                    isUnmatched: item.status === 'PENDING_DESIGN' || item.design_status === 'PENDING_DESIGN' || (!item.drawing_id && item.status !== 'MATCHED' && item.status !== 'ACTIVE'),
-                    description: item.description || '',
-                    hsnCode: item.hsn_code || '',
-                    deliveryDate: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
-                    quantity: item.quantity || '',
-                    unit: item.unit || 'NOS',
-                    rate: item.rate || '',
-                    cgstPercent: item.cgst_percent || 0,
-                    sgstPercent: item.sgst_percent || 0,
-                    igstPercent: item.igst_percent || 0,
-                    sub_assemblies: (item.sub_assemblies || []).map(sa => ({
-                      drawingNo: sa.drawing_no || sa.drawingNo || '',
-                      description: sa.description || '',
-                      hsnCode: sa.hsn_code || sa.hsnCode || '',
-                      deliveryDate: sa.delivery_date ? new Date(sa.delivery_date).toISOString().split('T')[0] : '',
-                      quantity: sa.quantity || 0,
-                      unit: sa.unit || 'NOS',
-                      rate: sa.rate || 0,
-                      item_group: sa.item_group || 'SA'
-                    }))
-                  }))
+                  items: (data.items || []).map(item => {
+                    const cleanDwg = String(item.drawing_no || item.drawingNo || '').trim().toUpperCase();
+                    const matchedMaster = allDrawings.find(d => String(d.drawing_no || d.drawingNo || '').trim().toUpperCase() === cleanDwg);
+                    const resolvedDwgId = item.drawing_id || item.drawingId || (matchedMaster ? (matchedMaster.id || matchedMaster.drawing_id) : null);
+                    const isMatched = Boolean(resolvedDwgId || matchedMaster || ['MATCHED', 'ACTIVE', 'APPROVED'].includes(String(item.status || '').trim().toUpperCase()));
+
+                    return {
+                      id: item.id,
+                      itemCode: item.item_code || item.drawing_no || '',
+                      drawingNo: item.drawing_no || '',
+                      drawingId: resolvedDwgId || null,
+                      status: isMatched ? 'MATCHED' : (item.status || 'PENDING_DESIGN'),
+                      isUnmatched: !isMatched,
+                      description: item.description || '',
+                      hsnCode: item.hsn_code || '',
+                      deliveryDate: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
+                      quantity: item.quantity || '',
+                      unit: item.unit || 'NOS',
+                      rate: item.rate || '',
+                      cgstPercent: item.cgst_percent || 0,
+                      sgstPercent: item.sgst_percent || 0,
+                      igstPercent: item.igst_percent || 0,
+                      sub_assemblies: (item.sub_assemblies || []).map(sa => ({
+                        drawingNo: sa.drawing_no || sa.drawingNo || '',
+                        description: sa.description || '',
+                        hsnCode: sa.hsn_code || sa.hsnCode || '',
+                        deliveryDate: sa.delivery_date ? new Date(sa.delivery_date).toISOString().split('T')[0] : '',
+                        quantity: sa.quantity || 0,
+                        unit: sa.unit || 'NOS',
+                        rate: sa.rate || 0,
+                        item_group: sa.item_group || 'SA'
+                      }))
+                    };
+                  })
                 });
               } catch (error) {
                 console.error('Error pre-filling PO items:', error);
@@ -2069,21 +2296,25 @@ const CustomerPO = ({
   // Helper to accurately determine if an item is pending design or matched
   const isItemPendingDesign = useCallback((item, drawingsList = allDrawings) => {
     if (!item) return false;
-    const statusUpper = String(item.status || item.design_status || '').trim().toUpperCase();
-    if (statusUpper === 'PENDING_DESIGN' || statusUpper === 'PENDING') return true;
-    if (statusUpper === 'MATCHED' || statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') return false;
-    if (item.isUnmatched === true) return true;
-    if (item.isUnmatched === false) return false;
-    if (item.drawingId || item.drawing_id) return false;
 
-    // Fallback check against Drawing Master (allDrawings)
+    // 1. Fallback check against Drawing Master (allDrawings) - ground truth
     if (item.drawingNo && Array.isArray(drawingsList) && drawingsList.length > 0) {
       const cleanNo = String(item.drawingNo).trim().toUpperCase();
       const exists = drawingsList.some(d => String(d.drawing_no || d.drawingNo || '').trim().toUpperCase() === cleanNo);
-      return !exists;
+      if (exists) return false;
     }
 
-    return !item.drawingId && !item.drawing_id;
+    // 2. Explicit drawing link
+    if (item.drawingId || item.drawing_id) return false;
+
+    // 3. Status checks
+    const statusUpper = String(item.status || item.design_status || '').trim().toUpperCase();
+    if (statusUpper === 'MATCHED' || statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') return false;
+    if (statusUpper === 'PENDING_DESIGN' || statusUpper === 'PENDING') return true;
+    if (item.isUnmatched === false) return false;
+    if (item.isUnmatched === true) return true;
+
+    return true;
   }, [allDrawings]);
 
   // Dynamic counts for PO Form Items
@@ -2139,7 +2370,11 @@ const CustomerPO = ({
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
                   <Clock className="w-3 h-3 text-amber-600 shrink-0" /> Pending Design
                 </span>
-              ) : null}
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" /> Matched
+                </span>
+              )}
             </div>
           );
         }
@@ -2165,7 +2400,11 @@ const CustomerPO = ({
               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
                 <Clock className="w-3 h-3 text-amber-600 shrink-0" /> Pending Design
               </span>
-            ) : null}
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" /> Matched
+              </span>
+            )}
             {!isItemPendingDesign(item, allDrawings) && item.needsReview && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
                 ⚠️ Needs Review
@@ -3627,6 +3866,46 @@ const CustomerPO = ({
                     {/* Right Side: Action Buttons */}
                     {formMode !== 'VIEW' && (
                       <div className="flex items-center gap-2">
+                        {/* Download Excel Template */}
+                        <button
+                          type="button"
+                          onClick={handleDownloadExcelTemplate}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-xs font-semibold transition-all active:scale-95 shadow-2xs"
+                          title="Download Excel template with sample drawing items"
+                        >
+                          <FileDown className="w-3.5 h-3.5 text-slate-600" />
+                          <span>Download Template</span>
+                        </button>
+
+                        {/* Hidden file input for Customer PO Excel */}
+                        <input
+                          type="file"
+                          ref={poExcelInputRef}
+                          onChange={handleBulkExcelUpload}
+                          accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                          className="hidden"
+                          disabled={excelParsingLoading}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => poExcelInputRef.current?.click()}
+                          disabled={excelParsingLoading}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 text-emerald-800 border border-emerald-200 rounded-md text-xs font-semibold transition-all active:scale-95 shadow-2xs disabled:opacity-50"
+                          title="Upload completed Customer PO Excel template to import all line items"
+                        >
+                          {excelParsingLoading ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                              <span>Parsing Excel...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Upload Excel</span>
+                            </>
+                          )}
+                        </button>
+
                         {/* Hidden file input for Customer PO PDF */}
                         <input
                           type="file"

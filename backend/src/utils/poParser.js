@@ -322,15 +322,45 @@ const STOP_WORDS = new Set([
   'CAVITY', 'X', 'DAYS', 'PAGE', 'OF', 'BAL', 'BALANCE', 'DISPATCH', 'STANDARD'
 ]);
 
+const IGNORE_DESC_PATTERNS = [
+  /cin\s*no/i, /gstin\b/i, /telephone/i, /mobile/i, /phone\b/i, /fax\b/i, /email\b/i, /website/i, /pincode/i,
+  /page\s*\d+/i, /--\s*\d+/i, /vendor\s*code/i, /purchase\s*order/i, /order\s*type/i, /plant\s*:/i,
+  /payment\s*:/i, /freight\s*:/i, /insurance\s*:/i, /p\s*&\s*f\s*:/i, /delivery\s*date/i,
+  /our\s*ref/i, /your\s*ref/i, /purchase\s*term/i, /terms\b/i, /sl\s*no/i, /item\s*no/i, /item\s*description/i,
+  /despatch\s*address/i, /created\s*by/i, /sidel\b/i, /plot\s*no/i, /mahalunge/i, /pune/i, /industries/i,
+  /near\s*masal/i, /midc\b/i, /bhosari/i, /%\s*cgst/i, /sgst/i, /^\d{4}-\d{2}-\d{2}$/, /^\d{2}-\d{2}-\d{4}$/,
+  /old\s*material/i, /version\s*no/i, /header\s*text/i, /po\s*date/i, /^\s*in\s*$/i
+];
+
 /**
- * Extract Drawing / Item Numbers STRICTLY from the table's Item No column
- * Never scans continuation lines (descriptions, old material no, HSN, rate, etc.)
+ * Extract rich line items and Drawing Numbers from table rows
+ * Extracts Qty, Rate, HSN, Delivery Date, Pur.Req No, and Unit for each row individually
  */
-const extractTableDrawingNumbers = (text, knownDrawingsSet = new Set()) => {
+const extractTableLineItems = (text, knownDrawingsSet = new Set()) => {
   const lines = text.split(/\r?\n/);
   let inTable = false;
   let currentSlNo = 0;
+  const items = [];
   const drawingNumbers = [];
+  let currentItem = null;
+
+  const finalizeItem = () => {
+    if (!currentItem) return;
+    const cleanDesc = (currentItem.descLines || [])
+      .filter(l => !IGNORE_DESC_PATTERNS.some(p => p.test(l.trim())))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (cleanDesc) {
+      currentItem.description = cleanDesc;
+    } else {
+      currentItem.description = `Item ${currentItem.drawingNo}`;
+    }
+    delete currentItem.descLines;
+    items.push(currentItem);
+    currentItem = null;
+  };
 
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
@@ -349,7 +379,9 @@ const extractTableDrawingNumbers = (text, knownDrawingsSet = new Set()) => {
       /^Page\s*\d+\s*of\s*\d+/i.test(line) ||
       /^(?:subtotal|total\s*value|grand\s*total|amount\s*payable|special\s*instructions)/i.test(line)
     ) {
-      inTable = false;
+      if (/^(?:subtotal|total\s*value|grand\s*total|amount\s*payable|special\s*instructions)/i.test(line)) {
+        inTable = false;
+      }
       continue;
     }
 
@@ -361,8 +393,6 @@ const extractTableDrawingNumbers = (text, knownDrawingsSet = new Set()) => {
     if (slMatch) {
       const sl = parseInt(slMatch[1], 10);
       const rawItem = slMatch[2].replace(/[^A-Za-z0-9\-_./]/g, '').toUpperCase();
-
-      // Ensure proper sequential progression or page reset
       const isSlProgression = sl > currentSlNo || (sl === 1 && currentSlNo > 5);
 
       if (
@@ -375,24 +405,102 @@ const extractTableDrawingNumbers = (text, knownDrawingsSet = new Set()) => {
         !/^-?\d+\.\d+$/.test(rawItem) &&
         !/^(84|73|85|76|39)\d{6}$/.test(rawItem)
       ) {
+        finalizeItem();
         currentSlNo = sl;
         drawingNumbers.push(rawItem);
-        // Do NOT scan subsequent tokens or lines - exactly 1 Item No per row!
+        currentItem = {
+          slNo: sl,
+          drawingNo: rawItem,
+          description: '',
+          hsnCode: '',
+          deliveryDate: '',
+          purchaseReqNo: '',
+          rate: 0,
+          quantity: 1,
+          unit: 'NOS',
+          cgstPercent: 9,
+          sgstPercent: 9,
+          descLines: []
+        };
         continue;
       }
     }
 
     // Fallback: If table has no SL column, check if line starts directly with a known drawing from Drawing Master
-    const tokens = line.split(/\s+/).filter(Boolean);
-    if (tokens.length > 0) {
-      const firstTok = tokens[0].replace(/[^A-Za-z0-9\-_./]/g, '').toUpperCase();
-      if (knownDrawingsSet.has(firstTok)) {
-        drawingNumbers.push(firstTok);
+    if (!currentItem) {
+      const tokens = line.split(/\s+/).filter(Boolean);
+      if (tokens.length > 0) {
+        const firstTok = tokens[0].replace(/[^A-Za-z0-9\-_./]/g, '').toUpperCase();
+        if (knownDrawingsSet.has(firstTok)) {
+          drawingNumbers.push(firstTok);
+          currentItem = {
+            slNo: items.length + 1,
+            drawingNo: firstTok,
+            description: '',
+            hsnCode: '',
+            deliveryDate: '',
+            purchaseReqNo: '',
+            rate: 0,
+            quantity: 1,
+            unit: 'NOS',
+            cgstPercent: 9,
+            sgstPercent: 9,
+            descLines: []
+          };
+          continue;
+        }
+      }
+    }
+
+    if (currentItem) {
+      const tokens = line.split(/[\t\s]+/).filter(Boolean);
+      const unitIdx = tokens.findIndex(t => /^(PC|PCS|NOS|EA|SET|UNIT|KG|MTR|ROLL|LOT)$/i.test(t));
+      const hasDate = DATE_REGEX.test(line);
+
+      if (unitIdx > 0 && (hasDate || tokens.length >= 5)) {
+        currentItem.unit = tokens[unitIdx].toUpperCase();
+        const rawQty = parseFloat(tokens[unitIdx - 1]);
+        if (!isNaN(rawQty) && rawQty > 0) {
+          currentItem.quantity = rawQty;
+        }
+
+        if (unitIdx >= 2) {
+          const rawRate = parseFloat(tokens[unitIdx - 2]);
+          if (!isNaN(rawRate) && rawRate >= 0) {
+            currentItem.rate = rawRate;
+          }
+        }
+
+        if (unitIdx >= 3 && /^\d{7,12}$/.test(tokens[unitIdx - 3])) {
+          currentItem.purchaseReqNo = tokens[unitIdx - 3];
+        }
+
+        const dateMatch = line.match(DATE_REGEX);
+        if (dateMatch) {
+          currentItem.deliveryDate = normalizeDate(dateMatch[1]) || dateMatch[1];
+        }
+
+        const hsnToken = tokens.find(t => isHsnCode(t));
+        if (hsnToken) {
+          currentItem.hsnCode = hsnToken.replace(/[^0-9]/g, '');
+        }
+
+        if (tokens.length > unitIdx + 4) {
+          const tax1 = parseFloat(tokens[unitIdx + 4]);
+          if (!isNaN(tax1)) currentItem.cgstPercent = tax1;
+        }
+        if (tokens.length > unitIdx + 6) {
+          const tax2 = parseFloat(tokens[unitIdx + 6]);
+          if (!isNaN(tax2)) currentItem.sgstPercent = tax2;
+        }
+      } else if (!line.toLowerCase().includes('old material')) {
+        currentItem.descLines.push(line);
       }
     }
   }
 
-  return drawingNumbers;
+  finalizeItem();
+  return { drawingNumbers, items };
 };
 
 /**
@@ -509,8 +617,8 @@ const parsePoPdf = async (buffer, knownDrawings = []) => {
 
     const billingAddress = extractAddressBlock(sections.headerText, ['Billing Address', 'Address', 'Customer Address', 'Despatch Address']);
 
-    // Extract Drawing Numbers strictly from Item No column
-    const drawingNumbers = extractTableDrawingNumbers(text, knownDrawingsSet);
+    // Extract Drawing Numbers and rich Line Items strictly from Item No table column
+    const { drawingNumbers, items } = extractTableLineItems(text, knownDrawingsSet);
 
     return {
       companyCode,
@@ -529,7 +637,8 @@ const parsePoPdf = async (buffer, knownDrawings = []) => {
       remarks: extractField(scopeForHeaders, [/Remarks\s*[:\-]?\s*(.+)/i]),
       plant: plant || extractField(scopeForHeaders, [/Plant\s*[:\-]?\s*(.+)/i]),
       orderType: orderType || extractField(scopeForHeaders, [/Order\s*Type\s*[:\-]?\s*(.+)/i]),
-      drawingNumbers
+      drawingNumbers,
+      items
     };
   } catch (error) {
     console.error('PDF parse error:', error.message);

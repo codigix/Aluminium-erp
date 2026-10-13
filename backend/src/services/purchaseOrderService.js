@@ -6,38 +6,6 @@ const mustache = require('mustache');
 const stockService = require('./stockService');
 const fs = require('fs');
 const path = require('path');
-const { workflowError, PO_SYSTEM_ONLY_STATUSES, PO_APPROVABLE_STATUSES, salesOrderAdvanceSql } = require('../config/workflow');
-const { nextDocumentNumber } = require('../utils/documentNumber');
-
-// Quantity received per PO line, from GRN items (same basis as poReceiptService)
-const getReceivedQtyByPoItem = async (connection, poId) => {
-  const [rows] = await connection.query(
-    `SELECT gi.po_item_id, COALESCE(SUM(COALESCE(gi.receiving_qty, gi.received_qty, gi.accepted_qty, 0)), 0) AS received
-     FROM grn_items gi
-     JOIN purchase_order_items poi ON gi.po_item_id = poi.id
-     WHERE poi.purchase_order_id = ?
-     GROUP BY gi.po_item_id`,
-    [poId]
-  );
-  return new Map(rows.map(row => [Number(row.po_item_id), parseFloat(row.received) || 0]));
-};
-
-const getPoReceiptProgress = async (connection, poId) => {
-  const [items] = await connection.query(
-    `SELECT id, COALESCE(NULLIF(design_qty, 0), NULLIF(planned_qty, 0), quantity, 0) AS ordered
-     FROM purchase_order_items WHERE purchase_order_id = ?`,
-    [poId]
-  );
-  const receivedByItem = await getReceivedQtyByPoItem(connection, poId);
-  let ordered = 0;
-  let received = 0;
-  for (const item of items) {
-    const itemOrdered = parseFloat(item.ordered) || 0;
-    ordered += itemOrdered;
-    received += Math.min(receivedByItem.get(Number(item.id)) || 0, itemOrdered);
-  }
-  return { ordered: Number(ordered.toFixed(3)), received: Number(received.toFixed(3)) };
-};
 
 const formatAddressToTwoLines = (addressStr) => {
   if (!addressStr || addressStr === 'N/A' || String(addressStr).trim() === '') return 'N/A';
@@ -68,6 +36,107 @@ const formatAddressToTwoLines = (addressStr) => {
   const line2 = parts.slice(splitIndex).join(', ');
 
   return `${line1}<br/>${line2}`;
+};
+
+/**
+ * Determine whether a purchase order item is billed by weight (₹/KG) or by quantity (₹/NOS).
+ * Rule: Shape-based raw materials with calculated physical weight are billed by weight (KG).
+ * Bought-out components (BO-, fasteners, hardware, non-weight) are billed by quantity (NOS).
+ */
+const isItemWeightBased = (item) => {
+  if (!item) return false;
+
+  // 1. Bought-out components / standard hardware are NEVER weight-billed
+  const matType = (item.material_type || item.item_type || '').toUpperCase().trim();
+  const itemCode = String(item.item_code || '').toUpperCase().trim();
+  if (matType.includes('BOUGHT') || itemCode.startsWith('BO-')) {
+    return false;
+  }
+
+  const nameAndDesc = `${item.material_name || ''} ${item.description || ''} ${item.item_name || ''} ${item.item_code || ''}`.toUpperCase();
+  const BOUGHT_OUT_PATTERNS = [
+    /\bWASHER\b/, /\bBOLT\b/, /\bSCREW\b/, /\bNUT\b/, /\bBEARING\b/,
+    /\bFASTENER\b/, /\bOIL\b/, /\bLUBRICANT\b/, /\bGASKET\b/, /\bRIVET\b/, /\bSEAL\b/
+  ];
+  if (BOUGHT_OUT_PATTERNS.some(p => p.test(nameAndDesc)) && !item.shape_type && !item.shape_name) {
+    return false;
+  }
+
+  // 2. Explicit shape type (PLATE, ROUND, PIPE, TUBE, ROD, SHEET, FLAT, ANGLE, CHANNEL, BAR, HEX, etc.)
+  const shapeStr = String(item.shape_type || item.shape_name || '').toUpperCase().trim();
+  const SHAPE_KEYWORDS = [
+    'PLATE', 'ROUND', 'ROUND BAR', 'PIPE', 'TUBE', 'ROD', 'SHEET', 'FLAT', 'ANGLE', 'CHANNEL', 'BAR', 'HEX'
+  ];
+  const hasExplicitShape = !!(shapeStr || item.shape_id);
+  const hasShapeInText = SHAPE_KEYWORDS.some(kw => new RegExp(`\\b${kw}\\b`, 'i').test(nameAndDesc) || nameAndDesc.includes(kw));
+
+  // 3. Physical weight values
+  const wpu = parseFloat(item.weight_per_unit || 0);
+  const totW = parseFloat(item.total_weight || 0);
+  const reqW = parseFloat(item.required_weight || 0);
+  const qty = parseFloat(item.quantity || 0);
+  const unitStr = String(item.unit || item.uom || '').trim().toUpperCase();
+
+  const hasPhysicalWeight = totW > 0 || reqW > 0 || wpu > 0;
+
+  // 4. Shape-based items with weight or in weight-bearing PO context
+  if ((hasExplicitShape || hasShapeInText) && (hasPhysicalWeight || unitStr === 'KG' || qty > 0)) {
+    return true;
+  }
+
+  // 5. If item unit is explicitly KG
+  if (unitStr === 'KG') return true;
+
+  // 6. If item group / material type is raw material with weight
+  const isRaw = (item.item_group || '').toLowerCase().includes('raw') || matType.includes('RAW');
+  if (isRaw && (hasPhysicalWeight || qty > 0)) {
+    return true;
+  }
+
+  return false;
+};
+
+const getItemEffectiveBillingQuantity = (item, isDirectCompany = false) => {
+  if (!item) return 0;
+
+  if (isItemWeightBased(item)) {
+    // 1. Explicit total_weight
+    const totW = parseFloat(item.total_weight || 0);
+    if (totW > 0) return totW;
+
+    // 2. Explicit required_weight
+    const reqW = parseFloat(item.required_weight || 0);
+    if (reqW > 0) return reqW;
+
+    const wpu = parseFloat(item.weight_per_unit || 0);
+    const dQ = parseFloat(item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : (item.planned_qty || 0));
+    const q = parseFloat(item.quantity || 0);
+
+    // 3. If quantity is different from piece designQty (e.g. 63.303 KG vs 3 NOS, 7.815 KG vs 3 NOS),
+    // quantity represents the total physical weight in KG
+    if (q > 0 && dQ > 0 && Math.abs(q - dQ) > 0.001) {
+      return q;
+    }
+
+    // 4. If piece count × weight_per_unit gives physical weight (e.g. 1 NOS × 12.726 KG = 12.726 KG)
+    if (wpu > 0 && dQ > 0) {
+      return Number((dQ * wpu).toFixed(3));
+    }
+
+    // Fallback to item.quantity
+    if (q > 0) return q;
+  }
+
+  // Non-weight-based (Bought out, piece-based)
+  const dQ = parseFloat(item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : (item.planned_qty || item.quantity || 0));
+  return dQ > 0 ? dQ : (parseFloat(item.quantity) || 0);
+};
+
+const calculatePOItemAmount = (item, isDirectCompany = false) => {
+  if (!item) return 0;
+  const bQty = getItemEffectiveBillingQuantity(item, isDirectCompany);
+  const rate = parseFloat(item.unit_rate !== undefined && item.unit_rate !== null ? item.unit_rate : (item.rate || 0));
+  return Number((bQty * rate).toFixed(2));
 };
 
 /**
@@ -419,7 +488,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
     let poNumber = manualPoNumber;
 
     if (!poNumber) {
-      poNumber = await nextDocumentNumber(connection, 'PURCHASE_ORDER');
+      poNumber = await generatePONumber();
     }
 
     const poStatus = (actualMrId && !finalVendorId) ? 'PO_REQUEST' : 'DRAFT';
@@ -555,8 +624,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
 
     if (sales_order_id) {
       await connection.execute(
-        // Forward only: buying extra material must not pull an order out of production
-        `UPDATE sales_orders SET status = ? WHERE id = ? AND ${salesOrderAdvanceSql('MATERIAL_PURCHASE_IN_PROGRESS')}`,
+        'UPDATE sales_orders SET status = ? WHERE id = ?',
         ['MATERIAL_PURCHASE_IN_PROGRESS', sales_order_id]
       );
     }
@@ -640,7 +708,7 @@ const createDirectCompanyPurchaseOrder = async (data) => {
 
     let poNumber = (inputPoNumber && String(inputPoNumber).trim()) ? String(inputPoNumber).trim() : '';
     if (!poNumber) {
-      poNumber = await nextDocumentNumber(connection, 'PURCHASE_ORDER');
+      poNumber = await generatePONumber();
     } else {
       const [existingPO] = await connection.execute(
         'SELECT id FROM purchase_orders WHERE po_number = ? LIMIT 1',
@@ -655,7 +723,7 @@ const createDirectCompanyPurchaseOrder = async (data) => {
     const formattedItems = items.map(item => {
       const qty = parseFloat(item.quantity) || 0;
       const rate = parseFloat(item.rate || item.unit_rate) || 0;
-      const amount = parseFloat(item.amount) > 0 ? parseFloat(item.amount) : Number((qty * rate).toFixed(2));
+      const amount = calculatePOItemAmount(item);
       const cgstPercent = parseFloat(item.cgst_percent ?? 9);
       const sgstPercent = parseFloat(item.sgst_percent ?? 9);
       const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
@@ -1163,7 +1231,7 @@ const getPurchaseOrders = async (filters = {}) => {
         }
       }
 
-      if (po.is_merged === 1 || po.is_merged === true || uniqueDwgNos.size > 1) {
+      if (po.po_type !== 'DIRECT_COMPANY' && (po.is_merged === 1 || po.is_merged === true || uniqueDwgNos.size > 1)) {
         po.drawing_no = 'Merged Drawings';
         po.finished_good = `${uniqueDwgNos.size} Drawings`;
       }
@@ -1436,6 +1504,7 @@ const getPurchaseOrderById = async (poId) => {
         '—'
       ) as customer_po_no,
       COALESCE(
+        (SELECT c_dir.company_name FROM companies c_dir WHERE c_dir.id = po.company_id),
         (SELECT c.company_name FROM companies c WHERE c.id = o_dir.client_id),
         (SELECT c3.company_name 
          FROM material_requests mr_inner
@@ -1672,7 +1741,7 @@ const getPurchaseOrderById = async (poId) => {
     }
   }
 
-  if (po.is_merged === 1 || po.is_merged === true || uniqueDwgNos.size > 1) {
+  if (po.po_type !== 'DIRECT_COMPANY' && (po.is_merged === 1 || po.is_merged === true || uniqueDwgNos.size > 1)) {
     po.drawing_no = 'Merged Drawings';
     po.finished_good = `${uniqueDwgNos.size} Drawings`;
   } else if (uniqueDwgNos.size === 1 && (!po.drawing_no || po.drawing_no === '—')) {
@@ -1688,7 +1757,23 @@ const getPurchaseOrderById = async (poId) => {
 };
 
 const updatePurchaseOrder = async (poId, payload) => {
-  const { status, poNumber, expectedDeliveryDate, notes, items, vendorId, discount_type, discount_value, discount_amount, shortClose, shortCloseReason } = payload;
+  const { 
+    status, 
+    poNumber, 
+    expectedDeliveryDate, 
+    notes, 
+    items, 
+    vendorId, 
+    discount_type, 
+    discount_value, 
+    discount_amount,
+    customerPoNo,
+    customer_po_no,
+    orderDate,
+    order_date,
+    companyId,
+    company_id
+  } = payload;
 
   const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'APPROVED', 'PENDING_PAYMENT', 'PAID', 'COMPLETED', 'CLOSED', 'FULFILLED'];
   if (status && !validStatuses.includes(status)) {
@@ -1701,65 +1786,45 @@ const updatePurchaseOrder = async (poId, payload) => {
   try {
     await connection.beginTransaction();
 
-    const [existing] = await connection.query('SELECT * FROM purchase_orders WHERE id = ? FOR UPDATE', [poId]);
+    const [existing] = await connection.query('SELECT * FROM purchase_orders WHERE id = ?', [poId]);
     if (!existing.length) {
       throw new Error('Purchase Order not found');
     }
-    const currentStatus = String(existing[0].status || '').toUpperCase();
 
     const updates = [];
     const params = [];
 
-    if (status && status !== currentStatus) {
-      if (currentStatus === 'MERGED') {
-        throw workflowError('This PO was merged into another PO and can no longer change');
-      }
-      // PAID is set by Accounts when payments cover the PO, never by hand
-      if (PO_SYSTEM_ONLY_STATUSES.includes(status)) {
-        throw workflowError(`${status} is set automatically and cannot be chosen manually`);
-      }
-      if (['FULFILLED', 'COMPLETED', 'CLOSED'].includes(status)) {
-        const progress = await getPoReceiptProgress(connection, poId);
-        const fullyReceived = progress.ordered > 0 && progress.received + 0.001 >= progress.ordered;
-        if (!fullyReceived && !shortClose) {
-          throw workflowError(
-            `Only ${progress.received} of ${progress.ordered} received. Record the receipt (GRN) first, or short-close the PO with a reason.`
-          );
-        }
-        if (!fullyReceived && shortClose && !String(shortCloseReason || '').trim()) {
-          throw workflowError('A reason is required to short-close a PO', 400);
-        }
-        if (!fullyReceived && shortClose) {
-          updates.push('notes = CONCAT(COALESCE(notes, \'\'), ?)');
-          params.push(`\n[Short-closed ${new Date().toISOString().slice(0, 10)}] ${String(shortCloseReason).trim()}`);
-        }
-      }
+    if (status) {
       updates.push('status = ?');
       params.push(status);
-    }
 
-    // Lines on a paid PO are a financial record; quantities can't drop below what was received
-    if (items && Array.isArray(items)) {
-      const [[paid]] = await connection.query(
-        "SELECT COUNT(*) AS cnt FROM payments WHERE po_id = ? AND status = 'CONFIRMED'",
-        [poId]
-      );
-      if (Number(paid.cnt) > 0) {
-        throw workflowError('Items cannot be changed after a payment has been made against this PO');
-      }
-      const receivedByItem = await getReceivedQtyByPoItem(connection, poId);
-      for (const item of items) {
-        if (!item.id) continue;
-        const received = receivedByItem.get(Number(item.id)) || 0;
-        const newQty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
-        if (received > 0 && newQty + 0.001 < received) {
-          throw workflowError(`${item.item_code || item.description || 'Item'}: quantity ${newQty} is below the ${received} already received`);
-        }
+      if (status === 'FULFILLED') {
+        // Automatically mark all items as accepted when fulfilled
+        await connection.execute(
+          'UPDATE purchase_order_items SET accepted_quantity = quantity WHERE purchase_order_id = ?',
+          [poId]
+        );
       }
     }
     if (poNumber) {
       updates.push('po_number = ?');
       params.push(poNumber);
+    }
+    if (customerPoNo !== undefined || customer_po_no !== undefined) {
+      updates.push('customer_po_no = ?');
+      params.push(customerPoNo !== undefined ? customerPoNo : customer_po_no);
+    }
+    if (companyId !== undefined || company_id !== undefined) {
+      const compVal = companyId !== undefined ? companyId : company_id;
+      updates.push('company_id = ?');
+      params.push(compVal ? parseInt(compVal) : null);
+    }
+    if (orderDate !== undefined || order_date !== undefined) {
+      const oDate = orderDate !== undefined ? orderDate : order_date;
+      if (oDate) {
+        updates.push('created_at = ?');
+        params.push(oDate);
+      }
     }
     if (expectedDeliveryDate !== undefined) {
       updates.push('expected_delivery_date = ?');
@@ -1771,7 +1836,7 @@ const updatePurchaseOrder = async (poId, payload) => {
     }
     if (vendorId !== undefined) {
       updates.push('vendor_id = ?');
-      params.push(vendorId);
+      params.push(vendorId ? parseInt(vendorId) : null);
     }
     if (discount_type !== undefined) {
       updates.push('discount_type = ?');
@@ -1795,6 +1860,17 @@ const updatePurchaseOrder = async (poId, payload) => {
     }
 
     if (items && Array.isArray(items)) {
+      const isDirect = existing[0].po_type === 'DIRECT_COMPANY' || existing[0].source === 'DIRECT_COMPANY_PURCHASE';
+
+      // Delete items removed in UI edit mode
+      const incomingItemIds = items.map(i => i.id).filter(id => id !== undefined && id !== null && id !== '');
+      if (incomingItemIds.length > 0) {
+        await connection.query(
+          `DELETE FROM purchase_order_items WHERE purchase_order_id = ? AND id NOT IN (?)`,
+          [poId, incomingItemIds]
+        );
+      }
+
       const parentDrawingNo = await getParentDrawingNumber(connection, {
         quotation_id: existing[0].quotation_id,
         mr_id: existing[0].mr_id,
@@ -1803,13 +1879,13 @@ const updatePurchaseOrder = async (poId, payload) => {
 
       for (const item of items) {
         const qty = parseFloat(item.quantity) || 0;
-        const designQty = parseFloat(item.design_qty) || qty;
-        const rate = parseFloat(item.unit_rate) || parseFloat(item.rate) || 0;
-        const amount = Number((designQty * rate).toFixed(2));
+        const designQty = parseFloat(item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : qty);
+        const rate = parseFloat(item.unit_rate !== undefined && item.unit_rate !== null ? item.unit_rate : (item.rate || 0));
+        const amount = calculatePOItemAmount(item, isDirect);
 
         // Default to 18% GST (9% CGST + 9% SGST)
-        const cgstPercent = item.cgst_percent || 9;
-        const sgstPercent = item.sgst_percent || 9;
+        const cgstPercent = parseFloat(item.cgst_percent) || 9;
+        const sgstPercent = parseFloat(item.sgst_percent) || 9;
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
         const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
         const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
@@ -1825,17 +1901,21 @@ const updatePurchaseOrder = async (poId, payload) => {
           targetDrawingNo = parentDrawingNo;
         }
 
+        const matName = item.material_name || item.description || item.item_code || null;
+        const desc = item.description || item.material_name || item.item_code || null;
+
         if (item.id) {
           await connection.execute(
             `UPDATE purchase_order_items 
              SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, design_qty = ?, planned_qty = ?, description = ?, item_code = ?, unit = ?,
-                 length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?, density = ?, weight_per_unit = ?, drawing_no = ?, shape_type = ?
+                 length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?, density = ?, weight_per_unit = ?, drawing_no = ?, shape_type = ?, material_name = ?
              WHERE id = ? AND purchase_order_id = ?`,
             [
-              rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, item.description, item.item_code, item.unit,
+              rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, desc, item.item_code, item.unit || 'NOS',
               item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0,
               targetDrawingNo || null,
               item.shape_type || item.shape_name || item.shape || null,
+              matName,
               item.id, poId
             ]
           );
@@ -1843,13 +1923,14 @@ const updatePurchaseOrder = async (poId, payload) => {
           await connection.execute(
             `INSERT INTO purchase_order_items 
              (purchase_order_id, item_code, description, quantity, design_qty, planned_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-              length, width, thickness, diameter, outer_diameter, density, weight_per_unit, drawing_no, shape_type)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              length, width, thickness, diameter, outer_diameter, density, weight_per_unit, drawing_no, shape_type, material_name)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              poId, item.item_code, item.description, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount,
+              poId, item.item_code, desc, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount,
               item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0,
               targetDrawingNo || null,
-              item.shape_type || item.shape_name || item.shape || null
+              item.shape_type || item.shape_name || item.shape || null,
+              matName
             ]
           );
         }
@@ -1860,10 +1941,7 @@ const updatePurchaseOrder = async (poId, payload) => {
       let targetDiscAmt = discount_amount !== undefined ? (parseFloat(discount_amount) || 0) : (parseFloat(existing[0].discount_amount) || 0);
 
       const subtotal = items.reduce((sum, item) => {
-        const qty = parseFloat(item.quantity) || 0;
-        const designQty = parseFloat(item.design_qty) || qty;
-        const rate = parseFloat(item.unit_rate || item.rate) || 0;
-        return sum + (designQty * rate);
+        return sum + calculatePOItemAmount(item, isDirect);
       }, 0);
 
       if (targetDiscType === 'PERCENTAGE') {
@@ -1901,23 +1979,6 @@ const deletePurchaseOrder = async (poId) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-
-    const [[usage]] = await connection.query(
-      `SELECT
-         (SELECT COUNT(*) FROM grn_items gi JOIN purchase_order_items poi ON gi.po_item_id = poi.id WHERE poi.purchase_order_id = ?) AS grn_lines,
-         (SELECT COUNT(*) FROM po_receipts WHERE po_id = ?) AS receipts,
-         (SELECT COUNT(*) FROM payments WHERE po_id = ? AND status <> 'FAILED') AS payments,
-         (SELECT COUNT(*) FROM vendor_invoices WHERE po_id = ?) AS invoices`,
-      [poId, poId, poId, poId]
-    );
-    const blockers = [];
-    if (Number(usage.grn_lines) > 0 || Number(usage.receipts) > 0) blockers.push('material has been received');
-    if (Number(usage.invoices) > 0) blockers.push('it was forwarded to Accounts');
-    if (Number(usage.payments) > 0) blockers.push('payments exist');
-    if (blockers.length > 0) {
-      throw workflowError(`PO cannot be deleted because ${blockers.join(', ')}. Close it instead.`);
-    }
-
     await connection.execute('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [poId]);
     await connection.execute('DELETE FROM purchase_orders WHERE id = ?', [poId]);
     await connection.commit();
@@ -2023,20 +2084,11 @@ const approvePurchaseOrder = async (poId, userId) => {
   try {
     await connection.beginTransaction();
 
-    const [po] = await connection.query('SELECT mr_id, vendor_id, status, po_number, total_amount FROM purchase_orders WHERE id = ? FOR UPDATE', [poId]);
+    const [po] = await connection.query('SELECT mr_id, vendor_id FROM purchase_orders WHERE id = ?', [poId]);
     if (!po.length) throw new Error('Purchase Order not found');
 
     if (!po[0].vendor_id) {
       throw new Error('Cannot approve PO without a vendor. Please edit the PO to assign a vendor first.');
-    }
-
-    // Approving an already-ordered / received PO would reset its progress to ORDERED
-    const currentStatus = String(po[0].status || '').toUpperCase();
-    if (!PO_APPROVABLE_STATUSES.includes(currentStatus)) {
-      throw workflowError(`PO ${po[0].po_number} is already ${currentStatus} and cannot be approved again`);
-    }
-    if (!(parseFloat(po[0].total_amount) > 0)) {
-      throw workflowError(`PO ${po[0].po_number} has no value; add item rates before approval`);
     }
 
     await connection.execute(
@@ -2995,9 +3047,15 @@ const generatePurchaseOrderPDF = async (poId) => {
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '—';
 
-  const subtotal = po.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+  const isDirectPO = po.po_type === 'DIRECT_COMPANY' || po.source === 'DIRECT_COMPANY_PURCHASE';
+  const getLineAmount = (item) => {
+    const calc = calculatePOItemAmount(item, isDirectPO);
+    return calc > 0 ? calc : (parseFloat(item.amount) || 0);
+  };
+
+  const subtotal = po.items.reduce((sum, item) => sum + getLineAmount(item), 0);
   const taxInclusiveSubtotal = po.items.reduce((sum, item) => {
-    const amt = parseFloat(item.amount) || 0;
+    const amt = getLineAmount(item);
     const cgst = amt * (parseFloat(item.cgst_percent || 9) / 100);
     const sgst = amt * (parseFloat(item.sgst_percent || 9) / 100);
     return sum + (amt + cgst + sgst);
@@ -3230,29 +3288,29 @@ const generatePurchaseOrderPDF = async (poId) => {
         unit: isWeightEmpty ? '' : weightUnit,
         is_bought_out: isWeightEmpty,
         unit_rate: parseFloat(i.unit_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        amount: getLineAmount(i).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         discount: (() => {
-          const amt = parseFloat(i.amount || 0);
+          const amt = getLineAmount(i);
           const itemDiscount = subtotal > 0 ? ((amt / subtotal) * discountAmount) : 0;
           return itemDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         })(),
         transaction_amount: (() => {
-          const amt = parseFloat(i.amount || 0);
+          const amt = getLineAmount(i);
           const itemDiscount = subtotal > 0 ? ((amt / subtotal) * discountAmount) : 0;
           return (amt - itemDiscount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         })(),
         cgst_rate: parseFloat(i.cgst_percent || 9).toFixed(2),
         cgst_amount: (() => {
-          const amt = parseFloat(i.amount || 0);
+          const amt = getLineAmount(i);
           return (amt * (parseFloat(i.cgst_percent || 9) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         })(),
         sgst_rate: parseFloat(i.sgst_percent || 9).toFixed(2),
         sgst_amount: (() => {
-          const amt = parseFloat(i.amount || 0);
+          const amt = getLineAmount(i);
           return (amt * (parseFloat(i.sgst_percent || 9) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         })(),
         total_amount: (() => {
-          const amt = parseFloat(i.amount || 0);
+          const amt = getLineAmount(i);
           const cgst = amt * (parseFloat(i.cgst_percent || 9) / 100);
           const sgst = amt * (parseFloat(i.sgst_percent || 9) / 100);
           return (amt + cgst + sgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -3383,7 +3441,7 @@ const mergePurchaseOrders = async (payload) => {
     }
 
     // 2. Generate new PO Number
-    const poNumber = await nextDocumentNumber(connection, 'PURCHASE_ORDER');
+    const poNumber = await generatePONumber();
     const publicId = crypto.randomUUID();
 
     // 3. Create consolidated PO Header
@@ -3507,25 +3565,14 @@ const forwardToAccounts = async (poId, receiptId = null) => {
       const poReceiptService = require('./poReceiptService');
       const receipt = await poReceiptService.getPOReceiptById(receiptId);
       if (receipt && receipt.items && receipt.items.length > 0) {
-        // Value the receipt at each PO line's own rate and GST, not a flat 18%
-        const [lines] = await connection.query(
-          `SELECT pri.received_quantity, pri.received_weight, poi.unit_rate,
-                  COALESCE(poi.cgst_percent, 0) + COALESCE(poi.sgst_percent, 0) AS gst_percent
-           FROM po_receipt_items pri
-           LEFT JOIN purchase_order_items poi ON pri.po_item_id = poi.id
-           WHERE pri.receipt_id = ?`,
-          [receiptId]
-        );
         let subtotal = 0;
-        let gst = 0;
-        lines.forEach(line => {
-          const recQty = parseFloat(line.received_quantity || 0);
-          const recWt = parseFloat(line.received_weight || 0);
-          const rate = parseFloat(line.unit_rate || 0);
-          const lineValue = recWt > 0 ? (recWt * rate) : (recQty * rate);
-          subtotal += lineValue;
-          gst += lineValue * (parseFloat(line.gst_percent) || 0) / 100;
+        receipt.items.forEach(it => {
+          const recQty = parseFloat(it.received_qty || 0);
+          const recWt = parseFloat(it.received_weight || 0);
+          const rate = parseFloat(it.unit_rate || 0);
+          subtotal += recWt > 0 ? (recWt * rate) : (recQty * rate);
         });
+        const gst = subtotal * 0.18;
         poAmount = Number((subtotal + gst).toFixed(2));
         grnNumber = `GRN-${String(receipt.id).padStart(4, '0')}`;
       }

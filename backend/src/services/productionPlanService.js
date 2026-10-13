@@ -27,6 +27,15 @@ const ensureShipmentAsFinalOperation = (opsList, context = {}) => {
     }
   }
 
+  // If this is an internal child part of an assembly, never include shipment
+  if (context.isInternalChildPart) {
+    return nonShipmentOps.map((op, idx) => ({
+      ...op,
+      step_no: idx + 1,
+      step: String(idx + 1).padStart(2, '0')
+    }));
+  }
+
   const finalShipment = existingShipment || {
     id: 999999,
     plan_id: context.planId || null,

@@ -311,3 +311,115 @@ export const calculateWeight = ({
 
   return calculatedWeight > 0 ? parseFloat(calculatedWeight.toFixed(3)) : 0;
 };
+
+/**
+ * Determine whether a purchase order item is billed by weight (₹/KG) or by quantity (₹/NOS).
+ * Rule: Shape-based raw materials with calculated physical weight are billed by weight (KG).
+ * Bought-out components (BO-, fasteners, hardware, non-weight) are billed by quantity (NOS).
+ */
+export const isWeightBasedItem = (item) => {
+  if (!item) return false;
+
+  // 1. Bought-out components / standard hardware are NEVER weight-billed
+  const matType = (item.material_type || item.item_type || '').toUpperCase().trim();
+  const itemCode = String(item.item_code || '').toUpperCase().trim();
+  if (matType.includes('BOUGHT') || itemCode.startsWith('BO-')) {
+    return false;
+  }
+
+  const nameAndDesc = `${item.material_name || ''} ${item.description || ''} ${item.item_name || ''} ${item.item_code || ''}`.toUpperCase();
+  const BOUGHT_OUT_PATTERNS = [
+    /\bWASHER\b/, /\bBOLT\b/, /\bSCREW\b/, /\bNUT\b/, /\bBEARING\b/,
+    /\bFASTENER\b/, /\bOIL\b/, /\bLUBRICANT\b/, /\bGASKET\b/, /\bRIVET\b/, /\bSEAL\b/
+  ];
+  if (BOUGHT_OUT_PATTERNS.some(p => p.test(nameAndDesc)) && !item.shape_type && !item.shape_name) {
+    return false;
+  }
+
+  // 2. Explicit shape type (PLATE, ROUND, PIPE, TUBE, ROD, SHEET, FLAT, ANGLE, CHANNEL, BAR, HEX, etc.)
+  const shapeStr = String(item.shape_type || item.shape_name || '').toUpperCase().trim();
+  const SHAPE_KEYWORDS = [
+    'PLATE', 'ROUND', 'ROUND BAR', 'PIPE', 'TUBE', 'ROD', 'SHEET', 'FLAT', 'ANGLE', 'CHANNEL', 'BAR', 'HEX'
+  ];
+  const hasExplicitShape = !!(shapeStr || item.shape_id);
+  const hasShapeInText = SHAPE_KEYWORDS.some(kw => new RegExp(`\\b${kw}\\b`, 'i').test(nameAndDesc) || nameAndDesc.includes(kw));
+
+  // 3. Physical weight values
+  const wPerUnit = parseFloat(item.weight_per_unit || 0);
+  const totWeight = parseFloat(item.total_weight || 0);
+  const reqWeight = parseFloat(item.required_weight || 0);
+  const qty = parseFloat(item.quantity || 0);
+  const unitStr = String(item.unit || item.uom || '').trim().toUpperCase();
+
+  const hasPhysicalWeight = totWeight > 0 || reqWeight > 0 || wPerUnit > 0;
+
+  // 4. Shape-based items with weight or in weight-bearing PO context
+  if ((hasExplicitShape || hasShapeInText) && (hasPhysicalWeight || unitStr === 'KG' || qty > 0)) {
+    return true;
+  }
+
+  // 5. If item unit is explicitly KG
+  if (unitStr === 'KG') return true;
+
+  // 6. If item group / material type is raw material with weight
+  const isRaw = (item.item_group || '').toLowerCase().includes('raw') || matType.includes('RAW');
+  if (isRaw && (hasPhysicalWeight || qty > 0)) {
+    return true;
+  }
+
+  return false;
+};
+
+/**
+ * Get the effective quantity used for billing/amount calculation:
+ * - Weight-based items: returns total weight in KG
+ * - Quantity-based items: returns piece quantity (design_qty or quantity)
+ */
+export const getItemEffectiveBillingQty = (item, isDirectCompany = false) => {
+  if (!item) return 0;
+
+  if (isWeightBasedItem(item)) {
+    // 1. Explicit total_weight
+    const totWeight = parseFloat(item.total_weight || 0);
+    if (totWeight > 0) return totWeight;
+
+    // 2. Explicit required_weight
+    const reqWeight = parseFloat(item.required_weight || 0);
+    if (reqWeight > 0) return reqWeight;
+
+    const wPerUnit = parseFloat(item.weight_per_unit || 0);
+    const dQty = parseFloat(item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : (item.planned_qty || 0));
+    const qty = parseFloat(item.quantity || 0);
+
+    // 3. If quantity is different from piece designQty (e.g. 63.303 KG vs 3 NOS, 7.815 KG vs 3 NOS),
+    // quantity represents the total physical weight in KG
+    if (qty > 0 && dQty > 0 && Math.abs(qty - dQty) > 0.001) {
+      return qty;
+    }
+
+    // 4. If piece count × weight_per_unit gives physical weight (e.g. 1 NOS × 12.726 KG = 12.726 KG)
+    if (wPerUnit > 0 && dQty > 0) {
+      return Number((dQty * wPerUnit).toFixed(3));
+    }
+
+    // Fallback to item.quantity
+    if (qty > 0) return qty;
+  }
+
+  // Non-weight-based (Bought out, piece-based)
+  const dQty = parseFloat(item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : (item.planned_qty || item.quantity || 0));
+  return dQty > 0 ? dQty : (parseFloat(item.quantity) || 0);
+};
+
+/**
+ * Standard calculation for item amount across the entire ERP:
+ * - Weight-based: Total Weight (KG) × Rate (₹/KG)
+ * - Quantity-based: Qty (NOS) × Rate (₹/NOS)
+ */
+export const calculateItemAmount = (item, isDirectCompany = false) => {
+  if (!item) return 0;
+  const billingQty = getItemEffectiveBillingQty(item, isDirectCompany);
+  const rate = parseFloat(item.unit_rate !== undefined && item.unit_rate !== null ? item.unit_rate : (item.rate || 0));
+  return Number((billingQty * rate).toFixed(2));
+};
+

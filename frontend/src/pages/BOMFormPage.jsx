@@ -1331,6 +1331,141 @@ const BOMFormPage = () => {
     materialForm.density
   ]);
 
+  // Group raw material items by composite key so logically identical materials appear only once in the dropdown
+  const rawMaterialOptions = useMemo(() => {
+    const filtered = (stockItems || []).filter(item => {
+      const itemCode = (item.item_code || "").toUpperCase();
+      const type = (item.material_type || "").toLowerCase();
+      const group = (item.item_group || "").toLowerCase();
+
+      // EXCLUDE FG, Sub-assemblies, and Parts (Keep Raw Materials, Consumables, PM, etc.)
+      if (itemCode.startsWith("FG-") || itemCode.startsWith("SA-") || itemCode.startsWith("SFG-") || itemCode.startsWith("PART-")) return false;
+      if (type.includes("finished") || type.includes("assembly") || type.includes("part")) return false;
+      if (group.includes("finished") || group.includes("assembly") || group.includes("part")) return false;
+
+      // Type Filter
+      const targetGroup = (materialForm.itemGroup || '').toLowerCase().replace(/_/g, ' ').trim();
+      const normalizedType = type.replace(/_/g, ' ').trim();
+      const normalizedGroup = group.replace(/_/g, ' ').trim();
+
+      if (targetGroup) {
+        if (targetGroup.includes('raw material') || targetGroup.includes('rm')) {
+          if (normalizedType.includes('finished') || normalizedType.includes('assembly') || normalizedType.includes('part')) return false;
+          if (normalizedGroup.includes('finished') || normalizedGroup.includes('assembly') || normalizedGroup.includes('part')) return false;
+        } else if (targetGroup.includes('consumable') || targetGroup.includes('con')) {
+          if (!normalizedType.includes('consumable') && !normalizedGroup.includes('consumable') && !normalizedGroup.includes('con')) return false;
+        } else if (targetGroup.includes('pm') || targetGroup.includes('packing')) {
+          if (!normalizedType.includes('pm') && !normalizedType.includes('packing') && !normalizedGroup.includes('pm') && !normalizedGroup.includes('packing')) return false;
+        } else if (targetGroup.includes('sub assembly') || targetGroup.includes('sfg') || targetGroup.includes('semi')) {
+          if (!normalizedType.includes('sub assembly') && !normalizedType.includes('semi') && !normalizedType.includes('sfg')) return false;
+        } else if (targetGroup.includes('tool')) {
+          if (!normalizedType.includes('tool')) return false;
+        } else if (targetGroup.includes('service')) {
+          if (!normalizedType.includes('service')) return false;
+        } else {
+          if (!normalizedType.includes(targetGroup) && !targetGroup.includes(normalizedType)) return false;
+        }
+      }
+      return true;
+    });
+
+    const groupedMap = new Map();
+
+    filtered.forEach(item => {
+      const rawCode = (item.item_code || '').trim().toUpperCase();
+      const rawName = (item.material_name || '').trim().toUpperCase();
+      const type = (item.material_type || item.item_group || '').toLowerCase();
+      const isRaw = (type.includes('raw') || type === 'rm' || rawCode.startsWith('RAW-') || rawCode.startsWith('RM-')) &&
+                    !rawCode.startsWith('CON-') && !rawCode.startsWith('BO-') && !rawCode.startsWith('PAC-') && !rawCode.startsWith('TOOL-') && !rawCode.startsWith('SER-');
+
+      let compositeKey = '';
+      if (isRaw) {
+        // Grouping key strictly preserving meaningful raw material differences:
+        // Material Name + Material Grade + Drawing No + Type
+        const gradeKey = (item.material_grade || '').trim().toUpperCase();
+        const dwgKey = (item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== '—') ? item.drawing_no.trim().toUpperCase() : '';
+        const typeKey = (item.material_type || 'RAW_MATERIAL').trim().toUpperCase();
+        compositeKey = `RAW:::${rawName}:::${gradeKey}:::${typeKey}:::${dwgKey}`;
+      } else {
+        // Grouping key for Consumables, Bought-out, Packaging, etc.:
+        // Deduplicate records sharing the same item_code or material_name
+        compositeKey = `NONRAW:::${rawCode || rawName}`;
+      }
+
+      if (!groupedMap.has(compositeKey)) {
+        groupedMap.set(compositeKey, {
+          compositeKey,
+          isRaw,
+          label: (item.material_name || '').trim(),
+          primaryItem: item,
+          variants: [item],
+          variantCodes: [item.item_code || '']
+        });
+      } else {
+        const group = groupedMap.get(compositeKey);
+        group.variants.push(item);
+        if (item.item_code && !group.variantCodes.includes(item.item_code)) {
+          group.variantCodes.push(item.item_code);
+        }
+        // If an earlier item didn't have shape_id but this one does, prefer the richer item
+        if (!group.primaryItem.shape_id && item.shape_id) {
+          group.primaryItem = item;
+        }
+        if (!group.primaryItem.item_code.startsWith('RM-') && item.item_code && item.item_code.startsWith('RM-')) {
+          group.primaryItem = item;
+        }
+      }
+    });
+
+    const resultOptions = [];
+    groupedMap.forEach(group => {
+      const primary = group.primaryItem;
+      const dims = getDimensionString(primary);
+      const variantCount = group.variants.length;
+
+      let subText = '';
+      if (group.isRaw && variantCount > 1) {
+        subText = `${primary.item_code || ''} • ${variantCount} stock sizes available`;
+      } else {
+        subText = `${dims ? `${dims}\n` : ''}${primary.item_code || ''}${primary.drawing_no && primary.drawing_no !== 'N/A' ? ` [Drg: ${primary.drawing_no}]` : ''}`;
+      }
+
+      resultOptions.push({
+        label: group.label,
+        value: primary.item_code || '',
+        subLabel: subText,
+        item: primary,
+        variants: group.variants,
+        variantCodes: group.variantCodes,
+        description: group.variantCodes.join(' ')
+      });
+    });
+
+    return resultOptions.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
+  }, [stockItems, materialForm.itemGroup]);
+
+  // Resolves the parent/grouped option value for SearchableSelect even when materialForm.itemCode holds a specific variant code
+  const selectedMaterialOptionValue = useMemo(() => {
+    if (!materialForm.itemCode && !materialForm.materialName) return '';
+    const matched = rawMaterialOptions.find(opt => 
+      opt.value === materialForm.itemCode ||
+      opt.variantCodes?.includes(materialForm.itemCode) ||
+      (opt.label && materialForm.materialName && opt.label.trim().toLowerCase() === materialForm.materialName.trim().toLowerCase())
+    );
+    return matched ? matched.value : (materialForm.itemCode || '');
+  }, [rawMaterialOptions, materialForm.itemCode, materialForm.materialName]);
+
+  // List of all dimension variants belonging to the currently selected material
+  const currentMaterialVariants = useMemo(() => {
+    if (!materialForm.materialName && !materialForm.itemCode) return [];
+    const matched = rawMaterialOptions.find(opt => 
+      opt.value === materialForm.itemCode ||
+      opt.variantCodes?.includes(materialForm.itemCode) ||
+      (opt.label && materialForm.materialName && opt.label.trim().toLowerCase() === materialForm.materialName.trim().toLowerCase())
+    );
+    return matched?.variants || [];
+  }, [rawMaterialOptions, materialForm.materialName, materialForm.itemCode]);
+
   const fetchData = useCallback(async (showLoading = true) => {
     try {
       console.log(`[fetchData] Starting - itemId: ${itemId}, showLoading: ${showLoading}`);
@@ -3221,65 +3356,45 @@ const BOMFormPage = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
                     <div className={`${(['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg') ? 'md:col-span-4' : 'md:col-span-5'} space-y-1`}>
-                      <label className="text-xs  text-slate-500 ml-1">Material Selection <span className="text-rose-500">*</span></label>
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs  text-slate-500 ml-1">Material Selection <span className="text-rose-500">*</span></label>
+                        {(!(['raw materials', 'raw material', 'rm'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg')) && currentMaterialVariants.length > 1 && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-slate-400">Variant:</span>
+                            <select
+                              className="text-[10px] bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-slate-600 outline-none"
+                              value={materialForm.itemCode || ''}
+                              onChange={(e) => {
+                                const v = currentMaterialVariants.find(it => it.item_code === e.target.value);
+                                if (v) {
+                                  setMaterialForm(prev => ({
+                                    ...prev,
+                                    itemCode: v.item_code,
+                                    rate: v.selling_rate > 0 ? v.selling_rate : (v.valuation_rate || prev.rate)
+                                  }));
+                                }
+                              }}
+                            >
+                              {currentMaterialVariants.map(v => (
+                                <option key={v.id || v.item_code} value={v.item_code}>
+                                  {v.item_code}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
                       <SearchableSelect
                         placeholder="Select material..."
                         onFocus={fetchStockItemsOnly}
-                        options={stockItems
-                          .filter(item => {
-                            // FG and Sub-assembly check
-                            const itemCode = (item.item_code || "").toUpperCase();
-                            const type = (item.material_type || "").toLowerCase();
-                            const group = (item.item_group || "").toLowerCase();
-
-                            // EXCLUDE FG, Sub-assemblies, and Parts (Keep Raw Materials, Consumables, PM, etc.)
-                            if (itemCode.startsWith("FG-") || itemCode.startsWith("SA-") || itemCode.startsWith("SFG-") || itemCode.startsWith("PART-")) return false;
-                            if (type.includes("finished") || type.includes("assembly") || type.includes("part")) return false;
-                            if (group.includes("finished") || group.includes("assembly") || group.includes("part")) return false;
-
-                            // Type Filter
-                            const targetGroup = (materialForm.itemGroup || '').toLowerCase().replace(/_/g, ' ').trim();
-                            const normalizedType = type.replace(/_/g, ' ').trim();
-                            const normalizedGroup = group.replace(/_/g, ' ').trim();
-
-                            // Filter by group logic
-                            if (targetGroup) {
-                              if (targetGroup.includes('raw material') || targetGroup.includes('rm')) {
-                                // For Raw Material selection, allow everything EXCEPT sub-assemblies/SFG/FG/Parts
-                                if (normalizedType.includes('finished') || normalizedType.includes('assembly') || normalizedType.includes('part')) return false;
-                                if (normalizedGroup.includes('finished') || normalizedGroup.includes('assembly') || normalizedGroup.includes('part')) return false;
-                              } else if (targetGroup.includes('consumable') || targetGroup.includes('con')) {
-                                if (!normalizedType.includes('consumable') && !normalizedGroup.includes('consumable') && !normalizedGroup.includes('con')) return false;
-                              } else if (targetGroup.includes('pm') || targetGroup.includes('packing')) {
-                                if (!normalizedType.includes('pm') && !normalizedType.includes('packing') && !normalizedGroup.includes('pm') && !normalizedGroup.includes('packing')) return false;
-                              } else if (targetGroup.includes('sub assembly') || targetGroup.includes('sfg') || targetGroup.includes('semi')) {
-                                if (!normalizedType.includes('sub assembly') && !normalizedType.includes('semi') && !normalizedType.includes('sfg')) return false;
-                              } else if (targetGroup.includes('tool')) {
-                                if (!normalizedType.includes('tool')) return false;
-                              } else if (targetGroup.includes('service')) {
-                                if (!normalizedType.includes('service')) return false;
-                              } else {
-                                // Direct match fallback
-                                if (!normalizedType.includes(targetGroup) && !targetGroup.includes(normalizedType)) return false;
-                              }
-                            }
-
-                            // Raw Materials/Consumables do not need to match the product drawing number
-                            return true;
-                          })
-                          .map(item => {
-                            const dims = getDimensionString(item);
-                            return {
-                              label: item.material_name || '',
-                              value: item.item_code || '',
-                              subLabel: `${dims ? `${dims}\n` : ''}${item.item_code || ''}${item.drawing_no && item.drawing_no !== 'N/A' ? ` [Drg: ${item.drawing_no}]` : ''}`
-                            };
-                          })
-                          .sort((a, b) => (a.label || '').localeCompare(b.label || ''))
-                        }
-                        value={materialForm.itemCode || stockItems.find(i => i.material_name === materialForm.materialName)?.item_code || ''}
+                        options={rawMaterialOptions}
+                        value={selectedMaterialOptionValue}
                         onChange={(e) => {
-                          const item = stockItems.find(i => i.item_code === e.target.value) ||
+                          const chosenOpt = rawMaterialOptions.find(opt => opt.value === e.target.value) ||
+                            rawMaterialOptions.find(opt => opt.variantCodes?.includes(e.target.value));
+
+                          const item = chosenOpt?.item ||
+                            stockItems.find(i => i.item_code === e.target.value) ||
                             stockItems.find(i => i.material_name === e.target.value);
                           // Check if this material is a sub-assembly and has an approved BOM cost
                           const bomInfo = item ? approvedBOMs.find(b => b.item_code === item.item_code) : null;
@@ -3486,9 +3601,52 @@ const BOMFormPage = () => {
 
                             {isKg && selectedShape && (
                               <div className="md:col-span-12 p-3 bg-white rounded border border-slate-200 mt-2 space-y-2">
-                                <div className="flex items-center gap-2 text-indigo-700 text-xs font-semibold">
-                                  <div className="w-1.5 h-1.5 rounded bg-indigo-500"></div>
-                                  {selectedShape} Dimensions (All in mm)
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                                  <div className="flex items-center gap-2 text-indigo-700 text-xs font-semibold">
+                                    <div className="w-1.5 h-1.5 rounded bg-indigo-500"></div>
+                                    <span>{selectedShape} Dimensions (All in mm)</span>
+                                  </div>
+                                  {currentMaterialVariants.length > 1 && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">Stock Size / Variant:</span>
+                                      <select
+                                        className="p-1 px-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all cursor-pointer max-w-[280px]"
+                                        value={materialForm.itemCode || ''}
+                                        onChange={(e) => {
+                                          const selectedCode = e.target.value;
+                                          const selectedVariant = currentMaterialVariants.find(v => v.item_code === selectedCode);
+                                          if (selectedVariant) {
+                                            setMaterialForm(prev => ({
+                                              ...prev,
+                                              itemCode: selectedVariant.item_code,
+                                              length: selectedVariant.length !== null && selectedVariant.length !== undefined && parseFloat(selectedVariant.length) > 0 ? selectedVariant.length : prev.length,
+                                              width: selectedVariant.width !== null && selectedVariant.width !== undefined && parseFloat(selectedVariant.width) > 0 ? selectedVariant.width : prev.width,
+                                              thickness: selectedVariant.thickness !== null && selectedVariant.thickness !== undefined && parseFloat(selectedVariant.thickness) > 0 ? selectedVariant.thickness : prev.thickness,
+                                              diameter: selectedVariant.diameter !== null && selectedVariant.diameter !== undefined && parseFloat(selectedVariant.diameter) > 0 ? selectedVariant.diameter : prev.diameter,
+                                              outer_diameter: selectedVariant.outer_diameter !== null && selectedVariant.outer_diameter !== undefined && parseFloat(selectedVariant.outer_diameter) > 0 ? selectedVariant.outer_diameter : prev.outer_diameter,
+                                              rate: selectedVariant.selling_rate > 0 ? selectedVariant.selling_rate : (selectedVariant.valuation_rate || prev.rate)
+                                            }));
+                                          } else {
+                                            const baseCode = currentMaterialVariants[0]?.item_code || materialForm.itemCode;
+                                            setMaterialForm(prev => ({
+                                              ...prev,
+                                              itemCode: baseCode
+                                            }));
+                                          }
+                                        }}
+                                      >
+                                        <option value="">Custom Dimensions (Manual)</option>
+                                        {currentMaterialVariants.map(v => {
+                                          const dimStr = getDimensionString(v);
+                                          return (
+                                            <option key={v.id || v.item_code} value={v.item_code}>
+                                              {dimStr ? `${dimStr} — ` : ''}{v.item_code}
+                                            </option>
+                                          );
+                                        })}
+                                      </select>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                   {(selectedShape.toLowerCase() === 'plate' || selectedShape.toLowerCase().includes('plate') || selectedShape.toLowerCase().includes('sheet') || selectedShape.toLowerCase().includes('flat')) && (

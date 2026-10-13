@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Package, RefreshCw, Plus, Calendar, CreditCard, User, FileText, Download, Send } from 'lucide-react';
+import { Package, RefreshCw, Plus, Calendar, CreditCard, User, FileText, Download, Trash2, Send } from 'lucide-react';
 import { DataTable, Button } from '../components/ui.jsx';
 import PaymentReceivedModal from '../components/PaymentReceivedModal.jsx';
 import SendEmailModal from '../components/SendEmailModal.jsx';
 import { errorToast, successToast } from '../utils/toast';
+import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -52,9 +53,10 @@ const PaymentReceived = () => {
           ...row,
           customer_id: row.company_id,
           customer_name: row.company_name,
-          sales_order_id: row.id,
+          sales_order_id: row.source === 'SALES_INVOICE' ? (row.sales_order_id || row.order_id) : row.id,
+          invoice_id: row.invoice_id || (row.source === 'SALES_INVOICE' ? row.id : null),
           sales_order_source: row.source,
-          po_number: row.so_number,
+          po_number: row.invoice_no || row.so_number,
           outstanding: row.outstanding,
           already_paid: row.paid_amount,
           total_amount: row.total_amount
@@ -77,12 +79,13 @@ const PaymentReceived = () => {
   }, [location.pathname, searchParams, payments]);
 
   const handleSendEmailClick = (row) => {
+    const docRef = row.invoice_no || row.so_number;
     setEmailModalData({
       to: row.customer_email || '',
-      subject: `Invoice: ${row.so_number}`,
-      message: `Dear ${row.company_name},\n\nPlease find attached the invoice for your order ${row.so_number}.\n\nRegards,\nSPTECHPIONEER Accounts Team`,
+      subject: `Invoice: ${docRef}`,
+      message: `Dear ${row.company_name},\n\nPlease find attached the invoice ${docRef}.\n\nRegards,\nSPTECHPIONEER Accounts Team`,
       id: row.id,
-      so_number: row.so_number,
+      so_number: docRef,
       company_name: row.company_name,
       source: row.source
     });
@@ -149,7 +152,9 @@ const PaymentReceived = () => {
   const handleDownloadInvoice = async (row) => {
     try {
       const token = localStorage.getItem('authToken');
-      const endpoint = row.source === 'SALES_ORDER' 
+      const endpoint = row.source === 'SALES_INVOICE'
+        ? `${API_BASE}/sales-invoices/${row.id}/pdf`
+        : row.source === 'SALES_ORDER' 
         ? `${API_BASE}/sales-orders/${row.id}/pdf` 
         : `${API_BASE}/order/${row.id}/pdf`;
 
@@ -163,7 +168,7 @@ const PaymentReceived = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const fileName = `Invoice_${row.so_number || row.id}.pdf`;
+      const fileName = `Invoice_${row.invoice_no || row.so_number || row.id}.pdf`;
       link.setAttribute('download', fileName);
       document.body.appendChild(link);
       link.click();
@@ -175,21 +180,68 @@ const PaymentReceived = () => {
     }
   };
 
+  const handleDeleteInvoice = async (row) => {
+    const docRef = row.invoice_no || row.so_number || `ID: ${row.id}`;
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: `Do you want to delete this invoice (${docRef})?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const endpoint = row.source === 'SALES_INVOICE'
+          ? `${API_BASE}/sales-invoices/${row.id}`
+          : row.source === 'SALES_ORDER'
+          ? `${API_BASE}/sales-orders/${row.id}`
+          : `${API_BASE}/order/${row.id}`;
+
+        const response = await fetch(endpoint, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          successToast('Invoice has been deleted');
+          fetchOutstandingInvoices();
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || 'Failed to delete invoice');
+        }
+      } catch (err) {
+        errorToast(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   const columns = [
     {
-      label: 'Order Details',
-      key: 'so_number',
+      label: 'Invoice #',
+      key: 'invoice_no',
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col py-1">
-          <span className=" text-rose-600 font-semibold ">
-            {val}
-          </span>
-          <div className="flex items-center gap-1 mt-0.5">
-            <span className="text-[10px] text-slate-400 px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100 ">
-              {row.source === 'SALES_ORDER' ? 'DESIGN BASED' : 'DIRECT ORDER'}
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono font-bold text-indigo-700 text-xs">
+              {row.invoice_no || val || row.so_number}
+            </span>
+            <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+              INVOICE
             </span>
           </div>
+          {row.so_number && (
+            <span className="text-[11px] text-slate-500 font-mono mt-0.5">
+              SO: {row.so_number}
+            </span>
+          )}
         </div>
       )
     },
@@ -212,13 +264,13 @@ const PaymentReceived = () => {
       )
     },
     {
-      label: 'Order Date',
+      label: 'Date',
       key: 'created_at',
       sortable: true,
-      render: (val) => (
+      render: (_, row) => (
         <div className="flex items-center gap-2 text-slate-600">
           <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          <span className="text-xs">{formatDate(val)}</span>
+          <span className="text-xs">{formatDate(row.invoice_date || row.created_at)}</span>
         </div>
       )
     },
@@ -274,41 +326,26 @@ const PaymentReceived = () => {
       render: (_, row) => {
         const outstanding = parseFloat(row.outstanding) || 0;
         const received = parseFloat(row.paid_amount) || 0;
-        // Shows where the order is in the flow, so an advance on an unshipped order is obvious
-        const stage = row.order_status ? (
-          <div className="text-[10px] text-slate-400 mt-1 uppercase tracking-wide">
-            Order: {String(row.order_status).replace(/_/g, ' ')}
-          </div>
-        ) : null;
-        if (outstanding <= 0) {
+        if (outstanding === 0) {
           return (
-            <div>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                PAID
-              </span>
-              {stage}
-            </div>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              COMPLETED
+            </span>
           );
-        } else if (received > 0) {
+        } else if (outstanding > 0 && received > 0) {
           return (
-            <div>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 font-medium border border-amber-100">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                Partial Paid
-              </span>
-              {stage}
-            </div>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 font-medium border border-amber-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              Partial Paid
+            </span>
           );
         } else {
           return (
-            <div>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-rose-50 text-rose-700 font-medium border border-rose-100">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                Pending Payment
-              </span>
-              {stage}
-            </div>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-rose-50 text-rose-700 font-medium border border-rose-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              Pending Payment
+            </span>
           );
         }
       }
@@ -335,13 +372,34 @@ const PaymentReceived = () => {
           </button>
           {parseFloat(row.outstanding) > 0 && (
             <button
-              onClick={() => navigate(`/payment-received/record?id=${row.id}`)}
+              onClick={() => {
+                setSelectedInvoice({
+                  ...row,
+                  customer_id: row.company_id,
+                  customer_name: row.company_name,
+                  sales_order_id: row.source === 'SALES_INVOICE' ? (row.sales_order_id || row.order_id) : row.id,
+                  invoice_id: row.invoice_id || (row.source === 'SALES_INVOICE' ? row.id : null),
+                  sales_order_source: row.source,
+                  po_number: row.invoice_no || row.so_number,
+                  outstanding: row.outstanding,
+                  already_paid: row.paid_amount,
+                  total_amount: row.total_amount
+                });
+                setIsPaymentModalOpen(true);
+              }}
               className="p-2 hover:bg-emerald-50 rounded text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100 group shadow-sm"
               title="Record Payment"
             >
               <CreditCard className="w-4 h-4 group-hover:scale-110" />
             </button>
           )}
+          <button
+            onClick={() => handleDeleteInvoice(row)}
+            className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
+            title="Delete Invoice"
+          >
+            <Trash2 className="w-4 h-4 group-hover:scale-110" />
+          </button>
         </div>
       )
     }
@@ -395,7 +453,7 @@ const PaymentReceived = () => {
           columns={columns}
           data={payments}
           loading={loading}
-          searchPlaceholder="Search by order number or customer..."
+          searchPlaceholder="Search by invoice #, SO #, or customer..."
           className="border-none"
         />
       </div>

@@ -715,17 +715,35 @@ const ItemsMaster = () => {
   const getGroupColor = (groupName) => {
     if (!groupName) return 'text-slate-600';
     const name = groupName.toUpperCase();
-    if (name.includes('BOUGHT_OUT')) return 'text-blue-600';
+    if (name.includes('BOUGHT_OUT') || name.includes('BOUGHT') || name === 'BO') return 'text-blue-600';
     if (name.includes('RAW_MATERIAL') || name.includes('RAW MATERIAL') || name === 'RM') return 'text-amber-600';
     if (name.includes('PART')) return 'text-teal-600';
     if (name.includes('ASSEMBLY') || name === 'SA') return 'text-purple-600';
     if (name.includes('FINISHED') || name === 'FG') return 'text-emerald-600';
-    if (name.includes('CONSUMABLE') || name.includes('HARDWARE')) return 'text-rose-600';
+    if (name.includes('CONSUMABLE') || name.includes('CONSUMBLE') || name.includes('CONSUM') || name.includes('HARDWARE')) return 'text-rose-600';
     return 'text-slate-600';
   };
 
   const itemColumns = useMemo(() => [
-    { label: 'Item Code', key: 'item_code', sortable: true, className: ' text-indigo-600' },
+    { 
+      label: 'Item Code', 
+      key: 'item_code', 
+      sortable: true, 
+      className: ' text-indigo-600',
+      render: (val, row) => (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span>{val}</span>
+          {row.variants && row.variants.length > 1 && (
+            <span 
+              className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded text-[10px] font-semibold whitespace-nowrap cursor-default shadow-xs" 
+              title={`${row.variants.length} dimension cuts: ${(row.variantCodes || []).join(', ')}`}
+            >
+              +{row.variants.length - 1} sizes
+            </span>
+          )}
+        </div>
+      )
+    },
     { 
       label: 'Item Name', 
       key: 'material_name', 
@@ -736,7 +754,14 @@ const ItemsMaster = () => {
         
         return (
           <div className="flex flex-col gap-0.5">
-            <span className=" text-slate-900 font-medium">{val}</span>
+            <div className="flex items-center gap-2">
+              <span className=" text-slate-900 font-medium">{val}</span>
+              {row.variants && row.variants.length > 1 && (
+                <span className="text-[10px] text-slate-400 font-normal">
+                  ({row.variants.length} variants)
+                </span>
+              )}
+            </div>
             {formatted && (
               <span className="text-xs  text-slate-400 mt-0.5">
                 {formatted}
@@ -913,14 +938,95 @@ const ItemsMaster = () => {
     selectedShape
   ]);
 
+  // Group raw material items and deduplicate identical records for Items Master display
+  const deduplicatedItems = useMemo(() => {
+    if (!itemsList || itemsList.length === 0) return [];
+
+    const groupedMap = new Map();
+
+    itemsList.forEach(item => {
+      const rawCode = (item.item_code || '').trim().toUpperCase();
+      const rawName = (item.material_name || '').trim().toUpperCase();
+      const type = (item.material_type || '').toLowerCase();
+      const isRaw = (type.includes('raw') || type === 'rm' || rawCode.startsWith('RAW-') || rawCode.startsWith('RM-')) &&
+                    !rawCode.startsWith('CON-') && !rawCode.startsWith('BO-') && !rawCode.startsWith('PAC-') && !rawCode.startsWith('TOOL-') && !rawCode.startsWith('SER-');
+
+      let compositeKey = '';
+      if (isRaw) {
+        // Grouping key strictly preserving meaningful raw material differences:
+        // Material Name + Material Grade + Drawing No + Type
+        const gradeKey = (item.material_grade || '').trim().toUpperCase();
+        const dwgKey = (item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== '—') ? item.drawing_no.trim().toUpperCase() : '';
+        const typeKey = (item.material_type || 'RAW_MATERIAL').trim().toUpperCase();
+        compositeKey = `RAW:::${rawName}:::${gradeKey}:::${typeKey}:::${dwgKey}`;
+      } else {
+        // Non-raw items (Consumables, Bought-Out, Sub-Assemblies, Finished Goods):
+        // Deduplicate records sharing the same item_code or material_name
+        compositeKey = `NONRAW:::${rawCode || rawName}`;
+      }
+
+      if (!groupedMap.has(compositeKey)) {
+        groupedMap.set(compositeKey, {
+          ...item,
+          compositeKey,
+          isRaw,
+          material_name: (item.material_name || '').trim(),
+          primaryItem: item,
+          variants: [item],
+          variantCodes: [item.item_code || ''],
+          totalBalance: parseFloat(item.current_balance || 0),
+          totalWeight: parseFloat(item.current_weight || 0)
+        });
+      } else {
+        const group = groupedMap.get(compositeKey);
+        group.variants.push(item);
+        if (item.item_code && !group.variantCodes.includes(item.item_code)) {
+          group.variantCodes.push(item.item_code);
+        }
+        group.totalBalance += parseFloat(item.current_balance || 0);
+        group.totalWeight += parseFloat(item.current_weight || 0);
+
+        // Prefer canonical RM- code or item with richer details
+        if (!group.primaryItem.shape_id && item.shape_id) {
+          group.shape_id = item.shape_id;
+          group.shape_type = item.shape_type;
+          group.primaryItem = item;
+        }
+        if (!group.item_code?.startsWith('RM-') && item.item_code?.startsWith('RM-')) {
+          group.item_code = item.item_code;
+          group.id = item.id;
+          group.public_id = item.public_id;
+        }
+        if (!group.hsn_code && item.hsn_code) {
+          group.hsn_code = item.hsn_code;
+        }
+        if ((!group.valuation_rate || group.valuation_rate === 0) && item.valuation_rate > 0) {
+          group.valuation_rate = item.valuation_rate;
+        }
+      }
+    });
+
+    const result = [];
+    groupedMap.forEach(group => {
+      result.push({
+        ...group,
+        current_balance: group.totalBalance,
+        current_weight: group.totalWeight
+      });
+    });
+
+    return result;
+  }, [itemsList]);
+
   const filteredItems = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return itemsList.filter(item => 
+    return deduplicatedItems.filter(item => 
       item.item_code?.toLowerCase().includes(term) ||
       item.material_name?.toLowerCase().includes(term) ||
-      item.drawing_no?.toLowerCase().includes(term)
+      item.drawing_no?.toLowerCase().includes(term) ||
+      item.variantCodes?.some(code => code.toLowerCase().includes(term))
     );
-  }, [itemsList, searchTerm]);
+  }, [deduplicatedItems, searchTerm]);
 
   const path = location.pathname;
   const isAddPath = path.endsWith('/item-master/add-items');
@@ -929,14 +1035,15 @@ const ItemsMaster = () => {
   const isFormPath = isAddPath || isEditPath || isCopyPath;
   const isFormReady = showItemForm && (!isEditPath && !isCopyPath || editingItemId !== null);
 
-  // Helper to categorize item material_type
-  const getCategory = (type) => {
-     if (!type) return 'other';
-     const t = type.toLowerCase();
-     if (t.includes('raw') || t === 'rm') return 'raw';
-     if (t.includes('sub') || t.includes('assembly') || t === 'sa') return 'sub';
-     if (t.includes('finish') || t === 'fg' || t === 'finished good') return 'finished';
-     if (t.includes('consumable') || t.includes('hardware') || t.includes('packing')) return 'consumables';
+  // Helper to categorize item material_type and item_code
+  const getCategory = (type, code = '') => {
+     const t = (type || '').toLowerCase();
+     const c = (code || '').toUpperCase();
+     if (t.includes('bought') || t === 'bo' || c.startsWith('BO-')) return 'bought_out';
+     if (t.includes('consum') || t.includes('hardware') || t.includes('packing') || c.startsWith('CON-')) return 'consumables';
+     if (t.includes('raw') || t === 'rm' || c.startsWith('RAW-') || c.startsWith('RM-')) return 'raw';
+     if (t.includes('sub') || t.includes('assembly') || t === 'sa' || c.startsWith('SA-') || c.startsWith('ASSEMBLY-')) return 'sub';
+     if (t.includes('finish') || t === 'fg' || t.includes('part') || c.startsWith('PART-') || c.startsWith('FG-')) return 'finished';
      return 'other';
   };
 
@@ -969,17 +1076,18 @@ const ItemsMaster = () => {
             columns={itemColumns}
             data={filteredItems.filter(item => {
                if (dataTableTab === 'all') return true;
-               return getCategory(item.material_type) === dataTableTab;
+               return getCategory(item.material_type, item.item_code) === dataTableTab;
             })}
             loading={itemsLoading}
             initialPageSize={25}
             searchPlaceholder="Search by code, name, material, drawing no, etc..."
             tabs={[
-               { id: 'all', label: 'All Items', count: itemsList.length },
-               { id: 'raw', label: 'Raw Materials', count: itemsList.filter(i => getCategory(i.material_type) === 'raw').length },
-               { id: 'sub', label: 'Sub Assemblies', count: itemsList.filter(i => getCategory(i.material_type) === 'sub').length },
-               { id: 'finished', label: 'Finished Goods', count: itemsList.filter(i => getCategory(i.material_type) === 'finished').length },
-               { id: 'consumables', label: 'Consumables', count: itemsList.filter(i => getCategory(i.material_type) === 'consumables').length }
+               { id: 'all', label: 'All Items', count: deduplicatedItems.length },
+               { id: 'raw', label: 'Raw Materials', count: deduplicatedItems.filter(i => getCategory(i.material_type, i.item_code) === 'raw').length },
+               { id: 'sub', label: 'Sub Assemblies', count: deduplicatedItems.filter(i => getCategory(i.material_type, i.item_code) === 'sub').length },
+               { id: 'finished', label: 'Parts', count: deduplicatedItems.filter(i => getCategory(i.material_type, i.item_code) === 'finished').length },
+               { id: 'bought_out', label: 'Bought Out', count: deduplicatedItems.filter(i => getCategory(i.material_type, i.item_code) === 'bought_out').length },
+               { id: 'consumables', label: 'Consumables', count: deduplicatedItems.filter(i => getCategory(i.material_type, i.item_code) === 'consumables').length }
             ]}
             activeTab={dataTableTab}
             onTabChange={setDataTableTab}

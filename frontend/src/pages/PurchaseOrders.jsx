@@ -10,7 +10,7 @@ import DataTable from '../components/DataTable.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
-import { formatDimensions, calculateWeight, validateShapeDimensions } from '../utils/formatters';
+import { formatDimensions, calculateWeight, validateShapeDimensions, isWeightBasedItem, calculateItemAmount, getItemEffectiveBillingQty } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -105,16 +105,13 @@ const PurchaseOrders = () => {
         setShowCreateModal(false);
         setViewMode('list');
       }
-    } else if (path.startsWith(`${deptPrefix}/purchase-orders/edit-manual/`)) {
+    } else if (path.startsWith(`${deptPrefix}/purchase-orders/edit-manual/`) || path.startsWith(`${deptPrefix}/purchase-orders/edit/`)) {
       const id = path.split('/').pop();
-      const po = pos.find(p => p.id.toString() === id);
-      if (po && po.status === 'PO_REQUEST') {
-        if (!showManualCreateModal || manualFormData.id !== po.id) {
-          handleEditPO(po.id);
-          setShowManualCreateModal(true);
-          setShowCreateModal(false);
-          setViewMode('list');
-        }
+      if (id && (!showManualCreateModal || String(manualFormData.id) !== String(id))) {
+        handleEditPO(id);
+        setShowManualCreateModal(true);
+        setShowCreateModal(false);
+        setViewMode('list');
       }
     } else if (path.startsWith(`${deptPrefix}/purchase-orders/view/`)) {
       const id = path.split('/').pop();
@@ -468,25 +465,108 @@ const PurchaseOrders = () => {
   };
 
   const directItemOptions = React.useMemo(() => {
-    const seen = new Set();
-    const opts = [];
+    const groupedMap = new Map();
+
     (stockItems || []).forEach(si => {
-      const code = si.item_code ? String(si.item_code).trim() : '';
-      if (!code || seen.has(code)) return;
-      seen.add(code);
-      const matName = si.material_name || si.item_description || si.description || '';
+      const rawCode = (si.item_code ? String(si.item_code).trim() : '').toUpperCase();
+      const rawName = (si.material_name || si.item_description || si.description || '').trim();
+      const type = (si.material_type || si.item_group || '').toLowerCase();
+      const isRaw = (type.includes('raw') || type === 'rm' || rawCode.startsWith('RAW-') || rawCode.startsWith('RM-')) &&
+                    !rawCode.startsWith('CON-') && !rawCode.startsWith('BO-') && !rawCode.startsWith('PAC-') && !rawCode.startsWith('TOOL-') && !rawCode.startsWith('SER-');
+      const isConsumable = (type.includes('consum') || type.includes('hardware') || type.includes('packing') || rawCode.startsWith('CON-') || rawCode.startsWith('PAC-'));
+
+      let compositeKey = '';
+      if (isRaw) {
+        // Grouping key strictly preserving meaningful raw material differences:
+        // Material Name + Material Grade + Drawing No
+        const gradeKey = (si.material_grade || '').trim().toUpperCase();
+        const dwgKey = (si.drawing_no && si.drawing_no !== 'N/A' && si.drawing_no !== '—') ? si.drawing_no.trim().toUpperCase() : '';
+        compositeKey = `RAW:::${rawName.toUpperCase()}:::${gradeKey}:::${dwgKey}`;
+      } else if (isConsumable) {
+        // Group consumables by material_name (or item_code if no name)
+        compositeKey = `CON:::${rawName.toUpperCase() || rawCode}`;
+      } else {
+        // Bought-out, parts, and other items
+        compositeKey = `OTHER:::${rawCode || rawName.toUpperCase()}`;
+      }
+
+      if (!groupedMap.has(compositeKey)) {
+        groupedMap.set(compositeKey, {
+          compositeKey,
+          isRaw,
+          isConsumable,
+          material_name: rawName,
+          primaryItem: si,
+          variants: [si],
+          variantCodes: rawCode ? [rawCode] : []
+        });
+      } else {
+        const group = groupedMap.get(compositeKey);
+        group.variants.push(si);
+        if (rawCode && !group.variantCodes.includes(rawCode)) {
+          group.variantCodes.push(rawCode);
+        }
+        // Prefer canonical item with shape_id or RM- code
+        if (!group.primaryItem.shape_id && si.shape_id) {
+          group.primaryItem = si;
+        }
+        if (!group.primaryItem.item_code?.startsWith('RM-') && si.item_code?.startsWith('RM-')) {
+          group.primaryItem = si;
+        }
+        if (si.item_code && group.primaryItem.item_code && si.item_code < group.primaryItem.item_code) {
+          group.primaryItem = si;
+        }
+      }
+    });
+
+    const opts = [];
+    groupedMap.forEach(group => {
+      const primary = group.primaryItem;
+      const code = primary.item_code ? String(primary.item_code).trim() : '';
+      const matName = group.material_name || primary.material_name || primary.item_description || primary.description || code;
+      const variantCount = group.variants.length;
+
+      let label = matName ? `${code} - ${matName}` : code;
+      if ((group.isRaw || group.isConsumable) && variantCount > 1) {
+        label = `${code} - ${matName} (${variantCount} sizes)`;
+      }
+
       opts.push({
         value: code,
-        label: matName ? `${code} - ${matName}` : code,
+        label,
         item_code: code,
         material_name: matName,
-        description: si.item_description || si.description || '',
-        unit: si.unit || 'Kg',
-        rate: parseFloat(si.valuation_rate) || parseFloat(si.standard_rate) || parseFloat(si.rate) || 0
+        description: `${primary.item_description || primary.description || ''} ${group.variantCodes.join(' ')}`,
+        unit: primary.unit || 'Kg',
+        rate: parseFloat(primary.valuation_rate) || parseFloat(primary.standard_rate) || parseFloat(primary.rate) || 0,
+        isRaw: group.isRaw,
+        isConsumable: group.isConsumable,
+        variants: group.variants,
+        variantCodes: group.variantCodes,
+        primaryItem: primary
       });
     });
+
     return opts;
   }, [stockItems]);
+
+  const selectedPoMaterialValue = React.useMemo(() => {
+    if (!newPoItem.item_code) return '';
+    const matched = directItemOptions.find(opt => 
+      opt.value === newPoItem.item_code ||
+      opt.variantCodes?.includes(newPoItem.item_code)
+    );
+    return matched ? matched.value : newPoItem.item_code;
+  }, [directItemOptions, newPoItem.item_code]);
+
+  const currentPoMaterialVariants = React.useMemo(() => {
+    if (!newPoItem.item_code) return [];
+    const matched = directItemOptions.find(opt => 
+      opt.value === newPoItem.item_code ||
+      opt.variantCodes?.includes(newPoItem.item_code)
+    );
+    return matched?.variants || [];
+  }, [directItemOptions, newPoItem.item_code]);
 
   const drawingOptions = React.useMemo(() => {
     const seen = new Set();
@@ -523,47 +603,37 @@ const PurchaseOrders = () => {
   }, [vendors]);
 
   const handleAddManualItem = () => {
-    if (manualFormData.poType === 'DIRECT_COMPANY') {
-      if (showAddPoItem) {
-        setShowAddPoItem(false);
-        setEditingPoItemIndex(null);
-      } else {
-        setEditingPoItemIndex(null);
-        setNewPoItem({
-          item_code: '',
-          drawing_no: '',
-          material_name: '',
-          description: '',
-          quantity: 1,
-          unit: 'NOS',
-          item_group: '',
-          material_id: '',
-          material_type: '',
-          density: 0,
-          shape_id: '',
-          shape_type: '',
-          weight_per_unit: 0,
-          total_weight: 0,
-          length: '',
-          width: '',
-          thickness: '',
-          diameter: '',
-          outer_diameter: '',
-          thread_pitch: '',
-          rate: 0,
-          amount: 0,
-          remarks: ''
-        });
-        setShowAddPoItem(true);
-      }
+    if (showAddPoItem) {
+      setShowAddPoItem(false);
+      setEditingPoItemIndex(null);
     } else {
-      setManualFormData({
-        ...manualFormData,
-        items: [
-          ...manualFormData.items,
-          { item_code: '', description: '', material_name: '', quantity: 0, unit: 'Kg', rate: 0, amount: 0 }
-        ]
+      setEditingPoItemIndex(null);
+      setNewPoItem({
+        item_code: '',
+        drawing_no: '',
+        material_name: '',
+        description: '',
+        quantity: 1,
+        unit: 'NOS',
+        item_group: '',
+        material_id: '',
+        material_type: '',
+        density: 0,
+        shape_id: '',
+        shape_type: '',
+        weight_per_unit: 0,
+        total_weight: 0,
+        length: '',
+        width: '',
+        thickness: '',
+        diameter: '',
+        outer_diameter: '',
+        thread_pitch: '',
+        rate: 0,
+        amount: 0,
+        remarks: ''
       });
+      setShowAddPoItem(true);
     }
   };
 
@@ -592,12 +662,11 @@ const PurchaseOrders = () => {
       threadPitch: newPoItem.thread_pitch
     });
 
-    const isKgUnit = (newPoItem.unit || '').toUpperCase() === 'KG';
     const wPerUnit = calculatedWeight > 0 ? calculatedWeight : (parseFloat(newPoItem.weight_per_unit) || 0);
     const totWeight = Number((qty * wPerUnit).toFixed(3));
-    const amt = isKgUnit && wPerUnit > 0
-      ? Number((totWeight * rate).toFixed(2))
-      : Number((qty * rate).toFixed(2));
+    const isWeightBasis = isWeightBasedItem({ ...newPoItem, weight_per_unit: wPerUnit, total_weight: totWeight });
+    const billingQty = isWeightBasis && totWeight > 0 ? totWeight : qty;
+    const amt = Number((billingQty * rate).toFixed(2));
 
     setNewPoItem(prev => {
       if (prev.weight_per_unit === wPerUnit && prev.total_weight === totWeight && prev.amount === amt) {
@@ -698,14 +767,18 @@ const PurchaseOrders = () => {
       return;
     }
 
-    const isKgBased = (newPoItem.unit || '').toUpperCase() === 'KG' || (newPoItem.item_group || '').toLowerCase().includes('raw') || !!newPoItem.shape_type;
-    const finalQty = isKgBased && parseFloat(newPoItem.weight_per_unit) > 0 && (newPoItem.unit || '').toUpperCase() === 'KG'
-      ? Number((parseFloat(newPoItem.weight_per_unit) * qty).toFixed(3))
-      : qty;
+    const wpu = parseFloat(newPoItem.weight_per_unit) || 0;
+    const totWeight = parseFloat(newPoItem.total_weight) || Number((wpu * qty).toFixed(3));
+    const isWeightBasis = isWeightBasedItem({ ...newPoItem, weight_per_unit: wpu, total_weight: totWeight });
+    const billingQty = isWeightBasis && totWeight > 0 ? totWeight : qty;
     const rate = parseFloat(newPoItem.rate) || 0;
-    const amt = parseFloat(newPoItem.amount) || Number((finalQty * rate).toFixed(2));
+    const amt = Number((billingQty * rate).toFixed(2));
+    const finalQty = (newPoItem.unit || '').toUpperCase() === 'KG' && totWeight > 0 ? totWeight : qty;
+
+    const existingId = (editingPoItemIndex !== null && manualFormData.items[editingPoItemIndex]) ? manualFormData.items[editingPoItemIndex].id : undefined;
 
     const committedItem = {
+      ...(existingId ? { id: existingId } : {}),
       item_code: newPoItem.item_code,
       drawing_no: newPoItem.drawing_no ? String(newPoItem.drawing_no).trim() : '',
       material_name: newPoItem.material_name,
@@ -809,32 +882,20 @@ const PurchaseOrders = () => {
       } else {
         newItems[index].quantity = dQty;
       }
-      const rate = parseFloat(newItems[index].rate) || 0;
-      const billingQty = ((newItems[index].unit || '').toUpperCase() === 'KG' && wpu > 0)
-        ? (newItems[index].total_weight || dQty)
-        : dQty;
-      newItems[index].amount = Number((billingQty * rate).toFixed(2));
+      newItems[index].amount = calculateItemAmount(newItems[index]);
       setManualFormData({ ...manualFormData, items: newItems });
       return;
     }
 
     if (field === 'rate') {
       newItems[index].rate = value;
-      const r = parseFloat(value) || 0;
-      const wpu = parseFloat(newItems[index].weight_per_unit) || 0;
-      const dQty = parseFloat(newItems[index].design_qty !== undefined ? newItems[index].design_qty : newItems[index].quantity) || 0;
-      const billingQty = ((newItems[index].unit || '').toUpperCase() === 'KG' && wpu > 0)
-        ? (parseFloat(newItems[index].total_weight) || (dQty * wpu))
-        : (parseFloat(newItems[index].quantity) || dQty);
-      newItems[index].amount = Number((billingQty * r).toFixed(2));
+      newItems[index].amount = calculateItemAmount(newItems[index]);
       setManualFormData({ ...manualFormData, items: newItems });
       return;
     }
 
     // Always recalculate amount on any change to quantity or rate
-    const qty = parseFloat(newItems[index].quantity) || 0;
-    const rate = parseFloat(newItems[index].rate) || 0;
-    newItems[index].amount = Number((qty * rate).toFixed(2));
+    newItems[index].amount = calculateItemAmount(newItems[index]);
 
     setManualFormData({ ...manualFormData, items: newItems });
   };
@@ -842,6 +903,30 @@ const PurchaseOrders = () => {
   const handleRemoveManualItem = (index) => {
     const newItems = manualFormData.items.filter((_, i) => i !== index);
     setManualFormData({ ...manualFormData, items: newItems });
+  };
+
+  const handleCloseManualModal = () => {
+    setShowManualCreateModal(false);
+    setShowAddPoItem(false);
+    setEditingPoItemIndex(null);
+    setManualFormData({
+      id: null,
+      poType: 'DRAWING',
+      poNumber: '',
+      customerPoNo: '',
+      orderDate: new Date().toISOString().split('T')[0],
+      companyId: '',
+      vendorId: '',
+      quotationId: '',
+      expectedDeliveryDate: '',
+      notes: '',
+      currency: 'INR (Indian Rupee)',
+      discountType: 'AMOUNT',
+      discountValue: 0,
+      discountAmount: 0,
+      items: []
+    });
+    navigate(`${deptPrefix}/purchase-orders`);
   };
 
   const handleStartEditPoItem = (index) => {
@@ -1048,6 +1133,7 @@ const PurchaseOrders = () => {
           discount_type: manualFormData.discountType || 'AMOUNT',
           discount_value: discVal,
           items: manualFormData.items.map(item => ({
+            id: item.id || undefined,
             item_code: item.item_code,
             drawing_no: item.drawing_no ? String(item.drawing_no).trim() : null,
             shape_type: item.shape_type ? String(item.shape_type).trim() : null,
@@ -1069,8 +1155,13 @@ const PurchaseOrders = () => {
           }))
         };
 
-        const response = await fetch(`${API_BASE}/purchase-orders/direct-company`, {
-          method: 'POST',
+        const url = manualFormData.id
+          ? `${API_BASE}/purchase-orders/${manualFormData.id}`
+          : `${API_BASE}/purchase-orders/direct-company`;
+        const method = manualFormData.id ? 'PATCH' : 'POST';
+
+        const response = await fetch(url, {
+          method: method,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -1080,20 +1171,21 @@ const PurchaseOrders = () => {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to create Direct Company PO');
+          throw new Error(errorData.message || `Failed to ${manualFormData.id ? 'update' : 'create'} Direct Company PO`);
         }
 
-        successToast('Direct Company Purchase Order created successfully');
+        successToast(`Direct Company Purchase Order ${manualFormData.id ? 'updated' : 'created'} successfully`);
+        setShowManualCreateModal(false);
         navigate(`${deptPrefix}/purchase-orders`);
         fetchPOs(false);
         fetchStats();
       } catch (error) {
-        errorToast(error.message || 'Failed to create Direct Company PO');
+        errorToast(error.message || `Failed to ${manualFormData.id ? 'update' : 'create'} Direct Company PO`);
       }
       return;
     }
 
-    if (!manualFormData.quotationId) return errorToast('Please select an approved quote');
+    if (!manualFormData.quotationId && !manualFormData.id) return errorToast('Please select an approved quote');
     if (!manualFormData.vendorId) return errorToast('Please select a vendor');
     if (manualFormData.items.length === 0) return errorToast('Please add at least one item');
 
@@ -1112,6 +1204,9 @@ const PurchaseOrders = () => {
       }
 
       const payload = {
+        poNumber: manualFormData.poNumber ? manualFormData.poNumber.trim() : null,
+        customerPoNo: manualFormData.customerPoNo ? manualFormData.customerPoNo.trim() : null,
+        orderDate: manualFormData.orderDate || null,
         vendorId: parseInt(manualFormData.vendorId),
         quotationId: manualFormData.quotationId ? parseInt(manualFormData.quotationId) : null,
         expectedDeliveryDate: manualFormData.expectedDeliveryDate || null,
@@ -1121,7 +1216,7 @@ const PurchaseOrders = () => {
         discount_value: discVal,
         discount_amount: discAmt,
         total_amount: Math.max(0, subtotal - discAmt) * 1.18,
-        status: manualFormData.id ? 'DRAFT' : undefined,
+        status: manualFormData.id ? undefined : 'DRAFT',
         items: manualFormData.items.map(item => ({
           id: item.id || undefined,
           item_code: item.item_code,
@@ -1129,7 +1224,9 @@ const PurchaseOrders = () => {
           shape_type: item.shape_type ? String(item.shape_type).trim() : null,
           description: item.description,
           material_name: item.material_name,
+          design_qty: item.design_qty !== undefined && item.design_qty !== null ? parseFloat(item.design_qty) : (parseFloat(item.quantity) || 0),
           quantity: parseFloat(item.quantity) || 0,
+          total_weight: parseFloat(item.total_weight) || 0,
           unit: item.unit || 'NOS',
           rate: parseFloat(item.rate) || 0,
           amount: parseFloat(item.amount) || 0,
@@ -1163,6 +1260,7 @@ const PurchaseOrders = () => {
       }
 
       successToast(`Purchase Order ${manualFormData.id ? 'updated' : 'created'} successfully`);
+      setShowManualCreateModal(false);
       navigate(`${deptPrefix}/purchase-orders`);
       fetchPOs(false);
       fetchStats();
@@ -1519,52 +1617,68 @@ const PurchaseOrders = () => {
       if (!response.ok) throw new Error('Failed to fetch PO details');
       const data = await response.json();
 
-      if (data.status === 'PO_REQUEST') {
-        setManualFormData({
-          id: data.id,
-          vendorId: data.vendor_id || '',
-          quotationId: data.quotation_id || '',
-          expectedDeliveryDate: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
-          notes: data.notes || '',
-          currency: data.currency ? `${data.currency} (${data.currency === 'INR' ? 'Indian Rupee' : 'US Dollar'})` : 'INR (Indian Rupee)',
-          discountType: data.discount_type || 'AMOUNT',
-          discountValue: data.discount_value || 0,
-          discountAmount: data.discount_amount || 0,
-          items: (data.items || [])
-            .filter(item => {
-              const type = (item.material_type || '').toUpperCase();
-              return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
-            })
-            .map(item => ({
-              id: item.id,
-              item_code: item.item_code || '',
-              drawing_no: item.drawing_no ? String(item.drawing_no).trim() : (item.drawing_number ? String(item.drawing_number).trim() : ''),
-              description: item.description || '',
-              quantity: item.quantity || 0,
-              unit: item.unit || 'NOS',
-              rate: item.unit_rate || item.rate || 0,
-              amount: item.amount || ((item.quantity || 0) * (item.unit_rate || item.rate || 0))
-            }))
-        });
-        setShowManualCreateModal(true);
-      } else {
-        setSelectedPO(data);
-        const filteredItems = (data.items || []).filter(item => {
-          const type = (item.material_type || '').toUpperCase();
-          return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
-        });
-        setPoItems(filteredItems);
-        setEditFormData({
-          expectedDeliveryDate: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
-          notes: data.notes || '',
-          status: data.status || '',
-          vendorId: data.vendor_id || '',
-          discountType: data.discount_type || 'AMOUNT',
-          discountValue: data.discount_value || 0,
-          discountAmount: data.discount_amount || 0
-        });
-        setShowEditModal(true);
-      }
+      setSelectedPO(data);
+
+      const isDirect = data.po_type === 'DIRECT_COMPANY' || data.source === 'DIRECT_COMPANY_PURCHASE';
+
+      const filteredItems = (data.items || []).filter(item => {
+        const type = (item.material_type || '').toUpperCase();
+        return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+      });
+
+      const mappedItems = filteredItems.map(item => {
+        const isWeight = isWeightBasedItem(item);
+        const designQty = parseFloat(item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : (item.planned_qty || item.quantity || 0));
+        const billingQty = getItemEffectiveBillingQty(item, isDirect);
+        const rate = parseFloat(item.unit_rate !== undefined && item.unit_rate !== null ? item.unit_rate : (item.rate || 0));
+        const amount = calculateItemAmount(item, isDirect);
+
+        return {
+          id: item.id,
+          item_code: item.item_code || '',
+          drawing_no: item.drawing_no && item.drawing_no !== '—' ? String(item.drawing_no).trim() : (item.drawing_number ? String(item.drawing_number).trim() : ''),
+          material_name: item.material_name || item.description || item.item_code || '',
+          description: item.description || item.material_name || item.item_code || '',
+          design_qty: designQty,
+          quantity: item.quantity !== undefined ? parseFloat(item.quantity) : designQty,
+          total_weight: isWeight ? billingQty : (parseFloat(item.total_weight) || 0),
+          unit: item.unit || 'NOS',
+          shape_type: item.shape_type || item.shape_name || '',
+          length: item.length || 0,
+          width: item.width || 0,
+          thickness: item.thickness || 0,
+          diameter: item.diameter || 0,
+          outer_diameter: item.outer_diameter || 0,
+          density: item.density || 0,
+          weight_per_unit: item.weight_per_unit || 0,
+          rate: rate,
+          amount: amount,
+          cgst_percent: parseFloat(item.cgst_percent) || 9,
+          sgst_percent: parseFloat(item.sgst_percent) || 9
+        };
+      });
+
+      setManualFormData({
+        id: data.id,
+        poType: isDirect ? 'DIRECT_COMPANY' : 'DRAWING',
+        poNumber: data.po_number || '',
+        customerPoNo: data.customer_po_no || '',
+        orderDate: data.created_at ? data.created_at.split('T')[0] : (data.order_date ? data.order_date.split('T')[0] : new Date().toISOString().split('T')[0]),
+        companyId: data.company_id ? String(data.company_id) : (data.company_name || ''),
+        vendorId: data.vendor_id ? String(data.vendor_id) : '',
+        quotationId: data.quotation_id ? String(data.quotation_id) : '',
+        expectedDeliveryDate: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
+        notes: data.notes || '',
+        status: data.status || 'DRAFT',
+        currency: data.currency ? `${data.currency} (${data.currency === 'INR' ? 'Indian Rupee' : 'US Dollar'})` : 'INR (Indian Rupee)',
+        discountType: data.discount_type || 'AMOUNT',
+        discountValue: data.discount_value !== undefined && data.discount_value !== null ? data.discount_value : 0,
+        discountAmount: data.discount_amount || 0,
+        items: mappedItems
+      });
+
+      setShowManualCreateModal(true);
+      setShowEditModal(false);
     } catch (error) {
       errorToast(error.message || 'Failed to load PO details');
     }
@@ -1994,6 +2108,13 @@ const PurchaseOrders = () => {
       key: 'company_name',
       sortable: true,
       render: (val, row) => {
+        if (row.po_type === 'DIRECT_COMPANY') {
+          return (
+            <span className="font-bold text-slate-900 text-xs">
+              {row.company_name || '—'}
+            </span>
+          );
+        }
         const isMergedPO = Boolean(
           row.is_merged || 
           row.drawing_no === 'Merged Drawings' || 
@@ -2081,18 +2202,34 @@ const PurchaseOrders = () => {
       label: 'Drawing',
       key: 'drawing_no',
       sortable: true,
-      render: (val, row) => (
-        <div className="flex flex-col">
-          <span className="text-xs font-semibold text-[#111827] leading-[16px]">
-            {row.drawing_no || (row.po_type === 'DIRECT_COMPANY' ? 'Direct Purchase' : '—')}
-          </span>
-          {row.finished_good && (
-            <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
-              {row.finished_good}
+      render: (val, row) => {
+        let displayDrawing = row.drawing_no;
+        if (row.po_type === 'DIRECT_COMPANY' && (row.drawing_no === 'Merged Drawings' || !row.drawing_no)) {
+          const itemDwgs = (row.items || [])
+            .map(i => i.drawing_no)
+            .filter(d => d && d !== '—' && d !== 'Merged Drawings' && String(d).trim() !== '');
+          const uniqueDwgs = Array.from(new Set(itemDwgs));
+          if (uniqueDwgs.length === 1) {
+            displayDrawing = uniqueDwgs[0];
+          } else if (uniqueDwgs.length > 1) {
+            displayDrawing = `${uniqueDwgs.length} Drawings`;
+          } else {
+            displayDrawing = 'Direct Purchase';
+          }
+        }
+        return (
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-[#111827] leading-[16px]">
+              {displayDrawing || (row.po_type === 'DIRECT_COMPANY' ? 'Direct Purchase' : '—')}
             </span>
-          )}
-        </div>
-      )
+            {row.po_type !== 'DIRECT_COMPANY' && row.finished_good && (
+              <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
+                {row.finished_good}
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       label: 'Order -- Expected',
@@ -2295,7 +2432,7 @@ const PurchaseOrders = () => {
   ];
 
   const filteredPOs = pos.filter(po => {
-    const isMergedPO = Boolean(
+    const isMergedPO = po.po_type !== 'DIRECT_COMPANY' && Boolean(
       po.is_merged || 
       po.drawing_no === 'Merged Drawings' || 
       (po.items && po.items.some(i => i.source_po_item_id || i.source_quotation_id || i.source_quotation_number))
@@ -2481,47 +2618,65 @@ const PurchaseOrders = () => {
 
       {/* Manual Create PO Modal (New Design) */}
       {showManualCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 overflow-y-auto">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) handleCloseManualModal(); }}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 overflow-y-auto"
+        >
           <div className="bg-white rounded shadow-2xl w-full max-w-4xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
             {/* Modal Header */}
             <div className="flex justify-between items-center p-2 border-b border-slate-50">
-              <h2 className="text-xl  text-slate-800">{manualFormData.id ? 'Edit Purchase Order Request' : 'Create New Purchase Order'}</h2>
+              <h2 className="text-xl  text-slate-800">{manualFormData.id ? (manualFormData.poNumber ? `Edit Purchase Order (${manualFormData.poNumber})` : 'Edit Purchase Order') : 'Create New Purchase Order'}</h2>
               <button
-                onClick={() => navigate(`${deptPrefix}/purchase-orders`)}
-                className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
+                type="button"
+                onClick={handleCloseManualModal}
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+                title="Close"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleCreateManualPO} className="p-2 space-y-2 max-h-[calc(90vh-100px)] overflow-y-auto custom-scrollbar">
               {/* Purchase Order Type Selector */}
               <div className="bg-slate-50 border border-slate-200 rounded p-3">
-                <label className="text-xs font-semibold text-slate-700 ml-1 block mb-2">Purchase Order Type *</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-slate-700 ml-1">Purchase Order Type *</label>
+                  {manualFormData.id && (
+                    <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
+                      Fixed for existing PO
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700 hover:text-blue-600">
+                  <label className={`flex items-center gap-2 text-xs font-medium ${manualFormData.id ? 'cursor-not-allowed opacity-60 text-slate-500' : 'cursor-pointer text-slate-700 hover:text-blue-600'}`} title={manualFormData.id ? "Purchase Order Type cannot be changed when editing" : ""}>
                     <input
                       type="radio"
                       name="poType"
                       value="DRAWING"
+                      disabled={!!manualFormData.id}
                       checked={manualFormData.poType === 'DRAWING'}
-                      onChange={() => setManualFormData(prev => ({
-                        ...prev,
-                        poType: 'DRAWING',
-                        companyId: '',
-                        items: []
-                      }))}
-                      className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      onChange={() => {
+                        if (manualFormData.id) return;
+                        setManualFormData(prev => ({
+                          ...prev,
+                          poType: 'DRAWING',
+                          companyId: '',
+                          items: []
+                        }));
+                      }}
+                      className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
                     />
                     Against Drawing
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700 hover:text-blue-600">
+                  <label className={`flex items-center gap-2 text-xs font-medium ${manualFormData.id ? 'cursor-not-allowed opacity-60 text-slate-500' : 'cursor-pointer text-slate-700 hover:text-blue-600'}`} title={manualFormData.id ? "Purchase Order Type cannot be changed when editing" : ""}>
                     <input
                       type="radio"
                       name="poType"
                       value="DIRECT_COMPANY"
+                      disabled={!!manualFormData.id}
                       checked={manualFormData.poType === 'DIRECT_COMPANY'}
                       onChange={() => {
+                        if (manualFormData.id) return;
                         setManualFormData(prev => ({
                           ...prev,
                           poType: 'DIRECT_COMPANY',
@@ -2531,7 +2686,7 @@ const PurchaseOrders = () => {
                         }));
                         fetchNextPONumber();
                       }}
-                      className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
                     />
                     Direct Company Purchase
                   </label>
@@ -2700,10 +2855,59 @@ const PurchaseOrders = () => {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 ml-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              PO Number
+                              <span className="text-[10px] text-slate-400 font-normal">(Auto / Manual)</span>
+                            </span>
+                            {!manualFormData.id && (
+                              <button
+                                type="button"
+                                onClick={fetchNextPONumber}
+                                className="text-[10px] text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                                title="Fetch latest sequence number"
+                              >
+                                <RefreshCw size={10} className="inline" /> Auto-fill
+                              </button>
+                            )}
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={manualFormData.poNumber || ''}
+                              onChange={(e) => setManualFormData(prev => ({ ...prev, poNumber: e.target.value }))}
+                              placeholder="Auto-generated if left blank"
+                              className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 font-mono font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all pr-8"
+                            />
+                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                              <FileText size={13} />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-slate-700 ml-1 flex items-center justify-between">
+                            <span>Customer PO Number</span>
+                            <span className="text-[10px] text-slate-400 font-normal">(Optional Manual Ref)</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={manualFormData.customerPoNo || ''}
+                              onChange={(e) => setManualFormData(prev => ({ ...prev, customerPoNo: e.target.value }))}
+                              placeholder="e.g. CUST-PO-2026-0421"
+                              className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-800 font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-slate-700 ml-1">Order Date *</label>
                           <input
                             type="date"
-                            defaultValue={new Date().toISOString().split('T')[0]}
+                            value={manualFormData.orderDate || new Date().toISOString().split('T')[0]}
+                            onChange={(e) => setManualFormData(prev => ({ ...prev, orderDate: e.target.value }))}
                             className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             required
                           />
@@ -2733,7 +2937,7 @@ const PurchaseOrders = () => {
                     </div>
                     <h3 className="text-sm  text-slate-700">Purchase Order Items</h3>
                   </div>
-                  {manualFormData.poType === 'DIRECT_COMPANY' && (
+                  {(manualFormData.poType === 'DIRECT_COMPANY' || manualFormData.id) && (
                     <button
                       type="button"
                       onClick={handleAddManualItem}
@@ -2763,7 +2967,7 @@ const PurchaseOrders = () => {
                 </div>
 
                 {/* Add Purchase Order Item Card (Material Request Style) */}
-                {manualFormData.poType === 'DIRECT_COMPANY' && showAddPoItem && (() => {
+                {showAddPoItem && (() => {
                   const isKgBased = (newPoItem.unit || '').toUpperCase() === 'KG' ||
                     (newPoItem.item_group || '').toLowerCase().includes('raw') ||
                     !!newPoItem.shape_type;
@@ -2860,13 +3064,41 @@ const PurchaseOrders = () => {
                         </div>
 
                         <div className="col-span-12 md:col-span-4 space-y-1">
-                          <label className="text-xs text-slate-600 font-semibold block">
-                            Material Selection <span className="text-rose-500">*</span>
-                          </label>
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs text-slate-600 font-semibold block">
+                              Material Selection <span className="text-rose-500">*</span>
+                            </label>
+                            {currentPoMaterialVariants.length > 1 && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-slate-400 font-medium">Stock Size:</span>
+                                <select
+                                  className="text-[10px] bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                                  value={newPoItem.item_code || ''}
+                                  onChange={(e) => {
+                                    handleSelectMaterialForPo(e.target.value);
+                                  }}
+                                >
+                                  {currentPoMaterialVariants.map(v => {
+                                    const dims = [
+                                      v.length ? `L:${v.length}` : '',
+                                      v.width ? `W:${v.width}` : '',
+                                      v.thickness ? `T:${v.thickness}` : '',
+                                      v.diameter ? `Ø:${v.diameter}` : ''
+                                    ].filter(Boolean).join('×');
+                                    return (
+                                      <option key={v.id || v.item_code} value={v.item_code}>
+                                        {v.item_code} {dims ? `(${dims} mm)` : ''}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              </div>
+                            )}
+                          </div>
                           <SearchableSelect
                             placeholder="Search Item Code or Material Name..."
                             options={directItemOptions}
-                            value={newPoItem.item_code}
+                            value={selectedPoMaterialValue}
                             onChange={(e) => {
                               handleSelectMaterialForPo(e.target.value);
                             }}
@@ -2874,10 +3106,17 @@ const PurchaseOrders = () => {
                             allowCustom={false}
                             className="font-semibold"
                             renderOption={(opt) => (
-                              <div className="flex items-center gap-2 py-0.5">
-                                <span className="font-bold text-slate-800 tracking-wide shrink-0">{opt.item_code}</span>
-                                <span className="text-slate-400 font-normal shrink-0">-</span>
-                                <span className="text-slate-700 font-medium truncate">{opt.material_name || opt.description}</span>
+                              <div className="flex items-center justify-between gap-2 py-0.5 w-full">
+                                <div className="flex items-center gap-2 truncate">
+                                  <span className="font-bold text-slate-800 tracking-wide shrink-0">{opt.item_code}</span>
+                                  <span className="text-slate-400 font-normal shrink-0">-</span>
+                                  <span className="text-slate-700 font-medium truncate">{opt.material_name || opt.description}</span>
+                                </div>
+                                {opt.variants && opt.variants.length > 1 && (
+                                  <span className="text-[10px] bg-indigo-50 text-indigo-600 font-semibold px-1.5 py-0.5 rounded border border-indigo-100 whitespace-nowrap shrink-0">
+                                    {opt.variants.length} sizes
+                                  </span>
+                                )}
                               </div>
                             )}
                           />
@@ -3379,243 +3618,131 @@ const PurchaseOrders = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
-                        {manualFormData.poType === 'DIRECT_COMPANY' ? (
-                          <>
-                            <th className="px-4 p-2 text-left w-32">Drawing No.</th>
-                            <th className="px-4 p-2 text-left min-w-[200px]">Material Name & Code</th>
-                            <th className="px-4 p-2 text-left">Remarks / Description</th>
-                            <th className="px-4 p-2 text-center w-28">Design Qty</th>
-                            <th className="px-4 p-2 text-center w-28">Weight</th>
-                            <th className="px-4 p-2 text-center w-28">Rate</th>
-                            <th className="px-4 p-2 text-right w-32">Amount</th>
-                            <th className="px-4 p-2 text-center w-16">Action</th>
-                          </>
-                        ) : (
-                          <>
-                            <th className="px-4 p-2 text-left min-w-[280px]">Item Code</th>
-                            <th className="px-4 p-2 text-left">Material Name & Description</th>
-                            <th className="px-4 p-2 text-center w-28">Design Qty</th>
-                            <th className="px-4 p-2 text-center w-28">Weight</th>
-                            <th className="px-4 p-2 text-center w-28">Rate</th>
-                            <th className="px-4 p-2 text-right w-32">Amount</th>
-                            <th className="px-4 p-2 text-center w-12"></th>
-                          </>
-                        )}
+                        <th className="px-4 p-2 text-left w-32">Drawing No.</th>
+                        <th className="px-4 p-2 text-left min-w-[200px]">Item Code & Material</th>
+                        <th className="px-4 p-2 text-left">Remarks / Description</th>
+                        <th className="px-4 p-2 text-center w-28">Design Qty</th>
+                        <th className="px-4 p-2 text-center w-28">Weight</th>
+                        <th className="px-4 p-2 text-center w-28">Rate</th>
+                        <th className="px-4 p-2 text-right w-32">Amount</th>
+                        <th className="px-4 p-2 text-center w-16">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {manualFormData.items.map((item, idx) => (
                         <tr key={idx} className="group hover:bg-slate-50/50 transition-all">
-                          {manualFormData.poType === 'DIRECT_COMPANY' ? (
-                            <>
-                              <td className="px-4 p-2 w-32">
-                                {item.drawing_no ? (
-                                  <span className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                                    {item.drawing_no}
+                          <td className="px-4 p-2 w-32">
+                            {item.drawing_no ? (
+                              <span className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                {item.drawing_no}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 p-2 min-w-[200px]">
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-xs text-slate-800">{item.item_code}</span>
+                                {item.shape_type && (
+                                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200">
+                                    {item.shape_type}
                                   </span>
-                                ) : (
-                                  <span className="text-slate-400 text-xs">—</span>
                                 )}
-                              </td>
-                              <td className="px-4 p-2 min-w-[200px]">
-                                <div className="flex flex-col gap-0.5">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="font-bold text-xs text-slate-800">{item.item_code}</span>
-                                    {item.shape_type && (
-                                      <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200">
-                                        {item.shape_type}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-[11px] text-slate-600 font-medium">{item.material_name || item.description}</span>
-                                  {formatDimensions(item) && (
-                                    <span className="text-[10px] text-slate-500 font-mono">
-                                      📐 {formatDimensions(item)}
-                                    </span>
-                                  )}
-                                  {parseFloat(item.weight_per_unit) > 0 && (
-                                    <span className="text-[10px] text-slate-400 font-medium">
-                                      Wt: {item.weight_per_unit} kg/ea
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-4 p-2">
-                                <input
-                                  type="text"
-                                  value={item.remarks || item.description || ''}
-                                  onChange={(e) => handleManualItemChange(idx, 'remarks', e.target.value)}
-                                  className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                  placeholder="Remarks"
-                                />
-                              </td>
-                              <td className="px-4 p-2 w-28 text-center">
-                                <div className="flex flex-col items-center gap-1">
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    min="0.001"
-                                    value={item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : (item.quantity || '')}
-                                    onChange={(e) => handleManualItemChange(idx, 'design_qty', e.target.value)}
-                                    className="w-20 p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-slate-800"
-                                  />
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase">
-                                    {(item.unit || '').toUpperCase() === 'KG' ? 'NOS' : (item.unit || 'NOS')}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-4 p-2 w-28 text-center">
-                                {parseFloat(item.total_weight) > 0 || parseFloat(item.weight_per_unit) > 0 || (item.unit || '').toUpperCase() === 'KG' ? (
-                                  <div className="flex flex-col items-center gap-0.5">
-                                    <span className="text-xs font-bold text-slate-800">
-                                      {Number(item.total_weight || item.quantity || 0).toFixed(3)}
-                                    </span>
-                                    <span className="text-[10px] text-emerald-600 font-bold uppercase">KG</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-slate-400 font-medium">—</span>
-                                )}
-                              </td>
-                              <td className="px-4 p-2 w-28">
-                                <div className="flex flex-col items-center gap-0.5">
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    value={item.rate}
-                                    onChange={(e) => handleManualItemChange(idx, 'rate', e.target.value)}
-                                    className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700"
-                                  />
-                                  <span className="text-[9px] text-slate-400 font-medium">
-                                    {(item.unit || '').toUpperCase() === 'KG' ? '₹ / Kg' : `₹ / ${item.unit || 'Nos'}`}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-4 p-2 text-right font-bold text-xs text-slate-800 w-32">
-                                {formatCurrency(item.amount)}
-                              </td>
-                              <td className="px-4 p-2 text-center w-16">
-                                <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStartEditPoItem(idx)}
-                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                    title="Edit item"
-                                  >
-                                    <Pencil size={13} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveManualItem(idx)}
-                                    className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded transition-all"
-                                    title="Remove item"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </div>
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="px-4 p-2 min-w-[280px]">
-                                <div className="flex flex-col gap-1">
-                                  <select
-                                    value={item.item_code}
-                                    onChange={(e) => handleManualItemChange(idx, 'item_code', e.target.value)}
-                                    className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer font-semibold"
-                                  >
-                                    <option value="">Select Item</option>
-                                    {stockItems.map(si => (
-                                      <option key={si.id} value={si.item_code}>
-                                        {si.item_code}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  {item.description && (
-                                    <span className="text-[10px] text-slate-400 font-medium px-1 leading-normal break-words max-w-[210px] block">
-                                      {item.description}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-4 p-2">
-                                <div className="flex flex-col gap-1">
-                                  <input
-                                    type="text"
-                                    value={item.material_name || item.description || ''}
-                                    onChange={(e) => handleManualItemChange(idx, 'material_name', e.target.value)}
-                                    className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                    placeholder="Material Name"
-                                  />
-                                  {formatDimensions(item) && (
-                                    <div className="px-1 text-[10px] text-slate-400">
-                                      {formatDimensions(item)}
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-4 p-2 w-28 text-center">
-                                <div className="flex flex-col items-center gap-1">
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    min="0.001"
-                                    value={item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : (item.quantity || '')}
-                                    onChange={(e) => handleManualItemChange(idx, 'design_qty', e.target.value)}
-                                    className="w-20 p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-slate-800"
-                                  />
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase">
-                                    {(item.unit || '').toUpperCase() === 'KG' ? 'NOS' : (item.unit || 'NOS')}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-4 p-2 w-28 text-center">
-                                {parseFloat(item.total_weight) > 0 || parseFloat(item.weight_per_unit) > 0 || (item.unit || '').toUpperCase() === 'KG' ? (
-                                  <div className="flex flex-col items-center gap-0.5">
-                                    <span className="text-xs font-bold text-slate-800">
-                                      {Number(item.total_weight || item.quantity || 0).toFixed(3)}
-                                    </span>
-                                    <span className="text-[10px] text-emerald-600 font-bold uppercase">KG</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-slate-400 font-medium">—</span>
-                                )}
-                              </td>
-                              <td className="px-4 p-2 w-28">
-                                <div className="flex flex-col items-center gap-0.5">
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    value={item.rate}
-                                    onChange={(e) => handleManualItemChange(idx, 'rate', e.target.value)}
-                                    className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700"
-                                  />
-                                  <span className="text-[9px] text-slate-400 font-medium">
-                                    {(item.unit || '').toUpperCase() === 'KG' ? '₹ / Kg' : `₹ / ${item.unit || 'Nos'}`}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-4 p-2 text-right font-bold text-xs text-slate-800 w-32">
-                                {formatCurrency(item.amount)}
-                              </td>
-                              <td className="px-4 p-2 text-center w-12">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveManualItem(idx)}
-                                  className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-all"
-                                  title="Remove item"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                </button>
-                              </td>
-                            </>
-                          )}
+                              </div>
+                              <span className="text-[11px] text-slate-600 font-medium">{item.material_name || item.description}</span>
+                              {formatDimensions(item) && (
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  📐 {formatDimensions(item)}
+                                </span>
+                              )}
+                              {parseFloat(item.weight_per_unit) > 0 && (
+                                <span className="text-[10px] text-slate-400 font-medium">
+                                  Wt: {item.weight_per_unit} kg/ea
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 p-2">
+                            <input
+                              type="text"
+                              value={item.remarks || item.description || ''}
+                              onChange={(e) => handleManualItemChange(idx, 'remarks', e.target.value)}
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                              placeholder="Remarks / Description"
+                            />
+                          </td>
+                          <td className="px-4 p-2 w-28 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <input
+                                type="number"
+                                step="any"
+                                min="0.001"
+                                value={item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : (item.quantity || '')}
+                                onChange={(e) => handleManualItemChange(idx, 'design_qty', e.target.value)}
+                                className="w-20 p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-slate-800"
+                              />
+                              <span className="text-[10px] text-slate-400 font-bold uppercase">
+                                {(item.unit || '').toUpperCase() === 'KG' ? 'NOS' : (item.unit || 'NOS')}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 p-2 w-28 text-center">
+                            {parseFloat(item.total_weight) > 0 || parseFloat(item.weight_per_unit) > 0 || (item.unit || '').toUpperCase() === 'KG' ? (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-xs font-bold text-slate-800">
+                                  {Number(item.total_weight || item.quantity || 0).toFixed(3)}
+                                </span>
+                                <span className="text-[10px] text-emerald-600 font-bold uppercase">KG</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400 font-medium">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 p-2 w-28">
+                            <div className="flex flex-col items-center gap-0.5">
+                              <input
+                                type="number"
+                                step="any"
+                                value={item.rate}
+                                onChange={(e) => handleManualItemChange(idx, 'rate', e.target.value)}
+                                className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700"
+                              />
+                              <span className="text-[9px] text-slate-400 font-medium">
+                                {isWeightBasedItem(item) ? '₹ / Kg' : `₹ / ${item.unit || 'Nos'}`}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 p-2 text-right font-bold text-xs text-slate-800 w-32">
+                            {formatCurrency(item.amount)}
+                          </td>
+                          <td className="px-4 p-2 text-center w-16">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditPoItem(idx)}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                                title="Edit item"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveManualItem(idx)}
+                                className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded transition-all"
+                                title="Remove item"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   {manualFormData.items.length === 0 && (
                     <div className="py-12 text-center text-slate-400 italic text-xs">
-                      {manualFormData.poType === 'DIRECT_COMPANY'
+                      {manualFormData.poType === 'DIRECT_COMPANY' || manualFormData.id
                         ? "No items added yet. Click '+ Add Item' above to add materials."
                         : "No items loaded yet. Select a drawing quotation above."}
                     </div>
@@ -3748,10 +3875,8 @@ const PurchaseOrders = () => {
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    navigate(`${deptPrefix}/purchase-orders`);
-                  }}
-                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all "
+                  onClick={handleCloseManualModal}
+                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded text-xs hover:bg-slate-50 transition-all font-medium"
                 >
                   Cancel
                 </button>
@@ -3950,7 +4075,8 @@ const PurchaseOrders = () => {
         </div>
       )}
 
-      {showEditModal && selectedPO && (
+      {/* Legacy showEditModal retired in favor of unified Create/Edit PO form */}
+      {false && showEditModal && selectedPO && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 overflow-y-auto">
           <div className="bg-white rounded shadow-2xl w-full max-w-4xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
             {/* Modal Header */}
