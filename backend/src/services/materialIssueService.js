@@ -1,5 +1,35 @@
 const pool = require('../config/db');
 const stockService = require('./stockService');
+const { nextDocumentNumber } = require('../utils/documentNumber');
+const { logProductionEvent } = require('./productionAuditService');
+const { QTY_TOLERANCE, productionError, WORK_ORDER_BLOCKED_FOR_ACTIVITY } = require('../config/productionWorkflow');
+
+// Released quantity of one material on a plan's Material Requests, minus what was
+// already allocated to the plan's work orders. Matches by item code or material name.
+const getPlanIssuable = async (connection, planId, itemCode, materialName) => {
+  const [[released]] = await connection.query(
+    // Weight materials (kg): the released kilograms are in allocated_weight when Stores recorded a weight,
+    // otherwise (as in most existing data) in allocated_quantity. Issues are in the material's own unit.
+    `SELECT COALESCE(SUM(CASE WHEN LOWER(TRIM(COALESCE(mri.uom, ''))) IN ('kg', 'kgs', 'kilogram') THEN COALESCE(NULLIF(mri.allocated_weight, 0), mri.allocated_quantity) ELSE mri.allocated_quantity END), 0) AS qty
+     FROM material_request_items mri JOIN material_requests mr ON mri.mr_id = mr.id
+     WHERE mr.plan_id = ? AND UPPER(COALESCE(mr.status, '')) NOT IN ('CANCELLED', 'REJECTED')
+       AND ((? IS NOT NULL AND mri.item_code = ?) OR (? IS NOT NULL AND LOWER(TRIM(mri.item_name)) = LOWER(TRIM(?))))`,
+    [planId, itemCode || null, itemCode || null, materialName || null, materialName || null]
+  );
+  const [[allocated]] = await connection.query(
+    `SELECT COALESCE(SUM(mii.quantity), 0) AS qty
+     FROM material_issue_items mii
+     JOIN material_issues mi ON mii.issue_id = mi.id
+     JOIN work_orders wo ON mi.work_order_id = wo.id
+     WHERE wo.plan_id = ?
+       AND ((? IS NOT NULL AND mii.item_code = ?) OR (? IS NOT NULL AND LOWER(TRIM(mii.material_name)) = LOWER(TRIM(?))))`,
+    [planId, itemCode || null, itemCode || null, materialName || null, materialName || null]
+  );
+  const releasedQty = parseFloat(released.qty) || 0;
+  const allocatedQty = parseFloat(allocated.qty) || 0;
+  return { released: releasedQty, allocated: allocatedQty, issuable: Math.max(0, releasedQty - allocatedQty) };
+};
+
 
 const listMaterialIssues = async () => {
   const [rows] = await pool.query(
@@ -34,42 +64,50 @@ const getMaterialIssueById = async (id) => {
 
 const createMaterialIssue = async (data, userId) => {
   const { workOrderId, remarks, items } = data;
-  
+
+  if (!Array.isArray(items) || items.length === 0) {
+    throw productionError('Add at least one material to issue', 400);
+  }
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
-    // 1. Generate Issue Number
-    const [countRows] = await connection.query('SELECT COUNT(*) as count FROM material_issues');
-    const count = countRows[0].count + 1;
-    const issueNumber = `MI-${new Date().getFullYear().toString().slice(-2)}-${count.toString().padStart(4, '0')}`;
-    
-    // 2. Create Material Issue header
+
+    const [woRows] = await connection.query('SELECT id, plan_id, status, wo_number FROM work_orders WHERE id = ? FOR UPDATE', [workOrderId]);
+    if (woRows.length === 0) throw productionError('Work Order not found', 404);
+    const wo = woRows[0];
+    if (WORK_ORDER_BLOCKED_FOR_ACTIVITY.includes(wo.status)) {
+      throw productionError(`Cannot issue material: Work Order ${wo.wo_number} is ${wo.status}`);
+    }
+
+    // A plan's stock leaves the store when its Material Request is released, so an issue
+    // only allocates released material to the work order. Work orders without a plan
+    // have no release step, so the issue itself deducts the stock.
+    const planBacked = Boolean(wo.plan_id);
+
+    const issueNumber = await nextDocumentNumber(connection, 'MATERIAL_ISSUE');
     const [result] = await connection.execute(
-      `INSERT INTO material_issues (issue_number, work_order_id, issued_by, remarks)
-       VALUES (?, ?, ?, ?)`,
-      [issueNumber, workOrderId, userId, remarks]
+      `INSERT INTO material_issues (issue_number, work_order_id, issued_by, remarks, stock_source)
+       VALUES (?, ?, ?, ?, ?)`,
+      [issueNumber, workOrderId, userId, remarks, planBacked ? 'MR_RELEASE' : 'DIRECT']
     );
-    
     const issueId = result.insertId;
-    
-    // 3. Create items and deduct stock
+
+    // Items in one request for the same material add up against the same release
+    const requestedSoFar = new Map();
+
     for (const item of items) {
-      await connection.execute(
-        `INSERT INTO material_issue_items (issue_id, material_name, material_type, item_code, quantity, uom, warehouse)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [issueId, item.materialName, item.materialType, item.itemCode || null, item.quantity, item.uom, item.warehouse]
-      );
-      
-      // Deduct from stock
-      // In this system, we identify stock by item_code if available, or material_name + type
+      const qty = parseFloat(item.quantity);
+      if (!(qty > 0)) {
+        throw productionError(`Issue quantity for ${item.materialName || item.itemCode || 'material'} must be greater than zero`, 400);
+      }
+
       let itemIdentifier = item.itemCode;
-      
       if (!itemIdentifier) {
         // Try to find item_code from stock_balance based on material_name, type, and dimensions
         const [stockRows] = await connection.query(
-          `SELECT item_code FROM stock_balance 
-           WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+          `SELECT item_code FROM stock_balance
+           WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?))
              AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
              AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
              AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
@@ -95,16 +133,38 @@ const createMaterialIssue = async (data, userId) => {
           }
         }
       }
-      
-      if (itemIdentifier) {
+
+      if (planBacked) {
+        const key = `${itemIdentifier || ''}|${String(item.materialName || '').toLowerCase().trim()}`;
+        const alreadyRequested = requestedSoFar.get(key) || 0;
+        const { released, issuable } = await getPlanIssuable(connection, wo.plan_id, itemIdentifier, item.materialName);
+        if (released <= 0) {
+          throw productionError(`${item.materialName || itemIdentifier} has not been released on this plan's Material Request yet. Release it from Stores first.`);
+        }
+        if (alreadyRequested + qty > issuable + QTY_TOLERANCE) {
+          throw productionError(`Cannot issue ${qty} of ${item.materialName || itemIdentifier}: only ${Math.max(0, issuable - alreadyRequested)} of the ${released} released remains unallocated.`);
+        }
+        requestedSoFar.set(key, alreadyRequested + qty);
+      }
+
+      await connection.execute(
+        `INSERT INTO material_issue_items (issue_id, material_name, material_type, item_code, quantity, uom, warehouse)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [issueId, item.materialName, item.materialType, itemIdentifier || null, qty, item.uom, item.warehouse]
+      );
+
+      if (!planBacked) {
+        if (!itemIdentifier) {
+          throw productionError(`No stock record found for ${item.materialName}; cannot deduct stock for a direct issue`, 400);
+        }
         await stockService.addStockLedgerEntry(
           itemIdentifier,
           'OUT',
-          item.quantity,
+          qty,
           'MATERIAL_ISSUE',
           issueId,
           issueNumber,
-          `Issued for Work Order ${workOrderId}`,
+          `Issued for Work Order ${wo.wo_number}`,
           userId,
           {
             connection,
@@ -123,7 +183,12 @@ const createMaterialIssue = async (data, userId) => {
         );
       }
     }
-    
+
+    await logProductionEvent(connection, {
+      entityType: 'MATERIAL_ISSUE', entityId: issueId, action: 'CREATE',
+      newValue: `${issueNumber}: ${items.length} item(s) to ${wo.wo_number} (${planBacked ? 'allocated from MR release' : 'direct stock issue'})`, userId
+    });
+
     await connection.commit();
     return issueId;
   } catch (error) {
@@ -135,6 +200,7 @@ const createMaterialIssue = async (data, userId) => {
 };
 
 module.exports = {
+  getPlanIssuable,
   listMaterialIssues,
   getMaterialIssueById,
   createMaterialIssue

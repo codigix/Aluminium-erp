@@ -12,6 +12,14 @@ router.get('/', authenticate, authorize(['PROD_VIEW', 'DESIGN_VIEW', 'DESIGN_MAN
   }
 });
 
+router.get('/routing-check', authenticate, authorize(['PROD_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
+  try {
+    res.json(await operationService.getRoutingCheck());
+  } catch (error) {
+    res.status(500).json({ message: error.message, error: error.message });
+  }
+});
+
 router.get('/next-code', authenticate, authorize(['PROD_VIEW', 'DESIGN_VIEW', 'DESIGN_MANAGE']), async (req, res) => {
   try {
     const nextCode = await operationService.generateOperationCode();

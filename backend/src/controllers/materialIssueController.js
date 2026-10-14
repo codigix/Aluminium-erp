@@ -1,11 +1,12 @@
 const materialIssueService = require('../services/materialIssueService');
+const { respondWithError } = require('../config/productionWorkflow');
 
 const listMaterialIssues = async (req, res) => {
   try {
     const issues = await materialIssueService.listMaterialIssues();
     res.json(issues);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    respondWithError(res, error);
   }
 };
 
@@ -15,7 +16,7 @@ const getMaterialIssueById = async (req, res) => {
     if (!issue) return res.status(404).json({ error: 'Material issue not found' });
     res.json(issue);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    respondWithError(res, error);
   }
 };
 
@@ -26,7 +27,7 @@ const createMaterialIssue = async (req, res) => {
     const newIssue = await materialIssueService.getMaterialIssueById(id);
     res.status(201).json(newIssue);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    respondWithError(res, error);
   }
 };
 

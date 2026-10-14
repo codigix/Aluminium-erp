@@ -8,7 +8,8 @@ const upload = require('../middleware/upload');
 router.get('/', authenticate, async (req, res) => {
   try {
     const [challans] = await pool.execute(`
-      SELECT oc.*, v.vendor_name, jc.job_card_no, wo.wo_number 
+      SELECT oc.*, v.vendor_name, jc.job_card_no, wo.wo_number, wo.item_name, wo.item_code,
+             (SELECT COALESCE(SUM(ic.total_received_qty), 0) FROM inward_challans ic WHERE ic.outward_challan_id = oc.id) AS received_qty
       FROM outward_challans oc
       JOIN vendors v ON oc.vendor_id = v.id
       JOIN job_cards jc ON oc.job_card_id = jc.id

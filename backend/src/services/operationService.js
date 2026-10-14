@@ -148,8 +148,77 @@ const generateOperationCode = async () => {
   return `OP-${String(nextNumber)}`;
 };
 
+const isShipmentStep = name => ['shipment', 'dispatch'].includes(String(name || '').trim().toLowerCase());
+const isOutsourcedType = type => /^(outsourc|sub[\s-]?contract|vendor)/i.test(String(type || '').trim());
+
+// Each product's operation sequence, with the problems that later make job cards start without
+// a machine, a standard time or a matching operation. Read-only: operations are edited on the item's BOM.
+const getRoutingCheck = async () => {
+  const [steps] = await pool.query(
+    `SELECT soio.id, soio.sales_order_item_id, soio.item_code, soio.drawing_no, soio.operation_name, soio.workstation,
+            soio.cycle_time_min, soio.setup_time_min, soio.hourly_rate, soio.operation_type,
+            soi.description AS item_description, soi.status AS item_status, so.so_number, so.project_name
+     FROM sales_order_item_operations soio
+     LEFT JOIN sales_order_items soi ON soio.sales_order_item_id = soi.id
+     LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
+     WHERE soi.id IS NULL OR soi.status != 'Rejected'
+     ORDER BY soio.sales_order_item_id, soio.id
+     LIMIT 8000`
+  );
+  const [masterOps] = await pool.query('SELECT LOWER(TRIM(operation_name)) AS n FROM operations');
+  const [masterStations] = await pool.query('SELECT LOWER(TRIM(workstation_name)) AS n, LOWER(TRIM(workstation_code)) AS c FROM workstations');
+  const knownOps = new Set(masterOps.map(r => r.n));
+  // Routings usually store the workstation code (WS-0009); older ones store the name. Accept either.
+  const knownStations = new Set(masterStations.flatMap(r => [r.n, r.c]).filter(Boolean));
+
+  const groups = new Map();
+  for (const s of steps) {
+    const key = s.sales_order_item_id ? `item_${s.sales_order_item_id}` : `code_${s.item_code || s.drawing_no || 'unknown'}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key, itemId: s.sales_order_item_id, itemCode: s.item_code, drawingNo: s.drawing_no, description: s.item_description,
+        orderNo: s.so_number, project: s.project_name, steps: []
+      });
+    }
+    const outsourced = isOutsourcedType(s.operation_type);
+    const shipment = isShipmentStep(s.operation_name);
+    const issues = [];
+    if (!shipment && !knownOps.has(String(s.operation_name || '').trim().toLowerCase())) issues.push({ code: 'UNKNOWN_OPERATION', level: 'note', text: 'Not in Operation Master. The routing\'s own time and rate are used instead' });
+    if (!outsourced && !shipment) {
+      if (!s.workstation) issues.push({ code: 'NO_WORKSTATION', level: 'problem', text: 'No workstation chosen, so the job card starts without a machine' });
+      else if (!knownStations.has(String(s.workstation).trim().toLowerCase())) issues.push({ code: 'UNKNOWN_WORKSTATION', level: 'problem', text: `"${s.workstation}" is not in the Workstation master (it may have been deleted), so the job card starts without a machine` });
+      if (!(parseFloat(s.cycle_time_min) > 0)) issues.push({ code: 'NO_TIME', level: 'problem', text: 'No cycle time, so scheduling falls back to a 60-minute guess' });
+    }
+    groups.get(key).steps.push({
+      id: s.id, operation: s.operation_name, workstation: s.workstation, type: s.operation_type || 'In-House',
+      cycleMin: parseFloat(s.cycle_time_min) || 0, setupMin: parseFloat(s.setup_time_min) || 0, rate: parseFloat(s.hourly_rate) || 0, issues
+    });
+  }
+
+  const routings = Array.from(groups.values()).map(g => ({
+    ...g,
+    minutesPerPiece: Math.round(g.steps.reduce((sum, st) => sum + st.cycleMin, 0) * 100) / 100,
+    // "problems" stop a job card getting its machine or time; "notes" are only master-data tidiness
+    problemCount: g.steps.reduce((sum, st) => sum + st.issues.filter(i => i.level === 'problem').length, 0),
+    noteCount: g.steps.reduce((sum, st) => sum + st.issues.filter(i => i.level === 'note').length, 0)
+  }));
+  const countCode = code => routings.reduce((sum, r) => sum + r.steps.filter(st => st.issues.some(i => i.code === code)).length, 0);
+  return {
+    routings,
+    summary: {
+      routings: routings.length,
+      withProblems: routings.filter(r => r.problemCount > 0).length,
+      unknownOperations: countCode('UNKNOWN_OPERATION'),
+      noWorkstation: countCode('NO_WORKSTATION'),
+      unknownWorkstations: countCode('UNKNOWN_WORKSTATION'),
+      noTime: countCode('NO_TIME')
+    }
+  };
+};
+
 module.exports = {
   getAllOperations,
+  getRoutingCheck,
   getOperationById,
   createOperation,
   updateOperation,

@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import ProductionReportsPanel from './ProductionReportsPanel.jsx';
 import { cleanProjectName } from '../utils/formatters';
 import { Card, DataTable, StatusBadge, Button, Skeleton, SkeletonCard, SkeletonTable } from '../components/ui.jsx';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, Cell, PieChart, Pie, Legend
 } from 'recharts';
-import { 
-  TrendingUp, IndianRupee, ShoppingCart, Clock, CheckCircle2, 
+import {
+  TrendingUp, IndianRupee, ShoppingCart, Clock, CheckCircle2,
   Target, Filter, Download, RefreshCw, Calendar, ChevronRight,
   FileText, Users, Eye, Printer, Share2, Trash2, Edit, Truck,
   CheckCircle, XCircle, Send, Package, ArrowRight, MoreVertical,
@@ -17,7 +18,7 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const ProductionReport = () => {
+const ProductionOverview = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -55,10 +56,24 @@ const ProductionReport = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  // Rolling default (last 30 days) instead of a fixed start date that grows stale
+  const localDateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const daysAgoKey = (n) => localDateKey(new Date(Date.now() - n * 86400000));
   const [dateRange, setDateRange] = useState({
-    start: '2026-04-01',
-    end: new Date().toISOString().split('T')[0]
+    start: daysAgoKey(29),
+    end: localDateKey(new Date())
   });
+  const applyPreset = (value) => {
+    const today = localDateKey(new Date());
+    if (value === 'month') {
+      const now = new Date();
+      setDateRange({ start: localDateKey(new Date(now.getFullYear(), now.getMonth(), 1)), end: today });
+    } else if (value === 'year') {
+      setDateRange({ start: localDateKey(new Date(new Date().getFullYear(), 0, 1)), end: today });
+    } else if (value) {
+      setDateRange({ start: daysAgoKey(parseInt(value, 10) - 1), end: today });
+    }
+  };
   const [selectedProject, setSelectedProject] = useState('All');
   const [summaryPage, setSummaryPage] = useState(1);
   const [projectsPage, setProjectsPage] = useState(1);
@@ -79,7 +94,7 @@ const ProductionReport = () => {
       if (selectedProject !== 'All') url += `&project=${selectedProject}`;
 
       const response = await fetch(url, {
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
@@ -198,9 +213,9 @@ const ProductionReport = () => {
       const response = await fetch(`${API_BASE}/job-cards/quality-logs/${jobCardId}/download`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       if (!response.ok) throw new Error('Failed to download report');
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -243,21 +258,34 @@ const ProductionReport = () => {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs  text-slate-600">
              <Calendar className="w-4 h-4 text-slate-400" />
-             <input 
-               type="date" 
-               value={dateRange.start} 
+             <input
+               type="date"
+               value={dateRange.start}
                onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
                className="bg-transparent border-none outline-none cursor-pointer"
              />
              <span className="text-slate-300 mx-1">—</span>
-             <input 
-               type="date" 
-               value={dateRange.end} 
+             <input
+               type="date"
+               value={dateRange.end}
                onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                className="bg-transparent border-none outline-none cursor-pointer"
              />
           </div>
-          <select 
+          <select
+            defaultValue=""
+            onChange={(e) => { applyPreset(e.target.value); e.target.value = ''; }}
+            className="bg-white border border-slate-200 rounded p-2 text-xs text-slate-600 outline-none"
+            title="Jump to a common period"
+          >
+            <option value="">Period...</option>
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="month">This month</option>
+            <option value="year">This year</option>
+          </select>
+          <select
             value={selectedProject}
             onChange={(e) => setSelectedProject(e.target.value)}
             className="bg-white border border-slate-200 rounded p-2 text-xs  text-slate-600 outline-none"
@@ -267,7 +295,7 @@ const ProductionReport = () => {
               <option key={idx} value={project.name}>{project.name}</option>
             ))}
           </select>
-          <button 
+          <button
             onClick={handleExport}
             className="bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded text-xs    transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
           >
@@ -400,7 +428,7 @@ const ProductionReport = () => {
                   <span className="w-20 text-center text-xs  text-slate-600">{op.efficiency}%</span>
                   <span className="w-16 text-right">
                     <span className={`text-[9px]   px-2 py-0.5 rounded ${
-                      op.efficiency >= 70 ? 'text-emerald-600 bg-emerald-50' : 
+                      op.efficiency >= 70 ? 'text-emerald-600 bg-emerald-50' :
                       op.efficiency >= 50 ? 'text-amber-600 bg-amber-50' : 'text-rose-600 bg-rose-50'
                     }`}>
                       {op.efficiency >= 70 ? 'Good' : op.efficiency >= 50 ? 'Average' : 'Low'}
@@ -410,7 +438,7 @@ const ProductionReport = () => {
               ))}
             </div>
           </div>
-          <button 
+          <button
             onClick={() => navigate('/production/operation-master?from=production-report')}
             className="text-xs  text-indigo-600   flex items-center gap-1 self-end mt-auto pt-4 hover:underline"
           >
@@ -428,7 +456,7 @@ const ProductionReport = () => {
               <h3 className="text-sm text-slate-900   ">Top Projects by Production</h3>
               <p className="text-xs text-slate-400   mt-1">Projects with highest production output</p>
             </div>
-            <button 
+            <button
               onClick={() => {
                 const segments = location.pathname.split('/').filter(Boolean);
                 const currentPrefix = segments[0] || 'sales';
@@ -476,14 +504,14 @@ const ProductionReport = () => {
                 Page {projectsPage} of {totalProjectsPages}
               </p>
               <div className="flex items-center gap-1">
-                <button 
+                <button
                   disabled={projectsPage === 1}
                   onClick={() => setProjectsPage(prev => prev - 1)}
                   className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
                 >
                   <ChevronRight className="w-3 h-3 rotate-180" />
                 </button>
-                <button 
+                <button
                   disabled={projectsPage === totalProjectsPages}
                   onClick={() => setProjectsPage(prev => prev + 1)}
                   className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
@@ -505,20 +533,20 @@ const ProductionReport = () => {
               {(stats?.recentActivity || []).map((activity, idx) => (
                 <div key={idx} className="flex items-start gap-3 group">
                   <div className={`p-2 rounded ${
-                    activity.type === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600' : 
-                    activity.type === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-600' : 
+                    activity.type === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600' :
+                    activity.type === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-600' :
                     activity.type === 'PENDING' ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400'
                   }`}>
-                    {activity.type === 'COMPLETED' ? <CheckCircle className="w-3.5 h-3.5" /> : 
-                     activity.type === 'IN_PROGRESS' ? <Activity className="w-3.5 h-3.5" /> : 
+                    {activity.type === 'COMPLETED' ? <CheckCircle className="w-3.5 h-3.5" /> :
+                     activity.type === 'IN_PROGRESS' ? <Activity className="w-3.5 h-3.5" /> :
                      activity.type === 'PENDING' ? <Clock className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
                   </div>
                   <div className="flex-1 border-b border-slate-50 pb-3 last:border-0">
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="text-xs  text-slate-900 ">
-                          Work Order {activity.wo} {activity.type === 'COMPLETED' ? 'completed' : 
-                                                 activity.type === 'IN_PROGRESS' ? 'in progress' : 
+                          Work Order {activity.wo} {activity.type === 'COMPLETED' ? 'completed' :
+                                                 activity.type === 'IN_PROGRESS' ? 'in progress' :
                                                  activity.type === 'PENDING' ? 'pending' : 'on hold'}
                         </p>
                         <p className="text-xs text-slate-500  mt-0.5">Operation: {activity.operation}</p>
@@ -668,14 +696,14 @@ const ProductionReport = () => {
                   </td>
                   <td className="p-2 text-right">
                     <div className="flex items-center justify-end gap-1">
-                       <Link 
+                       <Link
                          to={`/work-order-details/${row.jobCardId}`}
                          className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
                          title="View Details"
                        >
                          <Eye className="w-3.5 h-3.5" />
                        </Link>
-                       <button 
+                       <button
                          onClick={() => handlePrintJobCard(row.jobCardId)}
                          disabled={!row.jobCardId}
                          className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all disabled:opacity-30"
@@ -696,7 +724,7 @@ const ProductionReport = () => {
                Showing {(summaryPage - 1) * itemsPerPage + 1} to {Math.min(summaryPage * itemsPerPage, stats?.summaryTable?.length || 0)} of {stats?.summaryTable?.length || 0} entries
              </p>
              <div className="flex items-center gap-1">
-               <button 
+               <button
                  disabled={summaryPage === 1}
                  onClick={() => setSummaryPage(prev => prev - 1)}
                  className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
@@ -705,7 +733,7 @@ const ProductionReport = () => {
                </button>
                {totalSummaryPages <= 5 ? (
                  [...Array(totalSummaryPages)].map((_, i) => (
-                   <button 
+                   <button
                      key={i}
                      onClick={() => setSummaryPage(i + 1)}
                      className={`w-8 h-8 flex items-center justify-center rounded  text-xs transition-all ${
@@ -721,7 +749,7 @@ const ProductionReport = () => {
                      {summaryPage}
                    </button>
                    <span className="text-slate-400  px-1">/</span>
-                   <button 
+                   <button
                      onClick={() => setSummaryPage(totalSummaryPages)}
                      className={`w-8 h-8 flex items-center justify-center rounded  text-xs border border-slate-200 text-slate-400 hover:bg-white`}
                    >
@@ -729,7 +757,7 @@ const ProductionReport = () => {
                    </button>
                  </>
                )}
-               <button 
+               <button
                  disabled={summaryPage === totalSummaryPages}
                  onClick={() => setSummaryPage(prev => prev + 1)}
                  className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
@@ -740,6 +768,21 @@ const ProductionReport = () => {
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+// Overview keeps the original charts; Detailed reports adds the per-work-order, machine, quality, material and shipment tables
+const ProductionReport = () => {
+  const [tab, setTab] = React.useState('overview');
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-1 border-b border-slate-200">
+        {[['overview', 'Overview'], ['detailed', 'Detailed reports']].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} className={`px-4 py-2 text-sm border-b-2 -mb-px ${tab === id ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{label}</button>
+        ))}
+      </div>
+      {tab === 'overview' ? <ProductionOverview /> : <ProductionReportsPanel />}
     </div>
   );
 };

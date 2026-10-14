@@ -11,7 +11,10 @@ router.post('/create-from-plan/:planId', authorize(['PROD_MANAGE']), workOrderCo
 router.get('/next-number', authorize(['PROD_VIEW']), workOrderController.getNextWoNumber);
 router.get('/:id', authorize(['PROD_VIEW']), workOrderController.getWorkOrderById);
 router.get('/:id/material-requirements', authorize(['PROD_VIEW']), workOrderController.getMaterialRequirements);
+router.get('/:id/material-reconciliation', authorize(['PROD_VIEW']), workOrderController.getMaterialReconciliation);
+router.post('/:id/material-return', authorize(['PROD_MANAGE']), workOrderController.returnMaterial);
 router.post('/:id/material-consumption', authorize(['PROD_MANAGE']), workOrderController.updateMaterialConsumption);
+router.put('/:id', authorize(['PROD_MANAGE']), workOrderController.updateWorkOrder);
 router.patch('/:id/status', authorize(['PROD_MANAGE']), workOrderController.updateStatus);
 router.delete('/delete-all', authorize(['PROD_MANAGE']), workOrderController.deleteAllWorkOrders);
 router.delete('/:id', authorize(['PROD_MANAGE']), workOrderController.deleteWorkOrder);

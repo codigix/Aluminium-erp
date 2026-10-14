@@ -8,7 +8,10 @@ const DOCUMENT_TYPES = {
   PURCHASE_ORDER: { table: 'purchase_orders', column: 'po_number', prefix: year => `PO-${year}-`, pad: 4 },
   DELIVERY_CHALLAN: { table: 'delivery_challans', column: 'challan_number', prefix: year => `DC-${year}-`, pad: 5 },
   PAYMENT_RECEIPT: { table: 'customer_payments', column: 'payment_receipt_no', prefix: year => `PR-${year}-`, pad: 5 },
-  PAYMENT_VOUCHER: { table: 'payments', column: 'payment_voucher_no', prefix: year => `PV-${year}-`, pad: 5 }
+  PAYMENT_VOUCHER: { table: 'payments', column: 'payment_voucher_no', prefix: year => `PV-${year}-`, pad: 5 },
+  WORK_ORDER: { table: 'work_orders', column: 'wo_number', prefix: year => `WO-${year}-`, pad: 5 },
+  MATERIAL_ISSUE: { table: 'material_issues', column: 'issue_number', prefix: year => `MI-${year}-`, pad: 4 },
+  JOB_CARD: { table: 'job_cards', column: 'job_card_no', prefix: year => `JC-${year}-`, pad: 5 }
 };
 
 const highestExistingNumber = async (connection, config, prefix) => {

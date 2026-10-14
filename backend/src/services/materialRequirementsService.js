@@ -9,7 +9,9 @@ const getMaterialRequirements = async () => {
       soi.id as soi_id,
       soi.item_code,
       soi.drawing_no,
-      pp.plan_code
+      pp.plan_code,
+      pp.id as plan_id,
+      COALESCE(pp.start_date, pp.plan_date) as plan_start
     FROM production_plan_items ppi
     JOIN production_plans pp ON ppi.plan_id = pp.id
     JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
@@ -72,7 +74,9 @@ const getMaterialRequirements = async () => {
         total_required: parseFloat(m.qty_per_pc || 0) * parseFloat(ppi.planned_qty),
         project_name: ppi.project_name,
         item_code: ppi.item_code,
-        plan_code: ppi.plan_code
+        plan_code: ppi.plan_code,
+        plan_id: ppi.plan_id,
+        plan_start: ppi.plan_start
       });
     }
   }
@@ -100,8 +104,26 @@ const getMaterialRequirements = async () => {
       project_name: row.project_name,
       item_code: row.item_code,
       plan_code: row.plan_code,
+      plan_id: row.plan_id,
+      plan_start: row.plan_start,
       qty: parseFloat(row.total_required)
     });
+  }
+
+  // What each plan has already had released from Stores, per material (kg materials in kilograms: the
+  // recorded weight, or the quantity when no weight was recorded; everything else in pieces), so it is not counted against stock a second time
+  const planIds = [...new Set(rows.map(r => r.plan_id))];
+  const releasedByPlanMaterial = new Map();
+  if (planIds.length > 0) {
+    const [releasedRows] = await pool.query(
+      `SELECT mr.plan_id, LOWER(TRIM(mri.item_name)) AS name,
+              SUM(CASE WHEN LOWER(TRIM(COALESCE(mri.uom, ''))) IN ('kg', 'kgs', 'kilogram') THEN COALESCE(NULLIF(mri.allocated_weight, 0), mri.allocated_quantity, 0) ELSE COALESCE(mri.allocated_quantity, 0) END) AS released
+       FROM material_request_items mri JOIN material_requests mr ON mri.mr_id = mr.id
+       WHERE mr.plan_id IN (?) AND UPPER(COALESCE(mr.status, '')) NOT IN ('CANCELLED', 'REJECTED')
+       GROUP BY mr.plan_id, name`,
+      [planIds]
+    );
+    releasedRows.forEach(r => releasedByPlanMaterial.set(`${r.plan_id}|${r.name}`, parseFloat(r.released) || 0));
   }
 
   // Fetch stock levels for these materials matching name, type, and dimensions
@@ -121,8 +143,33 @@ const getMaterialRequirements = async () => {
         mat.length, mat.width, mat.thickness, mat.diameter, mat.outer_diameter
       ]
     );
-    mat.available_qty = stockRows[0]?.total_stock || 0;
-    mat.shortage = Math.max(0, mat.required_qty - mat.available_qty);
+    mat.available_qty = parseFloat(stockRows[0]?.total_stock) || 0;
+
+    // Plans share one stock, so hand it out in order (earliest start first) instead of
+    // showing every plan the same overall number. Material a plan has already had released
+    // has left stock, so it no longer counts as still needed.
+    const nameKey = String(mat.material_name || '').trim().toLowerCase();
+    let remainingStock = mat.available_qty;
+    const orderedDetails = [...mat.details].sort((a, b) => {
+      const as = a.plan_start ? new Date(a.plan_start).getTime() : Infinity;
+      const bs = b.plan_start ? new Date(b.plan_start).getTime() : Infinity;
+      return as - bs || (a.plan_id || 0) - (b.plan_id || 0);
+    });
+    for (const d of orderedDetails) {
+      const releasedKey = `${d.plan_id}|${nameKey}`;
+      const releasedLeft = releasedByPlanMaterial.get(releasedKey) || 0;
+      const releasedHere = Math.min(d.qty, releasedLeft);
+      releasedByPlanMaterial.set(releasedKey, releasedLeft - releasedHere);
+
+      const stillNeeded = d.qty - releasedHere;
+      const covered = Math.min(stillNeeded, Math.max(0, remainingStock));
+      remainingStock -= covered;
+      d.released_qty = releasedHere;
+      d.still_needed_qty = stillNeeded;
+      d.covered_qty = covered;
+      d.short_qty = Math.max(0, stillNeeded - covered);
+    }
+    mat.shortage = mat.details.reduce((sum, d) => sum + d.short_qty, 0);
   }
 
   return materialList;

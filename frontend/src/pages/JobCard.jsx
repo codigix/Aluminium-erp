@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 're
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect, Tabs, Button, DataTable } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import JobCardList from './JobCardList.jsx';
 import {
   ClipboardList, Activity, CheckCircle, TrendingUp, Calendar,
   Play, Check, Edit2, Trash2, Filter, Plus, X, Pause, Square,
@@ -138,6 +139,20 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
       )}
     </div>
   );
+};
+
+// Shows the server's own explanation (it says what to do next); falls back to a generic line
+const showServerError = async (response, fallback) => {
+  let message = null;
+  try {
+    const data = await response.json();
+    message = data.error || data.message || null;
+  } catch (e) { /* no JSON body */ }
+  if (message && [403, 409].includes(response.status)) {
+    await Swal.fire({ icon: 'warning', title: "That can't be done yet", text: message, confirmButtonColor: '#4f46e5' });
+  } else {
+    errorToast(message || fallback);
+  }
 };
 
 const JobCard = () => {
@@ -1246,6 +1261,9 @@ const JobCard = () => {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [showProductionEntry, setShowProductionEntry] = useState(false);
   const [selectedJC, setSelectedJC] = useState(null);
+  // Which part of the production entry screen is showing: produce | quality | downtime | handover | report
+  const [entryTab, setEntryTab] = useState('produce');
+  useEffect(() => { setEntryTab('produce'); }, [selectedJC?.id]);
 
   useEffect(() => {
     if (selectedJC && jobCards.length > 0) {
@@ -2124,8 +2142,7 @@ const JobCard = () => {
         successToast(`Job Card status updated to ${status}`);
         fetchJobCards();
       } else {
-        const error = await response.json();
-        errorToast(error.error || 'Failed to update status');
+        await showServerError(response, 'Failed to update status');
       }
     } catch (error) {
       console.error('Error updating status:', error);
@@ -3065,8 +3082,71 @@ const JobCard = () => {
           )}
         </div>
 
+        {!isShipmentOp(selectedJC) && (() => {
+          const plannedForOp = parseFloat(selectedJC.planned_qty || 0) + parseFloat(selectedJC.rework_qty || 0);
+          const madeQty = qcStats.totalProduced;
+          const inspectedQty = qcStats.totalInspected;
+          const pendingInspections = (logs.qualityLogs || []).filter(l => String(l.status || '').trim() !== 'APPROVED').length;
+          const isDone = selectedJC.status === 'COMPLETED';
+          const allMade = plannedForOp > 0 && madeQty + 0.001 >= plannedForOp;
+          const allInspected = madeQty > 0 && inspectedQty + 0.001 >= madeQty;
+          const allApproved = allInspected && pendingInspections === 0 && (logs.qualityLogs || []).length > 0;
+
+          let next;
+          if (isDone) next = { tone: 'emerald', text: 'This operation is completed.', tab: null };
+          else if (madeQty <= 0) next = { tone: 'indigo', text: 'Start by logging what you have produced.', tab: 'produce', button: 'Log production' };
+          else if (!allInspected) next = { tone: 'indigo', text: `${Math.round((madeQty - inspectedQty) * 1000) / 1000} produced piece(s) have not been sent for inspection yet.`, tab: 'quality', button: 'Send for inspection' };
+          else if (pendingInspections > 0) next = { tone: 'amber', text: `Waiting for the Quality department to approve ${pendingInspections} inspection(s). You cannot complete this operation until they do.`, tab: 'quality', button: 'See inspections' };
+          else if (!allMade) next = { tone: 'indigo', text: `${Math.round((plannedForOp - madeQty) * 1000) / 1000} more piece(s) to make. Log more production, or complete the operation short if no more will be made.`, tab: 'produce', button: 'Log production' };
+          else next = { tone: 'emerald', text: 'All pieces are made, inspected and approved. Complete the operation and hand the pieces to the next operation.', tab: 'handover', button: 'Complete & hand over' };
+
+          const toneCls = { indigo: 'border-indigo-200 bg-indigo-50', amber: 'border-amber-200 bg-amber-50', emerald: 'border-emerald-200 bg-emerald-50' }[next.tone];
+          const steps = [
+            { label: 'Produce', done: allMade || isDone, tab: 'produce' },
+            { label: 'Send for inspection', done: allInspected || isDone, tab: 'quality' },
+            { label: 'QC approves', done: allApproved || isDone, tab: 'quality' },
+            { label: 'Complete & hand over', done: isDone, tab: 'handover' }
+          ];
+          const tabs = [
+            { id: 'produce', label: 'Produce', badge: (logs.timeLogs || []).length },
+            { id: 'quality', label: 'Inspection', badge: pendingInspections > 0 ? `${pendingInspections} pending` : (logs.qualityLogs || []).length, warn: pendingInspections > 0 },
+            { id: 'downtime', label: 'Downtime', badge: (logs.downtimeLogs || []).length },
+            { id: 'handover', label: 'Complete & hand over' },
+            { id: 'report', label: 'Daily report' }
+          ];
+          return (
+            <div className="space-y-2 mt-2">
+              <div className={`rounded border p-3 ${toneCls}`}>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  {steps.map((st, i) => (
+                    <React.Fragment key={st.label}>
+                      <button type="button" onClick={() => setEntryTab(st.tab)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border ${st.done ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-600 border-slate-200'}`}>
+                        <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] bg-white/30">{st.done ? '✓' : i + 1}</span>{st.label}
+                      </button>
+                      {i < steps.length - 1 && <span className="text-slate-300">›</span>}
+                    </React.Fragment>
+                  ))}
+                  <span className="ml-auto text-xs text-slate-600">Made {madeQty} · Inspected {inspectedQty} · Accepted {qcStats.totalAccepted} of {plannedForOp}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm text-slate-900">{next.text}</span>
+                  {next.tab && <button type="button" onClick={() => setEntryTab(next.tab)} className="ml-auto px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded">{next.button}</button>}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1 border-b border-slate-200">
+                {tabs.map(t => (
+                  <button key={t.id} type="button" onClick={() => setEntryTab(t.id)} className={`px-4 py-2 text-sm border-b-2 -mb-px ${entryTab === t.id ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+                    {t.label}
+                    {t.badge !== undefined && t.badge !== 0 && <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full ${t.warn ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{t.badge}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Sections */}
-        <div className="space-y-12 mt-12">
+        <div className="space-y-12 mt-6">
           {isShipmentOp(selectedJC) ? (
             <>
               {/* 1. Preceding Operation Handover Card */}
@@ -3561,10 +3641,10 @@ const JobCard = () => {
           ) : (
             <>
               {/* 1. Add Time Log Section */}
-              <section className="space-y-2">
+              <section className={`space-y-2 ${entryTab === 'produce' ? '' : 'hidden'}`}>
                 <div className="flex items-center gap-2 px-1">
 
-                  <h2 className="text-sm  text-slate-800  ">Add Time Log</h2>
+                  <h2 className="text-sm  text-slate-800  ">Log production</h2>
                 </div>
 
                 <div className="bg-white rounded  border border-slate-100 shadow-sm">
@@ -3737,9 +3817,7 @@ const JobCard = () => {
                               <option value="SHIFT_B">B</option>
                               <option value="SHIFT_C">C</option>
                             </select>
-                            <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
-                              <ChevronRight className="w-3 h-3" />
-                            </button>
+                            <span className="p-2 text-indigo-300"><ChevronRight className="w-3 h-3" /></span>
                           </div>
                         </FormControl>
                       </div>
@@ -3877,13 +3955,13 @@ const JobCard = () => {
               </section>
 
               {/* 2. Quality & Rejection Entry Section */}
-              <section className="space-y-2">
+              <section className={`space-y-2 ${entryTab === 'quality' ? '' : 'hidden'}`}>
                 <div className="flex items-center justify-between gap-6 p-4 bg-white rounded border border-slate-100 shadow-sm">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-emerald-50 rounded flex items-center justify-center text-emerald-600">
                       <ShieldCheck className="w-4 h-4" />
                     </div>
-                    <h2 className="text-sm text-slate-800">Quality & Rejection Entry</h2>
+                    <h2 className="text-sm text-slate-800">Inspection — send pieces to Quality</h2>
                   </div>
 
                   <div className="flex items-center gap-4">
@@ -3903,7 +3981,10 @@ const JobCard = () => {
                 </div>
               </section>
 
-              <section className="mt-8 overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
+              <section className={`mt-4 overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white ${entryTab === 'quality' ? '' : 'hidden'}`}>
+                <div className="px-3 py-2 text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
+                  Pieces you send here wait as <b>Awaiting QC approval</b>. Only the Quality department can approve or reject them. This operation can be completed once every produced piece is inspected and approved.
+                </div>
                 <DataTable
                   columns={qualityLogColumns}
                   data={logs.qualityLogs}
@@ -3914,12 +3995,12 @@ const JobCard = () => {
               </section>
 
               {/* 3. Operational Downtime Section */}
-              <section className="space-y-2">
+              <section className={`space-y-2 ${entryTab === 'downtime' ? '' : 'hidden'}`}>
                 <div className="flex items-center gap-2 px-1">
                   <div className="w-8 h-8 bg-amber-50 rounded  flex items-center justify-center text-amber-600">
                     <AlertTriangle className="w-4 h-4" />
                   </div>
-                  <h2 className="text-sm  text-slate-800  ">Operational Downtime</h2>
+                  <h2 className="text-sm  text-slate-800  ">Machine downtime</h2>
                 </div>
 
                 <div className="bg-white rounded  border border-slate-100 shadow-sm">
@@ -3948,9 +4029,7 @@ const JobCard = () => {
                             <option value="SHIFT_B">B</option>
                             <option value="SHIFT_C">C</option>
                           </select>
-                          <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
-                            <ChevronRight className="w-3 h-3" />
-                          </button>
+                          <span className="p-2 text-indigo-300"><ChevronRight className="w-3 h-3" /></span>
                         </div>
                       </FormControl>
                       <FormControl label="Downtime Type" required>
@@ -4099,14 +4178,13 @@ const JobCard = () => {
               </section>
 
               {/* 4. Next Stage Configuration Section */}
-              <section className="space-y-2">
+              <section className={`space-y-2 ${entryTab === 'handover' ? '' : 'hidden'}`}>
                 <div className="flex items-center justify-between px-1">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
                       <Play className="w-4 h-4" />
                     </div>
-                    <h2 className="text-sm  text-slate-800  ">Next Stage Configuration</h2>
-                    <span className=" bg-emerald-50 text-emerald-600 rounded text-xs   border border-emerald-100">Active</span>
+                    <h2 className="text-sm  text-slate-800  ">Complete &amp; hand over to the next operation</h2>
                   </div>
                   <div className="flex items-center gap-6">
                     {(nextOperationOptions.length === 0 || availableTransferQty === 0) && (
@@ -4132,7 +4210,7 @@ const JobCard = () => {
                   </div>
                 </div>
 
-                <p className="text-xs  text-slate-400 italic px-1">Specify destination and operational parameters for the next manufacturing phase</p>
+                <p className="text-xs text-slate-500 px-1">Choose where the accepted pieces go next. You can send accepted pieces on in batches while this operation is still running. When every piece is made, inspected and approved, complete the operation.</p>
 
                 <div className="bg-white rounded  border border-slate-100 shadow-sm p-2">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -4196,13 +4274,23 @@ const JobCard = () => {
                     </div>
                   </div>
 
+                  {selectedJC.status !== 'COMPLETED' && (nextOperationOptions.length === 0 || availableTransferQty === 0) && (!qcStats.isApproved || !qcStats.isComplete) && (
+                    <div className="mb-3 text-xs rounded bg-amber-50 text-amber-800 border border-amber-200 p-2">
+                      You can complete this operation once:
+                      <ul className="list-disc ml-5 mt-1">
+                        {qcStats.totalProduced <= 0 && <li>some production has been logged</li>}
+                        {!qcStats.isComplete && <li>every produced piece has been sent for inspection ({qcStats.totalInspected} of {qcStats.totalProduced} so far)</li>}
+                        {!qcStats.isApproved && <li>the Quality department has approved all inspections</li>}
+                      </ul>
+                    </div>
+                  )}
                   <div className="flex items-center justify-start border-t border-slate-50 pt-6">
                     {selectedJC.status === 'COMPLETED' ? (
                       <div className="flex items-center gap-2.5 p-3 px-5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/60 shadow-sm">
                         <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
                         <div className="text-left">
-                          <p className="text-xs opacity-90 font-medium">Finalize & Dispatch</p>
-                          <p className="text-sm font-bold">Production Completed</p>
+                          <p className="text-xs opacity-90 font-medium">This operation</p>
+                          <p className="text-sm font-bold">Completed</p>
                         </div>
                       </div>
                     ) : (
@@ -4223,9 +4311,9 @@ const JobCard = () => {
                               <Layers className="w-4 h-4" />
                             </div>
                             <div className="text-left">
-                              <p className="text-xs opacity-80">Transfer Qty</p>
+                              <p className="text-xs opacity-80">Send accepted pieces on</p>
                               <p className="text-sm font-semibold">
-                                Transfer {availableTransferQty.toFixed(0)} Qty
+                                Send {availableTransferQty.toFixed(0)} piece(s) to the next operation
                               </p>
                             </div>
                           </button>
@@ -4247,8 +4335,8 @@ const JobCard = () => {
                               <CheckCircle className="w-4 h-4" />
                             </div>
                             <div className="text-left">
-                              <p className="text-xs opacity-80">Finalize & Dispatch</p>
-                              <p className="text-sm font-semibold">Complete Production</p>
+                              <p className="text-xs opacity-80">All pieces made, inspected and approved</p>
+                              <p className="text-sm font-semibold">Complete operation</p>
                             </div>
                             <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${!qcStats.isApproved || !qcStats.isComplete ? 'opacity-20' : 'opacity-100'
                               }`} />
@@ -4264,7 +4352,7 @@ const JobCard = () => {
 
           {/* 5. Daily Production Report Section */}
           {selectedJC && !isShipmentOp(selectedJC) && (
-            <section className="space-y-2">
+            <section className={`space-y-2 ${entryTab === 'report' ? '' : 'hidden'}`}>
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
@@ -5242,6 +5330,8 @@ const JobCard = () => {
           rejectedQty: 0,
           scrapQty: 0
         }));
+      } else {
+        await showServerError(response, 'Failed to record quality log');
       }
     } catch (error) {
       errorToast('Failed to record quality log');
@@ -5273,7 +5363,7 @@ const JobCard = () => {
           fetchJobCards();
           prefillProductionEntryForm(selectedJC, updatedLogs ? (updatedLogs.timeLogs || []) : []);
         } else {
-          errorToast('Failed to delete time log');
+          await showServerError(response, 'Failed to delete time log');
         }
       }
     } catch (error) {
@@ -5363,7 +5453,7 @@ const JobCard = () => {
         // Prefill for the next production entry using helper
         prefillProductionEntryForm(selectedJC, updatedLogs ? (updatedLogs.timeLogs || []) : []);
       } else {
-        errorToast('Failed to update time log');
+        await showServerError(response, 'Failed to update time log');
       }
     } catch (error) {
       errorToast('Failed to update time log');
@@ -5388,7 +5478,7 @@ const JobCard = () => {
         await fetchLogs(selectedJC.id);
         fetchJobCards();
       } else {
-        errorToast('Failed to update quality log');
+        await showServerError(response, 'Failed to update quality log');
       }
     } catch (error) {
       errorToast('Failed to update quality log');
@@ -5419,7 +5509,7 @@ const JobCard = () => {
           await fetchLogs(selectedJC.id);
           fetchJobCards();
         } else {
-          errorToast('Failed to delete quality log');
+          await showServerError(response, 'Failed to delete quality log');
         }
       }
     } catch (error) {
@@ -5511,7 +5601,7 @@ const JobCard = () => {
           successToast('Downtime log deleted');
           await fetchLogs(selectedJC.id);
         } else {
-          errorToast('Failed to delete downtime log');
+          await showServerError(response, 'Failed to delete downtime log');
         }
       }
     } catch (error) {
@@ -5611,7 +5701,7 @@ const JobCard = () => {
         navigate(`${deptPrefix}/job-card`);
         fetchJobCards();
       } else {
-        errorToast(isEdit ? 'Failed to update outward challan' : 'Failed to create outward challan');
+        await showServerError(response, isEdit ? 'Failed to update outward challan' : 'Failed to create outward challan');
       }
     } catch (error) {
       console.error('Error saving outward challan:', error);
@@ -5658,7 +5748,7 @@ const JobCard = () => {
         navigate(`${deptPrefix}/job-card`);
         fetchJobCards();
       } else {
-        errorToast('Failed to record vendor receipt');
+        await showServerError(response, 'Failed to record vendor receipt');
       }
     } catch (error) {
       console.error('Error recording vendor receipt:', error);
@@ -5689,7 +5779,7 @@ const JobCard = () => {
           successToast('Job Card deleted successfully');
           fetchJobCards();
         } else {
-          errorToast('Failed to delete Job Card');
+          await showServerError(response, 'Failed to delete Job Card');
         }
       }
     } catch (error) {
@@ -6150,7 +6240,7 @@ const JobCard = () => {
           : 'bg-amber-50 text-amber-600 border-amber-100'
           }`}>
           <div className={`w-1.5 h-1.5 rounded mr-1.5 ${val?.trim() === 'APPROVED' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
-          {val?.trim() === 'APPROVED' ? 'Verified' : 'Pending Verification'}
+          {val?.trim() === 'APPROVED' ? 'Approved by QC' : 'Awaiting QC approval'}
         </div>
       )
     },
@@ -7007,84 +7097,21 @@ const JobCard = () => {
     <div className="min-h-screen bg-[#F8FAFC]">
       {!showProductionEntry ? (
         <>
-          {/* Header Section */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl  text-slate-900  ">Job Cards</h1>
-                  <span className="p-2  bg-indigo-50 text-indigo-600 text-xs  rounded  border border-indigo-100  ">
-                    Live Operations
-                  </span>
-                </div>
-                <p className="text-slate-500  text-xs mt-1">
-                  Manufacturing Intelligence <ChevronRight className="w-3 h-3 inline mx-1" /> <span className="text-indigo-600">Operational Controls</span>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 p-2  bg-white rounded  border border-slate-200 ">
-                <div className="w-2 h-2 bg-emerald-500 rounded  animate-pulse"></div>
-                <span className="text-xs  text-slate-500  ">System Status</span>
-                <span className="text-xs  text-slate-900">{new Date().toLocaleTimeString()}</span>
-              </div>
-              <button 
-                onClick={handleResetQueue}
-                disabled={resettingQueue || jobCards.length === 0}
-                className="flex items-center gap-2 p-2 text-rose-600 hover:bg-rose-50 rounded transition-all text-xs disabled:opacity-50"
-                title="Delete all Job Cards"
-              >
-                <Trash2 className={`w-4 h-4 ${resettingQueue ? 'animate-spin' : ''}`} />
-                {resettingQueue ? 'Resetting...' : 'Reset Queue'}
-              </button>
-              <button
-                onClick={() => navigate(`${deptPrefix}/job-card/add`)}
-                className="flex items-center gap-2  p-2 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all  text-xs shadow-lg shadow-slate-200"
-              >
-                <Play className="w-4 h-4" />
-                Create Job Card
-              </button>
-            </div>
-          </div>
-
-          {/* Stats Grid */}
-          {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-2 my-5">
-            {stats.map((stat, i) => (
-              <div key={i} className="bg-white rounded  border border-slate-100 p-2 flex items-center justify-between  hover: transition-all group">
-                <div>
-                  <p className="text-xs  text-slate-400   mb-2">{stat.label}</p>
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-xl  text-slate-900">{stat.value}</p>
-                  </div>
-                  <p className="text-xs  text-slate-400   mt-2 flex items-center gap-1">
-                    {stat.subValue}
-                  </p>
-                </div>
-                <div className={`w-14 h-14 rounded  flex items-center justify-center transition-all group-hover:scale-110 ${stat.color === 'indigo' ? 'bg-indigo-50 text-indigo-600' :
-                  stat.color === 'amber' ? 'bg-amber-50 text-amber-600' :
-                    stat.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
-                      'bg-purple-50 text-purple-600'
-                  }`}>
-                  <stat.icon className="w-7 h-7" />
-                </div>
-              </div>
-            ))}
-          </div> */}
-
-          <DataTable
-            columns={jobCardColumns}
-            data={filteredJobCards}
+          <JobCardList
+            jobCards={filteredJobCards}
             loading={loading}
-            pageSize={20}
-            actions={
-              <button className="flex items-center gap-2  p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 hover:bg-slate-50 transition-all ">
-                <Filter className="w-4 h-4" />
-                All Operational States
-                <ChevronDown className="w-4 h-4 ml-2" />
-              </button>
-            }
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            isPlanFulfilled={isPlanFulfilled}
+            onView={(jc) => navigate(`${deptPrefix}/job-card/view?id=${jc.id}`)}
+            onStart={(jc) => handleUpdateStatus(jc, 'IN_PROGRESS')}
+            onProduction={(jc) => handleLogProgress(jc)}
+            onOutward={(jc) => navigate(`${deptPrefix}/job-card/outward?id=${jc.id}`)}
+            onEdit={(jc) => navigate(`${deptPrefix}/job-card/edit?id=${jc.id}`)}
+            onDelete={(id) => handleDelete(id)}
+            onCreate={() => navigate(`${deptPrefix}/job-card/add`)}
+            onResetQueue={handleResetQueue}
+            onRefresh={fetchJobCards}
           />
         </>
       ) : (
@@ -7095,7 +7122,7 @@ const JobCard = () => {
       <Modal
         isOpen={!!viewingJobCard}
         onClose={() => navigate(`${deptPrefix}/job-card`)}
-        title="Operational Intelligence"
+        title="Job card details"
         maxWidth="max-w-2xl"
       >
         {viewingJobCard && (
@@ -7232,7 +7259,7 @@ const JobCard = () => {
             <div className="bg-amber-50 border border-amber-100 rounded  p-2">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-lg">🧠</span>
-                <h4 className=" text-slate-900">Intelligence Notes</h4>
+                <h4 className=" text-slate-900">Notes</h4>
               </div>
               <p className="text-sm text-amber-700">
                 {viewingJobCard.remarks || 'No supplemental operational data recorded for this phase.'}
@@ -7531,18 +7558,14 @@ const JobCard = () => {
                       <span className="text-sm">Execution & Metrics</span>
                     </div>
 
-                    <FormControl label="Job Status">
-                      <select
-                        value={formData.status}
-                        onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
-                      >
-                        <option value="PENDING">PENDING</option>
-                        <option value="IN_PROGRESS">IN PROGRESS</option>
-                        <option value="COMPLETED">COMPLETED</option>
-                        <option value="ON_HOLD">ON HOLD</option>
-                      </select>
-                    </FormControl>
+                    {formData.id ? (
+                      <FormControl label="Job Status">
+                        <div className="flex items-center gap-2">
+                          <StatusBadge status={formData.status} />
+                          <span className="text-[11px] text-slate-400">Change it from the list: Start, Production entry, Put on hold. Completion needs QC approval.</span>
+                        </div>
+                      </FormControl>
+                    ) : null}
 
                     <div className="grid grid-cols-3 gap-3">
                       <FormControl label="Planned Qty">
@@ -7578,9 +7601,12 @@ const JobCard = () => {
                           Remaining: {Math.max(0, parseFloat(formData.plannedQty || 0) - parseFloat(formData.producedQty || 0)).toFixed(3)}
                         </p>
                       </FormControl>
-                      <FormControl label="Produced Qty">
+                      <FormControl label="Produced Qty (from production entries)">
                         <input
                           type="number"
+                          readOnly
+                          disabled
+                          title="Produced quantity is recorded through production entries"
                           value={formData.producedQty}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -7608,16 +7634,19 @@ const JobCard = () => {
                           className="w-full p-2 bg-white border border-indigo-200 ring-1 ring-indigo-50 rounded text-xs text-indigo-700  outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </FormControl>
-                      <FormControl label="Accepted Qty">
+                      <FormControl label="Accepted Qty (QC-approved)">
                         <input
                           type="number"
+                          readOnly
+                          disabled
+                          title="Accepted quantity comes from approved quality inspections"
                           value={formData.acceptedQty}
                           onChange={(e) => setFormData(prev => ({ ...prev, acceptedQty: e.target.value }))}
                           className="w-full p-2 bg-white border border-emerald-200 ring-1 ring-emerald-50 rounded text-xs text-emerald-700  outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                       </FormControl>
                     </div>
-                    <p className="text-xs  text-slate-400 italic">Note: Accepted quantity represents final yield after QC.</p>
+                    <p className="text-xs  text-slate-400 italic">Produced and accepted quantities are results: they come from production entries and QC-approved inspections, so they cannot be typed here.</p>
                   </div>
                 </div>
 

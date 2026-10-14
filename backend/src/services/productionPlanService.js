@@ -90,7 +90,16 @@ const listProductionPlans = async () => {
             (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id) as total_ops,
             (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id AND jc.status = 'COMPLETED') as completed_ops,
             (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status,
-            (SELECT id FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_id
+            (SELECT id FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_id,
+            (SELECT COUNT(*) FROM material_requests mr WHERE mr.plan_id = pp.id AND UPPER(COALESCE(mr.status, '')) NOT IN ('CANCELLED', 'REJECTED')) as live_mr_count,
+            (SELECT COUNT(*) FROM material_requests mr WHERE mr.plan_id = pp.id AND UPPER(COALESCE(mr.status, '')) IN ('FULFILLED', 'COMPLETED')) as released_mr_count,
+            (SELECT COUNT(*) FROM material_requests mr WHERE mr.plan_id = pp.id AND UPPER(COALESCE(mr.status, '')) = 'PARTIALLY_RELEASED') as partial_mr_count,
+            (SELECT COUNT(*) FROM work_orders WHERE plan_id = pp.id AND status = 'COMPLETED') as completed_wo_count,
+            (SELECT COUNT(*) FROM work_orders WHERE plan_id = pp.id AND status = 'DRAFT') as draft_wo_count,
+            (SELECT COUNT(*) FROM work_orders WHERE plan_id = pp.id AND end_date < CURDATE() AND status NOT IN ('COMPLETED', 'CANCELLED')) as late_wo_count,
+            (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id AND jc.status = 'IN_PROGRESS') as running_ops,
+            (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id AND jc.status = 'ON_HOLD') as held_ops,
+            (SELECT MAX(end_date) FROM work_orders WHERE plan_id = pp.id) as latest_wo_end
      FROM production_plans pp
      LEFT JOIN users u ON pp.created_by = u.id
      LEFT JOIN (
@@ -3681,7 +3690,96 @@ const bulkCreateMaterialRequests = async (planIds, userId) => {
   };
 };
 
+// Per-material picture for one plan: needed, requested, released by Stores and issued to its work orders.
+// Weight materials (kg): released = the recorded weight, or the quantity when no weight was recorded (as in most existing data).
+const WEIGHT_UOMS = ['kg', 'kgs', 'kilogram'];
+const isWeightUom = uom => WEIGHT_UOMS.includes(String(uom || '').trim().toLowerCase());
+const SKIPPED_MATERIAL = /^(PART-|SA-|FG-|SFG-|ASSEMBLY)/i;
+
+const getPlanMaterialStatus = async (planId) => {
+  const [[plan]] = await pool.query('SELECT id, plan_code, status FROM production_plans WHERE id = ?', [planId]);
+  if (!plan) {
+    const error = new Error('Production Plan not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const [requests] = await pool.query(
+    `SELECT id, mr_number, status, created_at FROM material_requests
+     WHERE plan_id = ? AND UPPER(COALESCE(status, '')) NOT IN ('CANCELLED', 'REJECTED') ORDER BY id`,
+    [planId]
+  );
+  const [requestItems] = await pool.query(
+    `SELECT mri.item_code, mri.item_name, mri.uom, mri.quantity, mri.allocated_quantity, mri.allocated_weight
+     FROM material_request_items mri JOIN material_requests mr ON mri.mr_id = mr.id
+     WHERE mr.plan_id = ? AND UPPER(COALESCE(mr.status, '')) NOT IN ('CANCELLED', 'REJECTED')`,
+    [planId]
+  );
+  const [issuedRows] = await pool.query(
+    `SELECT mii.item_code, LOWER(TRIM(mii.material_name)) AS name, SUM(mii.quantity) AS qty
+     FROM material_issue_items mii
+     JOIN material_issues mi ON mii.issue_id = mi.id
+     JOIN work_orders wo ON mi.work_order_id = wo.id
+     WHERE wo.plan_id = ? GROUP BY mii.item_code, name`,
+    [planId]
+  );
+  const [requiredRows] = await pool.query(
+    `SELECT item_code, material_name, uom, SUM(required_qty) AS required
+     FROM production_plan_materials WHERE plan_id = ? GROUP BY item_code, material_name, uom`,
+    [planId]
+  );
+
+  const keyOf = (code, name) => String(name || code || '').trim().toLowerCase();
+  const materials = new Map();
+  const ensure = (code, name, uom) => {
+    const key = keyOf(code, name);
+    if (!materials.has(key)) materials.set(key, { key, item_code: code || null, material_name: name || code, uom: uom || '', required: 0, requested: 0, released: 0, issued: 0 });
+    const m = materials.get(key);
+    if (!m.item_code && code) m.item_code = code;
+    if (!m.uom && uom) m.uom = uom;
+    return m;
+  };
+
+  requiredRows.forEach(r => {
+    if (SKIPPED_MATERIAL.test(String(r.item_code || r.material_name || ''))) return;
+    ensure(r.item_code, r.material_name, r.uom).required += parseFloat(r.required) || 0;
+  });
+  requestItems.forEach(r => {
+    if (SKIPPED_MATERIAL.test(String(r.item_code || r.item_name || ''))) return;
+    const m = ensure(r.item_code, r.item_name, r.uom);
+    m.requested += parseFloat(r.quantity) || 0;
+    m.released += (isWeightUom(r.uom) ? (parseFloat(r.allocated_weight) || parseFloat(r.allocated_quantity)) : parseFloat(r.allocated_quantity)) || 0;
+  });
+  issuedRows.forEach(r => {
+    const direct = [...materials.values()].find(m => m.item_code && m.item_code === r.item_code) || materials.get(keyOf(null, r.name));
+    ensure(direct?.item_code, direct?.material_name || r.name, direct?.uom).issued += parseFloat(r.qty) || 0;
+  });
+
+  const round = v => Math.round(v * 1000) / 1000;
+  const rows = [...materials.values()].map(m => {
+    const state = m.requested <= 0 ? 'NOT_REQUESTED'
+      : m.released + 0.0005 >= m.requested ? 'RELEASED'
+        : m.released > 0 ? 'PARTIAL' : 'WAITING';
+    return {
+      item_code: m.item_code, material_name: m.material_name, uom: m.uom,
+      required: round(m.required), requested: round(m.requested), released: round(m.released), issued: round(m.issued),
+      to_release: round(Math.max(0, m.requested - m.released)),
+      to_issue: round(Math.max(0, m.released - m.issued)),
+      state
+    };
+  }).sort((a, b) => String(a.material_name || '').localeCompare(String(b.material_name || '')));
+
+  const count = s => rows.filter(r => r.state === s).length;
+  return {
+    plan,
+    requests,
+    materials: rows,
+    summary: { total: rows.length, notRequested: count('NOT_REQUESTED'), waiting: count('WAITING'), partial: count('PARTIAL'), released: count('RELEASED') }
+  };
+};
+
 module.exports = {
+  getPlanMaterialStatus,
   listProductionPlans,
   getProductionPlanById,
   createProductionPlan,

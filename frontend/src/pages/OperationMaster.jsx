@@ -122,9 +122,9 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ 
-      ...prev, 
-      [name]: type === 'checkbox' ? (checked ? 1 : 0) : value 
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? (checked ? 1 : 0) : value
     }));
   };
 
@@ -210,9 +210,9 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
         const token = localStorage.getItem('authToken');
         const response = await fetch(`${API_BASE}/operations/${op.id}`, {
           method: 'PUT',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({ ...op, is_active: newStatus })
         });
@@ -258,21 +258,21 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
   const isFromProductionReport = searchParams.get('from') === 'production-report';
 
   const columns = [
-    { 
-      label: 'Operation Code', 
-      key: 'operation_code', 
+    {
+      label: 'Operation Code',
+      key: 'operation_code',
       sortable: true,
       render: (val) => <span className=" text-indigo-600  ">{val}</span>
     },
-    { 
-      label: 'Operation Name', 
-      key: 'operation_name', 
+    {
+      label: 'Operation Name',
+      key: 'operation_name',
       sortable: true,
       render: (val) => <span className=" text-slate-900">{val}</span>
     },
-    { 
-      label: 'Operation Type', 
-      key: 'operation_type', 
+    {
+      label: 'Operation Type',
+      key: 'operation_type',
       sortable: true,
       render: (val) => {
         const type = val || 'In-House';
@@ -282,9 +282,9 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
         return <Badge variant={variant} className="capitalize font-semibold">{type}</Badge>;
       }
     },
-    { 
-      label: 'Workstations', 
-      key: 'workstation_names', 
+    {
+      label: 'Workstations',
+      key: 'workstation_names',
       sortable: true,
       render: (val, row) => (
         <div>
@@ -293,8 +293,8 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
         </div>
       )
     },
-    { 
-      label: 'Std Time', 
+    {
+      label: 'Std Time',
       key: 'std_time',
       render: (val, row) => (
         <span className="text-slate-600 ">
@@ -302,8 +302,8 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
         </span>
       )
     },
-    { 
-      label: 'Hourly Rate', 
+    {
+      label: 'Hourly Rate',
       key: 'operation_rate',
       render: (val) => (
         <span className="text-emerald-600 ">
@@ -311,8 +311,8 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
         </span>
       )
     },
-    { 
-      label: 'Status', 
+    {
+      label: 'Status',
       key: 'is_active',
       render: (val) => (
         <Badge variant={val ? 'success' : 'danger'}>
@@ -325,34 +325,10 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
       key: 'actions',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-center gap-2">
-          <button 
-            onClick={() => handleEdit(row)}
-            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded  transition-colors"
-            title="Edit Operation"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-          <button 
-            onClick={() => handleToggleStatus(row)}
-            className={`p-1.5 rounded  transition-colors ${row.is_active ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
-            title={row.is_active ? 'Disable Operation' : 'Enable Operation'}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-            </svg>
-          </button>
-          <button 
-            onClick={() => handleDelete(row)}
-            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded  transition-colors"
-            title="Delete Operation"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
+        <div className="flex justify-end gap-1">
+          <button onClick={() => handleEdit(row)} className="px-2.5 py-1.5 text-xs border border-slate-200 text-indigo-700 rounded hover:bg-indigo-50" title="Change this operation's details">Edit</button>
+          <button onClick={() => handleToggleStatus(row)} className={`px-2.5 py-1.5 text-xs border rounded ${row.is_active ? 'border-amber-200 text-amber-700 hover:bg-amber-50' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`} title={row.is_active ? 'Stop offering this operation on new routings' : 'Offer this operation on routings again'}>{row.is_active ? 'Disable' : 'Enable'}</button>
+          <button onClick={() => handleDelete(row)} className="px-2.5 py-1.5 text-xs border border-rose-200 text-rose-700 rounded hover:bg-rose-50" title="Remove this operation">Delete</button>
         </div>
       )
     }] : [])
@@ -373,12 +349,13 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
           )}
           <div>
             <h1 className="text-xl text-slate-900">Operation Master</h1>
-            <p className="text-xs text-slate-500 ">Define and manage manufacturing operations and standard times</p>
+            <p className="text-xs text-slate-500 ">The standard operations. A routing step whose name matches one of these picks up its standard time and rate. Steps that do not match are listed in the Routing check.</p>
           </div>
         </div>
         {!isFromProductionReport && (
           <div className="flex gap-2">
-            <button 
+            <button onClick={() => navigate('/production/routing-operations')} className="px-3 py-2 text-xs border border-slate-200 text-slate-700 rounded hover:bg-slate-50" title="See which routing steps do not match this list">Routing check</button>
+            <button
               onClick={fetchOperations}
               className="p-2 bg-slate-100 text-slate-600 rounded  hover:bg-slate-200 transition-all"
               title="Refresh Data"
@@ -387,7 +364,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
-            <button 
+            <button
               onClick={() => { navigate('/production/operation-master/form'); }}
               className="flex items-center gap-2  p-2  bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700  shadow-indigo-200 transition-all active:scale-95"
             >
@@ -400,15 +377,15 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
         )}
       </div>
 
-      <DataTable 
+      <DataTable
         columns={columns}
         data={operations}
         loading={loading}
         searchPlaceholder="Search by code or name..."
       />
 
-      <Modal 
-        isOpen={showForm} 
+      <Modal
+        isOpen={showForm}
         onClose={() => { navigate('/production/operation-master'); }}
         title={isEditing ? 'Edit Operation' : 'Add New Operation'}
       >
@@ -416,8 +393,8 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div className="space-y-1.5">
               <label className="text-xs  text-slate-500">Operation Code *</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 name="operation_code"
                 className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                 placeholder="e.g., OP-10"
@@ -428,7 +405,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
             </div>
             <div className="space-y-1.5">
               <label className="text-xs  text-slate-500">Operation Name *</label>
-              <SearchableSelect 
+              <SearchableSelect
                 placeholder="e.g., VMC Machining"
                 options={Array.from(new Set(operations.map(op => op.operation_name))).map(name => ({
                   label: name,
@@ -443,7 +420,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
             </div>
             <div className="space-y-1.5">
               <label className="text-xs text-slate-500">Operation Type *</label>
-              <select 
+              <select
                 name="operation_type"
                 className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                 value={formData.operation_type}
@@ -457,7 +434,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
             </div>
             <div className="space-y-1.5">
               <label className="text-xs  text-slate-500">Workstations *</label>
-              <MultiSelect 
+              <MultiSelect
                 placeholder="Select Workstations"
                 options={workstations.map(ws => ({
                   label: ws.workstation_name,
@@ -472,8 +449,8 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <label className="text-xs  text-slate-500">Std Time *</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   name="std_time"
                   step="0.01"
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
@@ -484,7 +461,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs  text-slate-500">UOM</label>
-                <select 
+                <select
                   name="time_uom"
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
                   value={formData.time_uom}
@@ -498,8 +475,8 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
               <label className="text-xs  text-slate-500">Hourly Rate (Override)</label>
               <div className="relative">
                 <span className="absolute left-4 top-2 text-slate-400 text-sm">₹</span>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   name="hourly_rate"
                   step="0.01"
                   className="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded  text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
@@ -510,8 +487,8 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
               </div>
             </div>
             <div className="flex items-center gap-2  pt-6">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 name="is_active"
                 id="is_active"
                 className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
@@ -523,14 +500,14 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
           </div>
 
           <div className="flex justify-end gap-2 pt-6 border-t border-slate-100">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => { setShowForm(false); resetForm(); }}
               className="p-2 border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>
-            <button 
+            <button
               type="submit"
               className="px-10 py-2.5 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
             >

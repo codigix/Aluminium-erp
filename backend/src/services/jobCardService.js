@@ -3,6 +3,100 @@ const pool = require('../config/db');
 const generateJobCardQcPdf = require('../utils/generateJobCardQcPdf');
 const stockService = require('./stockService');
 const { canTransitionSalesOrder, salesOrderRank, SALES_ORDER_STAGES } = require('../config/workflow');
+const { nextDocumentNumber } = require('../utils/documentNumber');
+const { logProductionEvent } = require('./productionAuditService');
+const schedulingService = require('./schedulingService');
+const productionFlowService = require('./productionFlowService');
+const {
+  QTY_TOLERANCE,
+  productionError,
+  WORK_ORDER_BLOCKED_FOR_ACTIVITY,
+  JOB_CARD_CLOSED,
+  isShipmentOperation,
+  isSubcontractJobCard
+} = require('../config/productionWorkflow');
+
+// Locks the job card (and reads its work order) and refuses shop-floor
+// activity on closed, held or cancelled work. Call inside a transaction.
+const assertJobCardOpenForActivity = async (connection, jobCardId, { allowClosed = false } = {}) => {
+  const [rows] = await connection.query(
+    `SELECT jc.id, jc.status, jc.work_order_id, jc.operation_name, jc.sequence_no, jc.planned_qty,
+            jc.execution_mode, jc.execution_type, wo.status AS wo_status, wo.wo_number
+     FROM job_cards jc
+     JOIN work_orders wo ON jc.work_order_id = wo.id
+     WHERE jc.id = ?
+     FOR UPDATE`,
+    [jobCardId]
+  );
+  if (rows.length === 0) throw productionError('Job Card not found', 404);
+  const jc = rows[0];
+
+  if (!allowClosed && JOB_CARD_CLOSED.includes(jc.status)) {
+    throw productionError(`Job Card is ${jc.status}; no further entries can be made`);
+  }
+  if (jc.status === 'ON_HOLD') {
+    throw productionError('Job Card is ON_HOLD (pre-empted by a higher-priority job). Resume it before making entries.');
+  }
+  if (WORK_ORDER_BLOCKED_FOR_ACTIVITY.includes(jc.wo_status) && !(allowClosed && jc.wo_status === 'COMPLETED')) {
+    throw productionError(`Work Order ${jc.wo_number} is ${jc.wo_status}; production activity is not allowed`);
+  }
+  return jc;
+};
+
+// Builds the start/end timestamps of a production entry. A shift that ends
+// "before" it starts (e.g. 22:00 -> 06:00) crosses midnight, so the end rolls
+// to the next calendar day instead of producing a negative duration.
+const buildLogWindow = (logDate, startTime, endTime) => {
+  if (!logDate || !startTime || !endTime) {
+    throw productionError('Production entry needs a date, start time and end time', 400);
+  }
+  const fullStart = `${logDate} ${startTime}`;
+  let fullEnd = `${logDate} ${endTime}`;
+
+  const startMs = new Date(fullStart.replace(' ', 'T')).getTime();
+  let endMs = new Date(fullEnd.replace(' ', 'T')).getTime();
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
+    throw productionError('Invalid date or time in production entry', 400);
+  }
+  if (endMs === startMs) {
+    throw productionError('End time must be different from start time', 400);
+  }
+  if (endMs < startMs) {
+    const next = new Date(`${logDate}T00:00:00`);
+    next.setDate(next.getDate() + 1);
+    const nextDate = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+    fullEnd = `${nextDate} ${endTime}`;
+    endMs = new Date(fullEnd.replace(' ', 'T')).getTime();
+  }
+  return { fullStart, fullEnd };
+};
+
+// Work order status follows its job cards, but never overrides a deliberate
+// CANCELLED / ON_HOLD / COMPLETED decision. Returns the resulting status.
+const recomputeWorkOrderStatus = async (connection, workOrderId) => {
+  const [woRows] = await connection.query('SELECT status FROM work_orders WHERE id = ? FOR UPDATE', [workOrderId]);
+  if (woRows.length === 0) return null;
+  const current = woRows[0].status || 'DRAFT';
+  if (['CANCELLED', 'ON_HOLD', 'COMPLETED'].includes(current)) return current;
+
+  const [allJcs] = await connection.query(
+    "SELECT status FROM job_cards WHERE work_order_id = ? AND status != 'CANCELLED'",
+    [workOrderId]
+  );
+  if (allJcs.length === 0) return current;
+
+  let next = current === 'DRAFT' ? 'RELEASED' : current;
+  if (allJcs.every(jc => jc.status === 'COMPLETED')) {
+    next = 'COMPLETED';
+  } else if (allJcs.some(jc => ['IN_PROGRESS', 'PAUSED', 'COMPLETED'].includes(jc.status))) {
+    next = 'IN_PROGRESS';
+  }
+
+  if (next !== current) {
+    await connection.execute('UPDATE work_orders SET status = ? WHERE id = ?', [next, workOrderId]);
+  }
+  return next;
+};
 
 // Finished goods leave production and enter stock when the dispatch operation
 // releases quantity to Shipment. Idempotent per shipment order.
@@ -83,6 +177,14 @@ const markSalesOrderProductionCompleted = async (connection, workOrderId) => {
 
   const [soRows] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [salesOrderId]);
   if (!soRows.length) return;
+  if (String(soRows[0].status).toUpperCase() === 'QC_REJECTED') {
+    // Rework after a failed Final QC is finished: send the order back to the QC queue
+    await connection.execute(
+      "UPDATE sales_orders SET status = 'PRODUCTION_COMPLETED', current_department = 'QUALITY', updated_at = NOW() WHERE id = ?",
+      [salesOrderId]
+    );
+    return;
+  }
   if (salesOrderRank(soRows[0].status) < SALES_ORDER_STAGES.PRODUCTION_COMPLETED &&
       canTransitionSalesOrder(soRows[0].status, 'PRODUCTION_COMPLETED').ok) {
     await connection.execute(
@@ -107,21 +209,26 @@ const checkProductionPlanFulfilled = async (connectionOrPool, { jobCardId, workO
   
   if (!planId) return true; // No production plan associated, allow it.
 
+  // Every live Material Request of the plan must be released. Looking only at the
+  // newest one let a later DRAFT request block shop-floor work while an older
+  // unreleased request was ignored. Cancelled / rejected requests do not count.
   const [mrRows] = await connectionOrPool.query(
-    'SELECT status FROM material_requests WHERE plan_id = ? ORDER BY id DESC LIMIT 1',
+    "SELECT status FROM material_requests WHERE plan_id = ? AND UPPER(COALESCE(status, '')) NOT IN ('CANCELLED', 'REJECTED')",
     [planId]
   );
   if (mrRows.length === 0) return false; // Has plan but no MR exists at all.
 
-  const normalized = (mrRows[0].status || '').toUpperCase().trim();
-  return normalized === 'FULFILLED' || normalized === 'COMPLETED';
+  return mrRows.every(mr => {
+    const normalized = (mr.status || '').toUpperCase().trim();
+    return normalized === 'FULFILLED' || normalized === 'COMPLETED';
+  });
 };
 
 const listJobCards = async () => {
   const [rows] = await pool.query(
     `SELECT jc.id, jc.job_card_no, jc.work_order_id, jc.operation_id, COALESCE(jc.workstation_id, w.id) as workstation_id, jc.assigned_to, jc.planned_qty, jc.status, jc.execution_mode, jc.public_id,
             jc.sequence_no, jc.actual_start_date, jc.created_at,
-            jc.start_time, jc.end_time, jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.rework_qty, jc.scrap_qty, jc.remarks, jc.vendor_id, jc.vendor_rate,
+            jc.start_time, jc.end_time, jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.rework_qty, jc.scrap_qty, jc.remarks, jc.vendor_id, jc.vendor_rate, jc.is_rework, jc.hold_reason, jc.held_at,
             ROW_NUMBER() OVER (PARTITION BY COALESCE(wo.plan_id, wo.parent_wo_id, wo.id) ORDER BY CASE WHEN wo.source_type = 'SA' OR wo.source_type = 'PART' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC) as operation_sequence,
             wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             wo.plan_id, wo.sales_order_id, wo.parent_wo_id, wo.item_code, wo.sales_order_item_id,
@@ -524,9 +631,13 @@ const createJobCard = async (data) => {
     }
   }
 
+  if (JOB_CARD_CLOSED.includes(status)) {
+    throw productionError(`A Job Card cannot be created as ${status}`, 400);
+  }
+
   // Check if item is rejected
   const [itemRows] = await pool.query(
-    `SELECT soi.status 
+    `SELECT soi.status
      FROM work_orders wo
      JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
      WHERE wo.id = ?`,
@@ -562,14 +673,38 @@ const createJobCard = async (data) => {
   );
   const sequenceNo = (seqRow[0]?.maxSeq || 0) + 1;
 
+  const [woStatusRows] = await pool.query('SELECT status FROM work_orders WHERE id = ?', [workOrderId]);
+  if (woStatusRows.length === 0) throw productionError('Work Order not found', 404);
+  if (WORK_ORDER_BLOCKED_FOR_ACTIVITY.includes(woStatusRows[0].status)) {
+    throw productionError(`Cannot add a Job Card: Work Order is ${woStatusRows[0].status}`);
+  }
+
+  // Quantity and progress are derived from logs, never entered directly on creation
+  if ((parseFloat(producedQty) || 0) > 0 || (parseFloat(acceptedQty) || 0) > 0) {
+    throw productionError('Produced and accepted quantities are recorded through production and quality entries, not on the job card form', 400);
+  }
+
+  const numberConnection = await pool.getConnection();
+  let issuedJobCardNo;
+  try {
+    await numberConnection.beginTransaction();
+    issuedJobCardNo = await nextDocumentNumber(numberConnection, 'JOB_CARD');
+    await numberConnection.commit();
+  } catch (error) {
+    await numberConnection.rollback();
+    throw error;
+  } finally {
+    numberConnection.release();
+  }
+
   const publicId = crypto.randomUUID();
   const [result] = await pool.execute(
-    `INSERT INTO job_cards 
-     (job_card_no, work_order_id, operation_id, workstation_id, assigned_to, planned_qty, remarks, 
+    `INSERT INTO job_cards
+     (job_card_no, work_order_id, operation_id, workstation_id, assigned_to, planned_qty, remarks,
       status, execution_mode, vendor_id, vendor_rate, produced_qty, accepted_qty, start_time, end_time, public_id, sequence_no)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      jobCardNo || null, workOrderId, operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks,
+      issuedJobCardNo, workOrderId, operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks,
       status || 'PENDING', executionMode || 'In-house', vendorId || null, vendorRate || 0, producedQty || 0, acceptedQty || 0,
       startDateTime ? startDateTime.replace('T', ' ') : null,
       endDateTime ? endDateTime.replace('T', ' ') : null,
@@ -613,6 +748,12 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
     carrierName, trackingNumber, shippingNotes, dispatchDate, dispatchMode, dispatchQty, plannedQty, sourceJobCardId } = data;
 
   try {
+
+    // Lock the job card and refuse activity on closed / held / cancelled work
+    await assertJobCardOpenForActivity(connection, id);
+    if (status === 'CANCELLED') {
+      throw productionError('Job Cards are cancelled by cancelling their Work Order');
+    }
 
     // Fetch the current state of this job card to allow carrying forward configured operator/workstation and status transition
     const [currentJcRow] = await connection.query(
@@ -746,19 +887,61 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
     if (finalStatus === 'COMPLETED') {
       // Get operation details to see if it is a shipment operation or subcontracted
       const [opRow] = await connection.query(
-        'SELECT COALESCE(o.operation_name, jc.operation_name) as operation_name, o.operation_type, jc.execution_mode FROM job_cards jc LEFT JOIN operations o ON jc.operation_id = o.id WHERE jc.id = ?',
+        'SELECT COALESCE(o.operation_name, jc.operation_name) as operation_name, o.operation_type, jc.execution_mode, jc.execution_type, jc.sequence_no, jc.work_order_id, jc.planned_qty, jc.produced_qty, jc.dispatch_qty FROM job_cards jc LEFT JOIN operations o ON jc.operation_id = o.id WHERE jc.id = ?',
         [id]
       );
-      const isShipment = opRow.length > 0 && (
-        String(opRow[0].operation_name || '').toLowerCase() === 'shipment' ||
-        String(opRow[0].operation_name || '').toLowerCase() === 'dispatch' ||
-        String(opRow[0].operation_type || '').toLowerCase() === 'dispatch'
-      );
-      const isSubcontract = opRow.length > 0 && (
-        String(opRow[0].execution_mode || '').toLowerCase() === 'outsource' ||
-        String(opRow[0].execution_mode || '').toLowerCase() === 'subcontract' ||
-        String(opRow[0].execution_mode || '').toLowerCase() === 'sub-contract'
-      );
+      const isShipment = opRow.length > 0 && isShipmentOperation(opRow[0].operation_name, opRow[0].operation_type);
+      const isSubcontract = opRow.length > 0 && isSubcontractJobCard(opRow[0]);
+
+      // An operation can only close once every earlier operation of the same work order is closed
+      if (opRow.length > 0) {
+        const [openPredecessors] = await connection.query(
+          `SELECT job_card_no, operation_name FROM job_cards
+           WHERE work_order_id = ? AND id != ? AND status NOT IN ('COMPLETED', 'CANCELLED')
+             AND (sequence_no < ? OR (is_rework = 1 AND sequence_no = ?))
+           ORDER BY sequence_no ASC`,
+          [opRow[0].work_order_id, id, opRow[0].sequence_no, opRow[0].sequence_no]
+        );
+        if (openPredecessors.length > 0) {
+          const names = openPredecessors.map(p => p.operation_name || p.job_card_no).join(', ');
+          throw productionError(`Cannot complete this operation: earlier operation(s) are not completed yet (${names}).`);
+        }
+      }
+
+      if (isShipment && opRow.length > 0) {
+        // Full-shipment close: everything planned must have been dispatched. Partial dispatches stay open.
+        const plannedForShipment = parseFloat(opRow[0].planned_qty || 0);
+        const dispatchedSoFar = dispatchQty !== undefined ? parseFloat(dispatchQty || 0) : parseFloat(opRow[0].dispatch_qty || 0);
+        if (dispatchedSoFar + QTY_TOLERANCE < plannedForShipment) {
+          throw productionError(`Cannot complete Shipment: dispatched ${dispatchedSoFar} of ${plannedForShipment}. Dispatch the remaining quantity first.`);
+        }
+
+        // An assembly cannot ship while its component work orders are still open
+        const [[shipWo]] = await connection.query('SELECT id, plan_id, item_code FROM work_orders WHERE id = ?', [opRow[0].work_order_id]);
+        if (shipWo) {
+          const [openChildren] = await connection.query(
+            `SELECT wo_number, item_code FROM work_orders
+             WHERE id != ? AND status NOT IN ('COMPLETED', 'CANCELLED')
+               AND (parent_wo_id = ? OR (plan_id = ? AND plan_id IS NOT NULL AND source_fg = ?))`,
+            [shipWo.id, shipWo.id, shipWo.plan_id, shipWo.item_code]
+          );
+          if (openChildren.length > 0) {
+            throw productionError(`Cannot complete Shipment: component work order(s) still open (${openChildren.map(c => c.wo_number).join(', ')}).`);
+          }
+        }
+      }
+
+      if (!isShipment && opRow.length > 0) {
+        const plannedForOp = parseFloat(opRow[0].planned_qty || 0);
+        const producedForOp = producedQty !== undefined ? parseFloat(producedQty || 0) : parseFloat(opRow[0].produced_qty || 0);
+        if (producedForOp + QTY_TOLERANCE < plannedForOp) {
+          await logProductionEvent(connection, {
+            entityType: 'JOB_CARD', entityId: Number(id), action: 'SHORT_CLOSE',
+            oldValue: `planned ${plannedForOp}`, newValue: `produced ${producedForOp}`,
+            reason: 'Operation completed below planned quantity'
+          });
+        }
+      }
 
       if (!isShipment && !isSubcontract) {
         // 1. Check if all quality logs are approved
@@ -1105,6 +1288,20 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
       if (salesOrderId) {
         const newDispatchQtyVal = dispatchQty !== undefined ? parseFloat(dispatchQty || 0) : 0;
 
+        if (dispatchQty !== undefined) {
+          if (Number.isNaN(newDispatchQtyVal) || newDispatchQtyVal < 0) {
+            throw productionError('Dispatch quantity must be a positive number', 400);
+          }
+          if (newDispatchQtyVal + QTY_TOLERANCE < prevDispatchQty) {
+            throw productionError(`Dispatch quantity cannot be reduced below what has already been dispatched (${prevDispatchQty}). Use a shipment return instead.`);
+          }
+          // Partial shipments ship what earlier operations have accepted, not the whole order
+          const shipFlow = await productionFlowService.getOperationAvailability(connection, id);
+          if (newDispatchQtyVal > shipFlow.available + QTY_TOLERANCE) {
+            throw productionError(`Cannot dispatch ${newDispatchQtyVal}: only ${shipFlow.available} accepted quantity is available for shipment (${prevDispatchQty} already dispatched).`);
+          }
+        }
+
         // If this is a new dispatch (new dispatch qty is greater than previous dispatch qty)
         if (newDispatchQtyVal > prevDispatchQty) {
           // Count existing shipment orders for this job card to create a unique suffix
@@ -1240,65 +1437,23 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
       }
     }
 
-    const affectedWoIds = [];
-    if (finalStatus === 'COMPLETED' && isShipment && opRow.length > 0) {
-      const workOrderId = opRow[0].work_order_id;
-      affectedWoIds.push(workOrderId);
+    // The work order status follows its job cards. Completing the shipment
+    // operation no longer force-completes anything: every earlier operation and
+    // every component work order was already verified as closed above.
+    const [jcRows] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [id]);
+    const affectedWoIds = jcRows.length > 0 ? [jcRows[0].work_order_id] : [];
 
-      await connection.execute(
-        'UPDATE job_cards SET status = "COMPLETED" WHERE work_order_id = ? AND status != "COMPLETED"',
-        [workOrderId]
-      );
-
-      // Find child/sub-assembly work orders under the same plan
-      const [parentWoRows] = await connection.query(
-        'SELECT id, plan_id, item_code FROM work_orders WHERE id = ?',
-        [workOrderId]
-      );
-      if (parentWoRows.length > 0) {
-        const { id: parentId, plan_id: planId, item_code: parentItemCode } = parentWoRows[0];
-        
-        // Find child work orders by parent_wo_id or source_fg matching parent's item_code under the same plan
-        const [childWoRows] = await connection.query(
-          'SELECT id FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?)',
-          [planId, parentId, parentItemCode]
-        );
-        
-        if (childWoRows.length > 0) {
-          const childWoIds = childWoRows.map(row => row.id);
-          affectedWoIds.push(...childWoIds);
-
-          // Complete all job cards for these child work orders
-          await connection.query(
-            `UPDATE job_cards SET status = "COMPLETED" WHERE work_order_id IN (${childWoIds.join(',')}) AND status != "COMPLETED"`
-          );
-        }
-      }
-    } else {
-      const [jcRows] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [id]);
-      if (jcRows.length > 0) {
-        affectedWoIds.push(jcRows[0].work_order_id);
-      }
+    // Jobs this card pre-empted go back into the queue once it finishes
+    if (finalStatus === 'COMPLETED') {
+      await schedulingService.resumeJobCardsHeldBy(connection, Number(id));
     }
 
-    // Update Work Order status based on Job Cards
     for (const woId of affectedWoIds) {
-      const [allJcs] = await connection.query('SELECT status FROM job_cards WHERE work_order_id = ?', [woId]);
-
-      let newWoStatus = 'RELEASED';
-      if (allJcs.some(jc => jc.status === 'IN_PROGRESS')) {
-        newWoStatus = 'IN_PROGRESS';
-      } else if (allJcs.every(jc => jc.status === 'COMPLETED')) {
-        newWoStatus = 'COMPLETED';
-      } else if (allJcs.some(jc => jc.status === 'COMPLETED' || jc.status === 'PENDING')) {
-        const hasStarted = allJcs.some(jc => jc.status === 'COMPLETED');
-        if (hasStarted) newWoStatus = 'IN_PROGRESS';
-      }
-
-      await connection.execute('UPDATE work_orders SET status = ? WHERE id = ?', [newWoStatus, woId]);
+      const [[before]] = await connection.query('SELECT status FROM work_orders WHERE id = ?', [woId]);
+      const newWoStatus = await recomputeWorkOrderStatus(connection, woId);
       await syncReworkQuantities(woId, connection);
 
-      if (newWoStatus === 'COMPLETED') {
+      if (newWoStatus === 'COMPLETED' && before?.status !== 'COMPLETED') {
         const [woRow] = await connection.query(
           'SELECT plan_id, production_plan_item_id FROM work_orders WHERE id = ?',
           [woId]
@@ -1329,6 +1484,10 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
           }
         }
 
+        await logProductionEvent(connection, {
+          entityType: 'WORK_ORDER', entityId: Number(woId), action: 'STATUS_CHANGE',
+          oldValue: before?.status, newValue: 'COMPLETED', reason: 'All job cards completed'
+        });
         await markSalesOrderProductionCompleted(connection, woId);
       }
     }
@@ -1530,6 +1689,13 @@ const addTimeLog = async (data) => {
   try {
     await connection.beginTransaction();
 
+    // Locks the job card row, so two simultaneous entries cannot both pass the quantity cap
+    await assertJobCardOpenForActivity(connection, jobCardId);
+
+    if (!(parseFloat(producedQty) >= 0)) {
+      throw productionError('Produced quantity must be zero or more', 400);
+    }
+
     // Check if the production plan's material requirement is fulfilled
     const isPlanFulfilled = await checkProductionPlanFulfilled(connection, { jobCardId });
     if (!isPlanFulfilled) {
@@ -1612,9 +1778,20 @@ const addTimeLog = async (data) => {
       }
     }
 
+    // Partial release: production is limited to what the previous operation has passed on
+    // (or, for an assembly's first operation, what its components allow)
+    const flow = await productionFlowService.getOperationAvailability(connection, jobCardId);
+    if (parseFloat(producedQty || 0) > flow.remaining + QTY_TOLERANCE) {
+      const reason = flow.basis === 'COMPONENTS'
+        ? `components delivered so far support only ${flow.available} assembly unit(s)`
+        : flow.basis === 'PREVIOUS_OPERATION'
+          ? `the previous operation has passed on ${flow.available} piece(s)`
+          : `the allowed quantity is ${flow.available}`;
+      throw productionError(`Cannot log ${producedQty}: ${reason}, ${flow.used} already produced. Remaining: ${flow.remaining}.`);
+    }
+
     // 1b. Check Operator, Workstation, and Sequence availability with time overlap
-    const fullStartTime = (logDate && startTime) ? `${logDate} ${startTime}` : null;
-    const fullEndTime = (logDate && endTime) ? `${logDate} ${endTime}` : null;
+    const { fullStart: fullStartTime, fullEnd: fullEndTime } = buildLogWindow(logDate, startTime, endTime);
 
     const formatTimeStr = (dtStr) => {
       if (!dtStr) return '';
@@ -1817,49 +1994,151 @@ const addTimeLog = async (data) => {
   }
 };
 
+const toTimePart = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}:${String(value.getSeconds()).padStart(2, '0')}`;
+  }
+  const text = String(value).trim();
+  return text.includes(' ') ? text.split(' ')[1] : text;
+};
+
+const toDatePart = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+  }
+  return String(value).trim().slice(0, 10);
+};
+
 const updateTimeLog = async (id, data) => {
   const { day, logDate, operatorId, workstationId, shift, startTime, endTime, producedQty } = data;
 
-  // Get jobCardId from the log before updating if not provided
-  let { jobCardId } = data;
-  if (!jobCardId) {
-    const [log] = await pool.query('SELECT job_card_id FROM job_card_time_logs WHERE id = ?', [id]);
-    if (log.length > 0) jobCardId = log[0].job_card_id;
-  }
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  const fullStartTime = startTime ? (startTime.includes(':') && !startTime.includes(' ') ? `${logDate} ${startTime}` : startTime) : null;
-  const fullEndTime = endTime ? (endTime.includes(':') && !endTime.includes(' ') ? `${logDate} ${endTime}` : endTime) : null;
+    const [logRows] = await connection.query('SELECT * FROM job_card_time_logs WHERE id = ? FOR UPDATE', [id]);
+    if (logRows.length === 0) throw productionError('Time log not found', 404);
+    const existing = logRows[0];
+    const jobCardId = existing.job_card_id;
 
-  const updates = [];
-  const params = [];
+    // Locks the job card; closed, held or cancelled work cannot be edited
+    await assertJobCardOpenForActivity(connection, jobCardId);
 
-  if (day !== undefined) { updates.push('day = ?'); params.push(day); }
-  if (logDate) { updates.push('log_date = ?'); params.push(logDate); }
-  if (operatorId) { updates.push('operator_id = ?'); params.push(operatorId); }
-  if (workstationId) { updates.push('workstation_id = ?'); params.push(workstationId); }
-  if (shift) { updates.push('shift = ?'); params.push(shift); }
-  if (fullStartTime) { updates.push('start_time = ?'); params.push(fullStartTime); }
-  if (fullEndTime) { updates.push('end_time = ?'); params.push(fullEndTime); }
-  if (producedQty !== undefined) { updates.push('produced_qty = ?'); params.push(producedQty); }
+    const newQty = producedQty !== undefined ? parseFloat(producedQty) : parseFloat(existing.produced_qty || 0);
+    if (Number.isNaN(newQty) || newQty < 0) {
+      throw productionError('Produced quantity must be zero or more', 400);
+    }
 
-  if (updates.length > 0) {
-    params.push(id);
-    await pool.execute(
-      `UPDATE job_card_time_logs SET ${updates.join(', ')} WHERE id = ?`,
-      params
+    // Re-apply the same quantity cap that adding a log enforces
+    const [[limits]] = await connection.query(
+      `SELECT jc.planned_qty, jc.rework_qty,
+              (SELECT COALESCE(SUM(produced_qty), 0) FROM job_card_time_logs WHERE job_card_id = ? AND id != ?) AS other_produced
+       FROM job_cards jc WHERE jc.id = ?`,
+      [jobCardId, id, jobCardId]
     );
-  }
+    const maxAllowed = parseFloat(limits.planned_qty || 0) + parseFloat(limits.rework_qty || 0);
+    const newTotal = parseFloat(limits.other_produced || 0) + newQty;
+    if (newTotal > maxAllowed + QTY_TOLERANCE) {
+      throw productionError(`Cannot update production: total produced quantity (${newTotal}) would exceed the allowed operation limit (${maxAllowed}).`);
+    }
 
-  // Update total produced qty, workstation and operator in job card
-  if (jobCardId) {
-    await pool.execute(
-      `UPDATE job_cards jc 
-       SET produced_qty = (SELECT SUM(produced_qty) FROM job_card_time_logs WHERE job_card_id = ?),
+    const flow = await productionFlowService.getOperationAvailability(connection, jobCardId);
+    if (newTotal > flow.available + QTY_TOLERANCE) {
+      throw productionError(`Cannot update production: only ${flow.available} piece(s) are available to this operation (${flow.basis.toLowerCase().replace(/_/g, ' ')}).`);
+    }
+
+    // Resolve the effective time window (any omitted part keeps its stored value)
+    const baseDate = logDate || toDatePart(existing.log_date);
+    const timeTouched = startTime !== undefined || endTime !== undefined || logDate;
+    let window = null;
+    if (timeTouched) {
+      const startPart = startTime ? toTimePart(startTime) : toTimePart(existing.start_time);
+      const endPart = endTime ? toTimePart(endTime) : toTimePart(existing.end_time);
+      window = buildLogWindow(startTime && String(startTime).includes(' ') ? toDatePart(startTime) : baseDate, startPart, endPart);
+    }
+
+    const effectiveWorkstation = workstationId || existing.workstation_id;
+    const effectiveOperator = operatorId || existing.operator_id;
+
+    if (window) {
+      const [selfOverlap] = await connection.query(
+        'SELECT id FROM job_card_time_logs WHERE job_card_id = ? AND id != ? AND start_time < ? AND end_time > ?',
+        [jobCardId, id, window.fullEnd, window.fullStart]
+      );
+      if (selfOverlap.length > 0) {
+        throw productionError('Time overlap detected. Another time log for this Job Card already exists during the selected time period.');
+      }
+
+      if (effectiveWorkstation) {
+        const [[ws]] = await connection.query('SELECT IFNULL(capacity, 1) AS capacity, workstation_name FROM workstations WHERE id = ?', [effectiveWorkstation]);
+        const [busy] = await connection.query(
+          `SELECT jc.job_card_no FROM job_card_time_logs tl
+           JOIN job_cards jc ON tl.job_card_id = jc.id
+           WHERE tl.workstation_id = ? AND tl.id != ? AND tl.start_time < ? AND tl.end_time > ? AND jc.status != 'CANCELLED'`,
+          [effectiveWorkstation, id, window.fullEnd, window.fullStart]
+        );
+        if (ws && busy.length >= ws.capacity) {
+          throw productionError(`Workstation "${ws.workstation_name}" is already allocated to Job Card ${busy[0].job_card_no} in that time slot.`);
+        }
+      }
+
+      if (effectiveOperator) {
+        const [busyOperator] = await connection.query(
+          `SELECT jc.job_card_no FROM job_card_time_logs tl
+           JOIN job_cards jc ON tl.job_card_id = jc.id
+           WHERE tl.operator_id = ? AND tl.id != ? AND tl.start_time < ? AND tl.end_time > ? AND jc.status != 'CANCELLED'`,
+          [effectiveOperator, id, window.fullEnd, window.fullStart]
+        );
+        if (busyOperator.length > 0) {
+          throw productionError(`Operator is already busy on Job Card ${busyOperator[0].job_card_no} in that time slot.`);
+        }
+      }
+    }
+
+    const updates = [];
+    const params = [];
+
+    if (day !== undefined) { updates.push('day = ?'); params.push(day); }
+    if (logDate) { updates.push('log_date = ?'); params.push(logDate); }
+    if (operatorId) { updates.push('operator_id = ?'); params.push(operatorId); }
+    if (workstationId) { updates.push('workstation_id = ?'); params.push(workstationId); }
+    if (shift) { updates.push('shift = ?'); params.push(shift); }
+    if (window) {
+      updates.push('start_time = ?'); params.push(window.fullStart);
+      updates.push('end_time = ?'); params.push(window.fullEnd);
+    }
+    if (producedQty !== undefined) { updates.push('produced_qty = ?'); params.push(newQty); }
+
+    if (updates.length > 0) {
+      params.push(id);
+      await connection.execute(`UPDATE job_card_time_logs SET ${updates.join(', ')} WHERE id = ?`, params);
+    }
+
+    // Update total produced qty, workstation and operator in job card
+    await connection.execute(
+      `UPDATE job_cards jc
+       SET produced_qty = (SELECT COALESCE(SUM(produced_qty), 0) FROM job_card_time_logs WHERE job_card_id = ?),
            workstation_id = COALESCE(?, workstation_id),
            assigned_to = COALESCE(?, assigned_to)
        WHERE id = ?`,
-      [jobCardId, workstationId, operatorId, jobCardId]
+      [jobCardId, workstationId || null, operatorId || null, jobCardId]
     );
+
+    if (producedQty !== undefined && Math.abs(newQty - parseFloat(existing.produced_qty || 0)) > QTY_TOLERANCE) {
+      await logProductionEvent(connection, {
+        entityType: 'TIME_LOG', entityId: Number(id), action: 'QTY_EDIT',
+        oldValue: existing.produced_qty, newValue: newQty, reason: `Job card ${jobCardId}`, userId: data.userId || null
+      });
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
 };
 
@@ -1881,17 +2160,99 @@ const getQualityLogs = async (jobCardId) => {
   return rows;
 };
 
+// Statuses that only a QC approver may set. Production staff record an
+// inspection as PENDING; QC reviews it. The inspector is stored on the log.
+const REVIEWED_QUALITY_STATUSES = ['APPROVED', 'REJECTED', 'PROCESSING', 'PAID'];
+
+const num = (value) => {
+  const parsed = parseFloat(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+// accepted + rejected must account for everything inspected; scrap is the
+// part of the rejected quantity that cannot be reworked.
+// A PENDING inspection sent from production is only a request (accepted and
+// rejected still 0), so the balance is enforced once QC enters results or reviews it.
+const validateQualityQuantities = ({ inspected, accepted, rejected, scrap }, resultingStatus = 'PENDING') => {
+  if ([inspected, accepted, rejected, scrap].some(v => v < 0)) {
+    throw productionError('Quality quantities cannot be negative', 400);
+  }
+  const resultsEntered = (accepted + rejected) > 0 || REVIEWED_QUALITY_STATUSES.includes(resultingStatus);
+  if (resultsEntered && Math.abs((accepted + rejected) - inspected) > QTY_TOLERANCE) {
+    throw productionError(`Accepted (${accepted}) + Rejected (${rejected}) must equal Inspected (${inspected})`, 400);
+  }
+  if (scrap > rejected + QTY_TOLERANCE) {
+    throw productionError(`Scrap (${scrap}) cannot be more than Rejected (${rejected})`, 400);
+  }
+};
+
+// In-house inspections cannot cover more pieces than the operation produced.
+const assertInspectionWithinProduction = async (connection, jobCard, excludeLogId, newInspected) => {
+  if (isSubcontractJobCard(jobCard) || isShipmentOperation(jobCard.operation_name)) return;
+
+  const [[totals]] = await connection.query(
+    `SELECT
+       (SELECT COALESCE(SUM(produced_qty), 0) FROM job_card_time_logs WHERE job_card_id = ?) AS produced,
+       (SELECT COALESCE(SUM(inspected_qty), 0) FROM job_card_quality_logs WHERE job_card_id = ? AND id != ?) AS inspected`,
+    [jobCard.id, jobCard.id, excludeLogId || 0]
+  );
+  const produced = num(totals.produced);
+  const alreadyInspected = num(totals.inspected);
+  if (alreadyInspected + newInspected > produced + QTY_TOLERANCE) {
+    throw productionError(`Cannot inspect ${newInspected}: only ${Math.max(0, produced - alreadyInspected)} produced piece(s) remain uninspected on this operation.`);
+  }
+};
+
+const refreshJobCardQuality = async (connection, jobCardId) => {
+  await connection.execute(
+    `UPDATE job_cards jc
+     SET accepted_qty = COALESCE((SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
+         rejected_qty = COALESCE((SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
+         scrap_qty = COALESCE((SELECT SUM(scrap_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0)
+     WHERE id = ?`,
+    [jobCardId, jobCardId, jobCardId, jobCardId]
+  );
+  const [jcRow] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [jobCardId]);
+  if (jcRow.length > 0) {
+    await syncReworkQuantities(jcRow[0].work_order_id, connection);
+    await productionFlowService.syncReworkJobCard(connection, jobCardId);
+  }
+};
+
 const addQualityLog = async (data) => {
   const { jobCardId, day, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status, inwardItems, vendorInvoice, subTotal, gstAmount, grandTotal } = data;
+  const canApprove = Boolean(data.canApprove);
+  const userId = data.userId || null;
+
+  const inspected = num(inspectedQty);
+  const accepted = num(acceptedQty);
+  const rejected = num(rejectedQty);
+  const scrap = num(scrapQty);
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-     // 1. Get actual_start_date from job card
-    const [jobCard] = await connection.query('SELECT actual_start_date FROM job_cards WHERE id = ?', [jobCardId]);
-    if (jobCard.length === 0) throw new Error('Job Card not found');
+    const jobCard = await assertJobCardOpenForActivity(connection, jobCardId);
 
-    let jcActualStartDate = jobCard[0].actual_start_date;
+    // Only QC approvers can record an already-reviewed result
+    const requestedStatus = String(status || 'PENDING').trim().toUpperCase();
+    const isReviewedRequest = REVIEWED_QUALITY_STATUSES.includes(requestedStatus);
+    const finalStatus = isReviewedRequest && !canApprove ? 'PENDING' : (isReviewedRequest ? requestedStatus : 'PENDING');
+
+    validateQualityQuantities({ inspected, accepted, rejected, scrap }, finalStatus);
+    await assertInspectionWithinProduction(connection, jobCard, null, inspected);
+    if (isReviewedRequest && !canApprove) {
+      await logProductionEvent(connection, {
+        entityType: 'QUALITY_LOG', entityId: Number(jobCardId), action: 'APPROVAL_DENIED',
+        oldValue: requestedStatus, newValue: 'PENDING', reason: 'Recorded by a user without QC approval permission', userId
+      });
+    }
+    const reviewedNow = canApprove && (finalStatus === 'APPROVED' || finalStatus === 'REJECTED');
+
+     // 1. Get actual_start_date from job card
+    const [jobCardDates] = await connection.query('SELECT actual_start_date FROM job_cards WHERE id = ?', [jobCardId]);
+    let jcActualStartDate = jobCardDates[0].actual_start_date;
     if (jcActualStartDate instanceof Date) {
       jcActualStartDate = jcActualStartDate.toISOString().split('T')[0];
     }
@@ -1924,12 +2285,13 @@ const addQualityLog = async (data) => {
     const finalDay = (day !== undefined && day !== null && day !== '') ? day : calculatedDay;
 
     const [result] = await connection.execute(
-      `INSERT INTO job_card_quality_logs 
-       (job_card_id, day, check_date, shift, inspected_qty, accepted_qty, rejected_qty, scrap_qty, rejection_reason, notes, status, vendor_invoice, sub_total, gst_amount, grand_total)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO job_card_quality_logs
+       (job_card_id, day, check_date, shift, inspected_qty, accepted_qty, rejected_qty, scrap_qty, rejection_reason, notes, status, vendor_invoice, sub_total, gst_amount, grand_total, created_by, approved_by, approved_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${reviewedNow ? 'NOW()' : 'NULL'})`,
       [
-        jobCardId, finalDay, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason || null, notes || null, status || 'PENDING',
-        vendorInvoice || null, subTotal || 0, gstAmount || 0, grandTotal || 0
+        jobCardId, finalDay, checkDate, shift, inspected, accepted, rejected, scrap, rejectionReason || null, notes || null, finalStatus,
+        vendorInvoice || null, subTotal || 0, gstAmount || 0, grandTotal || 0,
+        userId, reviewedNow ? userId : null
       ]
     );
 
@@ -1939,7 +2301,7 @@ const addQualityLog = async (data) => {
     if (inwardItems && Array.isArray(inwardItems)) {
       for (const item of inwardItems) {
         await connection.execute(
-          `INSERT INTO job_card_inward_item_rates 
+          `INSERT INTO job_card_inward_item_rates
            (quality_log_id, item_code, release_qty, rate)
            VALUES (?, ?, ?, ?)`,
           [qualityLogId, item.item_code, item.release_qty, item.rate || 0]
@@ -1948,19 +2310,8 @@ const addQualityLog = async (data) => {
     }
 
     // Update accepted and rejected qty in job card if approved
-    if (status === 'APPROVED') {
-      await connection.execute(
-        `UPDATE job_cards jc 
-         SET accepted_qty = COALESCE((SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
-             rejected_qty = COALESCE((SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
-             scrap_qty = COALESCE((SELECT SUM(scrap_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0)
-         WHERE id = ?`,
-        [jobCardId, jobCardId, jobCardId, jobCardId]
-      );
-      const [jcRow] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [jobCardId]);
-      if (jcRow.length > 0) {
-        await syncReworkQuantities(jcRow[0].work_order_id, connection);
-      }
+    if (finalStatus === 'APPROVED') {
+      await refreshJobCardQuality(connection, jobCardId);
     }
 
     await connection.commit();
@@ -1975,17 +2326,38 @@ const addQualityLog = async (data) => {
 
 const updateQualityLog = async (id, data) => {
   const { day, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status } = data;
+  const canApprove = Boolean(data.canApprove);
+  const userId = data.userId || null;
 
-  // Get jobCardId from the log before updating if not provided
-  let { jobCardId } = data;
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    if (!jobCardId) {
-      const [log] = await connection.query('SELECT job_card_id FROM job_card_quality_logs WHERE id = ?', [id]);
-      if (log.length > 0) jobCardId = log[0].job_card_id;
+    const [logRows] = await connection.query('SELECT * FROM job_card_quality_logs WHERE id = ? FOR UPDATE', [id]);
+    if (logRows.length === 0) throw productionError('Quality log not found', 404);
+    const existing = logRows[0];
+    const jobCardId = existing.job_card_id;
+
+    const jobCard = await assertJobCardOpenForActivity(connection, jobCardId);
+
+    if (['PROCESSING', 'PAID'].includes(existing.status)) {
+      throw productionError(`This inspection is already ${existing.status} for payment and cannot be changed.`);
     }
+    if (existing.status !== 'PENDING' && !canApprove) {
+      throw productionError('Only a QC approver can change an inspection that has already been reviewed.', 403);
+    }
+
+    const requestedStatus = status ? String(status).trim().toUpperCase() : null;
+    if (requestedStatus && REVIEWED_QUALITY_STATUSES.includes(requestedStatus) && requestedStatus !== existing.status && !canApprove) {
+      throw productionError('Only a QC approver can approve or reject an inspection.', 403);
+    }
+
+    const inspected = inspectedQty !== undefined ? num(inspectedQty) : num(existing.inspected_qty);
+    const accepted = acceptedQty !== undefined ? num(acceptedQty) : num(existing.accepted_qty);
+    const rejected = rejectedQty !== undefined ? num(rejectedQty) : num(existing.rejected_qty);
+    const scrap = scrapQty !== undefined ? num(scrapQty) : num(existing.scrap_qty);
+    validateQualityQuantities({ inspected, accepted, rejected, scrap }, requestedStatus || existing.status);
+    await assertInspectionWithinProduction(connection, jobCard, id, inspected);
 
     const updates = [];
     const params = [];
@@ -1993,16 +2365,20 @@ const updateQualityLog = async (id, data) => {
     if (day !== undefined) { updates.push('day = ?'); params.push(day); }
     if (checkDate) { updates.push('check_date = ?'); params.push(checkDate); }
     if (shift) { updates.push('shift = ?'); params.push(shift); }
-    if (inspectedQty !== undefined) { updates.push('inspected_qty = ?'); params.push(inspectedQty); }
-    if (acceptedQty !== undefined) { updates.push('accepted_qty = ?'); params.push(acceptedQty); }
-    if (rejectedQty !== undefined) { updates.push('rejected_qty = ?'); params.push(rejectedQty); }
-    if (scrapQty !== undefined) { updates.push('scrap_qty = ?'); params.push(scrapQty); }
+    if (inspectedQty !== undefined) { updates.push('inspected_qty = ?'); params.push(inspected); }
+    if (acceptedQty !== undefined) { updates.push('accepted_qty = ?'); params.push(accepted); }
+    if (rejectedQty !== undefined) { updates.push('rejected_qty = ?'); params.push(rejected); }
+    if (scrapQty !== undefined) { updates.push('scrap_qty = ?'); params.push(scrap); }
     if (rejectionReason !== undefined) { updates.push('rejection_reason = ?'); params.push(rejectionReason); }
     if (notes !== undefined) { updates.push('notes = ?'); params.push(notes); }
-    if (status) {
-      const trimmedStatus = status.trim();
+    if (requestedStatus && requestedStatus !== existing.status) {
       updates.push('status = ?');
-      params.push(trimmedStatus);
+      params.push(requestedStatus);
+      if (canApprove && (requestedStatus === 'APPROVED' || requestedStatus === 'REJECTED')) {
+        updates.push('approved_by = ?');
+        params.push(userId);
+        updates.push('approved_at = NOW()');
+      }
     }
 
     if (updates.length > 0) {
@@ -2013,21 +2389,14 @@ const updateQualityLog = async (id, data) => {
       );
     }
 
-    // Update accepted and rejected qty in job card if approved
-    if (jobCardId) {
-      await connection.execute(
-        `UPDATE job_cards jc 
-         SET accepted_qty = COALESCE((SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
-             rejected_qty = COALESCE((SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
-             scrap_qty = COALESCE((SELECT SUM(scrap_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0)
-         WHERE id = ?`,
-        [jobCardId, jobCardId, jobCardId, jobCardId]
-      );
-      const [jcRow] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [jobCardId]);
-      if (jcRow.length > 0) {
-        await syncReworkQuantities(jcRow[0].work_order_id, connection);
-      }
+    if (requestedStatus && requestedStatus !== existing.status) {
+      await logProductionEvent(connection, {
+        entityType: 'QUALITY_LOG', entityId: Number(id), action: 'STATUS_CHANGE',
+        oldValue: existing.status, newValue: requestedStatus, reason: `Job card ${jobCardId}`, userId
+      });
     }
+
+    await refreshJobCardQuality(connection, jobCardId);
 
     await connection.commit();
   } catch (error) {
@@ -2137,6 +2506,32 @@ const updateJobCard = async (id, data) => {
     executionMode, vendorId, vendorRate, status, producedQty, acceptedQty, startDateTime, endDateTime
   } = data;
 
+  const [currentRows] = await pool.query(
+    `SELECT jc.status, jc.work_order_id, jc.execution_mode, COALESCE(jc.produced_qty, 0) AS produced_qty, wo.status AS wo_status, wo.wo_number
+     FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE jc.id = ?`,
+    [id]
+  );
+  if (currentRows.length === 0) throw productionError('Job Card not found', 404);
+  const currentJc = currentRows[0];
+
+  if (JOB_CARD_CLOSED.includes(currentJc.status)) {
+    throw productionError(`Job Card is ${currentJc.status} and can no longer be edited`);
+  }
+  if (WORK_ORDER_BLOCKED_FOR_ACTIVITY.includes(currentJc.wo_status)) {
+    throw productionError(`Work Order ${currentJc.wo_number} is ${currentJc.wo_status}; its job cards cannot be edited`);
+  }
+  // Completion, cancellation and quantities are controlled by the progress, quality and
+  // work-order flows (which enforce QC and sequencing); this form only edits planning data.
+  const finalJcStatus = status || currentJc.status;
+  if (finalJcStatus !== currentJc.status && JOB_CARD_CLOSED.includes(finalJcStatus)) {
+    throw productionError(`Use the production flow to ${finalJcStatus === 'COMPLETED' ? 'complete' : 'cancel'} a Job Card; it cannot be set from the edit form`);
+  }
+  if (workOrderId && Number(workOrderId) !== Number(currentJc.work_order_id)) {
+    throw productionError('A Job Card cannot be moved to a different Work Order', 400);
+  }
+  if (plannedQty !== undefined && parseFloat(plannedQty) + QTY_TOLERANCE < parseFloat(currentJc.produced_qty)) {
+    throw productionError(`Planned quantity cannot be lower than the quantity already produced (${currentJc.produced_qty})`, 400);
+  }
 
   // Check overlap first
   const conflictMessage = await checkOverlap(id, workstationId, assignedTo, startDateTime, endDateTime, executionMode);
@@ -2241,13 +2636,13 @@ const updateJobCard = async (id, data) => {
 
   await pool.execute(
     `UPDATE job_cards 
-     SET work_order_id = ?, operation_id = ?, workstation_id = ?, assigned_to = ?, planned_qty = ?, remarks = ?,
-         execution_mode = ?, vendor_id = ?, vendor_rate = ?, status = ?, produced_qty = ?, accepted_qty = ?, 
+     SET operation_id = ?, workstation_id = ?, assigned_to = ?, planned_qty = ?, remarks = ?,
+         execution_mode = ?, vendor_id = ?, vendor_rate = ?, status = ?,
          start_time = ?, end_time = ?
      WHERE id = ?`,
     [
-      workOrderId, operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks,
-      executionMode || 'In-house', vendorId || null, vendorRate || 0, status || 'PENDING', producedQty || 0, acceptedQty || 0,
+      operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks,
+      executionMode || currentJc.execution_mode || 'In-house', vendorId || null, vendorRate || 0, finalJcStatus,
       startDateTime ? startDateTime.replace('T', ' ') : null,
       endDateTime ? endDateTime.replace('T', ' ') : null,
       id
@@ -2255,35 +2650,54 @@ const updateJobCard = async (id, data) => {
   );
 };
 
-const deleteJobCard = async (id) => {
+// A job card that has produced, been inspected, dispatched or been outsourced is
+// history. It can be cancelled (via its work order) but never erased.
+const describeJobCardHistory = async (connection, jobCardId) => {
+  const [[row]] = await connection.query(
+    `SELECT
+       (SELECT COUNT(*) FROM job_card_time_logs WHERE job_card_id = ?) AS time_logs,
+       (SELECT COUNT(*) FROM job_card_quality_logs WHERE job_card_id = ?) AS quality_logs,
+       (SELECT COUNT(*) FROM job_card_downtime_logs WHERE job_card_id = ?) AS downtime_logs,
+       (SELECT COUNT(*) FROM shipment_orders WHERE job_card_id = ?) AS shipments,
+       (SELECT COUNT(*) FROM outward_challans WHERE job_card_id = ?) AS challans`,
+    [jobCardId, jobCardId, jobCardId, jobCardId, jobCardId]
+  );
+  return Object.entries(row)
+    .filter(([, count]) => Number(count) > 0)
+    .map(([name, count]) => `${count} ${name.replace(/_/g, ' ')}`);
+};
+
+const deleteJobCard = async (id, userId = null) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
+    const [jcRow] = await connection.query(
+      'SELECT job_card_no, operation_name, status, COALESCE(produced_qty, 0) AS produced_qty FROM job_cards WHERE id = ? FOR UPDATE',
+      [id]
+    );
+    if (jcRow.length === 0) throw productionError('Job Card not found', 404);
+    const jc = jcRow[0];
+
     // Block deleting shipment operation
-    const [jcRow] = await connection.query('SELECT operation_name FROM job_cards WHERE id = ?', [id]);
-    if (jcRow.length > 0) {
-      const opName = String(jcRow[0].operation_name || '').toLowerCase();
-      if (opName === 'shipment' || opName === 'dispatch') {
-        throw new Error('Cannot delete Shipment (Dispatch) operation: it is a required sequence.');
-      }
+    if (isShipmentOperation(jc.operation_name)) {
+      throw productionError('Cannot delete Shipment (Dispatch) operation: it is a required sequence.');
     }
 
-    // Dissociate payments first to avoid FK constraint fails
-    await connection.execute(`
-      UPDATE payments p
-      JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
-      SET p.job_card_quality_log_id = NULL
-      WHERE ql.job_card_id = ?
-    `, [id]);
+    if (!['DRAFT', 'PENDING', 'READY', 'CANCELLED'].includes(jc.status) || parseFloat(jc.produced_qty) > 0) {
+      throw productionError(`Job Card ${jc.job_card_no} is ${jc.status} with recorded production and cannot be deleted. Cancel its Work Order instead.`);
+    }
+    const history = await describeJobCardHistory(connection, id);
+    if (history.length > 0) {
+      throw productionError(`Job Card ${jc.job_card_no} cannot be deleted: it has ${history.join(', ')}.`);
+    }
 
-    // Delete associated logs first
-    await connection.execute('DELETE FROM job_card_time_logs WHERE job_card_id = ?', [id]);
-    await connection.execute('DELETE FROM job_card_quality_logs WHERE job_card_id = ?', [id]);
-    await connection.execute('DELETE FROM job_card_downtime_logs WHERE job_card_id = ?', [id]);
-
-    // Delete the job card
     await connection.execute('DELETE FROM job_cards WHERE id = ?', [id]);
+
+    await logProductionEvent(connection, {
+      entityType: 'JOB_CARD', entityId: Number(id), action: 'DELETE',
+      oldValue: `${jc.job_card_no} ${jc.operation_name || ''} (${jc.status})`, userId
+    });
 
     await connection.commit();
   } catch (error) {
@@ -2294,32 +2708,34 @@ const deleteJobCard = async (id) => {
   }
 };
 
-const deleteAllJobCards = async () => {
+// Clean-slate reset only: refused as soon as any job card has been worked on.
+const deleteAllJobCards = async (userId = null) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    // 1. Dissociate payments linked to job card quality logs to prevent foreign key constraint issues
-    await connection.execute(`
-      UPDATE payments p
-      JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
-      SET p.job_card_quality_log_id = NULL
-    `);
+    const [[started]] = await connection.query(
+      `SELECT COUNT(*) AS cnt FROM job_cards jc
+       WHERE jc.status IN ('IN_PROGRESS', 'COMPLETED', 'PAUSED', 'ON_HOLD') OR COALESCE(jc.produced_qty, 0) > 0
+          OR EXISTS (SELECT 1 FROM job_card_time_logs tl WHERE tl.job_card_id = jc.id)
+          OR EXISTS (SELECT 1 FROM job_card_quality_logs ql WHERE ql.job_card_id = jc.id)`
+    );
+    if (Number(started.cnt) > 0) {
+      throw productionError(`Cannot delete all Job Cards: ${started.cnt} job card(s) already have production or quality history. Cancel individual work orders instead.`);
+    }
 
-    // 2. Delete logs
-    await connection.execute('DELETE FROM job_card_time_logs');
-    await connection.execute('DELETE FROM job_card_quality_logs');
-    await connection.execute('DELETE FROM job_card_downtime_logs');
-
-    // 3. Clear outward challans job_card_id if table exists
+    // Clear outward challans job_card_id if table exists
     try {
       await connection.execute('UPDATE outward_challans SET job_card_id = NULL WHERE job_card_id IS NOT NULL');
     } catch (err) {
       // ignore if column or table not present
     }
 
-    // 4. Delete all job cards
     const [result] = await connection.execute('DELETE FROM job_cards');
+
+    await logProductionEvent(connection, {
+      entityType: 'JOB_CARD', action: 'DELETE_ALL', newValue: `${result.affectedRows} job cards`, userId
+    });
 
     await connection.commit();
     return { success: true, deletedCount: result.affectedRows };
@@ -2331,46 +2747,113 @@ const deleteAllJobCards = async () => {
   }
 };
 
-const deleteTimeLog = async (logId) => {
-  const [log] = await pool.query('SELECT job_card_id FROM job_card_time_logs WHERE id = ?', [logId]);
+const deleteTimeLog = async (logId, userId = null) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  await pool.execute('DELETE FROM job_card_time_logs WHERE id = ?', [logId]);
-
-  if (log.length > 0) {
+    const [log] = await connection.query('SELECT job_card_id, produced_qty FROM job_card_time_logs WHERE id = ? FOR UPDATE', [logId]);
+    if (log.length === 0) throw productionError('Time log not found', 404);
     const jobCardId = log[0].job_card_id;
-    await pool.execute(
-      `UPDATE job_cards jc 
+
+    await assertJobCardOpenForActivity(connection, jobCardId);
+
+    // Removing output must not leave inspected quantity higher than what is now produced
+    const [[remaining]] = await connection.query(
+      `SELECT
+         (SELECT COALESCE(SUM(produced_qty), 0) FROM job_card_time_logs WHERE job_card_id = ? AND id != ?) AS produced,
+         (SELECT COALESCE(SUM(inspected_qty), 0) FROM job_card_quality_logs WHERE job_card_id = ?) AS inspected`,
+      [jobCardId, logId, jobCardId]
+    );
+    if (parseFloat(remaining.inspected) > parseFloat(remaining.produced) + QTY_TOLERANCE) {
+      throw productionError('This production entry is already covered by quality inspections. Remove or correct the inspection first.');
+    }
+
+    await connection.execute('DELETE FROM job_card_time_logs WHERE id = ?', [logId]);
+    await connection.execute(
+      `UPDATE job_cards jc
        SET produced_qty = COALESCE((SELECT SUM(produced_qty) FROM job_card_time_logs WHERE job_card_id = ?), 0)
        WHERE id = ?`,
       [jobCardId, jobCardId]
     );
+
+    await logProductionEvent(connection, {
+      entityType: 'TIME_LOG', entityId: Number(logId), action: 'DELETE',
+      oldValue: `produced ${log[0].produced_qty}`, reason: `Job card ${jobCardId}`, userId
+    });
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
 };
 
-const deleteQualityLog = async (logId) => {
-  const [log] = await pool.query('SELECT job_card_id FROM job_card_quality_logs WHERE id = ?', [logId]);
+const deleteQualityLog = async (logId, { userId = null, canApprove = false } = {}) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  await pool.execute('DELETE FROM job_card_quality_logs WHERE id = ?', [logId]);
+    const [logRows] = await connection.query('SELECT * FROM job_card_quality_logs WHERE id = ? FOR UPDATE', [logId]);
+    if (logRows.length === 0) throw productionError('Quality log not found', 404);
+    const log = logRows[0];
+    const jobCardId = log.job_card_id;
 
-  if (log.length > 0) {
-    const jobCardId = log[0].job_card_id;
-    await pool.execute(
-      `UPDATE job_cards jc 
-       SET accepted_qty = COALESCE((SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
-           rejected_qty = COALESCE((SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
-           scrap_qty = COALESCE((SELECT SUM(scrap_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0)
-       WHERE id = ?`,
-      [jobCardId, jobCardId, jobCardId, jobCardId]
-    );
-    const [jcRow] = await pool.query('SELECT work_order_id FROM job_cards WHERE id = ?', [jobCardId]);
-    if (jcRow.length > 0) {
-      await syncReworkQuantities(jcRow[0].work_order_id, pool);
+    await assertJobCardOpenForActivity(connection, jobCardId);
+
+    if (['PROCESSING', 'PAID'].includes(log.status)) {
+      throw productionError(`This inspection is ${log.status} for vendor payment and cannot be deleted.`);
     }
+    const [[linkedPayments]] = await connection.query(
+      'SELECT COUNT(*) AS cnt FROM payments WHERE job_card_quality_log_id = ?',
+      [logId]
+    );
+    if (Number(linkedPayments.cnt) > 0) {
+      throw productionError('This inspection is linked to a payment and cannot be deleted.');
+    }
+    if (log.status !== 'PENDING' && !canApprove) {
+      throw productionError('Only a QC approver can delete an inspection that has already been reviewed.', 403);
+    }
+
+    await connection.execute('DELETE FROM job_card_quality_logs WHERE id = ?', [logId]);
+    await refreshJobCardQuality(connection, jobCardId);
+
+    await logProductionEvent(connection, {
+      entityType: 'QUALITY_LOG', entityId: Number(logId), action: 'DELETE',
+      oldValue: { status: log.status, inspected: log.inspected_qty, accepted: log.accepted_qty, rejected: log.rejected_qty },
+      reason: `Job card ${jobCardId}`, userId
+    });
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
 };
 
-const deleteDowntimeLog = async (logId) => {
-  await pool.execute('DELETE FROM job_card_downtime_logs WHERE id = ?', [logId]);
+const deleteDowntimeLog = async (logId, userId = null) => {
+  const [log] = await pool.query('SELECT job_card_id FROM job_card_downtime_logs WHERE id = ?', [logId]);
+  if (log.length === 0) throw productionError('Downtime log not found', 404);
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await assertJobCardOpenForActivity(connection, log[0].job_card_id);
+    await connection.execute('DELETE FROM job_card_downtime_logs WHERE id = ?', [logId]);
+    await logProductionEvent(connection, {
+      entityType: 'DOWNTIME_LOG', entityId: Number(logId), action: 'DELETE', reason: `Job card ${log[0].job_card_id}`, userId
+    });
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const getWorkOrderLogs = async (workOrderId) => {
@@ -2719,6 +3202,7 @@ module.exports = {
   downloadJobCardQcPdf,
   getJobCardDetailAnalysis,
   getActiveAllocations,
+  getQuantityAvailability: async (id) => { const c = await pool.getConnection(); try { return await productionFlowService.getOperationAvailability(c, id); } finally { c.release(); } },
   syncUnaccountedDowntime,
   syncReworkQuantities
 };

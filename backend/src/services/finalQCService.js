@@ -15,10 +15,48 @@ const getOrdersForFinalQC = async () => {
     LEFT JOIN companies c ON c.id = so.company_id
     LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
     LEFT JOIN shipment_orders s ON s.sales_order_id = so.id
-    WHERE so.status IN ('PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'READY_FOR_SHIPMENT')
+    WHERE so.status IN ('PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_REJECTED', 'READY_FOR_SHIPMENT')
     ORDER BY so.created_at DESC
   `);
   return rows;
+};
+
+// A failed Final QC sends the failed quantity back to the shop floor instead of dead-ending.
+// The rework card sits at the shipment step so the work order cannot complete until it is done.
+const reopenForFinalQcFailure = async (connection, salesOrderId, failedQty, workOrderId, userId) => {
+  const { nextDocumentNumber } = require('../utils/documentNumber');
+  const { logProductionEvent } = require('./productionAuditService');
+
+  const [candidates] = await connection.query(
+    `SELECT wo.id, wo.wo_number FROM work_orders wo
+     LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     WHERE COALESCE(soi.sales_order_id, wo.sales_order_id) = ?
+       AND wo.parent_wo_id IS NULL AND wo.source_type IN ('FG', 'PART') AND wo.status != 'CANCELLED'`,
+    [salesOrderId]
+  );
+  const target = workOrderId ? candidates.find(c => Number(c.id) === Number(workOrderId)) : (candidates.length === 1 ? candidates[0] : null);
+  if (!target) {
+    return { created: false, reason: candidates.length > 1 ? 'Several work orders on this order; pass workOrderId to choose which one to rework' : 'No work order found to rework' };
+  }
+
+  const [[last]] = await connection.query(
+    "SELECT sequence_no, workstation_id, operation_id FROM job_cards WHERE work_order_id = ? AND status != 'CANCELLED' ORDER BY sequence_no DESC, id DESC LIMIT 1",
+    [target.id]
+  );
+  const jobCardNo = await nextDocumentNumber(connection, 'JOB_CARD');
+  const [jc] = await connection.execute(
+    `INSERT INTO job_cards (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, operation_name,
+                            execution_type, execution_mode, sequence_no, is_rework, remarks)
+     VALUES (?, ?, ?, ?, ?, 'PENDING', 'Rework: Final QC failure', 'In-House', 'In-house', ?, 1, ?)`,
+    [jobCardNo, target.id, last?.operation_id || null, last?.workstation_id || null, failedQty, last?.sequence_no || 1,
+     `Final QC failed ${failedQty} pc(s) on sales order ${salesOrderId}`]
+  );
+  await connection.execute("UPDATE work_orders SET status = 'IN_PROGRESS' WHERE id = ? AND status = 'COMPLETED'", [target.id]);
+  await logProductionEvent(connection, {
+    entityType: 'WORK_ORDER', entityId: target.id, action: 'REOPENED_FINAL_QC',
+    newValue: `rework ${jobCardNo} for ${failedQty} pc(s)`, userId
+  });
+  return { created: true, workOrderId: target.id, woNumber: target.wo_number, jobCardId: jc.insertId, jobCardNo };
 };
 
 const completeFinalQC = async (salesOrderId, inspectionData, userId = null) => {
@@ -57,6 +95,12 @@ const completeFinalQC = async (salesOrderId, inspectionData, userId = null) => {
       'UPDATE sales_orders SET status = ?, current_department = ?, updated_at = NOW() WHERE id = ?',
       [soStatus, result === 'PASSED' ? 'SHIPMENT' : 'QUALITY', salesOrderId]
     );
+
+    // 3b. If FAILED, reopen production: the failed pieces go back as a rework job card
+    let reopened = null;
+    if (result !== 'PASSED' && failed > 0) {
+      reopened = await reopenForFinalQcFailure(connection, salesOrderId, failed, inspectionData.workOrderId, userId);
+    }
 
     // 4. If PASSED, auto-create a Shipment Order unless one already exists
     //    (job-card dispatch may have created per-item shipments)
@@ -161,7 +205,7 @@ const completeFinalQC = async (salesOrderId, inspectionData, userId = null) => {
     }
 
     await connection.commit();
-    return { success: true, status: soStatus };
+    return { success: true, status: soStatus, reopened };
   } catch (error) {
     await connection.rollback();
     throw error;

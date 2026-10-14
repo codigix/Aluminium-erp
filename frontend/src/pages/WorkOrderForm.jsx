@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Card, FormControl, SearchableSelect, Tabs, Button } from '../components/ui.jsx';
 import { successToast, errorToast } from '../utils/toast.js';
+import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -213,7 +214,8 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
             ...item,
             item_code: balance?.item_code || item.item_code, // Update with actual item code if found
             total_stock: stock.toFixed(3),
-            issued_qty: stock.toFixed(3),
+            // Rows from a saved work order carry the real issued quantity; only a BOM preview falls back to stock
+            issued_qty: item.on_floor_qty !== undefined ? item.issued_qty : stock.toFixed(3),
             remaining_qty: (stock - consumed).toFixed(3)
           };
         });
@@ -435,6 +437,71 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
     newInventory[index].remaining_qty = isWeightBased(newInventory[index].uom) ? remaining.toFixed(3) : remaining.toFixed(0);
     
     setInventory(newInventory);
+  };
+
+  // Asks for a quantity (and optionally what kind of return), returns null if cancelled
+  const askMaterialQty = async ({ title, max, unit, withReturnType = false, hint }) => {
+    const { value } = await Swal.fire({
+      title,
+      html: `<div style="text-align:left;font-size:13px;color:#475569">${hint || ''}<div style="margin:8px 0 4px">Quantity (max ${max} ${unit || ''})</div>
+        <input id="mat-qty" type="number" min="0" step="any" class="swal2-input" style="margin:0;width:100%" value="${max > 0 ? max : ''}">
+        ${withReturnType ? `<div style="margin:10px 0 4px">What is it?</div>
+        <select id="mat-type" class="swal2-select" style="margin:0;width:100%"><option value="RETURN">Unused material — back to stock</option><option value="OFFCUT">Offcut / remnant — back to stock</option><option value="SCRAP">Scrap — written off</option></select>` : ''}</div>`,
+      showCancelButton: true, confirmButtonColor: '#4f46e5',
+      preConfirm: () => {
+        const qty = parseFloat(document.getElementById('mat-qty').value);
+        if (!(qty > 0)) { Swal.showValidationMessage('Enter a quantity above zero'); return false; }
+        if (qty > max + 0.0005) { Swal.showValidationMessage(`The most you can enter is ${max}`); return false; }
+        return { qty, type: withReturnType ? document.getElementById('mat-type').value : undefined };
+      }
+    });
+    return value || null;
+  };
+
+  const materialCall = async (path, body, okMessage) => {
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body)
+    });
+    if (response.ok) {
+      successToast(okMessage);
+      fetchMaterialRequirements(workOrderId);
+      return;
+    }
+    const err = await response.json().catch(() => ({}));
+    await Swal.fire({ icon: 'warning', title: "That can't be done yet", text: err.error || err.message || 'The action was refused', confirmButtonColor: '#4f46e5' });
+  };
+
+  const issueToWorkOrder = async (inv) => {
+    const toIssue = Math.max(0, parseFloat(inv.required_qty || 0) - parseFloat(inv.issued_qty || 0));
+    const picked = await askMaterialQty({
+      title: `Issue ${inv.material_name}`, max: Math.max(toIssue, parseFloat(inv.required_qty || 0)), unit: inv.uom,
+      hint: 'Stores must have released this material on the production plan first. Issuing hands it to this work order.'
+    });
+    if (!picked) return;
+    await materialCall('/material-issues', {
+      workOrderId,
+      remarks: `Material issue for ${formData.woNumber || 'work order'}`,
+      items: [{ materialName: inv.material_name, materialType: inv.material_type, itemCode: inv.item_code, quantity: picked.qty, uom: inv.uom }]
+    }, 'Material issued to this work order');
+  };
+
+  const recordUse = async (inv) => {
+    const onFloor = parseFloat(inv.on_floor_qty || 0);
+    const picked = await askMaterialQty({ title: `Record use of ${inv.material_name}`, max: onFloor, unit: inv.uom, hint: 'Enter what has actually been used up. Only material already issued to this work order can be used.' });
+    if (!picked) return;
+    await materialCall(`/work-orders/${workOrderId}/material-consumption`, [{
+      item_code: inv.item_code, material_name: inv.material_name, material_type: inv.material_type, quantity: picked.qty, uom: inv.uom
+    }], 'Usage recorded');
+  };
+
+  const returnUnused = async (inv) => {
+    const onFloor = parseFloat(inv.on_floor_qty || 0);
+    const picked = await askMaterialQty({ title: `Return ${inv.material_name}`, max: onFloor, unit: inv.uom, withReturnType: true, hint: 'Unused material and offcuts go back into stock. Scrap is written off.' });
+    if (!picked) return;
+    await materialCall(`/work-orders/${workOrderId}/material-return`, [{
+      item_code: inv.item_code, material_name: inv.material_name, material_type: inv.material_type, quantity: picked.qty, uom: inv.uom, returnType: picked.type
+    }], picked.type === 'SCRAP' ? 'Scrap recorded' : 'Material returned to stock');
   };
 
   const commitConsumption = async () => {
@@ -810,7 +877,7 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                       </div>
                       <h2 className="text-sm  text-slate-800  ">04 Required Inventory</h2>
                     </div>
-                    {inventory.length > 0 && (
+                    {inventory.length > 0 && !workOrderId && (
                       <button 
                         onClick={commitConsumption}
                         disabled={consumptionLoading}
@@ -826,7 +893,57 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                     )}
                   </div>
 
-                  {inventory.length > 0 ? (
+                  {inventory.length > 0 && workOrderId ? (
+                    <>
+                      <div className="mb-2 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-2">
+                        Material flow: <b>Stores release</b> it on the plan, then <b>Issue</b> it to this work order, <b>Record use</b> as it is consumed, and <b>Return</b> any unused material, offcut or scrap.
+                      </div>
+                      <Card className="border-slate-200/60 overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-50 border-b border-slate-200">
+                              <tr>
+                                <th className="p-3 text-slate-400">Material</th>
+                                <th className="p-3 text-slate-400 text-right">Required</th>
+                                <th className="p-3 text-slate-400 text-right">Issued</th>
+                                <th className="p-3 text-slate-400 text-right">Used</th>
+                                <th className="p-3 text-slate-400 text-right">Returned</th>
+                                <th className="p-3 text-slate-400 text-right">On the floor</th>
+                                <th className="p-3 text-slate-400 text-right">In stock</th>
+                                <th className="p-3 text-slate-400 text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {inventory.map((inv, i) => {
+                                const fmt = (v) => (isWeightBased(inv.uom) ? parseFloat(v || 0).toFixed(3) : parseFloat(v || 0).toFixed(0));
+                                const onFloor = parseFloat(inv.on_floor_qty || 0);
+                                const stillToIssue = parseFloat(inv.required_qty || 0) - parseFloat(inv.issued_qty || 0);
+                                const locked = ['COMPLETED', 'CANCELLED'].includes(formData.status);
+                                return (
+                                  <tr key={i} className="hover:bg-slate-50/50">
+                                    <td className="p-3"><div className="text-slate-700">{inv.material_name}</div><div className="text-[10px] text-slate-400">{inv.item_code}</div></td>
+                                    <td className="p-3 text-right whitespace-nowrap">{fmt(inv.required_qty)} <span className="text-slate-400">{inv.uom}</span></td>
+                                    <td className="p-3 text-right whitespace-nowrap">{fmt(inv.issued_qty)}{stillToIssue > 0.0005 && <div className="text-[10px] text-amber-600">{fmt(stillToIssue)} still to issue</div>}</td>
+                                    <td className="p-3 text-right">{fmt(inv.consumed_qty)}</td>
+                                    <td className="p-3 text-right">{fmt(inv.returned_qty)}</td>
+                                    <td className={`p-3 text-right ${onFloor > 0.0005 ? 'text-indigo-700' : 'text-slate-500'}`}>{fmt(inv.on_floor_qty)}</td>
+                                    <td className="p-3 text-right text-slate-500">{fmt(inv.total_stock)}</td>
+                                    <td className="p-3">
+                                      <div className="flex justify-end gap-1">
+                                        <button disabled={locked} onClick={() => issueToWorkOrder(inv)} className="px-2 py-1 text-[11px] bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-40">Issue</button>
+                                        <button disabled={locked || onFloor <= 0.0005} onClick={() => recordUse(inv)} className="px-2 py-1 text-[11px] border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40" title={onFloor <= 0.0005 ? 'Nothing issued and unused' : 'Record what was used'}>Record use</button>
+                                        <button disabled={onFloor <= 0.0005} onClick={() => returnUnused(inv)} className="px-2 py-1 text-[11px] border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40" title={onFloor <= 0.0005 ? 'Nothing to return' : 'Return unused, offcut or scrap'}>Return</button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </Card>
+                    </>
+                  ) : inventory.length > 0 ? (
                     <Card className="border-slate-200/60 overflow-hidden shadow-sm">
                       <table className="w-full text-left text-xs">
                         <thead className="bg-slate-50 border-b border-slate-200">
@@ -929,7 +1046,23 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                       </div>
                       <h2 className="text-sm  text-slate-800  ">05 Daily Production History</h2>
                     </div>
-                    <button className="p-2 bg-indigo-600 text-white text-xs   rounded  hover:bg-indigo-700 transition-colors  ">
+                    <button
+                      type="button"
+                      disabled={consolidatedReport.length === 0}
+                      title={consolidatedReport.length === 0 ? 'Nothing to export yet' : 'Download this table as a CSV file'}
+                      onClick={() => {
+                        const cell = (v) => { const t = String(v ?? ''); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+                        const header = ['Date', 'Shift', 'Operators', 'Minutes', 'Produced', 'Accepted', 'Rejected', 'Scrap', 'Downtime (min)'];
+                        const lines = consolidatedReport.map(r => [r.date, r.shift, Array.from(r.operators).join('; '), r.mins, r.produced.toFixed(3), r.accepted.toFixed(3), r.rejected.toFixed(3), r.scrap.toFixed(3), r.downtime || 0]);
+                        const csv = [header, ...lines].map(row => row.map(cell).join(',')).join('\n');
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+                        link.download = `${formData.woNumber || 'work-order'}-daily-production.csv`;
+                        link.click();
+                        URL.revokeObjectURL(link.href);
+                      }}
+                      className="p-2 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
                       Export CSV
                     </button>
                   </div>
@@ -989,22 +1122,6 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
 
           {/* Right Sidebar */}
           <div className="w-80 space-y-4 sticky top-0">
-            {/* Efficiency Projection */}
-            <Card className="border-slate-200/60  overflow-hidden relative">
-              <div className="absolute -top-12 -right-12  bg-emerald-50 rounded " />
-              <div className="relative">
-                <div className="flex items-center gap-2  mb-4">
-                  <BarChart3 className="w-4 h-4 text-emerald-500" />
-                  <span className="text-xs  text-slate-400  ">Efficiency Projection</span>
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-xl  text-slate-900">0%</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                  Predicted production efficiency based on workstation load.
-                </p>
-              </div>
-            </Card>
 
             {/* Execution Pulse */}
             <div className="bg-slate-900 rounded  p-2 shadow-xl relative overflow-hidden group">

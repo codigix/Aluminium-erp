@@ -1957,8 +1957,100 @@ const ensureWorkOrderTables = async () => {
     if (!existingJcCols.has('transferred_qty')) await connection.query('ALTER TABLE job_cards ADD COLUMN transferred_qty DECIMAL(12, 3) DEFAULT 0 AFTER accepted_qty');
     if (!existingJcCols.has('actual_start_date')) await connection.query('ALTER TABLE job_cards ADD COLUMN actual_start_date DATE NULL AFTER rejected_qty');
 
-    // Update status enum if necessary
-    await connection.query("ALTER TABLE job_cards MODIFY COLUMN status ENUM('DRAFT', 'PENDING', 'READY', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'DRAFT'");
+    // Update status enum if necessary (ON_HOLD = pre-empted by a higher-priority job, CANCELLED = WO cancelled)
+    await connection.query("ALTER TABLE job_cards MODIFY COLUMN status ENUM('DRAFT', 'PENDING', 'READY', 'IN_PROGRESS', 'COMPLETED', 'PAUSED', 'ON_HOLD', 'CANCELLED') DEFAULT 'DRAFT'");
+
+    // Pre-emption bookkeeping: who put a job on hold, why, and what state to restore
+    try {
+      const [holdCols] = await connection.query('SHOW COLUMNS FROM job_cards');
+      const existingHold = new Set(holdCols.map(c => c.Field));
+      if (!existingHold.has('held_by_job_card_id')) await connection.query('ALTER TABLE job_cards ADD COLUMN held_by_job_card_id INT NULL');
+      if (!existingHold.has('held_at')) await connection.query('ALTER TABLE job_cards ADD COLUMN held_at DATETIME NULL');
+      if (!existingHold.has('hold_reason')) await connection.query('ALTER TABLE job_cards ADD COLUMN hold_reason VARCHAR(500) NULL');
+      if (!existingHold.has('status_before_hold')) await connection.query('ALTER TABLE job_cards ADD COLUMN status_before_hold VARCHAR(20) NULL');
+    } catch (holdErr) {
+      console.error('Error adding job card hold columns:', holdErr.message);
+    }
+
+    // Dependency graph between work orders (component -> assembly) and rework job cards
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS work_order_dependencies (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          predecessor_wo_id INT NOT NULL,
+          successor_wo_id INT NOT NULL,
+          qty_per_unit DECIMAL(12, 4) NOT NULL DEFAULT 1,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_wo_dependency (predecessor_wo_id, successor_wo_id),
+          FOREIGN KEY (predecessor_wo_id) REFERENCES work_orders(id) ON DELETE CASCADE,
+          FOREIGN KEY (successor_wo_id) REFERENCES work_orders(id) ON DELETE CASCADE
+        )
+      `);
+      const [flowCols] = await connection.query('SHOW COLUMNS FROM job_cards');
+      const existingFlow = new Set(flowCols.map(c => c.Field));
+      if (!existingFlow.has('is_rework')) await connection.query('ALTER TABLE job_cards ADD COLUMN is_rework TINYINT(1) NOT NULL DEFAULT 0');
+      if (!existingFlow.has('rework_of_job_card_id')) await connection.query('ALTER TABLE job_cards ADD COLUMN rework_of_job_card_id INT NULL');
+      await require('../services/productionFlowService').syncDependencies(connection);
+    } catch (flowErr) {
+      console.error('Error setting up work order dependencies / rework columns:', flowErr.message);
+    }
+
+    // Single material path: stock leaves the store at MR release; issues allocate it to a WO,
+    // consumption records usage, returns put unused / offcut material back
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS work_order_material_returns (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          work_order_id INT NOT NULL,
+          item_code VARCHAR(100),
+          material_name VARCHAR(255),
+          material_type VARCHAR(100),
+          quantity DECIMAL(12, 3) NOT NULL,
+          uom VARCHAR(20),
+          return_type ENUM('RETURN', 'OFFCUT', 'SCRAP') NOT NULL DEFAULT 'RETURN',
+          warehouse VARCHAR(100),
+          remarks TEXT,
+          returned_by INT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE
+        )
+      `);
+      const [miCols] = await connection.query('SHOW COLUMNS FROM material_issues');
+      if (!miCols.some(c => c.Field === 'stock_source')) {
+        // DIRECT = this issue posted the stock OUT itself; MR_RELEASE = stock already left at MR release
+        await connection.query("ALTER TABLE material_issues ADD COLUMN stock_source VARCHAR(20) NOT NULL DEFAULT 'DIRECT'");
+      }
+    } catch (matErr) {
+      console.error('Error setting up material return / issue source columns:', matErr.message);
+    }
+
+    // Accountability columns on quality logs: who recorded, who approved, and when
+    try {
+      const [qlCols] = await connection.query('SHOW COLUMNS FROM job_card_quality_logs');
+      const existingQlCols = new Set(qlCols.map(c => c.Field));
+      if (!existingQlCols.has('created_by')) await connection.query('ALTER TABLE job_card_quality_logs ADD COLUMN created_by INT NULL');
+      if (!existingQlCols.has('approved_by')) await connection.query('ALTER TABLE job_card_quality_logs ADD COLUMN approved_by INT NULL');
+      if (!existingQlCols.has('approved_at')) await connection.query('ALTER TABLE job_card_quality_logs ADD COLUMN approved_at DATETIME NULL');
+    } catch (qlErr) {
+      console.error('Error adding quality log accountability columns:', qlErr.message);
+    }
+
+    // Append-only trail for production state changes, approvals and deletions
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS production_audit_log (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id INT NULL,
+        action VARCHAR(50) NOT NULL,
+        old_value TEXT NULL,
+        new_value TEXT NULL,
+        reason VARCHAR(500) NULL,
+        user_id INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_pal_entity (entity_type, entity_id),
+        INDEX idx_pal_created (created_at)
+      )
+    `);
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS work_order_material_consumption (

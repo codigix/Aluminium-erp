@@ -13,6 +13,9 @@ import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions, validateShapeDimensions, calculateWeight } from '../utils/formatters';
 
+import ProductionPlanList from './ProductionPlanList.jsx';
+import PlanMaterialStatusModal, { PlanMaterialStatusPanel } from './PlanMaterialStatusModal.jsx';
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
@@ -43,6 +46,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [mrModalOpen, setMrModalOpen] = useState(false);
+  const [materialStatusPlan, setMaterialStatusPlan] = useState(null);
+  const [configMaterialSummary, setConfigMaterialSummary] = useState(null);
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [selectedPlanConfig, setSelectedPlanConfig] = useState(null);
   const [activeConfigTab, setActiveConfigTab] = useState('ops');
@@ -413,6 +418,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       if (response.ok) {
         const data = await response.json();
         setSelectedPlanConfig({ ...data, wo_count: plan.wo_count });
+        setConfigMaterialSummary(null);
         setConfigModalOpen(true);
         setActiveConfigTab('ops');
       } else {
@@ -2118,6 +2124,26 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       }
     ];
 
+    // Which of the four steps are filled in, and what still blocks "Create"
+    const hasOrder = Boolean(selectedOrderId);
+    const hasDrawing = newPlan.items.length > 0;
+    const hasQty = parseFloat(newPlan.targetQuantity) > 0;
+    const badDates = Boolean(newPlan.startDate && newPlan.endDate && newPlan.endDate < newPlan.startDate);
+    const missingForCreate = [
+      !hasOrder && 'Choose a sales order',
+      hasOrder && !hasDrawing && 'Choose the drawing to build',
+      !hasQty && 'Enter the quantity to make',
+      badDates && 'The due date is before the start date'
+    ].filter(Boolean);
+    const planReady = missingForCreate.length === 0;
+    const planSteps = [
+      { n: 1, label: 'Order, drawing & quantity', done: hasOrder && hasDrawing && hasQty, target: 'plan-step-1' },
+      { n: 2, label: 'Assembly', done: hasDrawing, target: 'plan-step-2' },
+      { n: 3, label: 'Parts', done: hasDrawing, target: 'plan-step-3' },
+      { n: 4, label: 'Materials', done: totalMaterialCount > 0, target: 'plan-step-4' }
+    ];
+    const goToStep = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
     return (
       <div className="space-y-2 animate-in fade-in duration-500">
         {/* Header Section */}
@@ -2139,7 +2165,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     }`}>
                     {isViewing ? newPlan.operationalStatus : 'Draft'}
                   </span>
-                  <span className="text-xs text-slate-400 ">Production Strategy</span>
+                  <span className="text-xs text-slate-400 ">{isViewing ? 'Plan details' : 'Fill the four steps below, then create the plan'}</span>
                 </div>
               </div>
             </div>
@@ -2151,50 +2177,40 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             >
               {isViewing ? 'Close' : 'Discard'}
             </Button>
-            {!isViewing && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="primary"
-                  onClick={handleSubmit}
-                  icon={Save}
-                  title="Create one Production Plan for the selected Drawing"
-                >
-                  Create Production Plan
-                </Button>
-                <button
-                  type="button"
-                  onClick={handleBulkCreateClick}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
-                  title="Automatically fetch all Drawings of this Sales Order and create separate Production Plans in bulk"
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>Bulk Create Production Plans</span>
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
         {/* Tab Navigation & Content Container */}
+        {!isViewing && (
+          <div className="flex flex-wrap items-center gap-2 px-2">
+            {planSteps.map((step, i) => (
+              <React.Fragment key={step.n}>
+                <button type="button" onClick={() => goToStep(step.target)} className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs ${step.done ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600'} hover:shadow-sm`}>
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${step.done ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>{step.done ? '✓' : step.n}</span>
+                  {step.label}
+                </button>
+                {i < planSteps.length - 1 && <span className="text-slate-300">›</span>}
+              </React.Fragment>
+            ))}
+            <span className="ml-auto text-[11px] text-slate-400">After creating: request material → Stores release → create work orders</span>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto p-2 space-y-2">
             {/* Tab Navigation */}
 
 
             {/* Section 01: Strategic Parameters */}
-            <Card className="bg-white border border-slate-200  rounded  ">
+            <Card id="plan-step-1" className="bg-white border border-slate-200  rounded  ">
               <div className="p-2">
                 <div className="flex items-center gap-2 mb-4">
                   <div>
                     <div className="flex items-center gap-2 ">
-                      <span className="text-xs  text-indigo-600">01</span>
-                      <h2 className="text-sm  text-slate-800">STRATEGIC PARAMETERS</h2>
+                      <span className="text-xs  text-indigo-600">1</span>
+                      <h2 className="text-sm  text-slate-800">Order, drawing &amp; quantity</h2>
                     </div>
-                    <p className="text-xs text-slate-400">Core planning identities and source selection</p>
+                    <p className="text-xs text-slate-400">Choose the approved sales order and the drawing to build, then say how many and by when.</p>
                   </div>
-                  <button className="ml-auto p-1 hover:bg-slate-50 rounded text-indigo-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
-                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -2320,26 +2336,36 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     </div>
                     <p className="text-xs text-indigo-600 mt-1 ">Quantity fetched from Design Order</p>
                   </FormControl>
+                  <FormControl label="Start date">
+                    <input type="date" disabled={isViewing} value={newPlan.startDate || ''} onChange={(e) => setNewPlan(prev => ({ ...prev, startDate: e.target.value }))} className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:outline-none" />
+                    <p className="text-xs text-slate-400 mt-1">When production should begin. Work orders and the material request use it.</p>
+                  </FormControl>
+                  <FormControl label="Due date">
+                    <input type="date" disabled={isViewing} min={newPlan.startDate || undefined} value={newPlan.endDate || ''} onChange={(e) => setNewPlan(prev => ({ ...prev, endDate: e.target.value }))} className={`w-full p-2 bg-white border rounded text-xs focus:outline-none ${badDates ? 'border-rose-400' : 'border-slate-200'}`} />
+                    <p className={`text-xs mt-1 ${badDates ? 'text-rose-600' : 'text-slate-400'}`}>{badDates ? 'The due date is before the start date.' : 'Work orders that run past this date are flagged as late.'}</p>
+                  </FormControl>
+                  <div className="md:col-span-3">
+                    <FormControl label="Notes (optional)">
+                      <input type="text" disabled={isViewing} value={newPlan.remarks || ''} onChange={(e) => setNewPlan(prev => ({ ...prev, remarks: e.target.value }))} placeholder="Anything production or Stores should know about this plan" className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:outline-none" />
+                    </FormControl>
+                  </div>
                 </div>
               </div>
             </Card>
 
             {/* Section 02: Finished Goods */}
-            <Card className="bg-white border border-slate-200  rounded  ">
+            <Card id="plan-step-2" className="bg-white border border-slate-200  rounded  ">
               <div className="p-2">
                 <div className="flex items-center gap-2 mb-6">
 
                   <div>
                     <div className="flex items-center gap-2 ">
-                      <span className="text-xs  text-blue-600">02</span>
-                      <h2 className="text-sm  text-slate-800">ASSEMBLY</h2>
+                      <span className="text-xs  text-blue-600">2</span>
+                      <h2 className="text-sm  text-slate-800">Assembly to build</h2>
                       <span className="p-1  bg-blue-50 text-blue-600 text-xs   rounded  ml-2  ">{newPlan.items.length} ITEMS</span>
                     </div>
-                    <p className="text-xs text-slate-400">Assembly items and target fulfillment</p>
+                    <p className="text-xs text-slate-400">The finished item this plan produces. Expand a row to see its operations.</p>
                   </div>
-                  <button className="ml-auto p-1 hover:bg-slate-50 rounded text-blue-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
-                  </button>
                 </div>
 
                 <div className="">
@@ -2362,22 +2388,19 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             </Card>
 
             {/* Section 04: Sub Assemblies */}
-            <Card className="bg-white border border-slate-200  rounded  ">
+            <Card id="plan-step-3" className="bg-white border border-slate-200  rounded  ">
               <div className="p-2">
                 <div className="flex items-center gap-2 mb-6">
 
                   <div>
                     <div className="flex items-center gap-2 ">
-                      <span className="text-xs  text-rose-600">04</span>
-                      <h2 className="text-sm  text-slate-800">PART</h2>
+                      <span className="text-xs  text-rose-600">3</span>
+                      <h2 className="text-sm  text-slate-800">Parts &amp; sub-assemblies to make</h2>
                       <span className="p-1  bg-rose-50 text-rose-600 text-xs   rounded  ml-2  ">{subAssembliesToDisplay.length} ITEMS</span>
                     </div>
-                    <p className="text-xs text-slate-400">Manufacturing breakdown of intermediate parts</p>
+                    <p className="text-xs text-slate-400">Components made in-house. Parts with no parent run on their own; the assembly starts as soon as enough components are ready.</p>
                     <p className="text-xs text-rose-600 mt-1   ">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
                   </div>
-                  <button className="ml-auto p-1 hover:bg-slate-50 rounded text-rose-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
-                  </button>
                 </div>
 
                 <div className="overflow-x-auto border border-slate-100 rounded ">
@@ -2482,22 +2505,19 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             </Card>
 
             {/* Section 03: Materials */}
-            <Card className="bg-white border border-slate-200  rounded  ">
+            <Card id="plan-step-4" className="bg-white border border-slate-200  rounded  ">
               <div className="p-2">
                 <div className="flex items-center gap-2 mb-4">
 
                   <div>
                     <div className="flex items-center gap-2 ">
-                      <span className="text-xs  text-amber-600">03</span>
-                      <h2 className="text-sm  text-slate-800">Materials</h2>
+                      <span className="text-xs  text-amber-600">4</span>
+                      <h2 className="text-sm  text-slate-800">Materials needed</h2>
                       <span className="p-1  bg-amber-50 text-amber-600 text-xs   rounded  ml-2  ">{totalMaterialCount} ITEMS</span>
                     </div>
-                    <p className="text-xs text-slate-400">Consolidated material explosion across all levels</p>
+                    <p className="text-xs text-slate-400">Everything the plan needs, worked out from the drawing. Stores release it after you request it.</p>
                     <p className="text-xs text-amber-600 mt-1   ">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
                   </div>
-                  <button className="ml-auto p-1 hover:bg-slate-50 rounded text-amber-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
-                  </button>
                 </div>
 
                 {/* Core Materials */}
@@ -2655,9 +2675,6 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 </div>
                 <p className="text-xs text-slate-400">Sequential manufacturing steps and workstation routing</p>
               </div>
-              <button className="ml-auto p-1 hover:bg-slate-50 rounded text-indigo-400">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
-              </button>
             </div>
 
             <div className="overflow-x-auto border border-slate-100 rounded ">
@@ -2714,52 +2731,48 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         </div>
 
         {/* Sticky Bottom Bar */}
-        <div className="bg-white border-t border-slate-200 p-2 flex items-center justify-between z-20 flex-shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center gap-8">
+        <div className="bg-white border-t border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 z-20 flex-shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
+          <div className="flex flex-wrap items-center gap-6">
             <div>
-              <span className="text-xs  text-slate-400   block mb-0.5">Plan Status</span>
-              <div className="flex items-center gap-2 ">
-                <span className="p-1 bg-slate-100 text-slate-600 text-xs   rounded border border-slate-200">{isViewing ? newPlan.operationalStatus : 'draft'}</span>
-              </div>
+              <span className="text-xs text-slate-400 block mb-0.5">Materials worked out</span>
+              <span className="text-xs text-slate-700">{totalMaterialCount} item(s)</span>
             </div>
-            <div className="h-8 w-px bg-slate-100"></div>
-            <div>
-              <span className="text-xs  text-slate-400   block mb-0.5">Calculated Materials</span>
-              <span className="text-xs  text-slate-700 ">{totalMaterialCount} Items Identified</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => handleCreateWorkOrders(newPlan.id)}
-              className="flex items-center gap-2 p-2 bg-emerald-50 text-emerald-600 rounded hover:bg-emerald-100 text-xs  transition-all border border-emerald-200/50 shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              Generate Work Orders
-            </button>
-            <button className="flex items-center gap-2 p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 text-xs  transition-all border border-indigo-200/50 shadow-sm">
-              <Zap className="w-4 h-4" />
-              Transmit MR
-            </button>
             {!isViewing && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleSubmit}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded hover:bg-slate-800 text-xs transition-all shadow-md shadow-slate-200 font-semibold active:scale-95 cursor-pointer"
-                  title="Create one Production Plan for the selected Drawing"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {newPlan.id ? 'Update Production Plan' : 'Create Production Plan'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleBulkCreateClick}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded hover:from-indigo-700 hover:to-blue-700 text-xs transition-all shadow-md shadow-indigo-100 font-semibold active:scale-95 cursor-pointer"
-                  title="Automatically fetch all Drawings of this Sales Order and create separate Production Plans in bulk"
-                >
-                  <Layers className="w-4 h-4" />
-                  <span>Bulk Create Production Plans</span>
-                </button>
+              <div className="min-w-[14rem]">
+                {planReady ? (
+                  <span className="text-xs text-emerald-700 flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> Ready to {newPlan.id ? 'update' : 'create'} this plan</span>
+                ) : (
+                  <div className="text-xs text-amber-700">
+                    <div className="mb-0.5">Before you can create the plan:</div>
+                    <ul className="list-disc ml-4 text-amber-800">{missingForCreate.map(m => <li key={m}>{m}</li>)}</ul>
+                  </div>
+                )}
               </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {newPlan.id && (
+              <>
+                <button type="button" onClick={() => handleTransmitMR(newPlan.id)} className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100 text-xs border border-indigo-200">
+                  <Send className="w-4 h-4" /> Request material
+                </button>
+                <button type="button" onClick={() => handleCreateWorkOrders(newPlan.id)} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100 text-xs border border-emerald-200">
+                  <Plus className="w-4 h-4" /> Create work orders
+                </button>
+              </>
+            )}
+            {!isViewing && !newPlan.id && (
+              <button type="button" onClick={handleBulkCreateClick} className="flex items-center gap-1.5 px-3 py-2 text-xs text-indigo-700 border border-indigo-200 rounded hover:bg-indigo-50" title="Fetch every drawing on this sales order and create a separate plan for each">
+                <Layers className="w-4 h-4" /> One plan per drawing on this order
+              </button>
+            )}
+            {!isViewing && (
+              <button type="button" disabled={!planReady} onClick={handleSubmit}
+                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-xs font-semibold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                title={planReady ? 'Create the production plan' : missingForCreate.join('. ')}>
+                <CheckCircle2 className="w-4 h-4" />
+                {newPlan.id ? 'Update production plan' : 'Create production plan'}
+              </button>
             )}
           </div>
         </div>
@@ -3799,102 +3812,30 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
   return (
     <div className="space-y-2 animate-in fade-in duration-500 pb-10">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-
-          <div>
-            <h1 className="text-xl  text-slate-900 ">Production Plans</h1>
-            <p className="text-xs text-slate-500 ">Manage manufacturing strategies and resource allocation</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {selectedPlanIds.size > 0 && (
-            <button
-              type="button"
-              onClick={handleOpenBulkMRModal}
-              className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
-              title="Create Material Requests for all selected Production Plans"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>Bulk Material Request ({selectedPlanIds.size})</span>
-            </button>
-          )}
-          <Button
-            variant="secondary"
-            onClick={fetchPlans}
-            icon={RefreshCw}
-            className={loading ? 'animate-spin' : ''}
-          />
-          <Button
-            variant="primary"
-            onClick={handleCreateNew}
-            icon={Plus}
-          >
-            New Production Plan
-          </Button>
-        </div>
-      </div>
-
-      {/* SEARCH & FILTER SECTION */}
-
-
-      {/* Content Section */}
-      <div className="">
-        {/* Bulk Action Banner when 1 or more Production Plans are selected */}
-        {selectedPlanIds.size > 0 && (
-          <div className="mb-2 p-2.5 bg-indigo-50/90 border border-indigo-200 rounded-lg flex items-center justify-between shadow-xs animate-in fade-in slide-in-from-top-1 duration-200">
-            <div className="flex items-center gap-2.5">
-              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold shadow-xs">
-                {selectedPlanIds.size}
-              </span>
-              <span className="text-xs font-semibold text-indigo-950">
-                {selectedPlanIds.size} {selectedPlanIds.size === 1 ? 'Production Plan' : 'Production Plans'} Selected
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedPlanIds(new Set())}
-                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded transition-colors cursor-pointer"
-              >
-                Clear Selection
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenBulkMRModal}
-                className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Bulk Material Request ({selectedPlanIds.size})</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        <DataTable
-          columns={columns}
-          data={filteredPlans}
-          loading={loading}
-          searchPlaceholder="Search strategic formulations..."
-          searchKey="plan_code"
-          selectable={true}
-          selectedRows={selectedPlanIds}
-          onSelectionChange={setSelectedPlanIds}
-          rowId="id"
+      {materialStatusPlan && (
+        <PlanMaterialStatusModal
+          plan={materialStatusPlan}
+          onClose={() => setMaterialStatusPlan(null)}
+          onRequestMore={() => { const id = materialStatusPlan.id; setMaterialStatusPlan(null); handleTransmitMR(id); }}
         />
-
-        {/* Summary Footer */}
-        <div className="p-2 border-t border-slate-100 flex items-center justify-between bg-white/30">
-          <div className="text-xs  text-slate-400   flex items-center gap-2 ">
-            Showing {filteredPlans.length} of {plans.length} strategic formulations
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-emerald-500  animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-            <span className="text-xs   text-slate-900  ">Neural Link Active</span>
-          </div>
-        </div>
-      </div>
+      )}
+      <ProductionPlanList
+        plans={plans}
+        loading={loading}
+        selectedIds={selectedPlanIds}
+        setSelectedIds={setSelectedPlanIds}
+        onNew={handleCreateNew}
+        onRefresh={fetchPlans}
+        onView={handleViewPlan}
+        onConfig={handleOpenConfig}
+        onRequestMaterial={handleTransmitMR}
+        onTrackMaterial={(plan) => setMaterialStatusPlan(plan)}
+        onCreateWorkOrders={handleCreateWorkOrders}
+        onOpenWorkOrders={(plan) => navigate(`${deptPrefix}/work-order?plan=${encodeURIComponent(plan.plan_code)}`)}
+        onEdit={handleEditPlan}
+        onDelete={handleDeletePlan}
+        onBulkMaterialRequest={handleOpenBulkMRModal}
+      />
 
       {/* Material Request Preview Modal */}
       <Modal
@@ -3907,7 +3848,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               <h2 className="text-lg  text-slate-800 ">Material Request</h2>
               <div className="flex items-center gap-1 text-xs text-indigo-500   ">
                 <Activity className="w-3 h-3" />
-                Resource Acquisition Phase
+                Ask Stores to release material for this plan
               </div>
             </div>
           </div>
@@ -3918,15 +3859,15 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           {/* MR Header Info */}
           <div className="grid grid-cols-3 gap-2">
             <div className="p-2 bg-slate-50/50 rounded  border border-slate-100">
-              <label className="text-xs text-slate-400    block mb-1">Request Identifier</label>
+              <label className="text-xs text-slate-400    block mb-1">Production plan</label>
               <div className="text-xs  text-slate-800">{mrPlanDetails?.planCode || '---'}</div>
             </div>
             <div className="p-2 bg-slate-50/50 rounded  border border-slate-100">
-              <label className="text-xs text-slate-400    block mb-1">Originating Dept</label>
-              <div className="text-xs  text-slate-800">Production</div>
+              <label className="text-xs text-slate-400    block mb-1">Requested by</label>
+              <div className="text-xs  text-slate-800">Production department</div>
             </div>
             <div className="p-2 bg-slate-50/50 rounded  border border-slate-100">
-              <label className="text-xs text-slate-400    block mb-1">SLA Target Date</label>
+              <label className="text-xs text-slate-400    block mb-1">Needed by</label>
               <div className="text-xs  text-slate-800">
                 {mrPlanDetails?.startDate ? new Date(mrPlanDetails.startDate).toLocaleDateString() : '---'}
               </div>
@@ -3936,8 +3877,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           <div className="flex items-center justify-between border-b border-slate-100 pb-0">
             <Tabs
               tabs={[
-                { id: 'pending', label: 'Pending Request', value: 'pending', icon: Clock },
-                { id: 'complete', label: 'Complete Request', value: 'complete', icon: CheckCircle2 }
+                { id: 'pending', label: 'To request', value: 'pending', icon: Clock },
+                { id: 'complete', label: 'Already requested', value: 'complete', icon: CheckCircle2 }
               ]}
               activeTab={activeTab === 'Pending Request' || activeTab === 'pending' ? 'pending' : 'complete'}
               onTabChange={(val) => setActiveTab(val)}
@@ -4612,12 +4553,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 {transmittingMr ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded animate-spin" />
-                    Transmitting...
+                    Sending...
                   </>
                 ) : (
                   <>
                     <Send className="w-3.5 h-3.5" />
-                    Material Request
+                    Send request to Stores
                   </>
                 )}
               </button>
@@ -4640,10 +4581,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <Zap className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-lg text-slate-800  ">Configure Work Order</h2>
-                <div className="flex items-center gap-1 text-xs text-indigo-500   ">
-                  <Activity className="w-3 h-3" />
-                  Strategy Implementation Phase
+                <h2 className="text-lg text-slate-800  ">Materials &amp; operations — {selectedPlanConfig?.plan_code}</h2>
+                <div className="flex items-center gap-1 text-xs text-slate-500">
+                  What this plan will make, the steps each job card will follow, and where its material stands
                 </div>
               </div>
             </div>
@@ -4654,7 +4594,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded text-xs font-medium transition-all disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshingOperations ? 'animate-spin' : ''}`} />
-              <span>Refresh Operations</span>
+              <span>Reload operations from master data</span>
             </button>
           </div>
         }
@@ -4676,11 +4616,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               <div className="text-sm  text-slate-800">{selectedPlanConfig?.target_qty || 0} Units</div>
             </div>
             <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-xs text-slate-400    block mb-1">Priority</label>
-              <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 bg-amber-500 " />
-                <span className="text-xs  text-amber-600 ">Medium</span>
-              </div>
+              <label className="text-xs text-slate-400    block mb-1">Work orders</label>
+              <div className="text-sm text-slate-800">{selectedPlanConfig?.wo_count > 0 ? `${selectedPlanConfig.wo_count} created` : 'Not created yet'}</div>
             </div>
           </div>
 
@@ -4691,14 +4628,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 onClick={() => setActiveConfigTab('ops')}
                 className={`pb-3 text-xs    transition-all relative ${activeConfigTab === 'ops' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
               >
-                Operational Sequence ({selectedPlanConfig?.operations?.length || 0})
+                Operations ({selectedPlanConfig?.operations?.length || 0})
                 {activeConfigTab === 'ops' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 " />}
               </button>
               <button
                 onClick={() => setActiveConfigTab('mats')}
                 className={`pb-3 text-xs    transition-all relative ${activeConfigTab === 'mats' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
               >
-                Resource Allocation ({selectedPlanConfig?.materials?.length || 0})
+                Material status
                 {activeConfigTab === 'mats' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 " />}
               </button>
             </div>
@@ -4786,48 +4723,21 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                   </tbody>
                 </table>
               ) : (
-                <table className="w-full text-left text-xs">
-                  <thead className="sticky top-0 bg-white z-10 border-b border-slate-100">
-                    <tr>
-                      <th className="py-3 px-2  text-slate-400  ">Component</th>
-                      <th className="py-3 px-2  text-slate-400   text-right">Required</th>
-                      <th className="py-3 px-2  text-slate-400   text-right">Available</th>
-                      <th className="py-3 px-2  text-slate-400   text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 ">
-                    {selectedPlanConfig?.materials?.length > 0 ? (
-                      selectedPlanConfig.materials.map((mat, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 px-2">
-                            <div className=" text-slate-700">{mat.item_code}</div>
-                            <div className="text-xs text-slate-400   mt-0.5">{mat.material_name}</div>
-                          </td>
-                          <td className="py-4 px-2 text-right  text-slate-900">{mat.required_qty} <span className="text-slate-400 font-normal">{mat.uom}</span></td>
-                          <td className="py-4 px-2 text-right  text-slate-500">0.00 <span className="text-slate-400 font-normal">{mat.uom}</span></td>
-                          <td className="py-4 px-2 text-center">
-                            <div className="w-4 h-4 bg-rose-50 text-rose-500  flex items-center justify-center mx-auto border border-rose-100">
-                              <AlertCircle className="w-3 h-3" />
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="4" className="py-12 text-center text-slate-400 italic">No material allocations defined</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                selectedPlanConfig?.id ? <PlanMaterialStatusPanel planId={selectedPlanConfig.id} onLoaded={setConfigMaterialSummary} /> : null
               )}
             </div>
           </div>
 
           {/* Footer Actions */}
           <div className="flex items-center justify-between pt-6 border-t border-slate-100">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600  border border-emerald-100 shadow-sm">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span className="text-xs   ">All Stocks Verified</span>
+            <div className="text-xs">
+              {!configMaterialSummary ? (
+                <button onClick={() => setActiveConfigTab('mats')} className="text-indigo-600 hover:underline">Check material status</button>
+              ) : configMaterialSummary.summary.released >= configMaterialSummary.summary.total && configMaterialSummary.summary.total > 0 ? (
+                <span className="flex items-center gap-1 text-emerald-700"><CheckCircle2 className="w-4 h-4" /> All material has been released by Stores</span>
+              ) : (
+                <span className="text-amber-700">{configMaterialSummary.summary.released} of {configMaterialSummary.summary.total} materials released. Work orders can be created now, but job cards cannot start until Stores release the rest.</span>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
@@ -4835,7 +4745,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 onClick={() => setConfigModalOpen(false)}
                 className="p-2 text-xs  text-slate-400 hover:text-slate-600 transition-colors  "
               >
-                Discard
+                Close
               </button>
               {selectedPlanConfig?.wo_count === 0 && (
                 <button
@@ -4850,8 +4760,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     </>
                   ) : (
                     <>
-                      <Settings className="w-4 h-4" />
-                      Work Order
+                      <Plus className="w-4 h-4" />
+                      Create work orders
                     </>
                   )}
                 </button>

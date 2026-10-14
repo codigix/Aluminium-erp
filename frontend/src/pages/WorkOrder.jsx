@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Card, Modal, FormControl, StatusBadge, SearchableSelect, DataTable } from '../components/ui.jsx';
-import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { 
-  FileText, Edit2, Trash2, Activity, Clock, 
-  AlertCircle, CheckCircle2, MoreVertical, Search, Filter, Plus
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { StatusBadge } from '../components/ui.jsx';
+import {
+  Plus, RefreshCw, Search, ChevronDown, ChevronRight, MoreVertical, Rocket, Activity, PauseCircle, PlayCircle,
+  Pencil, Trash2, XCircle, AlertTriangle, Layers, Puzzle, Box, CornerDownRight
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast.js';
@@ -12,648 +11,354 @@ import { cleanProjectName } from '../utils/formatters.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const formatDisplayDate = value => {
+const formatDate = value => {
   if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 };
+
+const isLate = wo => Boolean(wo.end_date && new Date(wo.end_date) < new Date(new Date().toDateString()) && !['COMPLETED', 'CANCELLED'].includes(wo.status));
+
+const STATUS_FILTERS = [
+  { id: 'ALL', label: 'All' },
+  { id: 'DRAFT', label: 'Draft' },
+  { id: 'RELEASED', label: 'Released' },
+  { id: 'IN_PROGRESS', label: 'In progress' },
+  { id: 'ON_HOLD', label: 'On hold' },
+  { id: 'COMPLETED', label: 'Completed' },
+  { id: 'CANCELLED', label: 'Cancelled' }
+];
+
+const PRIORITY_CLS = { URGENT: 'bg-rose-100 text-rose-700', HIGH: 'bg-amber-100 text-amber-700' };
+
+// What kind of work order is this, in plain words
+const describeType = (wo, hasChildren) => {
+  const code = String(wo.item_code || '').toUpperCase();
+  if (code.startsWith('BO-')) return { label: 'Bought-out', icon: Box, cls: 'text-amber-700 bg-amber-50' };
+  if (wo.source_type === 'SA') return { label: 'Sub-assembly', icon: Puzzle, cls: 'text-sky-700 bg-sky-50' };
+  if (wo.source_type === 'PART') return { label: 'Part', icon: Box, cls: 'text-slate-700 bg-slate-100' };
+  return hasChildren ? { label: 'Assembly', icon: Layers, cls: 'text-indigo-700 bg-indigo-50' } : { label: 'Finished item', icon: Layers, cls: 'text-indigo-700 bg-indigo-50' };
+};
+
+const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` });
 
 const WorkOrder = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const deptPrefix = (() => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '/production';
+  })();
+
   const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewingWorkOrder, setViewingWorkOrder] = useState(null);
-  const [woViewTab, setWoViewTab] = useState('foundation');
-  const [deletingAll, setDeletingAll] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [lateOnly, setLateOnly] = useState(false);
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('plan') || '');
+  const [collapsed, setCollapsed] = useState({});
+  const [menuFor, setMenuFor] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [pageMenu, setPageMenu] = useState(false);
 
-  useEffect(() => {
-    fetchWorkOrders();
-  }, []);
-
-  const fetchWorkOrders = async () => {
+  const load = useCallback(async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/work-orders`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setWorkOrders(data);
-      }
+      setLoading(true);
+      const response = await fetch(`${API_BASE}/work-orders`, { headers: authHeaders() });
+      if (response.ok) setWorkOrders(await response.json());
+      else errorToast('Could not load work orders');
     } catch (error) {
-      console.error('Error fetching work orders:', error);
+      errorToast('Network error while loading work orders');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleCreateNew = () => {
-    navigate('/production/work-order/edit-work');
-  };
+  useEffect(() => { load(); }, [load]);
 
-  const handleEdit = (id) => {
-    navigate(`/production/work-order/edit-work?id=${id}`);
-  };
-
-  const sortedWorkOrders = React.useMemo(() => {
-    const getSourcePriority = (type) => {
-      const t = (type || '').toLowerCase();
-      if (t.includes('part') || t.includes('assembly') || t === 'sa') return 1;
-      if (t.includes('finish') || t === 'fg') return 2;
-      return 3;
-    };
-
-    // 1. Group items by batch and find the latest ID in each batch
-    const groups = {};
-    workOrders.forEach(wo => {
-      const groupKey = wo.plan_id ? `plan_${wo.plan_id}` : (wo.parent_wo_id ? `parent_${wo.parent_wo_id}` : `wo_${wo.id}`);
-      if (!groups[groupKey]) {
-        groups[groupKey] = { latestId: 0, items: [] };
-      }
-      groups[groupKey].items.push(wo);
-      const currentId = Number(wo.id) || 0;
-      if (currentId > groups[groupKey].latestId) {
-        groups[groupKey].latestId = currentId;
-      }
-    });
-
-    // 2. Sort groups by their latest ID (newest batch first)
-    const sortedGroupKeys = Object.keys(groups).sort((a, b) => groups[b].latestId - groups[a].latestId);
-
-    // 3. Within each group, sort by SA first, then ID ASC
-    const result = [];
-    sortedGroupKeys.forEach(key => {
-      const groupedItems = groups[key].items.sort((a, b) => {
-        const aPrio = getSourcePriority(a.source_type);
-        const bPrio = getSourcePriority(b.source_type);
-        if (aPrio !== bPrio) return aPrio - bPrio;
-        return (Number(a.id) || 0) - (Number(b.id) || 0);
-      });
-      result.push(...groupedItems);
-    });
-
-    return result;
+  const counts = useMemo(() => {
+    const c = { ALL: workOrders.length };
+    workOrders.forEach(w => { c[w.status] = (c[w.status] || 0) + 1; });
+    return c;
   }, [workOrders]);
+  const lateCount = useMemo(() => workOrders.filter(isLate).length, [workOrders]);
+  const draftCount = counts.DRAFT || 0;
 
-  const columns = [
-    {
-      label: 'Work Order ID',
-      key: 'wo_number',
-      sortable: true,
-      render: (val) => <span className="text-indigo-600 ">{val}</span>
-    },
-    {
-      label: 'Project / Client',
-      key: 'project_name',
-      sortable: true,
-      render: (val, row) => {
-        const displayProject = cleanProjectName(row.project_name, row.client_name);
-        return (
-          <div className="flex flex-col">
-            <span className="text-xs text-slate-900 leading-tight " title={displayProject}>{displayProject}</span>
-          </div>
-        );
-      }
-    },
-    {
-      label: 'Specification',
-      key: 'source_type',
-      render: (val, row) => {
-        const itemCodeUpper = (row.item_code || '').toUpperCase();
-        const itemNameUpper = (row.item_name || '').toUpperCase();
-        const valUpper = (val || '').toUpperCase();
-        const itemGroupUpper = (row.item_group || '').toUpperCase();
-        const drawingTypeUpper = (row.drawing_type || '').toUpperCase();
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return workOrders.filter(w =>
+      (statusFilter === 'ALL' || w.status === statusFilter) &&
+      (!lateOnly || isLate(w)) &&
+      (!q || [w.wo_number, w.item_name, w.item_code, w.project_name, w.client_name, w.plan_code, w.bom_no].some(v => String(v || '').toLowerCase().includes(q)))
+    );
+  }, [workOrders, statusFilter, lateOnly, search]);
 
-        let badgeType = 'PART';
-        if (
-          itemCodeUpper.startsWith('BO-') ||
-          itemGroupUpper.includes('BOUGHT') ||
-          drawingTypeUpper.includes('BOUGHT') ||
-          valUpper === 'BO' ||
-          valUpper.includes('BOUGHT')
-        ) {
-          badgeType = 'BOUGHT OUT';
-        } else if (
-          itemGroupUpper === 'ASSEMBLY' ||
-          drawingTypeUpper === 'ASSEMBLY' ||
-          itemCodeUpper.startsWith('ASSEMBLY-') ||
-          itemCodeUpper.startsWith('SA-') ||
-          itemCodeUpper.startsWith('SFG-') ||
-          valUpper === 'FG' ||
-          valUpper === 'FINISHED GOOD' ||
-          valUpper === 'FINISHED GOODS' ||
-          valUpper === 'SA' ||
-          valUpper === 'SUB ASSEMBLY' ||
-          valUpper === 'SUB-ASSEMBLY' ||
-          itemNameUpper.includes('ASSEMBLAGE') ||
-          (itemNameUpper.includes('ASSEMBLY') && !itemCodeUpper.startsWith('PART-'))
-        ) {
-          if (itemGroupUpper === 'PART' || drawingTypeUpper === 'PART' || itemCodeUpper.startsWith('PART-')) {
-            badgeType = 'PART';
-          } else {
-            badgeType = 'ASSEMBLY';
-          }
-        } else {
-          badgeType = 'PART';
+  // Group by production plan (or by itself), then nest components under their assembly
+  const groups = useMemo(() => {
+    const map = new Map();
+    filtered.forEach(wo => {
+      const key = wo.plan_id ? `plan_${wo.plan_id}` : wo.parent_wo_id ? `parent_${wo.parent_wo_id}` : `wo_${wo.id}`;
+      if (!map.has(key)) map.set(key, { key, items: [], latestId: 0 });
+      const g = map.get(key);
+      g.items.push(wo);
+      g.latestId = Math.max(g.latestId, Number(wo.id) || 0);
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.latestId - a.latestId).map(g => {
+      const ids = new Set(g.items.map(i => i.id));
+      const childrenOf = new Map();
+      g.items.forEach(i => {
+        if (i.parent_wo_id && ids.has(i.parent_wo_id)) {
+          if (!childrenOf.has(i.parent_wo_id)) childrenOf.set(i.parent_wo_id, []);
+          childrenOf.get(i.parent_wo_id).push(i);
         }
+      });
+      const roots = g.items.filter(i => !(i.parent_wo_id && ids.has(i.parent_wo_id)))
+        .sort((a, b) => (a.source_type === 'FG' ? 1 : 0) - (b.source_type === 'FG' ? 1 : 0) || a.id - b.id);
 
-        let colorClass = 'text-rose-500';
-        if (badgeType === 'ASSEMBLY') colorClass = 'text-indigo-600';
-        else if (badgeType === 'BOUGHT OUT') colorClass = 'text-amber-600';
-
-        return (
-          <span className={`text-[10px] font-semibold ${colorClass}`}>
-            {badgeType}
-          </span>
-        );
-      }
-    },
-    {
-      label: 'Item To Manufacture',
-      key: 'item_name',
-      sortable: true,
-      render: (val, row) => (
-        <div className="flex flex-col">
-          <span className="text-xs font-semibold text-slate-900 leading-tight">{val || row.item_code}</span>
-          {row.source_type === 'SA' && row.source_fg && (
-            <span className="text-[9px] text-slate-500 italic mt-0.5">
-              <span className="text-indigo-600 not-italic ">{row.source_fg}</span>
-            </span>
-          )}
-          <span className="text-[9px] text-slate-400 mt-0.5">BOM-{row.bom_no || 'NA'}</span>
-        </div>
-      )
-    },
-    {
-      label: 'Qty',
-      key: 'quantity',
-      sortable: true,
-      render: (val) => <span className="text-slate-900 ">{val} <span className="text-slate-400 font-normal text-xs ">units</span></span>
-    },
-    {
-      label: 'Planned Start',
-      key: 'start_date',
-      render: (val) => (
-        <div className="flex items-center gap-1.5 text-xs text-slate-600">
-          <Clock className="w-3.5 h-3.5 text-slate-300" />
-          {formatDisplayDate(val)}
-        </div>
-      )
-    },
-    {
-      label: 'Progress',
-      key: 'progress',
-      sortable: true,
-      render: (_, row) => {
-        const progress = row.total_job_cards > 0 ? Math.round((row.completed_job_cards / row.total_job_cards) * 100) : 0;
-        return (
-          <div className="w-full ">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs  text-slate-500">
-                {row.completed_job_cards || 0}/{row.total_job_cards || 0}
-              </span>
-              <span className="text-xs   text-blue-600">{progress}%</span>
-            </div>
-            <div className="h-1 w-full ">
-              <div 
-                className="h-full bg-blue-500  transition-all duration-500" 
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      label: 'Status',
-      key: 'status',
-      sortable: true,
-      render: (val) => <StatusBadge status={val} />
-    },
-    {
-      label: 'Actions',
-      key: 'actions',
-      className: 'text-right',
-      render: (_, row) => (
-        <div className="flex items-center justify-end gap-1">
-          <button 
-            onClick={() => navigate(`/production/job-card?filter_work_order=${row.wo_number}`)}
-            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
-            title="Track Production"
-          >
-            <Activity className="w-3.5 h-3.5" />
-          </button>
-          <button 
-            onClick={() => handleEdit(row.id)}
-            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-            title="Edit"
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-          </button>
-          <button 
-            onClick={() => handleDelete(row.id)}
-            className="p-1.5 text-slate-400 hover:text-rose-600 hover: rounded transition-all"
-            title="Delete"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )
-    }
-  ];
-
-  const handleDelete = async (id) => {
-    try {
-      const result = await Swal.fire({
-        title: 'Delete Work Order?',
-        text: "This action cannot be undone.",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#ef4444',
-        cancelButtonColor: '#64748b',
-        confirmButtonText: 'Yes, delete it!'
+      const rows = [];
+      roots.forEach(r => {
+        const kids = (childrenOf.get(r.id) || []).sort((a, b) => a.id - b.id);
+        rows.push({ wo: r, depth: 0, hasChildren: kids.length > 0 });
+        kids.forEach(k => rows.push({ wo: k, depth: 1, hasChildren: false }));
       });
 
-      if (result.isConfirmed) {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/work-orders/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+      const totalJcs = g.items.reduce((s, i) => s + (Number(i.total_job_cards) || 0), 0);
+      const doneJcs = g.items.reduce((s, i) => s + (Number(i.completed_job_cards) || 0), 0);
+      const first = g.items[0];
+      return {
+        ...g, rows,
+        planCode: first.plan_code,
+        title: cleanProjectName(first.project_name, first.client_name) || first.item_name || first.wo_number,
+        progress: totalJcs ? Math.round((doneJcs / totalJcs) * 100) : 0,
+        drafts: g.items.filter(i => i.status === 'DRAFT'),
+        late: g.items.filter(isLate).length,
+        held: g.items.reduce((s, i) => s + (Number(i.held_job_cards) || 0), 0),
+        due: g.items.map(i => i.end_date).filter(Boolean).sort().slice(-1)[0],
+        allDone: g.items.every(i => ['COMPLETED', 'CANCELLED'].includes(i.status))
+      };
+    });
+  }, [filtered]);
 
-        if (response.ok) {
-          successToast('Work Order deleted');
-          fetchWorkOrders();
-        } else {
-          const errorData = await response.json();
-          errorToast(errorData.error || 'Failed to delete');
-        }
-      }
-    } catch (error) {
-      console.error('Error:', error);
+  const explain = (result) => Swal.fire({
+    icon: 'warning', title: "That can't be done yet", text: result.error || result.message || 'The action was refused', confirmButtonColor: '#4f46e5'
+  });
+
+  const changeStatus = async (wo, status, reason) => {
+    const response = await fetch(`${API_BASE}/work-orders/${wo.id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status, reason }) });
+    if (!response.ok) {
+      await explain(await response.json().catch(() => ({})));
+      return false;
     }
+    return true;
   };
 
-  const handleDeleteAllWorkOrders = async () => {
-    try {
-      const result = await Swal.fire({
-        title: 'Reset Queue?',
-        text: 'Are you sure you want to delete all Work Orders? This will also remove associated Job Cards and material issues, and cannot be undone.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#e11d48',
-        cancelButtonColor: '#64748b',
-        confirmButtonText: 'Yes, Delete All',
-        cancelButtonText: 'Cancel'
-      });
+  const release = async (wo) => {
+    setBusy(true);
+    if (await changeStatus(wo, 'RELEASED')) { successToast(`${wo.wo_number} released — job cards are now active`); await load(); }
+    setBusy(false);
+  };
 
-      if (result.isConfirmed) {
-        setDeletingAll(true);
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/work-orders/delete-all`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (response.ok) {
-          const resData = await response.json();
-          successToast(resData.message || 'All Work Orders deleted successfully');
-          await fetchWorkOrders();
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          errorToast(errData.error || errData.message || 'Failed to delete work orders');
-        }
-      }
-    } catch (err) {
-      console.error('Error deleting work orders:', err);
-      errorToast('Failed to delete work orders');
-    } finally {
-      setDeletingAll(false);
+  const releaseAll = async (group) => {
+    const ok = await Swal.fire({
+      title: `Release ${group.drafts.length} draft work order(s)?`, text: 'Their job cards become active and can be scheduled and started.',
+      icon: 'question', showCancelButton: true, confirmButtonText: 'Release all', confirmButtonColor: '#059669'
+    });
+    if (!ok.isConfirmed) return;
+    setBusy(true);
+    let released = 0;
+    for (const wo of group.drafts) {
+      if (await changeStatus(wo, 'RELEASED')) released += 1; else break;
     }
+    if (released) successToast(`${released} work order(s) released`);
+    await load();
+    setBusy(false);
+  };
+
+  const askReason = async (title, button, color) => {
+    const { value } = await Swal.fire({
+      title, input: 'text', inputLabel: 'Reason (required)', showCancelButton: true, confirmButtonText: button, confirmButtonColor: color,
+      inputValidator: v => (!v || !v.trim() ? 'Please give a reason' : null)
+    });
+    return value || null;
+  };
+
+  const hold = async (wo) => {
+    const reason = await askReason(`Put ${wo.wo_number} on hold?`, 'Hold', '#d97706');
+    if (reason && await changeStatus(wo, 'ON_HOLD', reason)) { successToast('Work order on hold'); await load(); }
+  };
+  const resume = async (wo) => {
+    if (await changeStatus(wo, Number(wo.completed_job_cards) > 0 || Number(wo.running_job_cards) > 0 ? 'IN_PROGRESS' : 'RELEASED', 'Resumed')) { successToast('Work order resumed'); await load(); }
+  };
+  const cancel = async (wo) => {
+    const reason = await askReason(`Cancel ${wo.wo_number}?`, 'Cancel work order', '#e11d48');
+    if (reason && await changeStatus(wo, 'CANCELLED', reason)) { successToast('Work order cancelled'); await load(); }
+  };
+  const remove = async (wo) => {
+    const ok = await Swal.fire({ title: `Delete ${wo.wo_number}?`, text: 'Only work orders with no production history can be deleted.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#e11d48', confirmButtonText: 'Delete' });
+    if (!ok.isConfirmed) return;
+    const response = await fetch(`${API_BASE}/work-orders/${wo.id}`, { method: 'DELETE', headers: authHeaders() });
+    if (response.ok) { successToast('Work order deleted'); await load(); } else await explain(await response.json().catch(() => ({})));
+  };
+  const resetQueue = async () => {
+    const ok = await Swal.fire({
+      title: 'Reset the whole queue?', text: 'Deletes ALL work orders and their job cards. This only works when nothing has been produced yet.',
+      icon: 'warning', showCancelButton: true, confirmButtonText: 'Yes, delete all', confirmButtonColor: '#e11d48'
+    });
+    if (!ok.isConfirmed) return;
+    const response = await fetch(`${API_BASE}/work-orders/delete-all`, { method: 'DELETE', headers: authHeaders() });
+    if (response.ok) { successToast('All work orders deleted'); await load(); } else await explain(await response.json().catch(() => ({})));
+  };
+
+  const openJobCards = wo => navigate(`${deptPrefix}/job-card?filter_work_order=${wo.wo_number}`);
+  const edit = wo => navigate(`${deptPrefix}/work-order/edit-work?id=${wo.id}`);
+
+  const primaryAction = (wo) => {
+    if (wo.status === 'DRAFT') return { label: 'Release', icon: Rocket, cls: 'bg-emerald-600 hover:bg-emerald-700 text-white', run: () => release(wo) };
+    if (wo.status === 'ON_HOLD') return { label: 'Resume', icon: PlayCircle, cls: 'bg-amber-500 hover:bg-amber-600 text-white', run: () => resume(wo) };
+    if (['RELEASED', 'IN_PROGRESS'].includes(wo.status)) return { label: 'Job cards', icon: Activity, cls: 'border border-indigo-200 text-indigo-700 hover:bg-indigo-50', run: () => openJobCards(wo) };
+    return { label: 'View', icon: Activity, cls: 'border border-slate-200 text-slate-600 hover:bg-slate-50', run: () => openJobCards(wo) };
   };
 
   return (
-    <div className="min-h-screen">
-      {/* Header Section */}
-      <div className="">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-xl  text-slate-900 ">Active Work Orders</h1>
-            <p className="text-slate-500 text-xs  mt-1">Real-time production tracking</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2  p-2 .5 bg-emerald-50 text-emerald-600 rounded  border border-emerald-100">
-              <div className="w-2 h-2 bg-emerald-500 rounded  animate-pulse"></div>
-              <span className="text-xs   ">{workOrders.length} Orders Active</span>
-            </div>
-            <button 
-              onClick={handleDeleteAllWorkOrders}
-              disabled={deletingAll || workOrders.length === 0}
-              className="flex items-center gap-2 p-2 text-rose-600 hover:bg-rose-50 rounded transition-all text-xs disabled:opacity-50"
-              title="Delete all Work Orders"
-            >
-              <Trash2 className={`w-4 h-4 ${deletingAll ? 'animate-spin' : ''}`} />
-              <span className="text-xs">{deletingAll ? 'Resetting...' : 'Reset Queue'}</span>
-            </button>
-            <button 
-              onClick={handleCreateNew}
-              className="flex items-center gap-2  p-2  bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all  hover:shadow-indigo-100"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="text-xs ">New Work Order</span>
-            </button>
-          </div>
+    <div className="space-y-3" onClick={() => { setMenuFor(null); setPageMenu(false); }}>
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-xl text-slate-900">Work Orders</h1>
+          <p className="text-xs text-slate-500">Grouped by production plan. Components sit under the assembly that needs them.</p>
         </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-8">
-          {[
-            { label: 'Total Orders', value: workOrders.length, icon: FileText, color: 'indigo' },
-            { label: 'In Progress', value: workOrders.filter(w => w.status === 'IN_PROGRESS').length, icon: Activity, color: 'blue' },
-            { label: 'Pending', value: workOrders.filter(w => w.status === 'DRAFT' || w.status === 'RELEASED').length, icon: Clock, color: 'amber' },
-            { label: 'Completed', value: workOrders.filter(w => w.status === 'COMPLETED').length, icon: CheckCircle2, color: 'emerald' }
-          ].map((stat, i) => (
-            <Card key={i} className="border-none  bg-white overflow-hidden group hover: transition-all">
-              <div className="p-2 flex items-center gap-2">
-                <div className={`p-2 bg-${stat.color}-50 text-${stat.color}-600 rounded  flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                  <stat.icon className="w-3 h-3" />
-                </div>
-                <div>
-                  <p className="text-xs  text-slate-400  ">{stat.label}</p>
-                  <p className="text-xl  text-slate-900">{stat.value}</p>
-                </div>
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          <button onClick={load} className="p-2 border border-slate-200 rounded hover:bg-slate-50" title="Refresh"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
+          <button onClick={() => navigate(`${deptPrefix}/work-order/edit-work`)} className="flex items-center gap-1 px-3 py-2 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded"><Plus className="w-4 h-4" /> New work order</button>
+          <div className="relative">
+            <button onClick={() => setPageMenu(v => !v)} className="p-2 border border-slate-200 rounded hover:bg-slate-50" title="More"><MoreVertical className="w-4 h-4" /></button>
+            {pageMenu && (
+              <div className="absolute right-0 mt-1 w-56 bg-white border border-slate-200 rounded shadow-lg z-20">
+                <button onClick={resetQueue} disabled={workOrders.length === 0} className="w-full text-left px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-40 flex items-center gap-2"><Trash2 className="w-3 h-3" /> Reset queue (delete all)</button>
               </div>
-            </Card>
-          ))}
+            )}
+          </div>
         </div>
-
-        {/* Work Orders List */}
-       
-          <DataTable
-            columns={columns}
-            data={sortedWorkOrders}
-            loading={loading}
-            searchPlaceholder="Search by Work Order, Project, or Item..."
-            searchKey="wo_number"
-          />
-        
       </div>
 
-      {/* Work Order Record View Modal */}
-      <Modal
-        isOpen={!!viewingWorkOrder}
-        onClose={() => setViewingWorkOrder(null)}
-        title="Work Order Record"
-        maxWidth="max-w-6xl"
-      >
-        {viewingWorkOrder && (
-          <div className="space-y-2">
-            {/* Header with Status */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-indigo-100 text-indigo-600 rounded flex items-center justify-center">
-                  <FileText className="p-2" />
-                </div>
-                <div>
-                  <h3 className="text-md  text-slate-900">{viewingWorkOrder.wo_number}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{cleanProjectName(viewingWorkOrder.project_name, viewingWorkOrder.client_name)} • {formatDisplayDate(viewingWorkOrder.created_at)}</p>
-                </div>
-              </div>
-              <span className={`p-2 rounded text-xs  ${
-                viewingWorkOrder.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' :
-                viewingWorkOrder.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
-                'bg-slate-100 text-slate-700'
-              }`}>
-                {viewingWorkOrder.status}
-              </span>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex gap-1 border-b border-slate-200">
-              {[
-                { id: 'foundation', label: '📋 Foundation', icon: true },
-                { id: 'timeline', label: '📅 Timeline', icon: true },
-                { id: 'operations', label: '⚙️ Operations', icon: true },
-                { id: 'inventory', label: '📦 Inventory', icon: true },
-                { id: 'report', label: '📊 Daily Report', icon: true }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setWoViewTab(tab.id)}
-                  className={`p-1 text-xs  border-b-2 transition-colors ${
-                    woViewTab === tab.id
-                      ? 'border-indigo-600 text-indigo-600'
-                      : 'border-transparent text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab Content */}
-            <div className="space-y-2">
-              {woViewTab === 'foundation' && (
-                <>
-                  {/* Foundation Setup */}
-                  <div className="border border-slate-200 rounded  p-5">
-                    <h4 className="text-xs  text-slate-900 mb-4 flex items-center gap-2">
-                      <span>01</span>
-                      Foundation Setup
-                    </h4>
-                    <div className="grid grid-cols-2 gap-6">
-                      <div>
-                        <label className="text-xs text-slate-500   ">Target Item to Manufacture</label>
-                        <p className="text-sm  text-slate-900 mt-2">{viewingWorkOrder.item_name || 'N/A'}</p>
-                        <p className="text-xs text-slate-400">{viewingWorkOrder.item_code}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-500   ">Bill of Materials (BOM)</label>
-                        <p className="text-sm  text-slate-900 mt-2">BOM-{viewingWorkOrder.bom_no || 'NA'}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-500   ">Quantity to Produce</label>
-                        <p className="text-sm  text-slate-900 mt-2">{viewingWorkOrder.quantity || 0} <span className="text-slate-400">UNIT</span></p>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-500   ">Priority Level</label>
-                        <p className="text-sm  text-slate-900 mt-2">{viewingWorkOrder.priority || 'Normal'}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Sales Order Reference */}
-                  <div className="border border-slate-200 rounded  p-5">
-                    <label className="text-xs text-slate-500   ">Sales Order Reference</label>
-                    <p className="text-sm  text-slate-900 mt-2">{cleanProjectName(viewingWorkOrder.project_name, viewingWorkOrder.client_name)}</p>
-                  </div>
-                </>
-              )}
-
-              {woViewTab === 'timeline' && (
-                <>
-                  <div className="border border-slate-200 rounded  p-5">
-                    <h4 className="text-xs  text-slate-900 mb-4 flex items-center gap-2">
-                      <span>02</span>
-                      Production Timeline
-                    </h4>
-                    <div className="grid grid-cols-3 gap-6">
-                      <div>
-                        <label className="text-xs text-slate-500   ">Planned Start Date</label>
-                        <p className="text-sm  text-slate-900 mt-2">{formatDisplayDate(viewingWorkOrder.start_date)}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-500   ">Planned Completion Date</label>
-                        <p className="text-sm  text-slate-900 mt-2">{formatDisplayDate(viewingWorkOrder.end_date)}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-500   ">Delivery Commitment</label>
-                        <p className="text-sm  text-amber-600 mt-2">Pending Schedule</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Efficiency Projection */}
-                  <div className="border border-slate-200 rounded  p-5">
-                    <h4 className="text-xs  text-slate-900 mb-4 flex items-center gap-2">
-                      <span>🎯</span>
-                      Efficiency Projection
-                    </h4>
-                    <p className="text-xl  text-slate-900">0%</p>
-                    <p className="text-xs text-slate-400 mt-2">Predicted production efficiency based on workstation load.</p>
-                  </div>
-                </>
-              )}
-
-              {woViewTab === 'operations' && (
-                <>
-                  <div className="border border-slate-200 rounded  overflow-hidden">
-                    <div className="bg-slate-50 px-5 p-2 border-b border-slate-200">
-                      <h4 className="text-xs  text-slate-900 flex items-center gap-2">
-                        <span>03</span>
-                        Operation Sequence
-                      </h4>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-slate-50 border-b border-slate-100">
-                          <tr>
-                            <th className="p-2 text-left text-xs  text-slate-500">Phase</th>
-                            <th className="p-2 text-left text-xs  text-slate-500">Assignment</th>
-                            <th className="p-2 text-left text-xs  text-slate-500">Status</th>
-                            <th className="p-2 text-left text-xs  text-slate-500">Time & Cost</th>
-                            <th className="p-2 text-left text-xs  text-slate-500">Progress</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="p-2">
-                              <span className="text-slate-900 ">No operations defined yet</span>
-                            </td>
-                            <td colSpan="4" className="p-2 text-center text-slate-500">Create job cards from this work order to define operations</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {woViewTab === 'inventory' && (
-                <>
-                  <div className="border border-slate-200 rounded  p-5">
-                    <h4 className="text-xs  text-slate-900 mb-4 flex items-center gap-2">
-                      <span>04</span>
-                      Required Inventory
-                    </h4>
-                    <p className="text-sm text-slate-500">Material requirements will be displayed based on the BOM.</p>
-                  </div>
-
-                  {/* Inventory Advisory */}
-                  <div className="bg-indigo-50 border border-indigo-200 rounded  p-5">
-                    <div className="flex gap-2">
-                      <span className="text-xl">ℹ️</span>
-                      <div>
-                        <h5 className=" text-indigo-900 mb-1">Inventory Advisory</h5>
-                        <p className="text-sm text-indigo-700">System tracks real-time material transfers. Ensure all raw materials are transferred from "Stores" to "Production" before consumption.</p>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {woViewTab === 'report' && (
-                <>
-                  <div className="border border-slate-200 rounded  overflow-hidden">
-                    <div className="bg-slate-50 px-5 p-2 border-b border-slate-200 flex items-center justify-between">
-                      <h4 className="text-xs  text-slate-900 flex items-center gap-2">
-                        <span>05</span>
-                        Daily Production History
-                      </h4>
-                      <button className="text-xs bg-indigo-600 text-white p-1.5 rounded hover:bg-indigo-700">
-                        📥 Export CSV
-                      </button>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-slate-50 border-b border-slate-100">
-                          <tr>
-                            <th className="p-2 text-left text-xs  text-slate-500">Date</th>
-                            <th className="p-2 text-left text-xs  text-slate-500">Shift</th>
-                            <th className="p-2 text-left text-xs  text-slate-500">Operation</th>
-                            <th className="p-2 text-left text-xs  text-slate-500">Operator</th>
-                            <th className="p-2 text-left text-xs  text-slate-500">Produced</th>
-                            <th className="p-2 text-left text-xs  text-slate-500">Accepted</th>
-                            <th className="p-2 text-left text-xs  text-slate-500">Rejected</th>
-                            <th className="p-2 text-left text-xs  text-slate-500">Downtime</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr className="text-center text-slate-500 py-8">
-                            <td colSpan="8" className="px-4 py-8">
-                              No production logs found for this work order yet.
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex justify-between items-center pt-4 border-t border-slate-200">
-              <button
-                onClick={() => setViewingWorkOrder(null)}
-                className="p-2 text-xs text-slate-600 hover:text-slate-900 "
-              >
-                Close
-              </button>
-              <button
-                onClick={() => {
-                  setViewingWorkOrder(null);
-                  handleEdit(viewingWorkOrder.id);
-                }}
-                className="flex items-center gap-2 p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700  text-sm"
-              >
-                <Edit2 className="w-4 h-4" />
-                Edit Work Order
-              </button>
-            </div>
+      {/* Next step */}
+      {draftCount > 0 && statusFilter !== 'DRAFT' && (
+        <div className="flex flex-wrap items-center gap-3 rounded border border-indigo-200 bg-indigo-50 p-3">
+          <Rocket className="w-5 h-5 text-indigo-600" />
+          <div className="flex-1 min-w-[14rem]">
+            <div className="text-sm text-slate-900">{draftCount} work order(s) are still in draft</div>
+            <div className="text-xs text-slate-500">Release a work order to make its job cards active. Material must be released by Stores before work can start.</div>
           </div>
-        )}
-      </Modal>
+          <button onClick={() => setStatusFilter('DRAFT')} className="px-3 py-1.5 text-xs border border-indigo-300 text-indigo-700 rounded hover:bg-white">Show drafts</button>
+        </div>
+      )}
 
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-1">
+          {STATUS_FILTERS.map(f => (
+            <button key={f.id} onClick={() => setStatusFilter(f.id)}
+              className={`px-3 py-1.5 text-xs rounded-full border ${statusFilter === f.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+              {f.label} <span className={statusFilter === f.id ? 'opacity-80' : 'text-slate-400'}>{counts[f.id] || 0}</span>
+            </button>
+          ))}
+          <button onClick={() => setLateOnly(v => !v)}
+            className={`px-3 py-1.5 text-xs rounded-full border flex items-center gap-1 ${lateOnly ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-200 hover:bg-rose-50'}`}>
+            <AlertTriangle className="w-3 h-3" /> Late {lateCount}
+          </button>
+        </div>
+        <div className="relative ml-auto">
+          <Search className="w-3 h-3 absolute left-2 top-2.5 text-slate-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search work order, item, project, plan..." className="pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded w-72" />
+        </div>
+      </div>
 
+      {/* Groups */}
+      {loading && workOrders.length === 0 ? (
+        <div className="p-10 text-center text-sm text-slate-500">Loading work orders...</div>
+      ) : groups.length === 0 ? (
+        <div className="border border-dashed border-slate-200 rounded p-10 text-center">
+          <div className="text-sm text-slate-700">{workOrders.length === 0 ? 'No work orders yet' : 'No work orders match these filters'}</div>
+          <div className="text-xs text-slate-500 mt-1">{workOrders.length === 0 ? 'Create them from a production plan, or add one manually.' : 'Try another status or clear the search.'}</div>
+        </div>
+      ) : groups.map(g => {
+        const isCollapsed = collapsed[g.key] ?? g.allDone;
+        return (
+          <div key={g.key} className="bg-white border border-slate-200 rounded">
+            <div className="flex flex-wrap items-center gap-3 px-3 py-2 border-b border-slate-100 bg-slate-50 rounded-t cursor-pointer" onClick={(e) => { e.stopPropagation(); setCollapsed(c => ({ ...c, [g.key]: !isCollapsed })); }}>
+              {isCollapsed ? <ChevronRight className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              <div className="min-w-[10rem]">
+                <div className="text-sm text-slate-900 leading-tight">{g.title}</div>
+                <div className="text-[11px] text-slate-500">{g.planCode ? `Plan ${g.planCode} · ` : ''}{g.items.length} work order(s)</div>
+              </div>
+              <div className="flex items-center gap-2 w-44">
+                <div className="flex-1 h-2 bg-slate-200 rounded overflow-hidden"><div className="h-full bg-indigo-500" style={{ width: `${g.progress}%` }} /></div>
+                <span className="text-xs text-slate-600 w-9 text-right">{g.progress}%</span>
+              </div>
+              <div className="text-xs text-slate-500">Due {formatDate(g.due)}</div>
+              {g.late > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">{g.late} late</span>}
+              {g.held > 0 && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{g.held} job(s) held</span>}
+              {g.drafts.length > 0 && (
+                <button disabled={busy} onClick={(e) => { e.stopPropagation(); releaseAll(g); }} className="ml-auto flex items-center gap-1 px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded disabled:opacity-50">
+                  <Rocket className="w-3 h-3" /> Release all drafts ({g.drafts.length})
+                </button>
+              )}
+            </div>
+
+            {!isCollapsed && (
+              <div className="divide-y divide-slate-100">
+                {g.rows.map(({ wo, depth, hasChildren }) => {
+                  const type = describeType(wo, hasChildren);
+                  const TypeIcon = type.icon;
+                  const total = Number(wo.total_job_cards) || 0;
+                  const done = Number(wo.completed_job_cards) || 0;
+                  const pct = total ? Math.round((done / total) * 100) : 0;
+                  const late = isLate(wo);
+                  const action = primaryAction(wo);
+                  const ActionIcon = action.icon;
+                  return (
+                    <div key={wo.id} className={`flex flex-wrap items-center gap-3 px-3 py-2.5 ${wo.status === 'CANCELLED' ? 'opacity-50' : ''}`} style={{ paddingLeft: depth ? '2.25rem' : undefined }}>
+                      {depth > 0 && <CornerDownRight className="w-4 h-4 text-slate-300 -ml-5" />}
+                      <span className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded w-28 shrink-0 ${type.cls}`}><TypeIcon className="w-3 h-3" />{type.label}</span>
+                      <div className="min-w-[11rem] flex-1">
+                        <div className="text-sm text-slate-900 leading-tight">{wo.item_name || wo.item_code}
+                          {PRIORITY_CLS[wo.priority] && <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${PRIORITY_CLS[wo.priority]}`}>{wo.priority}</span>}
+                        </div>
+                        <div className="text-[11px] text-slate-500"><span className="text-indigo-600">{wo.wo_number}</span> · BOM {wo.bom_no || 'NA'}{wo.source_type === 'SA' && wo.source_fg ? ` · for ${wo.source_fg}` : ''}</div>
+                      </div>
+                      <div className="w-16 text-sm text-slate-900 text-right">{parseFloat(wo.quantity)}<span className="text-[10px] text-slate-400 ml-0.5">pcs</span></div>
+                      <div className="w-36">
+                        <div className="flex justify-between text-[11px] text-slate-500"><span>{done}/{total} operations</span><span>{pct}%</span></div>
+                        <div className="h-1.5 bg-slate-100 rounded overflow-hidden"><div className="h-full bg-blue-500" style={{ width: `${pct}%` }} /></div>
+                      </div>
+                      <div className={`w-24 text-xs ${late ? 'text-rose-600' : 'text-slate-500'}`}>{late ? 'Late · ' : 'Due '}{formatDate(wo.end_date)}</div>
+                      <div className="w-24"><StatusBadge status={wo.status} />{Number(wo.held_job_cards) > 0 && <div className="text-[10px] text-amber-600">{wo.held_job_cards} held</div>}</div>
+                      <div className="flex items-center gap-1 ml-auto" onClick={e => e.stopPropagation()}>
+                        <button disabled={busy} onClick={action.run} className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded disabled:opacity-50 ${action.cls}`}><ActionIcon className="w-3.5 h-3.5" />{action.label}</button>
+                        <div className="relative">
+                          <button onClick={() => setMenuFor(menuFor === wo.id ? null : wo.id)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded" title="More actions"><MoreVertical className="w-4 h-4" /></button>
+                          {menuFor === wo.id && (
+                            <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-200 rounded shadow-lg z-20 text-xs">
+                              {['DRAFT', 'RELEASED', 'ON_HOLD'].includes(wo.status) && <button onClick={() => { setMenuFor(null); edit(wo); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2"><Pencil className="w-3 h-3" /> Edit</button>}
+                              {['RELEASED', 'IN_PROGRESS'].includes(wo.status) && <button onClick={() => { setMenuFor(null); hold(wo); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-amber-700"><PauseCircle className="w-3 h-3" /> Put on hold</button>}
+                              {!['COMPLETED', 'CANCELLED'].includes(wo.status) && <button onClick={() => { setMenuFor(null); cancel(wo); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-rose-600"><XCircle className="w-3 h-3" /> Cancel work order</button>}
+                              {wo.status === 'DRAFT' && <button onClick={() => { setMenuFor(null); remove(wo); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-rose-600"><Trash2 className="w-3 h-3" /> Delete</button>}
+                              <button onClick={() => { setMenuFor(null); openJobCards(wo); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2"><Activity className="w-3 h-3" /> Open job cards</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };
 
 export default WorkOrder;
-

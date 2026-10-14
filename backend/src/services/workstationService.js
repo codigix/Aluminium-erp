@@ -57,6 +57,23 @@ const updateWorkstation = async (id, data) => {
 };
 
 const deleteWorkstation = async (id) => {
+  // A machine with live or past production attached is history: deactivate it instead
+  const [[usage]] = await pool.query(
+    `SELECT
+       (SELECT COUNT(*) FROM job_cards WHERE workstation_id = ? AND status NOT IN ('COMPLETED', 'CANCELLED')) AS open_jobs,
+       (SELECT COUNT(*) FROM job_card_time_logs WHERE workstation_id = ?) AS time_logs`,
+    [id, id]
+  );
+  if (Number(usage.open_jobs) > 0) {
+    const error = new Error(`This workstation still has ${usage.open_jobs} open job card(s) assigned. Reassign or complete them first.`);
+    error.statusCode = 409;
+    throw error;
+  }
+  if (Number(usage.time_logs) > 0) {
+    const error = new Error('This workstation has production history and cannot be deleted. Set its status to Inactive instead.');
+    error.statusCode = 409;
+    throw error;
+  }
   await pool.query('DELETE FROM workstations WHERE id = ?', [id]);
   return { success: true };
 };

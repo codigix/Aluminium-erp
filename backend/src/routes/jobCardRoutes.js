@@ -12,6 +12,13 @@ router.get('/vendor-receipts/:logId/items', authorize(['PAYMENT_VIEW', 'PO_VIEW'
 router.patch('/vendor-receipts/:logId/send-to-payment', authorize(['PAYMENT_MANAGE', 'PAYMENT_PROCESS']), jobCardController.sendVendorReceiptToPayment);
 router.get('/active-allocations', authorize(['PROD_VIEW', 'QC_VIEW']), jobCardController.getActiveAllocations);
 
+router.get('/schedule/board', authorize(['PROD_VIEW']), jobCardController.getScheduleBoard);
+router.get('/:id/availability', authorize(['PROD_VIEW']), jobCardController.getAvailability);
+router.get('/:id/quantity-availability', authorize(['PROD_VIEW', 'QC_VIEW']), jobCardController.getQuantityAvailability);
+router.post('/:id/schedule', authorize(['PROD_MANAGE']), jobCardController.scheduleJobCard);
+router.post('/:id/hold', authorize(['PROD_MANAGE']), jobCardController.holdJobCard);
+router.post('/:id/resume', authorize(['PROD_MANAGE']), jobCardController.resumeJobCard);
+
 router.get('/', authorize(['PROD_VIEW', 'QC_VIEW']), jobCardController.listJobCards);
 router.get('/:id/details', authorize(['PROD_VIEW', 'QC_VIEW']), jobCardController.getJobCardDetails);
 router.post('/', authorize(['PROD_MANAGE']), jobCardController.createJobCard);

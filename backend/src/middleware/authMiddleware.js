@@ -95,6 +95,43 @@ exports.authorize = (requiredPermissions = []) => {
   };
 };
 
+// Same rules as authorize(), usable inside a controller when behaviour (not
+// access) depends on a permission, e.g. only QC approvers may approve an inspection.
+exports.userHasAnyPermission = async (user, requiredPermissions = []) => {
+  if (!user) return false;
+  if (user.role === 'SYS_ADMIN') return true;
+  if (requiredPermissions.length === 0) return true;
+
+  try {
+    const [results] = await db.query(
+      `SELECT p.code FROM role_permissions rp
+       JOIN permissions p ON rp.permission_id = p.id
+       WHERE rp.role_id = ?`,
+      [user.role_id]
+    );
+    const userPermissions = Array.isArray(results) ? results.map(r => r.code) : [];
+    if (requiredPermissions.some(perm => userPermissions.includes(perm))) return true;
+
+    const [roleCheck] = await db.query('SELECT code FROM roles WHERE id = ?', [user.role_id]);
+    if (roleCheck.length > 0 && roleCheck[0].code === 'SYS_ADMIN') return true;
+
+    if (user.department_code) {
+      let deptKey = user.department_code;
+      if (typeof deptKey === 'number' || !isNaN(deptKey)) {
+        const found = Object.entries(DEPARTMENT_CODES).find(([_, value]) => String(value) === String(deptKey));
+        if (found) deptKey = found[0];
+      }
+      const deptRules = DEPARTMENT_ACCESS_RULES[deptKey];
+      if (deptRules && deptRules.permissions) {
+        return requiredPermissions.some(perm => deptRules.permissions.includes(perm));
+      }
+    }
+  } catch (error) {
+    console.error('userHasAnyPermission failed:', error.message);
+  }
+  return false;
+};
+
 exports.authorizeByDepartment = (allowedDepartments = []) => {
   return (req, res, next) => {
     try {

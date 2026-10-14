@@ -64,7 +64,9 @@ const addToQualityQueue = async (req, res) => {
       rejectedQty: 0,
       scrapQty: 0,
       rejectionReason: null,
-      notes: 'Sent from Production'
+      notes: 'Sent from Production',
+      userId: req.user?.id || null,
+      canApprove: false
     };
 
     console.log('[DEBUG] Calling addQualityLog with:', data);

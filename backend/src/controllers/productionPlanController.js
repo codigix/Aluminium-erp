@@ -151,6 +151,14 @@ const bulkCreateProductionPlans = async (req, res, next) => {
   }
 };
 
+const getPlanMaterialStatus = async (req, res, next) => {
+  try {
+    res.json(await productionPlanService.getPlanMaterialStatus(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getBulkMaterialRequestPreview = async (req, res, next) => {
   try {
     const { planIds } = req.body;
@@ -172,6 +180,7 @@ const bulkCreateMaterialRequests = async (req, res, next) => {
 };
 
 module.exports = {
+  getPlanMaterialStatus,
   listProductionPlans,
   getProductionPlanById,
   createProductionPlan,

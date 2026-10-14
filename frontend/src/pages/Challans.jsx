@@ -4,6 +4,7 @@ import { Card, DataTable, StatusBadge, Modal, FormControl, Tabs, Button } from '
 import { Truck, Package, Eye, Search, Filter, Calendar, User, Building2, ClipboardList, ArrowRight, Download, FileText, CheckCircle, Send, History, Upload, ChevronDown, Trash2, Plus } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 import Swal from 'sweetalert2';
+import SubcontractTracker from './SubcontractTracker.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -372,35 +373,17 @@ const Challans = () => {
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl  text-slate-900">Subcontracting Challans</h1>
-          <p className="text-slate-500 text-xs">Track outward material movement and vendor receipts</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Tabs
-            tabs={[
-              { label: 'Outward Challans', value: 'outward', icon: Send },
-              { label: 'Inward Receipts', value: 'inward', icon: History }
-            ]}
-            activeTab={activeTab}
-            onTabChange={handleTabChange}
-            className="border-none px-0"
-          />
-          
-          
-        </div>
-      </div>
-
-      <Card className="overflow-hidden border-slate-200">
-        <DataTable 
-          columns={activeTab === 'outward' ? outwardColumns : inwardColumns}
-          data={filteredData}
-          loading={loading}
-          emptyMessage={`No ${activeTab} challans found`}
-        />
-      </Card>
+      <SubcontractTracker
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        outward={outwardChallans}
+        inward={inwardChallans}
+        loading={loading}
+        onViewOutward={(c) => navigate(`${deptPrefix}/sub-contract-challans/${activeTab}/details?id=${c.id}`)}
+        onViewInward={(r) => navigate(`${deptPrefix}/sub-contract-challans/inward/details?id=${r.id}`)}
+        onPdf={(c) => handleDownloadPDF(c.id, c.challan_number)}
+        onRecordInward={(c) => navigate(`${deptPrefix}/sub-contract-challans/outward/record-inward?id=${c.id}`)}
+      />
 
       <Modal
         isOpen={isViewModalOpen}

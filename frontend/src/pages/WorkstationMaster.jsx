@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, StatusBadge, FormControl, Modal, DataTable, Badge, SearchableSelect } from '../components/ui.jsx';
-import { Search, Plus, RefreshCw, Edit2, Trash2 } from 'lucide-react';
+import { Search, Plus, RefreshCw, Edit2, Trash2, Eye } from 'lucide-react';
+import WorkstationScheduleView from './WorkstationScheduleView.jsx';
+import WorkstationList from './WorkstationList.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast.js';
 
@@ -21,6 +23,8 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
   const [searchParams] = useSearchParams();
   const [workstations, setWorkstations] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [viewingWorkstation, setViewingWorkstation] = useState(null);
+  const [overview, setOverview] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
@@ -83,6 +87,18 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
       if (!response.ok) throw new Error('Failed to fetch workstations');
       const data = await response.json();
       setWorkstations(data);
+      // Live state per machine; if it cannot be loaded the list still shows the machine details
+      try {
+        const live = await fetch(`${API_BASE}/workstations/overview`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (live.ok) {
+          const rows = await live.json();
+          setOverview(Object.fromEntries(rows.map(r => [r.id, r])));
+        } else {
+          setOverview({});
+        }
+      } catch (e) {
+        setOverview({});
+      }
     } catch (error) {
       console.error(error);
       errorToast('Failed to load workstations');
@@ -225,7 +241,10 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!response.ok) throw new Error('Failed to delete workstation');
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.message || body.error || 'Failed to delete workstation');
+        }
         successToast('Workstation has been deleted.');
         fetchWorkstations();
       } catch (error) {
@@ -273,6 +292,13 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
       render: (_, row) => (
         <div className="flex justify-center gap-2">
           <button
+            onClick={() => setViewingWorkstation(row)}
+            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded  transition-colors"
+            title="View availability & schedule"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => handleEdit(row)}
             className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded  transition-colors"
             title="Edit Workstation"
@@ -293,6 +319,15 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
 
   return (
     <div className="">
+      <Modal
+        isOpen={Boolean(viewingWorkstation)}
+        onClose={() => setViewingWorkstation(null)}
+        title={viewingWorkstation ? `Availability & Schedule — ${viewingWorkstation.workstation_name}` : ''}
+        size="7xl"
+      >
+        {viewingWorkstation && <WorkstationScheduleView workstationId={viewingWorkstation.id} />}
+      </Modal>
+
       <Modal isOpen={showForm} onClose={() => { navigate(`${deptPrefix}/workstation-master`); }} title={isEditing ? "Edit Workstation" : "Create Workstation"}>
         <form onSubmit={handleSubmit} className="space-y-3">
           {/* Basic Information */}
@@ -370,31 +405,15 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
         </form>
       </Modal>
 
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-
-          <div>
-            <h1 className="text-xl  text-slate-900">Workstation Master</h1>
-            <p className="text-slate-500 text-xs">Manage production floor workstations and equipment</p>
-          </div>
-        </div>
-        <button
-          onClick={() => { navigate(`${deptPrefix}/workstation-master/form`); }}
-          className="flex items-center justify-center gap-2 p-2 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded  transition-all shadow-lg shadow-indigo-200 "
-        >
-          <Plus className="w-5 h-5" />
-          Add Workstation
-        </button>
-      </div>
-
-      {/* List Section */}
-      <DataTable
-        columns={columns}
-        data={workstations}
+      <WorkstationList
+        workstations={workstations}
+        overview={overview}
         loading={loading}
-        searchPlaceholder="Search workstations, locations, or types..."
-        searchKey="workstation_name"
+        onNew={() => { navigate(`${deptPrefix}/workstation-master/form`); }}
+        onRefresh={fetchWorkstations}
+        onSchedule={(w) => setViewingWorkstation(w)}
+        onEdit={(w) => handleEdit(w)}
+        onDelete={(w) => handleDelete(w.id, w.workstation_name)}
       />
 
     </div>

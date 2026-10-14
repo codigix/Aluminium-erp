@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, StatusBadge, FormControl, Modal, DataTable } from '../components/ui.jsx';
 import { 
   RefreshCw, 
@@ -18,6 +19,15 @@ import { successToast, errorToast } from '../utils/toast';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const MaterialRequirements = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const deptPrefix = (() => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '/production';
+  })();
+  const [view, setView] = useState('plan');
+  const [plans, setPlans] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState('ALL');
@@ -34,7 +44,17 @@ const MaterialRequirements = () => {
   useEffect(() => {
     fetchRequirements();
     fetchWorkOrders();
+    fetchPlans();
   }, []);
+
+  const fetchPlans = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/production-plans`, { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } });
+      if (response.ok) setPlans(await response.json());
+    } catch (error) {
+      console.error('Error fetching plans:', error);
+    }
+  };
 
   const fetchRequirements = async () => {
     try {
@@ -75,6 +95,13 @@ const MaterialRequirements = () => {
     setSelectedMat(mat);
     setIsDetailsModalOpen(true);
   };
+
+  // Work orders that belong to a plan needing the selected material
+  const issuableWorkOrders = useMemo(() => {
+    if (!selectedMat) return [];
+    const planCodes = new Set((selectedMat.details || []).map(d => d.plan_code));
+    return workOrders.filter(wo => wo.plan_code && planCodes.has(wo.plan_code) && !['COMPLETED', 'CANCELLED'].includes(wo.status));
+  }, [selectedMat, workOrders]);
 
   const handleOpenIssue = (mat) => {
     setSelectedMat(mat);
@@ -218,6 +245,21 @@ const MaterialRequirements = () => {
     }
   ];
 
+  const activePlans = useMemo(() => plans.filter(p => !['CANCELLED', 'COMPLETED', 'DELETED'].includes(String(p.status || '').toUpperCase())), [plans]);
+  // plan_code -> its materials, each carrying the stock shortage of that material overall
+  const materialsByPlan = useMemo(() => {
+    const map = new Map();
+    requirements.forEach(req => (req.details || []).forEach(d => {
+      if (!map.has(d.plan_code)) map.set(d.plan_code, []);
+      // Each plan's own share of the common stock, not the overall total
+      map.get(d.plan_code).push({
+        material_name: req.material_name, material_type: req.material_type, uom: req.uom, qty: d.qty,
+        released: d.released_qty || 0, covered: d.covered_qty || 0, shortage: d.short_qty || 0
+      });
+    }));
+    return map;
+  }, [requirements]);
+
   const totalRequired = requirements.length;
   const withShortage = requirements.filter(r => r.shortage > 0).length;
 
@@ -270,6 +312,75 @@ const MaterialRequirements = () => {
         </Card>
       </div>
 
+
+      {/* View switch */}
+      <div className="flex gap-1 border-b border-slate-200">
+        {[['plan', 'By production plan'], ['material', 'By material']].map(([id, label]) => (
+          <button key={id} onClick={() => setView(id)} className={`px-4 py-2 text-sm border-b-2 -mb-px ${view === id ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>{label}</button>
+        ))}
+      </div>
+
+      {view === 'plan' && (
+        <div className="space-y-2">
+          <div className="text-xs text-slate-500">For each plan: is the material requested, released by Stores, and covered by stock? Plans share one stock, so it is handed out in order of plan start date. Material already released to a plan no longer counts against stock.</div>
+          {activePlans.length === 0 ? (
+            <div className="border border-dashed border-slate-200 rounded p-8 text-center text-sm text-slate-500">No active production plans.</div>
+          ) : activePlans.map(plan => {
+            const mats = materialsByPlan.get(plan.plan_code) || [];
+            const live = Number(plan.live_mr_count) || 0;
+            const released = Number(plan.released_mr_count) || 0;
+            const state = live === 0 ? { label: 'Material not requested', cls: 'bg-rose-50 text-rose-700' }
+              : released >= live ? { label: 'Released by Stores', cls: 'bg-emerald-50 text-emerald-700' }
+              : { label: released > 0 || Number(plan.partial_mr_count) > 0 ? 'Partly released' : 'Requested — waiting for Stores', cls: 'bg-amber-50 text-amber-700' };
+            const planWos = workOrders.filter(w => w.plan_code === plan.plan_code && !['COMPLETED', 'CANCELLED'].includes(w.status));
+            const short = mats.filter(m => m.shortage > 0).length;
+            return (
+              <div key={plan.id} className="bg-white border border-slate-200 rounded">
+                <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-slate-50 border-b border-slate-100 rounded-t">
+                  <div className="min-w-[11rem]">
+                    <div className="text-sm text-indigo-700">{plan.plan_code}</div>
+                    <div className="text-[11px] text-slate-500">{plan.project_name || plan.company_name || ''} · {plan.drawing_no || plan.item_code || ''}</div>
+                  </div>
+                  <span className={`text-[11px] px-2 py-0.5 rounded ${state.cls}`}>{state.label}</span>
+                  {short > 0 && <span className="text-[11px] px-2 py-0.5 rounded bg-rose-50 text-rose-700">{short} material(s) short in stock</span>}
+                  <div className="ml-auto flex gap-2">
+                    {live === 0 && <button onClick={() => navigate(`${deptPrefix}/production-plan`)} className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700">Request material on the plan</button>}
+                    {planWos.length > 0 && <button onClick={() => navigate(`${deptPrefix}/work-order?plan=${encodeURIComponent(plan.plan_code)}`)} className="px-3 py-1.5 text-xs border border-slate-200 rounded hover:bg-slate-50">Work orders ({planWos.length})</button>}
+                  </div>
+                </div>
+                <div className="px-3 py-2">
+                  {mats.length === 0 ? <div className="text-xs text-slate-400">No bill-of-material rows found for this plan.</div> : (
+                    <table className="w-full text-xs">
+                      <thead className="text-slate-400 text-left"><tr><th className="py-1">Material</th><th className="py-1 text-right">Needed</th><th className="py-1 text-right">Already released</th><th className="py-1 text-right">Covered by stock</th><th className="py-1">Status</th></tr></thead>
+                      <tbody>
+                        {mats.map((m, i) => (
+                          <tr key={i} className="border-t border-slate-100">
+                            <td className="py-1.5 text-slate-800">{m.material_name}<span className="text-[10px] text-slate-400 ml-1">{m.material_type}</span></td>
+                            <td className="py-1.5 text-right">{parseFloat(m.qty || 0).toFixed(2)} {m.uom}</td>
+                            <td className="py-1.5 text-right">{parseFloat(m.released || 0).toFixed(2)} {m.uom}</td>
+                            <td className="py-1.5 text-right">{parseFloat(m.covered || 0).toFixed(2)} {m.uom}</td>
+                            <td className="py-1.5">{m.shortage > 0.0005 ? <span className="text-rose-600">Short by {parseFloat(m.shortage).toFixed(2)} {m.uom}</span> : <span className="text-emerald-600">Covered</span>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {planWos.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      Issue, use and return material per work order:
+                      {planWos.map(w => (
+                        <button key={w.id} onClick={() => navigate(`${deptPrefix}/work-order/edit-work?id=${w.id}`)} className="px-2 py-1 border border-slate-200 rounded hover:bg-indigo-50 text-indigo-700">{w.wo_number}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {view === 'material' && (
       <Card>
         <DataTable 
           columns={columns}
@@ -291,6 +402,7 @@ const MaterialRequirements = () => {
           }
         />
       </Card>
+      )}
 
       <Modal
         isOpen={isDetailsModalOpen}
@@ -330,6 +442,10 @@ const MaterialRequirements = () => {
         title={`Issue Material: ${selectedMat?.material_name}`}
       >
         <form onSubmit={handleIssueSubmit} className="space-y-2">
+          <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-2">
+            Stores release material on the production plan first. Issuing here hands that released material to one work order.
+            {issuableWorkOrders.length === 0 && <span className="block text-amber-700 mt-1">No active work order needs this material yet. Create the plan's work orders first.</span>}
+          </div>
           <FormControl label="Work Order">
             <select 
               value={issueData.workOrderId}
@@ -338,8 +454,8 @@ const MaterialRequirements = () => {
               required
             >
               <option value="">Select Work Order</option>
-              {workOrders.map(wo => (
-                <option key={wo.id} value={wo.id}>{wo.wo_number} - {wo.project_name}</option>
+              {issuableWorkOrders.map(wo => (
+                <option key={wo.id} value={wo.id}>{wo.wo_number} - {wo.item_name || wo.item_code} ({wo.status})</option>
               ))}
             </select>
           </FormControl>

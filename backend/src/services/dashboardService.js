@@ -318,59 +318,143 @@ const getProcurementDashboardStats = async () => {
 };
 
 const getProductionDashboardStats = async () => {
-  const [[woStats]] = await pool.query(`
-    SELECT 
-      COUNT(*) as activeJobs,
-      COALESCE(SUM(CASE WHEN status = 'COMPLETED' AND DATE(updated_at) = CURRENT_DATE THEN 1 ELSE 0 END), 0) as completedToday
-    FROM work_orders
-    WHERE status NOT IN ('CANCELLED', 'COMPLETED')
+  // Required lazily: the report service depends on the same pool
+  const reportService = require('./productionReportService');
+  const delta = (current, previous) => {
+    const c = parseFloat(current) || 0;
+    const p = parseFloat(previous) || 0;
+    if (p <= 0) return null;
+    return Math.round(((c - p) / p) * 1000) / 10;
+  };
+
+  const [[jobs]] = await pool.query(`
+    SELECT
+      COALESCE(SUM(status = 'IN_PROGRESS'), 0) AS running,
+      COALESCE(SUM(status = 'ON_HOLD'), 0) AS on_hold,
+      COALESCE(SUM(status IN ('PENDING', 'READY')), 0) AS waiting
+    FROM job_cards
+    WHERE is_rework = 0 AND status NOT IN ('CANCELLED', 'COMPLETED', 'DRAFT')
+  `);
+  const [[late]] = await pool.query(`
+    SELECT COUNT(*) AS cnt FROM work_orders
+    WHERE end_date < CURDATE() AND status NOT IN ('COMPLETED', 'CANCELLED')
+  `);
+  const [[machines]] = await pool.query(`
+    SELECT
+      (SELECT COUNT(*) FROM workstations WHERE COALESCE(status, 'Active') = 'Active') AS total,
+      (SELECT COUNT(DISTINCT workstation_id) FROM job_cards WHERE status = 'IN_PROGRESS' AND workstation_id IS NOT NULL) AS busy
+  `);
+  const [[output]] = await pool.query(`
+    SELECT
+      COALESCE(SUM(CASE WHEN log_date = CURDATE() THEN produced_qty END), 0) AS today,
+      COALESCE(SUM(CASE WHEN log_date = CURDATE() - INTERVAL 1 DAY THEN produced_qty END), 0) AS yesterday
+    FROM job_card_time_logs WHERE log_date >= CURDATE() - INTERVAL 1 DAY
+  `);
+  const [[quality]] = await pool.query(`
+    SELECT COALESCE(SUM(inspected_qty), 0) AS inspected, COALESCE(SUM(accepted_qty), 0) AS accepted,
+           COALESCE(SUM(rejected_qty), 0) AS rejected, COALESCE(SUM(scrap_qty), 0) AS scrap
+    FROM job_card_quality_logs WHERE status = 'APPROVED' AND check_date >= CURDATE() - INTERVAL 6 DAY
+  `);
+  const [[rework]] = await pool.query(`
+    SELECT COUNT(*) AS cnt FROM job_cards WHERE is_rework = 1 AND status NOT IN ('COMPLETED', 'CANCELLED')
+  `);
+  const [[shipped]] = await pool.query(`
+    SELECT COALESCE(SUM(quantity), 0) AS qty FROM shipment_orders
+    WHERE status NOT IN ('CANCELLED', 'REJECTED') AND created_at >= CURDATE() - INTERVAL 6 DAY
+  `);
+  const [[onTime]] = await pool.query(`
+    SELECT COUNT(*) AS total, COALESCE(SUM(done_at <= DATE_ADD(end_date, INTERVAL 1 DAY)), 0) AS on_time
+    FROM (
+      SELECT wo.end_date, (SELECT MAX(jc.updated_at) FROM job_cards jc WHERE jc.work_order_id = wo.id AND jc.status = 'COMPLETED') AS done_at
+      FROM work_orders wo WHERE wo.status = 'COMPLETED' AND wo.end_date IS NOT NULL
+    ) t WHERE done_at >= CURDATE() - INTERVAL 30 DAY
   `);
 
-  const [[planStats]] = await pool.query(`
-    SELECT COUNT(*) as plannedCount FROM production_plans WHERE status = 'PLANNED'
+  // Last 7 days: pieces made vs pieces QC accepted / rejected
+  const [series] = await pool.query(`
+    SELECT DATE_FORMAT(d.day, '%a %d') AS name,
+           COALESCE((SELECT SUM(produced_qty) FROM job_card_time_logs WHERE log_date = d.day), 0) AS produced,
+           COALESCE((SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE check_date = d.day AND status = 'APPROVED'), 0) AS accepted,
+           COALESCE((SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE check_date = d.day AND status = 'APPROVED'), 0) AS rejected
+    FROM (
+      SELECT CURDATE() - INTERVAL 6 DAY AS day UNION SELECT CURDATE() - INTERVAL 5 DAY UNION SELECT CURDATE() - INTERVAL 4 DAY UNION
+      SELECT CURDATE() - INTERVAL 3 DAY UNION SELECT CURDATE() - INTERVAL 2 DAY UNION SELECT CURDATE() - INTERVAL 1 DAY UNION SELECT CURDATE()
+    ) d ORDER BY d.day
   `);
 
   const [priorityOrders] = await pool.query(`
-    SELECT 
-      id,
-      wo_number as wo_code, 
-      item_name,
-      quantity,
-      'NOS' as unit,
-      status
-    FROM work_orders
-    WHERE status NOT IN ('COMPLETED', 'CANCELLED')
-    ORDER BY created_at DESC LIMIT 5
+    SELECT wo.id, wo.wo_number, wo.item_code, wo.item_name, wo.quantity, wo.priority, wo.status, wo.end_date,
+           DATEDIFF(CURDATE(), wo.end_date) AS days_late,
+           (SELECT COALESCE(SUM(jc.accepted_qty), 0) FROM job_cards jc
+              WHERE jc.work_order_id = wo.id AND jc.status != 'CANCELLED'
+                AND jc.sequence_no = (SELECT MAX(j2.sequence_no) FROM job_cards j2
+                                       WHERE j2.work_order_id = wo.id AND j2.is_rework = 0 AND j2.status != 'CANCELLED'
+                                         AND LOWER(TRIM(COALESCE(j2.operation_name, ''))) NOT IN ('shipment', 'dispatch'))) AS accepted_qty,
+           (SELECT COUNT(*) FROM job_cards jc WHERE jc.work_order_id = wo.id AND jc.status = 'ON_HOLD') AS held
+    FROM work_orders wo
+    WHERE wo.status IN ('RELEASED', 'IN_PROGRESS', 'ON_HOLD')
+    ORDER BY FIELD(wo.priority, 'URGENT', 'HIGH', 'NORMAL', 'LOW'), wo.end_date IS NULL, wo.end_date, wo.id
+    LIMIT 8
   `);
 
-  const [chartData] = await pool.query(`
-    SELECT 
-      DATE_FORMAT(date_list.date, '%b %d') as name,
-      COUNT(wo.id) as output
-    FROM (
-      SELECT CURRENT_DATE - INTERVAL 4 DAY as date UNION 
-      SELECT CURRENT_DATE - INTERVAL 3 DAY UNION 
-      SELECT CURRENT_DATE - INTERVAL 2 DAY UNION 
-      SELECT CURRENT_DATE - INTERVAL 1 DAY UNION 
-      SELECT CURRENT_DATE
-    ) date_list
-    LEFT JOIN work_orders wo ON DATE(wo.updated_at) = date_list.date AND wo.status = 'COMPLETED'
-    GROUP BY date_list.date
-    ORDER BY date_list.date ASC
-  `);
+  const to = new Date();
+  const from = new Date(to.getTime() - 6 * 86400000);
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const [utilisation, workspace] = await Promise.all([
+    reportService.getUtilisation({ from: fmt(from), to: fmt(to) }),
+    reportService.getWorkspace()
+  ]);
+  const machineLoad = utilisation.machines
+    .filter(m => m.utilisation_percent !== null)
+    .sort((a, b) => b.utilisation_percent - a.utilisation_percent)
+    .slice(0, 8)
+    .map(m => ({ name: m.name, utilisation: m.utilisation_percent, target: m.target_percent, runMinutes: m.run_minutes, downtimeMinutes: m.downtime_minutes }));
+  const avgUtilisation = utilisation.machines.length
+    ? Math.round((utilisation.machines.reduce((s, m) => s + (m.utilisation_percent || 0), 0) / utilisation.machines.length) * 10) / 10
+    : 0;
+
+  const pct = (part, whole) => (parseFloat(whole) > 0 ? Math.round((parseFloat(part) / parseFloat(whole)) * 1000) / 10 : null);
 
   return {
-    activeWorkOrders: woStats.activeJobs || 0,
-    plannedOrders: planStats.plannedCount || 0,
-    resourceLoad: 0,
-    completedToday: woStats.completedToday || 0,
-    priorityOrders,
-    chartData,
+    generatedAt: new Date().toISOString(),
+    kpis: {
+      runningJobs: Number(jobs.running),
+      waitingJobs: Number(jobs.waiting),
+      onHoldJobs: Number(jobs.on_hold),
+      lateWorkOrders: Number(late.cnt),
+      machinesBusy: Number(machines.busy),
+      machinesTotal: Number(machines.total),
+      outputToday: Math.round(parseFloat(output.today) * 100) / 100,
+      outputChangePercent: delta(output.today, output.yesterday),
+      yieldPercent: pct(quality.accepted, quality.inspected),
+      rejectionPercent: pct(quality.rejected, quality.inspected),
+      scrapQty: Math.round(parseFloat(quality.scrap) * 100) / 100,
+      openRework: Number(rework.cnt),
+      shippedThisWeek: Math.round(parseFloat(shipped.qty) * 100) / 100,
+      onTimePercent: pct(onTime.on_time, onTime.total),
+      avgUtilisationPercent: avgUtilisation
+    },
+    series,
+    machineLoad,
+    priorityOrders: priorityOrders.map(o => ({
+      ...o,
+      progress_percent: pct(o.accepted_qty, o.quantity) ?? 0,
+      days_late: o.days_late > 0 ? Number(o.days_late) : 0
+    })),
+    steps: workspace.steps,
+    actions: workspace.actions,
+
+    // Kept so older consumers of this endpoint keep working
+    activeWorkOrders: Number(jobs.running) + Number(jobs.waiting),
+    plannedOrders: 0,
+    resourceLoad: avgUtilisation,
+    completedToday: 0,
+    chartData: series.map(s => ({ name: s.name, output: Number(s.produced) })),
     health: [
-      { label: 'Schedule Adherence', value: 0, color: 'bg-indigo-500' },
-      { label: 'Yield Quality', value: 0, color: 'bg-emerald-500' },
-      { label: 'Downtime Variance', value: 0, color: 'bg-amber-500' },
-      { label: 'Scrap Rate', value: 0, color: 'bg-rose-500' }
+      { label: 'On-time delivery', value: pct(onTime.on_time, onTime.total) ?? 0, color: 'bg-indigo-500' },
+      { label: 'Yield quality', value: pct(quality.accepted, quality.inspected) ?? 0, color: 'bg-emerald-500' },
+      { label: 'Machine utilisation', value: avgUtilisation, color: 'bg-amber-500' },
+      { label: 'Rejection rate', value: pct(quality.rejected, quality.inspected) ?? 0, color: 'bg-rose-500' }
     ]
   };
 };
