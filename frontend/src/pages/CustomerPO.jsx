@@ -733,6 +733,11 @@ const CustomerPO = ({
       let newItem = { ...item };
 
       if (matchedDwg) {
+        const realDwgId = matchedDwg.drawing_master_id || matchedDwg.drawing_id || null;
+        if (realDwgId && newItem.drawingId !== realDwgId) {
+          newItem.drawingId = realDwgId;
+          itemChanged = true;
+        }
         if (!item.hsnCode && matchedDwg.hsn_code) {
           newItem.hsnCode = matchedDwg.hsn_code;
           itemChanged = true;
@@ -1476,7 +1481,7 @@ const CustomerPO = ({
         if (matchedDwg) {
           newItems[index].isUnmatched = false;
           newItems[index].needsReview = false;
-          newItems[index].drawingId = matchedDwg.id || matchedDwg.drawing_id || null;
+          newItems[index].drawingId = matchedDwg.drawing_master_id || matchedDwg.drawing_id || matchedDwg.id || null;
           newItems[index].status = 'MATCHED';
           newItems[index].design_status = null;
           newItems[index].description = matchedDwg.drawing_description || matchedDwg.description || newItems[index].description || '';
@@ -1639,7 +1644,7 @@ const CustomerPO = ({
           items: data.items.map(item => {
             const cleanDwg = String(item.drawing_no || item.drawingNo || '').trim().toUpperCase();
             const matchedMaster = allDrawings.find(d => String(d.drawing_no || d.drawingNo || '').trim().toUpperCase() === cleanDwg);
-            const resolvedDwgId = item.drawing_id || item.drawingId || (matchedMaster ? (matchedMaster.id || matchedMaster.drawing_id) : null);
+            const resolvedDwgId = (matchedMaster ? (matchedMaster.drawing_master_id || matchedMaster.drawing_id) : null) || item.drawing_id || item.drawingId || null;
             const isMatched = Boolean(resolvedDwgId || matchedMaster || ['MATCHED', 'ACTIVE', 'APPROVED'].includes(String(item.status || '').trim().toUpperCase()));
 
             return {
@@ -1876,7 +1881,7 @@ const CustomerPO = ({
       const mappedItems = poForm.items.map(item => {
         const cleanNo = String(item.drawingNo || '').trim().toUpperCase();
         const matchedMaster = allDrawings.find(d => String(d.drawing_no || d.drawingNo || '').trim().toUpperCase() === cleanNo);
-        const resolvedDrawingId = item.drawingId || item.drawing_id || (matchedMaster ? (matchedMaster.id || matchedMaster.drawing_id) : null);
+        const resolvedDrawingId = (matchedMaster ? (matchedMaster.drawing_master_id || matchedMaster.drawing_id) : null) || item.drawingId || item.drawing_id || null;
         const isMatched = Boolean(resolvedDrawingId || matchedMaster || ['MATCHED', 'ACTIVE', 'APPROVED'].includes(String(item.status || '').trim().toUpperCase()));
 
         return {
@@ -2231,7 +2236,7 @@ const CustomerPO = ({
                   items: (data.items || []).map(item => {
                     const cleanDwg = String(item.drawing_no || item.drawingNo || '').trim().toUpperCase();
                     const matchedMaster = allDrawings.find(d => String(d.drawing_no || d.drawingNo || '').trim().toUpperCase() === cleanDwg);
-                    const resolvedDwgId = item.drawing_id || item.drawingId || (matchedMaster ? (matchedMaster.id || matchedMaster.drawing_id) : null);
+                    const resolvedDwgId = (matchedMaster ? (matchedMaster.drawing_master_id || matchedMaster.drawing_id) : null) || item.drawing_id || item.drawingId || null;
                     const isMatched = Boolean(resolvedDwgId || matchedMaster || ['MATCHED', 'ACTIVE', 'APPROVED'].includes(String(item.status || '').trim().toUpperCase()));
 
                     return {

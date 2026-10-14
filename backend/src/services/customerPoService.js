@@ -165,11 +165,25 @@ const createCustomerPo = async payload => {
     const customerPoId = poResult.insertId;
 
     for (const item of items) {
-      let resolvedDrawingId = item.drawingId ? Number(item.drawingId) : null;
+      let resolvedDrawingId = (item.drawingId && !isNaN(Number(item.drawingId))) ? Number(item.drawingId) : null;
+      if (resolvedDrawingId) {
+        try {
+          const [existing] = await connection.execute(
+            'SELECT id FROM customer_drawings WHERE id = ? LIMIT 1',
+            [resolvedDrawingId]
+          );
+          if (!existing || existing.length === 0) {
+            resolvedDrawingId = null;
+          }
+        } catch (_e) {
+          resolvedDrawingId = null;
+        }
+      }
+
       if (!resolvedDrawingId && item.drawingNo && String(item.drawingNo).trim()) {
         try {
           const [matchedDwgRows] = await connection.execute(
-            'SELECT id FROM customer_drawings WHERE TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) LIMIT 1',
+            'SELECT id FROM customer_drawings WHERE TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) ORDER BY id DESC LIMIT 1',
             [String(item.drawingNo).trim()]
           );
           if (matchedDwgRows.length > 0) {
@@ -659,11 +673,25 @@ const updateCustomerPo = async (id, payload) => {
     await connection.execute('DELETE FROM customer_po_items WHERE customer_po_id = ?', [id]);
 
     for (const item of items) {
-      let resolvedDrawingId = item.drawingId ? Number(item.drawingId) : null;
+      let resolvedDrawingId = (item.drawingId && !isNaN(Number(item.drawingId))) ? Number(item.drawingId) : null;
+      if (resolvedDrawingId) {
+        try {
+          const [existing] = await connection.execute(
+            'SELECT id FROM customer_drawings WHERE id = ? LIMIT 1',
+            [resolvedDrawingId]
+          );
+          if (!existing || existing.length === 0) {
+            resolvedDrawingId = null;
+          }
+        } catch (_e) {
+          resolvedDrawingId = null;
+        }
+      }
+
       if (!resolvedDrawingId && item.drawingNo && String(item.drawingNo).trim()) {
         try {
           const [matchedDwgRows] = await connection.execute(
-            'SELECT id FROM customer_drawings WHERE TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) LIMIT 1',
+            'SELECT id FROM customer_drawings WHERE TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) ORDER BY id DESC LIMIT 1',
             [String(item.drawingNo).trim()]
           );
           if (matchedDwgRows.length > 0) {
