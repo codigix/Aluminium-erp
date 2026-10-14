@@ -465,7 +465,14 @@ const getCustomerPoById = async id => {
               ELSE cpi.design_status 
             END as design_status
      FROM customer_po_items cpi
-     LEFT JOIN customer_drawings cd ON TRIM(UPPER(cpi.drawing_no)) = TRIM(UPPER(cd.drawing_no))
+     LEFT JOIN (
+       SELECT id, drawing_no,
+              ROW_NUMBER() OVER (PARTITION BY UPPER(TRIM(drawing_no)) ORDER BY id DESC) as rn
+       FROM customer_drawings
+     ) cd ON (
+       (cpi.drawing_id IS NOT NULL AND cd.id = cpi.drawing_id)
+       OR (cpi.drawing_id IS NULL AND UPPER(TRIM(cpi.drawing_no)) = UPPER(TRIM(cd.drawing_no)) AND cd.rn = 1)
+     )
      WHERE cpi.customer_po_id = ?
      ORDER BY cpi.id ASC`,
     [id]
