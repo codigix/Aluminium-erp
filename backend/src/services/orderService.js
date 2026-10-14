@@ -74,10 +74,14 @@ const generateOrderNo = async (connection) => {
 const listOrders = async () => {
   const [rows] = await pool.query(`
     SELECT o.*, c.company_name AS client,
-           COALESCE(NULLIF(o.project_name, ''), NULLIF(cp.project_name, ''), 'General Project') as project_name
+           COALESCE(NULLIF(o.project_name, ''), NULLIF(cp.project_name, ''), 'General Project') as project_name,
+           COALESCE(cp.po_number, cp2.po_number) as po_number,
+           COALESCE(cp.po_date, cp2.po_date) as po_date
     FROM orders o
     JOIN companies c ON c.id = o.client_id
     LEFT JOIN customer_pos cp ON cp.id = o.quotation_id AND o.source_type = 'DIRECT'
+    LEFT JOIN sales_orders so ON so.so_number = o.order_no
+    LEFT JOIN customer_pos cp2 ON cp2.id = so.customer_po_id
     ORDER BY o.created_at DESC
   `);
   
@@ -196,6 +200,8 @@ const getOrderById = async (id) => {
            COALESCE(ct.email, cd_client.email, "") AS contact_email, 
            COALESCE(ct.phone, cd_client.phone, "") AS contact_mobile,
            COALESCE(NULLIF(o.project_name, ''), NULLIF(cp.project_name, ''), 'General Project') as project_name,
+           COALESCE(cp.po_number, so_cp.po_number) as po_number,
+           COALESCE(cp.po_date, so_cp.po_date) as po_date,
            COALESCE(ct.name, cd_client.contact_person, "") as contact_person,
            COALESCE(so.billing_address, ba.billing_address, cd_client.billing_address, "") as billing_address,
            COALESCE(so.shipping_address, sa.shipping_address, cd_client.shipping_address, "") as shipping_address
@@ -203,6 +209,7 @@ const getOrderById = async (id) => {
     JOIN companies c ON c.id = o.client_id
     LEFT JOIN customer_pos cp ON cp.id = o.quotation_id AND o.source_type = 'DIRECT'
     LEFT JOIN sales_orders so ON so.id = o.quotation_id AND o.source_type = 'DRAWING'
+    LEFT JOIN customer_pos so_cp ON so_cp.id = so.customer_po_id
     LEFT JOIN (
        SELECT company_id, email, phone, name,
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn

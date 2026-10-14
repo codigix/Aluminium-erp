@@ -1203,18 +1203,28 @@ const SalesOrders = () => {
       label: 'Order Details',
       key: 'order_no',
       sortable: true,
-      render: (val, row) => (
-        <div className="flex flex-col py-1">
-          <span className=" text-indigo-600 ">
-            {val || `ORD-${String(row.id).padStart(4, '0')}`}
-          </span>
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-slate-400 px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100 ">
-              {row.order_type || 'Sales Order'}
+      render: (val, row) => {
+        const poNumber = row.po_number || row.customer_po_number || row.customer_po_no;
+        return (
+          <div className="flex flex-col py-1">
+            <span className=" text-indigo-600 ">
+              {val || `ORD-${String(row.id).padStart(4, '0')}`}
             </span>
+            <div className="flex flex-col gap-1 mt-0.5">
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-slate-400 px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100 ">
+                  {row.order_type || 'Sales Order'}
+                </span>
+              </div>
+              {poNumber && (
+                <span className="text-[11px] text-slate-500 font-medium leading-none" title="Customer PO Number">
+                  PO: <span className="text-slate-800 font-semibold">{poNumber}</span>
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      )
+        );
+      }
     },
     {
       label: 'Client Name',
@@ -1422,6 +1432,7 @@ const SalesOrders = () => {
       const soNumber = (order.order_no || `ORD-${String(order.id).padStart(4, '0')}`).toLowerCase();
       const clientName = (order.client || order.company_name || '').toLowerCase();
       const projectName = (order.project_name || order.projectName || '').toLowerCase();
+      const poNumber = (order.po_number || order.customer_po_number || order.customer_po_no || '').toLowerCase();
 
       const itemsMatch = (order.items || []).some(item => {
         const drawingNo = (item.drawing_no || '').toLowerCase();
@@ -1429,7 +1440,7 @@ const SalesOrders = () => {
         return drawingNo.includes(q) || drawingName.includes(q);
       });
 
-      return soNumber.includes(q) || clientName.includes(q) || projectName.includes(q) || itemsMatch;
+      return soNumber.includes(q) || clientName.includes(q) || projectName.includes(q) || poNumber.includes(q) || itemsMatch;
     });
 
     return (
