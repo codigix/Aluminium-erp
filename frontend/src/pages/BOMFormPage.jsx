@@ -1205,9 +1205,12 @@ const BOMFormPage = () => {
     const t = (item.material_type || item.materialType || '').toLowerCase();
 
     // Priority 1: Consumables
-    if (name.includes('consumable') || ig.includes('consumable') || t.includes('consumable') ||
-      name.includes('con-') || t.includes('con-') || name.includes('grease') ||
-      name.includes('oil') || name.includes('lubricant') || name.includes('coolant')) return 'Consumables';
+    if (name.includes('consum') || ig.includes('consum') || t.includes('consum') ||
+      name.includes('con-') || t.includes('con-') || (item.item_code || '').toUpperCase().startsWith('CON-') ||
+      name.includes('grease') || name.includes('oil') || name.includes('lubricant') || name.includes('coolant')) {
+      const match = itemGroups.find(g => (g.name || '').toLowerCase().includes('consum'));
+      return match ? match.name : 'consumbles';
+    }
 
     // Priority 2: Assemblies
     if (name.includes('sub assembly') || name.includes('sub-assembly') || ig.includes('sub assembly') ||
@@ -1352,8 +1355,11 @@ const BOMFormPage = () => {
         if (targetGroup.includes('raw material') || targetGroup.includes('rm')) {
           if (normalizedType.includes('finished') || normalizedType.includes('assembly') || normalizedType.includes('part')) return false;
           if (normalizedGroup.includes('finished') || normalizedGroup.includes('assembly') || normalizedGroup.includes('part')) return false;
-        } else if (targetGroup.includes('consumable') || targetGroup.includes('con')) {
-          if (!normalizedType.includes('consumable') && !normalizedGroup.includes('consumable') && !normalizedGroup.includes('con')) return false;
+        } else if (targetGroup.includes('consum') || targetGroup.includes('con')) {
+          const isCon = normalizedType.includes('consum') || normalizedType.includes('con') ||
+                        normalizedGroup.includes('consum') || normalizedGroup.includes('con') ||
+                        itemCode.startsWith('CON-');
+          if (!isCon) return false;
         } else if (targetGroup.includes('pm') || targetGroup.includes('packing')) {
           if (!normalizedType.includes('pm') && !normalizedType.includes('packing') && !normalizedGroup.includes('pm') && !normalizedGroup.includes('packing')) return false;
         } else if (targetGroup.includes('sub assembly') || targetGroup.includes('sfg') || targetGroup.includes('semi')) {
@@ -3355,7 +3361,7 @@ const BOMFormPage = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                    <div className={`${(['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg') ? 'md:col-span-4' : 'md:col-span-5'} space-y-1`}>
+                    <div className={`${(['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'consumbles', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg') ? 'md:col-span-4' : 'md:col-span-5'} space-y-1`}>
                       <div className="flex justify-between items-center">
                         <label className="text-xs  text-slate-500 ml-1">Material Selection <span className="text-rose-500">*</span></label>
                         {(!(['raw materials', 'raw material', 'rm'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg')) && currentMaterialVariants.length > 1 && (
@@ -3455,12 +3461,12 @@ const BOMFormPage = () => {
                       />
                     </div>
 
-                    <div className={`${(['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg') ? 'md:col-span-1' : 'md:col-span-2'} space-y-1`}>
+                    <div className={`${(['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'consumbles', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg') ? 'md:col-span-1' : 'md:col-span-2'} space-y-1`}>
                       <label className="text-xs  text-slate-500 ml-1">Quantity</label>
                       <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="0.00" step="0.01" value={materialForm.qty} onChange={(e) => setMaterialForm({ ...materialForm, qty: e.target.value })} />
                     </div>
 
-                    <div className={`${(['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg') ? 'md:col-span-1' : 'md:col-span-2'} space-y-1`}>
+                    <div className={`${(['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'consumbles', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg') ? 'md:col-span-1' : 'md:col-span-2'} space-y-1`}>
                       <label className="text-xs  text-slate-500 ml-1">UOM</label>
                       <select className="w-full px-2 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.uom} onChange={(e) => setMaterialForm(prev => ({ ...prev, uom: e.target.value }))}>
                         <option value="Kg">Kg</option>
