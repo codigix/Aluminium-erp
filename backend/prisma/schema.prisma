@@ -134,7 +134,7 @@ model customer_drawings {
   drawing_type       String?                   @default("Part") @db.VarChar(50)
   hsn_code           String?                   @db.VarChar(20)
   delivery_date      DateTime?                 @db.Date
-  file_path          String                    @db.VarChar(500)
+  file_path          String                    @db.Text
   file_type          String?                   @db.VarChar(20)
   remarks            String?                   @db.Text
   type               String?                   @default("Customer") @db.VarChar(50)
@@ -927,7 +927,7 @@ model order_items {
   drawing_no            String?                 @db.VarChar(120)
   drawing_id            Int?
   revision_no           String?                 @db.VarChar(50)
-  drawing_pdf           String?                 @db.VarChar(500)
+  drawing_pdf           String?                 @db.Text
   description           String?                 @db.Text
   type                  String?                 @db.VarChar(100)
   hsn_code              String?                 @db.VarChar(50)
@@ -1750,7 +1750,7 @@ model sales_order_items {
   created_at                  DateTime?                     @default(now()) @db.Timestamp(0)
   drawing_no                  String?                       @db.VarChar(120)
   revision_no                 String?                       @db.VarChar(50)
-  drawing_pdf                 String?                       @db.VarChar(500)
+  drawing_pdf                 String?                       @db.Text
   updated_at                  DateTime?                     @default(now()) @db.Timestamp(0)
   item_group                  String?                       @db.VarChar(100)
   is_active                   Boolean?                      @default(true)

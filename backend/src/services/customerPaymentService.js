@@ -372,6 +372,7 @@ const getOutstandingInvoices = async (customerId) => {
       si.client_id as company_id,
       CONVERT(si.invoice_no USING utf8mb4) as invoice_no,
       CONVERT(COALESCE(o.order_no, CONCAT('ORD-', si.order_id)) USING utf8mb4) as so_number,
+      CONVERT(COALESCE(si.customer_po_no, cp.po_number, '') USING utf8mb4) as customer_po_no,
       c.company_name as company_name,
       COALESCE(NULLIF(si.project_name, ''), NULLIF(o.project_name, ''), 'General Project') as project_name,
       si.total_amount as total_amount,
@@ -383,6 +384,8 @@ const getOutstandingInvoices = async (customerId) => {
     FROM sales_invoices si
     JOIN orders o ON o.id = si.order_id
     JOIN companies c ON si.client_id = c.id
+    LEFT JOIN sales_orders so ON so.id = si.sales_order_id
+    LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
     WHERE si.client_id = ? AND si.sent_to_accounts = 1 AND si.status != 'Cancelled'
     HAVING outstanding >= 0
     ORDER BY si.created_at DESC`,
@@ -401,6 +404,7 @@ const getAllOutstandingInvoices = async () => {
       si.client_id as company_id,
       CONVERT(si.invoice_no USING utf8mb4) as invoice_no,
       CONVERT(COALESCE(o.order_no, CONCAT('ORD-', si.order_id)) USING utf8mb4) as so_number,
+      CONVERT(COALESCE(si.customer_po_no, cp.po_number, '') USING utf8mb4) as customer_po_no,
       c.company_name as company_name,
       con.email as customer_email,
       COALESCE(NULLIF(si.project_name, ''), NULLIF(o.project_name, ''), 'General Project') as project_name,
@@ -413,6 +417,8 @@ const getAllOutstandingInvoices = async () => {
     FROM sales_invoices si
     JOIN orders o ON o.id = si.order_id
     JOIN companies c ON si.client_id = c.id
+    LEFT JOIN sales_orders so ON so.id = si.sales_order_id
+    LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
     LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
     WHERE si.sent_to_accounts = 1 AND si.status != 'Cancelled'
     HAVING outstanding >= 0

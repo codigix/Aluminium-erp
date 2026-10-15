@@ -250,13 +250,23 @@ const PaymentReceived = () => {
       key: 'company_name',
       sortable: true,
       render: (val, row) => (
-        <div className="flex items-center gap-2 py-1">
-          <div className="w-8 h-8 rounded bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600  text-xs shadow-sm">
+        <div className="flex items-center gap-2.5 py-1">
+          <div className="w-8 h-8 rounded bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 font-bold text-xs shadow-sm shrink-0">
             {val ? val.substring(0, 2).toUpperCase() : 'C'}
           </div>
           <div className="flex flex-col">
             <span className="font-semibold text-slate-900 leading-tight">{val}</span>
-            <span className="text-[10px] text-slate-500 italic">
+            {row.customer_po_no ? (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  PO
+                </span>
+                <span className="text-[11px] font-mono font-semibold text-indigo-700">
+                  {row.customer_po_no}
+                </span>
+              </div>
+            ) : null}
+            <span className="text-[10px] text-slate-500 italic mt-0.5">
               Project: {row.project_name || 'N/A'}
             </span>
           </div>
@@ -282,74 +292,7 @@ const PaymentReceived = () => {
         <span className="text-slate-900 font-medium">{formatCurrency(val)}</span>
       )
     },
-    {
-      label: 'Received Amount',
-      key: 'paid_amount',
-      sortable: true,
-      render: (val) => (
-        <span className="text-emerald-600 font-medium">{formatCurrency(val)}</span>
-      )
-    },
-    {
-      label: 'Outstanding Amount',
-      key: 'outstanding',
-      sortable: true,
-      render: (val) => (
-        <span className="text-rose-600 font-semibold">{formatCurrency(val)}</span>
-      )
-    },
-    {
-      label: 'Payment %',
-      key: 'paid_amount',
-      sortable: true,
-      render: (_, row) => {
-        const total = parseFloat(row.total_amount) || 0;
-        const paid = parseFloat(row.paid_amount) || 0;
-        const percentage = total > 0 ? Math.round((paid / total) * 100) : 0;
-        return (
-          <div className="flex items-center gap-2">
-            <div className="w-12 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <div 
-                className="bg-emerald-500 h-1.5 rounded-full" 
-                style={{ width: `${Math.min(percentage, 100)}%` }}
-              />
-            </div>
-            <span className="text-slate-600 font-medium">{percentage}%</span>
-          </div>
-        );
-      }
-    },
-    {
-      label: 'Status',
-      key: 'outstanding',
-      sortable: true,
-      render: (_, row) => {
-        const outstanding = parseFloat(row.outstanding) || 0;
-        const received = parseFloat(row.paid_amount) || 0;
-        if (outstanding === 0) {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              COMPLETED
-            </span>
-          );
-        } else if (outstanding > 0 && received > 0) {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 font-medium border border-amber-100">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-              Partial Paid
-            </span>
-          );
-        } else {
-          return (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-rose-50 text-rose-700 font-medium border border-rose-100">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-              Pending Payment
-            </span>
-          );
-        }
-      }
-    },
+
     {
       label: 'Actions',
       key: 'id',
@@ -453,7 +396,14 @@ const PaymentReceived = () => {
           columns={columns}
           data={payments}
           loading={loading}
-          searchPlaceholder="Search by invoice #, SO #, or customer..."
+          searchPlaceholder="Search by invoice #, SO #, PO #, or customer..."
+          customFilter={(row, term) => 
+            (row.invoice_no && row.invoice_no.toLowerCase().includes(term)) ||
+            (row.so_number && row.so_number.toLowerCase().includes(term)) ||
+            (row.customer_po_no && row.customer_po_no.toLowerCase().includes(term)) ||
+            (row.company_name && row.company_name.toLowerCase().includes(term)) ||
+            (row.project_name && row.project_name.toLowerCase().includes(term))
+          }
           className="border-none"
         />
       </div>
