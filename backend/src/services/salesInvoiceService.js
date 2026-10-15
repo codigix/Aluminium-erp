@@ -773,11 +773,12 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
         .table-wrapper { flex: 1; display: flex; flex-direction: column; border-bottom: 1px solid #000; min-height: 0; }
         .item-table { width: 100%; border-collapse: collapse; height: 100%; }
         .item-table th { border: 1px solid #000; padding: 2px 2px; font-size: 6.8pt; font-weight: bold; text-align: center; background-color: #ffffff; height: 16px; }
-        .item-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1.2px 4px; vertical-align: top; font-size: 7.2pt; line-height: 1.15; }
+        .item-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 2px 4px; vertical-align: top; font-size: 7.2pt; line-height: 1.2; }
         .item-code { font-weight: bold; font-size: 7.2pt; }
         .item-desc { font-size: 7.2pt; font-weight: bold; margin-top: 0px; text-transform: uppercase; }
         
-        .item-table tr.total-row td { border-top: 1px solid #000; border-bottom: 2px solid #000; font-weight: bold; font-size: 7.5pt; padding: 2px 4px; }
+        .item-table tr.tax-row td { height: 16px; padding: 1.5px 4px; vertical-align: middle; }
+        .item-table tr.total-row td { border-top: 1px solid #000; border-bottom: 2px solid #000; font-weight: bold; font-size: 7.5pt; padding: 2px 4px; vertical-align: middle; }
         .item-table tr.spacer-row td { height: 100%; padding: 0; }
 
         .charge-box { padding: 3px 6px; border-bottom: 1px solid #000; display: flex; justify-content: space-between; align-items: flex-end; }
@@ -941,7 +942,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
               {{/items}}
 
               {{#has_cgst}}
-              <tr style="white-space: nowrap;">
+              <tr class="tax-row" style="white-space: nowrap;">
                 <td></td>
                 <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
                   Output CGST @ {{cgst_rate_str}}
@@ -956,7 +957,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
               {{/has_cgst}}
 
               {{#has_sgst}}
-              <tr style="white-space: nowrap;">
+              <tr class="tax-row" style="white-space: nowrap;">
                 <td></td>
                 <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
                   Output SGST @ {{sgst_rate_str}}
@@ -971,7 +972,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
               {{/has_sgst}}
 
               {{#has_igst}}
-              <tr style="white-space: nowrap;">
+              <tr class="tax-row" style="white-space: nowrap;">
                 <td></td>
                 <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
                   Output IGST @ {{igst_rate_str}}
@@ -986,7 +987,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
               {{/has_igst}}
 
               {{#round_off_val}}
-              <tr style="white-space: nowrap;">
+              <tr class="tax-row" style="white-space: nowrap;">
                 <td></td>
                 <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
                   Rounding Off.
@@ -1000,9 +1001,11 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
               </tr>
               {{/round_off_val}}
 
+              {{#has_spacer_row}}
               <tr class="spacer-row">
                 <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
               </tr>
+              {{/has_spacer_row}}
 
               <!-- Total Row -->
               <tr class="total-row">
@@ -1176,6 +1179,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
     tax_total_words: numberToWords(totalTaxAmt),
 
     empty_rows: Array.from({ length: Math.max(0, 4 - items.length) }),
+    has_spacer_row: formattedItems.length < 8,
     signatureBase64
   };
 
