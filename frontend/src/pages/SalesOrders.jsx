@@ -95,6 +95,8 @@ const SalesOrders = () => {
     status: 'Draft',
     cgstRate: 9,
     sgstRate: 9,
+    igstRate: 18,
+    isInterstate: false,
     profitMargin: 0,
     totalProfit: 0,
     sourceType: 'DIRECT',
@@ -714,6 +716,15 @@ const SalesOrders = () => {
       });
     }
 
+    const customerGstin = customerUpdateFields.customerGstin || '';
+    const isInterstate = Boolean(
+      (customerGstin && !customerGstin.startsWith('27') && customerGstin !== '—') ||
+      (customerUpdateFields.customerState && !customerUpdateFields.customerState.toLowerCase().includes('maharashtra'))
+    );
+    const igstRate = isInterstate ? parseFloat(avgGst.toFixed(2)) : 0;
+    const cgstRate = isInterstate ? 0 : parseFloat((avgGst / 2).toFixed(2));
+    const sgstRate = isInterstate ? 0 : parseFloat((avgGst / 2).toFixed(2));
+
     setFormData(prev => ({
       ...prev,
       customerPoId: uniqueKey,
@@ -721,8 +732,10 @@ const SalesOrders = () => {
       items,
       profitMargin: parseFloat(avgProfit.toFixed(2)),
       totalProfit: parseFloat(totalProfitVal.toFixed(2)),
-      cgstRate: parseFloat((avgGst / 2).toFixed(2)),
-      sgstRate: parseFloat((avgGst / 2).toFixed(2)),
+      cgstRate,
+      sgstRate,
+      igstRate: igstRate || 18,
+      isInterstate,
       sourceType,
       quotation_id: sourceType !== 'DIRECT' ? quotationId : null,
       customer_po_id: sourceType === 'DIRECT' ? quotationId : null,
@@ -901,6 +914,12 @@ const SalesOrders = () => {
           customerUpdateFields.customerState = billing?.state || '';
         }
 
+        const customerGstin = customerUpdateFields.customerGstin || data.gstin || '';
+        const isInterstate = Boolean(data.is_interstate) || (Number(data.igst_rate) > 0) || Boolean(customerGstin && !customerGstin.startsWith('27') && customerGstin !== '—');
+        const igstRateVal = isInterstate ? (Number(data.igst_rate) || (Number(data.cgst_rate) + Number(data.sgst_rate)) || 18) : 0;
+        const cgstRateVal = isInterstate ? 0 : (Number(data.cgst_rate) || 9);
+        const sgstRateVal = isInterstate ? 0 : (Number(data.sgst_rate) || 9);
+
         setFormData({
           ...initialFormState,
           id: data.id,
@@ -917,8 +936,10 @@ const SalesOrders = () => {
           orderQuantity: formattedItems?.[0]?.quantity || 1,
           warehouse: data.warehouse || '',
           status: data.status || 'Draft',
-          cgstRate: Number(data.cgst_rate) || 0,
-          sgstRate: Number(data.sgst_rate) || 0,
+          cgstRate: cgstRateVal,
+          sgstRate: sgstRateVal,
+          igstRate: igstRateVal || 18,
+          isInterstate,
           profitMargin: Number(data.profit_margin) || 0,
           totalProfit: totalProfitVal,
           subtotal: subtotalInclusiveOfProfit,
@@ -1083,9 +1104,12 @@ const SalesOrders = () => {
       const profitMarginVal = Number(formData.profitMargin) || 0;
       const totalProfitVal = Number(formData.totalProfit) || (subTotalVal * (profitMarginVal / 100));
       const costWithProfit = subTotalVal + totalProfitVal;
-      const cgstRateVal = Number(formData.cgstRate) || 0;
-      const sgstRateVal = Number(formData.sgstRate) || 0;
-      const gstAmount = costWithProfit * ((cgstRateVal + sgstRateVal) / 100);
+      const isInterstateVal = Boolean(formData.isInterstate);
+      const igstRateVal = isInterstateVal ? Number(formData.igstRate || 0) : 0;
+      const cgstRateVal = isInterstateVal ? 0 : Number(formData.cgstRate || 0);
+      const sgstRateVal = isInterstateVal ? 0 : Number(formData.sgstRate || 0);
+      const effectiveTaxRate = isInterstateVal ? igstRateVal : (cgstRateVal + sgstRateVal);
+      const gstAmount = costWithProfit * (effectiveTaxRate / 100);
       const grandTotal = costWithProfit + gstAmount;
 
       // Extract numeric IDs from the uniqueKey
@@ -1116,6 +1140,8 @@ const SalesOrders = () => {
           warehouse: formData.warehouse,
           cgst_rate: cgstRateVal,
           sgst_rate: sgstRateVal,
+          igst_rate: igstRateVal,
+          is_interstate: isInterstateVal ? 1 : 0,
           profit_margin: profitMarginVal,
           subtotal: costWithProfit,
           gst: gstAmount,
@@ -1522,9 +1548,12 @@ const SalesOrders = () => {
   // Use totalProfit if available, otherwise calculate from percentage
   const totalProfitVal = Number(formData.totalProfit) || (subTotal * (profitMarginVal / 100));
   const costWithProfit = subTotal + totalProfitVal;
-  const cgstRateVal = Number(formData.cgstRate) || 0;
-  const sgstRateVal = Number(formData.sgstRate) || 0;
-  const gstAmount = costWithProfit * ((cgstRateVal + sgstRateVal) / 100);
+  const isInterstateOrder = Boolean(formData.isInterstate);
+  const igstRateVal = isInterstateOrder ? Number(formData.igstRate || 0) : 0;
+  const cgstRateVal = isInterstateOrder ? 0 : Number(formData.cgstRate || 0);
+  const sgstRateVal = isInterstateOrder ? 0 : Number(formData.sgstRate || 0);
+  const effectiveTaxRate = isInterstateOrder ? igstRateVal : (cgstRateVal + sgstRateVal);
+  const gstAmount = costWithProfit * (effectiveTaxRate / 100);
   const totalAmount = costWithProfit + gstAmount;
 
   return (
@@ -1940,7 +1969,7 @@ const SalesOrders = () => {
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs max-h-[45vh] min-h-[220px] relative">
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs relative">
                 <DataTable
                   columns={viewOrderColumns}
                   data={formData.items}
@@ -2011,26 +2040,60 @@ const SalesOrders = () => {
                   </select>
                 </FormControl>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <FormControl label="CGST Rate (%)">
-                    <input
-                      type="number"
-                      className="w-full p-2 border border-slate-200 rounded text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
-                      value={formData.cgstRate}
-                      onChange={(e) => setFormData({ ...formData, cgstRate: Number(e.target.value) })}
+                <div className="flex items-center justify-between pb-1">
+                  <span className="text-xs text-slate-600 font-medium">Tax Type:</span>
+                  <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
                       disabled={formMode === 'view'}
-                    />
-                  </FormControl>
-                  <FormControl label="SGST Rate (%)">
-                    <input
-                      type="number"
-                      className="w-full p-2 border border-slate-200 rounded text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
-                      value={formData.sgstRate}
-                      onChange={(e) => setFormData({ ...formData, sgstRate: Number(e.target.value) })}
+                      onClick={() => setFormData(prev => ({ ...prev, isInterstate: false, cgstRate: 9, sgstRate: 9, igstRate: 0 }))}
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${!formData.isInterstate ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Intra (CGST+SGST)
+                    </button>
+                    <button
+                      type="button"
                       disabled={formMode === 'view'}
-                    />
-                  </FormControl>
+                      onClick={() => setFormData(prev => ({ ...prev, isInterstate: true, igstRate: 18, cgstRate: 0, sgstRate: 0 }))}
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${formData.isInterstate ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Inter (IGST)
+                    </button>
+                  </div>
                 </div>
+
+                {formData.isInterstate ? (
+                  <FormControl label="IGST Rate (%)">
+                    <input
+                      type="number"
+                      className="w-full p-2 border border-slate-200 rounded text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                      value={formData.igstRate}
+                      onChange={(e) => setFormData({ ...formData, igstRate: Number(e.target.value) })}
+                      disabled={formMode === 'view'}
+                    />
+                  </FormControl>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <FormControl label="CGST Rate (%)">
+                      <input
+                        type="number"
+                        className="w-full p-2 border border-slate-200 rounded text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                        value={formData.cgstRate}
+                        onChange={(e) => setFormData({ ...formData, cgstRate: Number(e.target.value) })}
+                        disabled={formMode === 'view'}
+                      />
+                    </FormControl>
+                    <FormControl label="SGST Rate (%)">
+                      <input
+                        type="number"
+                        className="w-full p-2 border border-slate-200 rounded text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                        value={formData.sgstRate}
+                        onChange={(e) => setFormData({ ...formData, sgstRate: Number(e.target.value) })}
+                        disabled={formMode === 'view'}
+                      />
+                    </FormControl>
+                  </div>
+                )}
               </div>
 
               {/* Price Breakdown Section */}
@@ -2049,7 +2112,9 @@ const SalesOrders = () => {
                   </div>
 
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-500">Tax (GST {cgstRateVal + sgstRateVal}%):</span>
+                    <span className="text-slate-500">
+                      {formData.isInterstate ? `Tax (IGST ${Number(formData.igstRate || 0)}%):` : `Tax (GST ${(Number(formData.cgstRate) || 0) + (Number(formData.sgstRate) || 0)}%):`}
+                    </span>
                     <span className="text-slate-900 font-semibold">₹ {(Number(gstAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>

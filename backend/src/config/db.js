@@ -2182,9 +2182,20 @@ const ensureOrdersTable = async () => {
     if (!existing.has('warehouse')) await connection.query('ALTER TABLE orders ADD COLUMN warehouse VARCHAR(100)');
     if (!existing.has('cgst_rate')) await connection.query('ALTER TABLE orders ADD COLUMN cgst_rate DECIMAL(5,2) DEFAULT 0');
     if (!existing.has('sgst_rate')) await connection.query('ALTER TABLE orders ADD COLUMN sgst_rate DECIMAL(5,2) DEFAULT 0');
+    if (!existing.has('igst_rate')) await connection.query('ALTER TABLE orders ADD COLUMN igst_rate DECIMAL(5,2) DEFAULT 0');
+    if (!existing.has('is_interstate')) await connection.query('ALTER TABLE orders ADD COLUMN is_interstate TINYINT(1) DEFAULT 0');
     if (!existing.has('profit_margin')) await connection.query('ALTER TABLE orders ADD COLUMN profit_margin DECIMAL(5,2) DEFAULT 0');
     if (!existing.has('public_id')) await connection.query('ALTER TABLE orders ADD COLUMN public_id VARCHAR(100) UNIQUE NULL');
     if (!existing.has('host_company_id')) await connection.query('ALTER TABLE orders ADD COLUMN host_company_id INT NULL');
+
+    try {
+      const [soCols] = await connection.query('SHOW COLUMNS FROM sales_orders');
+      const soExisting = new Set(soCols.map(c => c.Field));
+      if (!soExisting.has('igst_rate')) await connection.query('ALTER TABLE sales_orders ADD COLUMN igst_rate DECIMAL(5,2) DEFAULT 0');
+      if (!soExisting.has('is_interstate')) await connection.query('ALTER TABLE sales_orders ADD COLUMN is_interstate TINYINT(1) DEFAULT 0');
+    } catch (e) {
+      // Ignore if sales_orders does not exist
+    }
 
     console.log('Orders and Order Items tables synchronized');
   } catch (error) {

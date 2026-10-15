@@ -78,7 +78,8 @@ const deleteSalesInvoice = async (req, res, next) => {
 
 const generateSalesInvoicePDF = async (req, res, next) => {
   try {
-    const pdf = await salesInvoiceService.generateSalesInvoicePDF(req.params.id);
+    const copyType = req.query.copyType || 'Original for Recipient';
+    const pdf = await salesInvoiceService.generateSalesInvoicePDF(req.params.id, copyType);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="tax-invoice-${req.params.id}.pdf"`);
     res.send(pdf);

@@ -87,7 +87,8 @@ const getAvailableSalesOrders = async () => {
       c.company_name as client_name,
       c.gstin as company_gstin,
       COALESCE(NULLIF(o.project_name, ''), NULLIF(cp.project_name, ''), 'General Project') as project_name,
-      COALESCE(cp.po_number, '') as customer_po_no,
+      COALESCE(cp.po_number, cp2.po_number, '') as customer_po_no,
+      COALESCE(cp.po_date, cp2.po_date) as customer_po_date,
       o.order_date,
       o.grand_total,
       o.status,
@@ -97,6 +98,8 @@ const getAvailableSalesOrders = async () => {
     FROM orders o
     JOIN companies c ON c.id = o.client_id
     LEFT JOIN customer_pos cp ON cp.id = o.quotation_id AND o.source_type = 'DIRECT'
+    LEFT JOIN sales_orders so ON so.so_number = o.order_no
+    LEFT JOIN customer_pos cp2 ON cp2.id = so.customer_po_id
     ORDER BY o.created_at DESC
   `);
 
@@ -256,6 +259,12 @@ const getOrderDetailsForInvoice = async (orderId) => {
 
   const nextInvoiceNo = await getNextInvoiceNo();
 
+  const igstRate = parseFloat(order.igst_rate) || 0;
+  const isInterstate = Boolean(order.is_interstate) || igstRate > 0 || (order.company_gstin && !order.company_gstin.startsWith('27') && order.company_gstin !== '—');
+  const finalIgstRate = isInterstate ? (igstRate > 0 ? igstRate : 18) : 0;
+  const finalCgstRate = isInterstate ? 0 : (parseFloat(order.cgst_rate) || 9);
+  const finalSgstRate = isInterstate ? 0 : (parseFloat(order.sgst_rate) || 9);
+
   return {
     orderId: order.id,
     orderNo: order.order_no,
@@ -271,6 +280,10 @@ const getOrderDetailsForInvoice = async (orderId) => {
     contactEmail: order.contact_email || '—',
     contactMobile: order.contact_mobile || '—',
     nextInvoiceNo,
+    cgstRate: finalCgstRate,
+    sgstRate: finalSgstRate,
+    igstRate: finalIgstRate,
+    isInterstate: isInterstate,
     summary: {
       totalOrderedQty: totalOrdered,
       totalDispatchedQty: totalDispatched,
@@ -560,7 +573,7 @@ const deleteSalesInvoice = async (id) => {
   }
 };
 
-const generateSalesInvoicePDF = async (invoiceId) => {
+const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recipient') => {
   const [invRows] = await pool.query(`
     SELECT 
       si.*,
@@ -647,7 +660,7 @@ const generateSalesInvoicePDF = async (invoiceId) => {
   const cgstRate = parseFloat(invoice.cgst_rate) || 0;
   const sgstRate = parseFloat(invoice.sgst_rate) || 0;
   const igstRate = parseFloat(invoice.igst_rate) || 0;
-  const isInterstate = igstRate > 0 || Boolean(invoice.is_interstate);
+  const isInterstate = igstRate > 0 || (parseFloat(invoice.igst_amount) > 0) || Boolean(invoice.is_interstate);
 
   let totalTaxableValue = 0;
   let totalCgst = parseFloat(invoice.cgst_amount) || 0;
@@ -729,60 +742,67 @@ const generateSalesInvoicePDF = async (invoiceId) => {
     <head>
       <meta charset="utf-8">
       <style>
-        @page { size: A4 portrait; margin: 6mm 8mm; }
-        * { box-sizing: border-box; }
-        body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; line-height: 1.3; color: #000; margin: 0; padding: 0; background: #fff; }
-        .invoice-card { width: 100%; border: 1px solid #000; }
-        .title-header { text-align: center; font-weight: bold; font-size: 10.5pt; padding: 4px 0; border-bottom: 1px solid #000; text-transform: capitalize; }
+        @page { size: A4 portrait; margin: 4mm 6mm; }
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        html, body { font-family: Arial, Helvetica, sans-serif; font-size: 7.2pt; line-height: 1.2; color: #000; margin: 0; padding: 0; background: #fff; height: 100%; }
+        .invoice-card { width: 100%; height: 287mm; border: 1px solid #000; display: flex; flex-direction: column; }
+        .title-header { position: relative; text-align: center; padding: 3px 8px; border-bottom: 1px solid #000; min-height: 20px; }
+        .title-main { font-size: 10pt; font-weight: bold; line-height: 18px; }
+        .copy-type-title { position: absolute; right: 8px; top: 2.5px; font-size: 8pt; font-weight: bold; text-transform: uppercase; color: #000; background-color: #fffa65; padding: 1px 7px; border-radius: 2px; letter-spacing: 0.3px; }
         
         .row-flex { display: flex; width: 100%; }
         .border-b { border-bottom: 1px solid #000; }
         .border-r { border-right: 1px solid #000; }
 
-        .seller-box { width: 48%; padding: 6px 10px; min-height: 90px; border-right: 1px solid #000; }
-        .seller-name { font-weight: bold; font-size: 9.5pt; margin-bottom: 3px; text-transform: uppercase; }
-        .seller-line { font-size: 8pt; margin-bottom: 2px; line-height: 1.3; }
+        .seller-box { width: 48%; padding: 3px 6px; border-right: 1px solid #000; }
+        .seller-name { font-weight: bold; font-size: 8.5pt; margin-bottom: 1px; text-transform: uppercase; }
+        .seller-line { font-size: 7.2pt; margin-bottom: 1px; line-height: 1.2; }
 
         .meta-box { width: 52%; }
         .meta-table { width: 100%; border-collapse: collapse; }
-        .meta-table td { border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 3px 6px; height: 22px; vertical-align: top; font-size: 8pt; }
+        .meta-table td { border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 1.5px 4px; vertical-align: top; font-size: 7.2pt; height: 16px; }
         .meta-table tr td:last-child { border-right: none; }
         .meta-table tr:last-child td { border-bottom: none; }
-        .meta-lbl { font-size: 6.8pt; color: #333; display: block; margin-bottom: 1px; }
-        .meta-val { font-weight: bold; font-size: 8pt; }
+        .meta-lbl { font-size: 6.2pt; color: #333; display: block; margin-bottom: 0px; line-height: 1.1; }
+        .meta-val { font-weight: bold; font-size: 7.2pt; line-height: 1.15; }
 
-        .party-col { width: 50%; padding: 6px 10px; min-height: 65px; }
-        .party-title { font-size: 7.5pt; color: #333; font-weight: normal; margin-bottom: 3px; }
-        .party-name { font-weight: bold; font-size: 9pt; margin-bottom: 3px; text-transform: uppercase; }
+        .party-col { width: 50%; padding: 3px 6px; }
+        .party-title { font-size: 6.8pt; color: #333; font-weight: normal; margin-bottom: 1px; }
+        .party-name { font-weight: bold; font-size: 8pt; margin-bottom: 1px; text-transform: uppercase; }
 
-        .item-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; }
-        .item-table th { border: 1px solid #000; padding: 4px 3px; font-size: 7.5pt; font-weight: bold; text-align: center; background-color: #ffffff; }
-        .item-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 5px 6px; vertical-align: top; font-size: 8pt; }
-        .item-code { font-weight: bold; font-size: 8.5pt; }
-        .item-desc { font-size: 9pt; font-weight: bold; margin-top: 1px; text-transform: uppercase; }
+        .table-wrapper { flex: 1; display: flex; flex-direction: column; border-bottom: 1px solid #000; min-height: 0; }
+        .item-table { width: 100%; border-collapse: collapse; height: 100%; }
+        .item-table th { border: 1px solid #000; padding: 2px 2px; font-size: 6.8pt; font-weight: bold; text-align: center; background-color: #ffffff; height: 16px; }
+        .item-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1.2px 4px; vertical-align: top; font-size: 7.2pt; line-height: 1.15; }
+        .item-code { font-weight: bold; font-size: 7.2pt; }
+        .item-desc { font-size: 7.2pt; font-weight: bold; margin-top: 0px; text-transform: uppercase; }
         
-        .item-table tr.total-row td { border-top: 1px solid #000; border-bottom: 2px solid #000; font-weight: bold; font-size: 8.5pt; padding: 5px 6px; }
+        .item-table tr.total-row td { border-top: 1px solid #000; border-bottom: 2px solid #000; font-weight: bold; font-size: 7.5pt; padding: 2px 4px; }
+        .item-table tr.spacer-row td { height: 100%; padding: 0; }
 
-        .charge-box { padding: 8px 10px; border-bottom: 1px solid #000; display: flex; justify-content: space-between; align-items: flex-end; }
-        .charge-lbl { font-size: 7.5pt; color: #333; }
-        .charge-words { font-weight: bold; font-size: 8.5pt; margin-top: 2px; }
+        .charge-box { padding: 3px 6px; border-bottom: 1px solid #000; display: flex; justify-content: space-between; align-items: flex-end; }
+        .charge-lbl { font-size: 6.5pt; color: #333; line-height: 1.1; }
+        .charge-words { font-weight: bold; font-size: 7.5pt; margin-top: 1px; line-height: 1.2; }
 
         .gst-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; }
-        .gst-table th, .gst-table td { border: 1px solid #000; padding: 3px 4px; font-size: 7.5pt; text-align: center; height: 18px; }
+        .gst-table th, .gst-table td { border: 1px solid #000; padding: 1.5px 3px; font-size: 6.8pt; text-align: center; height: 14px; }
         .gst-table th { font-weight: bold; }
         .gst-table td.num { text-align: right; }
 
-        .tax-words-box { padding: 6px 10px; border-bottom: 1px solid #000; font-size: 8pt; }
+        .tax-words-box { padding: 2.5px 6px; border-bottom: 1px solid #000; font-size: 7pt; line-height: 1.2; }
 
-        .footer-flex { display: flex; border-bottom: 1px solid #000; min-height: 75px; }
-        .decl-box { width: 50%; padding: 6px 10px; font-size: 7.5pt; border-right: 1px solid #000; }
-        .sig-box-right { width: 50%; padding: 6px 10px; display: flex; flex-direction: column; justify-content: space-between; text-align: right; font-size: 8pt; }
-        .computer-msg { text-align: center; font-size: 7.5pt; padding: 3px 0; }
+        .footer-flex { display: flex; border-bottom: 1px solid #000; min-height: 48px; }
+        .decl-box { width: 50%; padding: 3px 6px; font-size: 6.8pt; line-height: 1.2; border-right: 1px solid #000; }
+        .sig-box-right { width: 50%; padding: 3px 6px; display: flex; flex-direction: column; justify-content: space-between; text-align: right; font-size: 7.2pt; }
+        .computer-msg { text-align: center; font-size: 6.5pt; padding: 2px 0; }
       </style>
     </head>
     <body>
       <div class="invoice-card">
-        <div class="title-header">Tax Invoice</div>
+        <div class="title-header">
+          <span class="title-main">Tax Invoice</span>
+          <span class="copy-type-title">({{copy_type}})</span>
+        </div>
 
         <!-- Top Section: 58% Left Stacked Blocks, 42% Right Metadata Table -->
         <div class="row-flex border-b">
@@ -889,115 +909,115 @@ const generateSalesInvoicePDF = async (invoiceId) => {
         </div>
 
         <!-- Main Items Table -->
-        <table class="item-table">
-          <thead>
-            <tr>
-              <th style="width: 4%; white-space: nowrap;">Sl No.</th>
-              <th style="width: 40%; white-space: nowrap;">Description of Goods</th>
-              <th style="width: 10%; white-space: nowrap;">HSN/SAC</th>
-              <th style="width: 10%; white-space: nowrap;">Quantity</th>
-              <th style="width: 12%; white-space: nowrap;">Rate</th>
-              <th style="width: 5%; white-space: nowrap;">per</th>
-              <th style="width: 7%; white-space: nowrap;">Disc %</th>
-              <th style="width: 12%; white-space: nowrap;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{#items}}
-            <tr>
-              <td style="text-align: center;">{{index}}</td>
-              <td>
-                {{#drawing_no}}<div class="item-code">{{drawing_no}}</div>{{/drawing_no}}
-                <div class="item-desc">{{description}}</div>
-              </td>
-              <td style="text-align: center;">{{hsn_code}}</td>
-              <td style="text-align: right; font-weight: bold; white-space: nowrap;">{{quantity}} {{unit}}</td>
-              <td style="text-align: right; white-space: nowrap;">{{rate}}</td>
-              <td style="text-align: center;">{{unit}}</td>
-              <td style="text-align: center;">{{discount_percent}}</td>
-              <td style="text-align: right; font-weight: bold; white-space: nowrap;">{{item_amount}}</td>
-            </tr>
-            {{/items}}
+        <div class="table-wrapper">
+          <table class="item-table">
+            <thead>
+              <tr>
+                <th style="width: 4%; white-space: nowrap;">Sl No.</th>
+                <th style="width: 40%; white-space: nowrap;">Description of Goods</th>
+                <th style="width: 10%; white-space: nowrap;">HSN/SAC</th>
+                <th style="width: 10%; white-space: nowrap;">Quantity</th>
+                <th style="width: 12%; white-space: nowrap;">Rate</th>
+                <th style="width: 5%; white-space: nowrap;">per</th>
+                <th style="width: 7%; white-space: nowrap;">Disc %</th>
+                <th style="width: 12%; white-space: nowrap;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#items}}
+              <tr>
+                <td style="text-align: center;">{{index}}</td>
+                <td>
+                  {{#drawing_no}}<div class="item-code">{{drawing_no}}</div>{{/drawing_no}}
+                  <div class="item-desc">{{description}}</div>
+                </td>
+                <td style="text-align: center;">{{hsn_code}}</td>
+                <td style="text-align: right; font-weight: bold; white-space: nowrap;">{{quantity}} {{unit}}</td>
+                <td style="text-align: right; white-space: nowrap;">{{rate}}</td>
+                <td style="text-align: center;">{{unit}}</td>
+                <td style="text-align: center;">{{discount_percent}}</td>
+                <td style="text-align: right; font-weight: bold; white-space: nowrap;">{{item_amount}}</td>
+              </tr>
+              {{/items}}
 
-            {{#has_cgst}}
-            <tr style="white-space: nowrap;">
-              <td></td>
-              <td style="text-align: right; font-style: italic; font-size: 8.5pt; font-weight: bold; white-space: nowrap;">
-                Output CGST @ {{cgst_rate_str}}
-              </td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td style="text-align: center; font-size: 8.5pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{cgst_rate_str}}</td>
-              <td style="text-align: right; font-size: 8.5pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{cgst_total}}</td>
-            </tr>
-            {{/has_cgst}}
+              {{#has_cgst}}
+              <tr style="white-space: nowrap;">
+                <td></td>
+                <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
+                  Output CGST @ {{cgst_rate_str}}
+                </td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td style="text-align: center; font-size: 7.2pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{cgst_rate_str}}</td>
+                <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{cgst_total}}</td>
+              </tr>
+              {{/has_cgst}}
 
-            {{#has_sgst}}
-            <tr style="white-space: nowrap;">
-              <td></td>
-              <td style="text-align: right; font-style: italic; font-size: 8.5pt; font-weight: bold; white-space: nowrap;">
-                Output SGST @ {{sgst_rate_str}}
-              </td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td style="text-align: center; font-size: 8.5pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{sgst_rate_str}}</td>
-              <td style="text-align: right; font-size: 8.5pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{sgst_total}}</td>
-            </tr>
-            {{/has_sgst}}
+              {{#has_sgst}}
+              <tr style="white-space: nowrap;">
+                <td></td>
+                <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
+                  Output SGST @ {{sgst_rate_str}}
+                </td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td style="text-align: center; font-size: 7.2pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{sgst_rate_str}}</td>
+                <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{sgst_total}}</td>
+              </tr>
+              {{/has_sgst}}
 
-            {{#has_igst}}
-            <tr style="white-space: nowrap;">
-              <td></td>
-              <td style="text-align: right; font-style: italic; font-size: 8.5pt; font-weight: bold; white-space: nowrap;">
-                Output IGST @ {{igst_rate_str}}
-              </td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td style="text-align: center; font-size: 8.5pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{igst_rate_str}}</td>
-              <td style="text-align: right; font-size: 8.5pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{igst_total}}</td>
-            </tr>
-            {{/has_igst}}
+              {{#has_igst}}
+              <tr style="white-space: nowrap;">
+                <td></td>
+                <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
+                  Output IGST @ {{igst_rate_str}}
+                </td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td style="text-align: center; font-size: 7.2pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{igst_rate_str}}</td>
+                <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{igst_total}}</td>
+              </tr>
+              {{/has_igst}}
 
-            {{#round_off_val}}
-            <tr style="white-space: nowrap;">
-              <td></td>
-              <td style="text-align: right; font-style: italic; font-size: 8.5pt; font-weight: bold; white-space: nowrap;">
-                Rounding Off.
-              </td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td style="text-align: right; font-size: 8.5pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{round_off_val}}</td>
-            </tr>
-            {{/round_off_val}}
+              {{#round_off_val}}
+              <tr style="white-space: nowrap;">
+                <td></td>
+                <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
+                  Rounding Off.
+                </td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{round_off_val}}</td>
+              </tr>
+              {{/round_off_val}}
 
-            {{#empty_rows}}
-            <tr style="height: 18px;">
-              <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
-            </tr>
-            {{/empty_rows}}
+              <tr class="spacer-row">
+                <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+              </tr>
 
-            <!-- Total Row -->
-            <tr class="total-row">
-              <td></td>
-              <td style="text-align: right;">Total</td>
-              <td></td>
-              <td style="text-align: right; white-space: nowrap;">{{total_quantity}}</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td style="text-align: right; white-space: nowrap;">₹ {{net_total}}</td>
-            </tr>
-          </tbody>
-        </table>
+              <!-- Total Row -->
+              <tr class="total-row">
+                <td></td>
+                <td style="text-align: right;">Total</td>
+                <td></td>
+                <td style="text-align: right; white-space: nowrap;">{{total_quantity}}</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td style="text-align: right; white-space: nowrap;">₹ {{net_total}}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <!-- Amount Chargeable (in words) -->
         <div class="charge-box">
@@ -1086,12 +1106,12 @@ const generateSalesInvoicePDF = async (invoiceId) => {
           <div class="sig-box-right">
             <div><strong>for {{hostCompanyName}}</strong></div>
             {{#signatureBase64}}
-            <div style="margin-top: 4px; margin-bottom: 4px;"><img src="{{signatureBase64}}" style="max-height: 40px;" /></div>
+            <div style="margin-top: 2px; margin-bottom: 2px;"><img src="{{signatureBase64}}" style="max-height: 28px;" /></div>
             {{/signatureBase64}}
             {{^signatureBase64}}
-            <div style="margin-top: 35px;"></div>
+            <div style="margin-top: 20px;"></div>
             {{/signatureBase64}}
-            <div style="font-size: 8pt; font-weight: bold;">Authorised Signatory</div>
+            <div style="font-size: 7.2pt; font-weight: bold;">Authorised Signatory</div>
           </div>
         </div>
 
@@ -1102,6 +1122,7 @@ const generateSalesInvoicePDF = async (invoiceId) => {
   `;
 
   const viewData = {
+    copy_type: copyType || 'Original for Recipient',
     invoice_no: invoice.invoice_no,
     invoice_date: formatDate(invoice.invoice_date || invoice.created_at),
     delivery_note: invoice.delivery_note || '',

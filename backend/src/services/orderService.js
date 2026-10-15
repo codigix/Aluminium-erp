@@ -118,6 +118,8 @@ const createOrder = async (orderData) => {
     warehouse,
     cgst_rate,
     sgst_rate,
+    igst_rate,
+    is_interstate,
     profit_margin,
     subtotal,
     gst,
@@ -136,12 +138,17 @@ const createOrder = async (orderData) => {
 
     const orderNo = await generateOrderNo(connection);
 
+    const isInterstateVal = Boolean(is_interstate) || (parseFloat(igst_rate) > 0) ? 1 : 0;
+    const igstRateVal = isInterstateVal ? (parseFloat(igst_rate) || 0) : 0;
+    const cgstRateVal = isInterstateVal ? 0 : (parseFloat(cgst_rate) || 0);
+    const sgstRateVal = isInterstateVal ? 0 : (parseFloat(sgst_rate) || 0);
+
     const [result] = await connection.execute(`
       INSERT INTO orders
       (order_no, public_id, quotation_id, client_id, project_name, order_date, delivery_date, 
-       status, source_type, warehouse, cgst_rate, sgst_rate, profit_margin,
+       status, source_type, warehouse, cgst_rate, sgst_rate, igst_rate, is_interstate, profit_margin,
        subtotal, gst, grand_total, host_company_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'Created', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'Created', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       orderNo,
       publicId,
@@ -152,8 +159,10 @@ const createOrder = async (orderData) => {
       delivery_date || null,
       source_type || 'DIRECT',
       warehouse || null,
-      cgst_rate || 0,
-      sgst_rate || 0,
+      cgstRateVal,
+      sgstRateVal,
+      igstRateVal,
+      isInterstateVal,
       profit_margin || 0,
       subtotal || 0,
       gst || 0,
@@ -350,6 +359,8 @@ const updateOrder = async (id, orderData) => {
     warehouse,
     cgst_rate,
     sgst_rate,
+    igst_rate,
+    is_interstate,
     profit_margin,
     subtotal,
     gst,
@@ -357,6 +368,11 @@ const updateOrder = async (id, orderData) => {
     items,
     host_company_id
   } = orderData;
+
+  const isInterstateVal = Boolean(is_interstate) || (parseFloat(igst_rate) > 0) ? 1 : 0;
+  const igstRateVal = isInterstateVal ? (parseFloat(igst_rate) || 0) : 0;
+  const cgstRateVal = isInterstateVal ? 0 : (parseFloat(cgst_rate) || 0);
+  const sgstRateVal = isInterstateVal ? 0 : (parseFloat(sgst_rate) || 0);
 
   const connection = await pool.getConnection();
   try {
@@ -374,6 +390,8 @@ const updateOrder = async (id, orderData) => {
         warehouse = ?,
         cgst_rate = ?,
         sgst_rate = ?,
+        igst_rate = ?,
+        is_interstate = ?,
         profit_margin = ?,
         subtotal = ?,
         gst = ?,
@@ -390,8 +408,10 @@ const updateOrder = async (id, orderData) => {
       status,
       source_type || 'DIRECT',
       warehouse || null,
-      cgst_rate || 0,
-      sgst_rate || 0,
+      cgstRateVal,
+      sgstRateVal,
+      igstRateVal,
+      isInterstateVal,
       profit_margin || 0,
       subtotal || 0,
       gst || 0,
@@ -1121,8 +1141,14 @@ const generateOrderPDF = async (orderId) => {
   let totalTaxableValue = 0;
   let totalCgst = 0;
   let totalSgst = 0;
+  let totalIgst = 0;
   let totalQuantityNum = 0;
   let defaultUnit = 'NOS';
+
+  const igstRate = parseFloat(order.igst_rate) || 0;
+  const isInterstate = Boolean(order.is_interstate) || igstRate > 0;
+  const cgstRate = isInterstate ? 0 : (parseFloat(order.cgst_rate) || 0);
+  const sgstRate = isInterstate ? 0 : (parseFloat(order.sgst_rate) || 0);
 
   // Group items by HSN for tax summary
   const taxMap = new Map();
@@ -1130,12 +1156,14 @@ const generateOrderPDF = async (orderId) => {
     const qty = Number(item.quantity || 0);
     const rate = Number(item.rate || 0);
     const taxable = qty * rate;
-    const cgst = taxable * (Number(order.cgst_rate || 0) / 100);
-    const sgst = taxable * (Number(order.sgst_rate || 0) / 100);
+    const cgst = isInterstate ? 0 : taxable * (cgstRate / 100);
+    const sgst = isInterstate ? 0 : taxable * (sgstRate / 100);
+    const igst = isInterstate ? taxable * (igstRate / 100) : 0;
 
     totalTaxableValue += taxable;
     totalCgst += cgst;
     totalSgst += sgst;
+    totalIgst += igst;
 
     totalQuantityNum += qty;
     if (item.unit) defaultUnit = item.unit;
@@ -1145,18 +1173,25 @@ const generateOrderPDF = async (orderId) => {
       taxMap.set(hsn, {
         hsn_code: hsn,
         taxable_value: 0,
-        central_rate: Number(order.cgst_rate || 0).toFixed(1) + '%',
+        central_rate: cgstRate.toFixed(1) + '%',
         central_amount: 0,
-        state_rate: Number(order.sgst_rate || 0).toFixed(1) + '%',
+        state_rate: sgstRate.toFixed(1) + '%',
         state_amount: 0,
+        igst_rate: igstRate.toFixed(1) + '%',
+        igst_amount: 0,
         total_tax: 0
       });
     }
     const entry = taxMap.get(hsn);
     entry.taxable_value += taxable;
-    entry.central_amount += cgst;
-    entry.state_amount += sgst;
-    entry.total_tax += (cgst + sgst);
+    if (isInterstate) {
+      entry.igst_amount += igst;
+      entry.total_tax += igst;
+    } else {
+      entry.central_amount += cgst;
+      entry.state_amount += sgst;
+      entry.total_tax += (cgst + sgst);
+    }
 
     return {
       ...item,
@@ -1174,13 +1209,14 @@ const generateOrderPDF = async (orderId) => {
     taxable_value: formatCurrency(t.taxable_value),
     central_amount: formatCurrency(t.central_amount),
     state_amount: formatCurrency(t.state_amount),
+    igst_amount: formatCurrency(t.igst_amount),
     total_tax: formatCurrency(t.total_tax)
   }));
 
-  const rawNetTotal = totalTaxableValue + totalCgst + totalSgst;
+  const rawNetTotal = totalTaxableValue + totalCgst + totalSgst + totalIgst;
   const netTotalRounded = Math.round(rawNetTotal);
   const roundOffNum = Number((netTotalRounded - rawNetTotal).toFixed(2));
-  const totalTaxAmt = totalCgst + totalSgst;
+  const totalTaxAmt = totalCgst + totalSgst + totalIgst;
 
   const viewData = {
     ...order,
@@ -1217,15 +1253,18 @@ const generateOrderPDF = async (orderId) => {
     buyer_state_code: buyerStateCode,
 
     items: formattedItems,
-    has_cgst: totalCgst > 0,
-    cgst_rate: Number(order.cgst_rate || 9).toFixed(1),
-    cgst_rate_str: (Number(order.cgst_rate || 9) % 1 === 0 ? Number(order.cgst_rate || 9) : Number(order.cgst_rate || 9).toFixed(1)) + '%',
+    has_cgst: !isInterstate && totalCgst > 0,
+    cgst_rate: cgstRate.toFixed(1),
+    cgst_rate_str: (cgstRate % 1 === 0 ? cgstRate : cgstRate.toFixed(1)) + '%',
     cgst_total: formatCurrency(totalCgst),
-    has_sgst: totalSgst > 0,
-    sgst_rate: Number(order.sgst_rate || 9).toFixed(1),
-    sgst_rate_str: (Number(order.sgst_rate || 9) % 1 === 0 ? Number(order.sgst_rate || 9) : Number(order.sgst_rate || 9).toFixed(1)) + '%',
+    has_sgst: !isInterstate && totalSgst > 0,
+    sgst_rate: sgstRate.toFixed(1),
+    sgst_rate_str: (sgstRate % 1 === 0 ? sgstRate : sgstRate.toFixed(1)) + '%',
     sgst_total: formatCurrency(totalSgst),
-    has_igst: false,
+    has_igst: isInterstate && totalIgst > 0,
+    igst_rate: igstRate.toFixed(1),
+    igst_rate_str: (igstRate % 1 === 0 ? igstRate : igstRate.toFixed(1)) + '%',
+    igst_total: formatCurrency(totalIgst),
     round_off_val: roundOffNum !== 0 ? (roundOffNum > 0 ? `+${roundOffNum.toFixed(2)}` : roundOffNum.toFixed(2)) : null,
     total_quantity: `${totalQuantityNum.toFixed(3)} ${defaultUnit}`,
     net_total: formatCurrency(netTotalRounded),

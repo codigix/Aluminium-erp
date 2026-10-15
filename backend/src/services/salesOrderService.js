@@ -300,6 +300,8 @@ const createSalesOrder = async (orderData) => {
     items,
     cgst_rate = 0,
     sgst_rate = 0,
+    igst_rate = 0,
+    is_interstate = 0,
     profit_margin = 0,
     bom_id = null,
     warehouse = null,
@@ -309,6 +311,11 @@ const createSalesOrder = async (orderData) => {
     parent_id = null,
     host_company_id = null
   } = orderData;
+
+  const isInterstateVal = Boolean(is_interstate) || (parseFloat(igst_rate) > 0) ? 1 : 0;
+  const igstRateVal = isInterstateVal ? (parseFloat(igst_rate) || 0) : 0;
+  const cgstRateVal = isInterstateVal ? 0 : (parseFloat(cgst_rate) || 0);
+  const sgstRateVal = isInterstateVal ? 0 : (parseFloat(sgst_rate) || 0);
 
   // Use either targetDispatchDate or delivery_date
   const finalTargetDispatchDate = targetDispatchDate || delivery_date;
@@ -334,10 +341,10 @@ const createSalesOrder = async (orderData) => {
         customer_po_id, company_id, project_name, drawing_required, 
         production_priority, target_dispatch_date, status, 
         current_department, request_accepted, cgst_rate, 
-        sgst_rate, profit_margin, bom_id, warehouse,
+        sgst_rate, igst_rate, is_interstate, profit_margin, bom_id, warehouse,
         quotation_id, source_type, parent_id, public_id, host_company_id
       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         validatedPoId,
         companyId || null,
@@ -346,8 +353,10 @@ const createSalesOrder = async (orderData) => {
         productionPriority,
         finalTargetDispatchDate || null,
         status,
-        cgst_rate,
-        sgst_rate,
+        cgstRateVal,
+        sgstRateVal,
+        igstRateVal,
+        isInterstateVal,
         profit_margin,
         bom_id,
         warehouse,
@@ -513,6 +522,8 @@ const updateSalesOrder = async (id, orderData) => {
     items,
     cgst_rate,
     sgst_rate,
+    igst_rate,
+    is_interstate,
     profit_margin,
     bom_id,
     warehouse,
@@ -521,6 +532,11 @@ const updateSalesOrder = async (id, orderData) => {
     source_type = 'DIRECT',
     host_company_id = null
   } = orderData;
+
+  const isInterstateVal = Boolean(is_interstate) || (parseFloat(igst_rate) > 0) ? 1 : 0;
+  const igstRateVal = isInterstateVal ? (parseFloat(igst_rate) || 0) : 0;
+  const cgstRateVal = isInterstateVal ? 0 : (parseFloat(cgst_rate) || 0);
+  const sgstRateVal = isInterstateVal ? 0 : (parseFloat(sgst_rate) || 0);
 
   const finalTargetDispatchDate = targetDispatchDate || delivery_date;
 
@@ -549,6 +565,8 @@ const updateSalesOrder = async (id, orderData) => {
         status = ?, 
         cgst_rate = ?, 
         sgst_rate = ?, 
+        igst_rate = ?, 
+        is_interstate = ?, 
         profit_margin = ?, 
         bom_id = ?, 
         warehouse = ?,
@@ -565,8 +583,10 @@ const updateSalesOrder = async (id, orderData) => {
         productionPriority || 'NORMAL',
         finalTargetDispatchDate || null,
         status || null,
-        cgst_rate || 0,
-        sgst_rate || 0,
+        cgstRateVal,
+        sgstRateVal,
+        igstRateVal,
+        isInterstateVal,
         profit_margin || 0,
         bom_id || null,
         warehouse || null,
@@ -1487,84 +1507,102 @@ const generateSalesOrderPDF = async (salesOrderId) => {
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="utf-8">
       <style>
-        @page { size: A4; margin: 10mm; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #000; line-height: 1.3; margin: 0; font-size: 10px; }
-        .invoice-container { border: 1px solid #000; min-height: 270mm; position: relative; }
+        @page { size: A4 portrait; margin: 4mm 6mm; }
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #000; line-height: 1.2; margin: 0; padding: 0; font-size: 7.2pt; background: #fff; }
+        .invoice-container { border: 1px solid #000; width: 100%; box-sizing: border-box; }
         
-        .tax-invoice-label { text-align: center; border-bottom: 1px solid #000; font-weight: bold; font-size: 14px; padding: 5px; }
+        .tax-invoice-label { text-align: center; border-bottom: 1px solid #000; font-weight: bold; font-size: 10pt; padding: 3px 0; letter-spacing: 0.5px; text-transform: uppercase; background: #fff; }
         
         .header-section { display: flex; border-bottom: 1px solid #000; }
-        .header-left { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
-        .header-right { flex: 1; padding: 10px; }
+        .header-left { flex: 1.4; padding: 3px 6px; border-right: 1px solid #000; }
+        .header-right { flex: 1; padding: 0; }
         
-        .company-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
-        .address-text { font-size: 9px; margin-bottom: 2px; }
+        .company-name { font-size: 9pt; font-weight: bold; margin-bottom: 1px; text-transform: uppercase; }
+        .address-text { font-size: 7.2pt; margin-bottom: 1px; line-height: 1.2; }
         
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-bottom: 1px solid #000; }
-        .info-box { padding: 8px; border-right: 1px solid #000; min-height: 80px; }
+        .meta-table { width: 100%; border-collapse: collapse; height: 100%; }
+        .meta-table td { padding: 1.5px 4px; border-bottom: 1px solid #000; border-right: 1px solid #000; font-size: 7.2pt; height: 15px; vertical-align: top; }
+        .meta-table tr:last-child td { border-bottom: none; }
+        .meta-table tr td:last-child { border-right: none; }
+        .meta-label { font-weight: bold; width: 44%; color: #333; font-size: 6.8pt; }
+        
+        .info-grid { display: flex; width: 100%; border-bottom: 1px solid #000; }
+        .info-box { flex: 1; padding: 3px 6px; border-right: 1px solid #000; }
         .info-box:last-child { border-right: none; }
-        .label { font-weight: bold; text-decoration: underline; margin-bottom: 5px; display: block; font-size: 11px; }
-        
-        .meta-table { width: 100%; border-collapse: collapse; }
-        .meta-table td { padding: 4px; border: 1px solid #000; }
-        .meta-label { font-weight: bold; width: 40%; }
+        .label { font-weight: bold; margin-bottom: 1px; display: block; font-size: 6.8pt; color: #333; text-transform: uppercase; }
         
         .items-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; }
-        .items-table th { border: 1px solid #000; padding: 6px; background: #f0f0f0; font-weight: bold; text-align: center; font-size: 9px; }
-        .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 6px; vertical-align: top; }
-        .items-table tr.item-row { min-height: 30px; }
+        .items-table th { border: 1px solid #000; padding: 2px 2px; background: #ffffff; font-weight: bold; text-align: center; font-size: 6.8pt; height: 15px; }
+        .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 1.2px 4px; vertical-align: top; font-size: 7.2pt; line-height: 1.15; }
+        .items-table tr.item-row { min-height: 16px; }
         
-        .total-section { display: flex; border-bottom: 1px solid #000; }
-        .words-section { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
+        .total-section { display: flex; border-bottom: 1px solid #000; page-break-inside: avoid; }
+        .words-section { flex: 1.4; padding: 3px 6px; border-right: 1px solid #000; display: flex; flex-direction: column; justify-content: space-between; }
         .calc-section { flex: 1; }
         
         .calc-table { width: 100%; border-collapse: collapse; }
-        .calc-table td { padding: 5px; border-bottom: 1px solid #000; text-align: right; }
-        .calc-table td:first-child { text-align: left; font-weight: bold; border-right: 1px solid #000; }
-        .calc-table tr:last-child td { border-bottom: none; font-size: 12px; font-weight: bold; }
+        .calc-table td { padding: 1.5px 5px; border-bottom: 1px solid #000; text-align: right; font-size: 7.2pt; }
+        .calc-table td:first-child { text-align: left; font-weight: bold; border-right: 1px solid #000; width: 50%; }
+        .calc-table tr:last-child td { border-bottom: none; font-size: 8pt; font-weight: bold; }
         
-        .tax-summary-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; margin-top: 0; }
-        .tax-summary-table th, .tax-summary-table td { border: 1px solid #000; padding: 4px; text-align: center; }
-        .tax-summary-table th { font-size: 8px; background: #f0f0f0; }
+        .tax-summary-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; page-break-inside: avoid; }
+        .tax-summary-table th, .tax-summary-table td { border: 1px solid #000; padding: 1.5px 3px; text-align: center; font-size: 6.8pt; height: 14px; }
+        .tax-summary-table th { background: #ffffff; font-weight: bold; }
         
-        .footer-section { display: flex; padding: 20px 10px; border-top: 1px solid #000; position: absolute; bottom: 0; width: 100%; box-sizing: border-box; }
-        .footer-col { flex: 1; text-align: center; }
-        .signature-box { margin-top: 40px; border-top: 1px dashed #000; display: inline-block; min-width: 150px; padding-top: 5px; }
+        .bank-declaration-section { display: flex; border-bottom: 1px solid #000; font-size: 6.8pt; page-break-inside: avoid; }
+        .bank-details-box { flex: 1.4; padding: 3px 6px; border-right: 1px solid #000; }
+        .declaration-box { flex: 1; padding: 3px 6px; }
+        
+        .footer-section { display: flex; padding: 4px 10px; border-top: 1px solid #000; width: 100%; box-sizing: border-box; page-break-inside: avoid; }
+        .footer-col { flex: 1; text-align: center; font-size: 7.2pt; }
+        .signature-box { margin-top: 20px; border-top: 1px dashed #000; display: inline-block; min-width: 140px; padding-top: 2px; font-weight: bold; }
       </style>
     </head>
     <body>
       <div class="invoice-container">
-        <div class="tax-invoice-label">TAX INVOICE</div>
+        <div class="tax-invoice-label">SALES ORDER / TAX INVOICE</div>
         
         <div class="header-section">
           <div class="header-left">
             {{#logoBase64}}
-            <img src="{{logoBase64}}" style="max-height: 45px; margin-bottom: 5px; display: block;" />
+            <img src="{{logoBase64}}" style="max-height: 35px; margin-bottom: 3px; display: block;" />
             {{/logoBase64}}
             <div class="company-name">{{hostCompanyName}}</div>
             {{#hostCompanyAddressLines}}
             <div class="address-text">{{.}}</div>
             {{/hostCompanyAddressLines}}
-            {{#hostGSTIN}}<div class="address-text">GSTIN/UIN: {{hostGSTIN}}</div>{{/hostGSTIN}}
+            {{#hostGSTIN}}<div class="address-text"><strong>GSTIN/UIN:</strong> {{hostGSTIN}}</div>{{/hostGSTIN}}
           </div>
           <div class="header-right">
             <table class="meta-table">
               <tr>
-                <td class="meta-label">Invoice No.</td>
-                <td>SO-{{order_id}}</td>
+                <td class="meta-label">Sales Order No.</td>
+                <td style="font-weight: bold;">{{order_no}}</td>
               </tr>
               <tr>
-                <td class="meta-label">Dated</td>
+                <td class="meta-label">Order Date</td>
                 <td>{{created_at}}</td>
               </tr>
               <tr>
-                <td class="meta-label">Buyer's Order No.</td>
-                <td>{{po_number}}</td>
+                <td class="meta-label">Buyer's PO No.</td>
+                <td style="font-weight: bold;">{{po_number}}</td>
               </tr>
               <tr>
                 <td class="meta-label">PO Date</td>
                 <td>{{po_date}}</td>
+              </tr>
+              {{#target_dispatch_date}}
+              <tr>
+                <td class="meta-label">Target Dispatch</td>
+                <td>{{target_dispatch_date}}</td>
+              </tr>
+              {{/target_dispatch_date}}
+              <tr>
+                <td class="meta-label">Order Status</td>
+                <td><span style="font-weight: bold;">{{status}}</span></td>
               </tr>
             </table>
           </div>
@@ -1573,25 +1611,25 @@ const generateSalesOrderPDF = async (salesOrderId) => {
         <div class="info-grid">
           <div class="info-box">
             <span class="label">Consignee (Ship to)</span>
-            <div style="font-weight: bold; font-size: 11px;">{{company_name}}</div>
+            <div style="font-weight: bold; font-size: 8pt; text-transform: uppercase;">{{company_name}}</div>
             <div class="address-text">{{shipping_address}}</div>
-            <div class="address-text">GSTIN/UIN: {{gstin}}</div>
-            <div class="address-text">State Name: {{shipping_state}}</div>
+            <div class="address-text"><strong>GSTIN/UIN:</strong> {{gstin}}</div>
+            <div class="address-text"><strong>State Name:</strong> {{shipping_state}}</div>
             {{#shipping_contact_name}}
-            <div class="address-text" style="margin-top: 3px; font-weight: bold; color: #444;">
-              Contact: {{shipping_contact_name}} {{#shipping_contact_phone}}({{shipping_contact_phone}}){{/shipping_contact_phone}}
+            <div class="address-text" style="margin-top: 1px; color: #444;">
+              <strong>Contact:</strong> {{shipping_contact_name}} {{#shipping_contact_phone}}({{shipping_contact_phone}}){{/shipping_contact_phone}}
             </div>
             {{/shipping_contact_name}}
           </div>
           <div class="info-box">
             <span class="label">Buyer (Bill to)</span>
-            <div style="font-weight: bold; font-size: 11px;">{{company_name}}</div>
+            <div style="font-weight: bold; font-size: 8pt; text-transform: uppercase;">{{company_name}}</div>
             <div class="address-text">{{billing_address}}</div>
-            <div class="address-text">GSTIN/UIN: {{gstin}}</div>
-            <div class="address-text">State Name: {{billing_state}}</div>
+            <div class="address-text"><strong>GSTIN/UIN:</strong> {{gstin}}</div>
+            <div class="address-text"><strong>State Name:</strong> {{billing_state}}</div>
             {{#billing_contact_name}}
-            <div class="address-text" style="margin-top: 3px; font-weight: bold; color: #444;">
-              Contact: {{billing_contact_name}} {{#billing_contact_phone}}({{billing_contact_phone}}){{/billing_contact_phone}}
+            <div class="address-text" style="margin-top: 1px; color: #444;">
+              <strong>Contact:</strong> {{billing_contact_name}} {{#billing_contact_phone}}({{billing_contact_phone}}){{/billing_contact_phone}}
             </div>
             {{/billing_contact_name}}
           </div>
@@ -1600,13 +1638,14 @@ const generateSalesOrderPDF = async (salesOrderId) => {
         <table class="items-table">
           <thead>
             <tr>
-              <th style="width: 30px;">Sl No.</th>
+              <th style="width: 25px;">Sl No.</th>
               <th>Description of Goods</th>
-              <th style="width: 70px;">HSN/SAC</th>
-              <th style="width: 60px;">Quantity</th>
-              <th style="width: 80px;">Rate</th>
-              <th style="width: 40px;">per</th>
-              <th style="width: 90px;">Amount</th>
+              <th style="width: 60px;">HSN/SAC</th>
+              <th style="width: 65px;">Delivery Date</th>
+              <th style="width: 50px;">Quantity</th>
+              <th style="width: 65px;">Rate</th>
+              <th style="width: 35px;">per</th>
+              <th style="width: 75px;">Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -1614,19 +1653,20 @@ const generateSalesOrderPDF = async (salesOrderId) => {
             <tr class="item-row">
               <td style="text-align: center;">{{index}}</td>
               <td>
-                <div style="font-weight: bold;">{{description}}</div>
-                {{#drawing_no}}<div style="font-size: 8px; color: #444;">DRW: {{drawing_no}}</div>{{/drawing_no}}
+                <div style="font-weight: bold; word-break: break-word;">{{description}}</div>
+                {{#drawing_no}}<div style="font-size: 6.8pt; color: #444;">Part/DRW: {{drawing_no}}</div>{{/drawing_no}}
               </td>
               <td style="text-align: center;">{{hsn_code}}</td>
-              <td style="text-align: center;">{{quantity}} {{unit}}</td>
+              <td style="text-align: center;">{{delivery_date_formatted}}</td>
+              <td style="text-align: center; font-weight: bold;">{{quantity}} {{unit}}</td>
               <td style="text-align: right;">{{rate}}</td>
               <td style="text-align: center;">{{unit}}</td>
               <td style="text-align: right; font-weight: bold;">{{item_amount}}</td>
             </tr>
             {{/items}}
             {{#empty_rows}}
-            <tr style="height: 25px;">
-              <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+            <tr style="height: 16px;">
+              <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
             </tr>
             {{/empty_rows}}
           </tbody>
@@ -1634,8 +1674,8 @@ const generateSalesOrderPDF = async (salesOrderId) => {
 
         <div class="total-section">
           <div class="words-section">
-            <div style="font-style: italic; margin-bottom: 10px;">Amount Chargeable (in words)</div>
-            <div style="font-weight: bold; font-size: 11px;">{{net_total_words}}</div>
+            <div style="font-style: italic; font-size: 6.8pt; color: #444; margin-bottom: 2px;">Amount Chargeable (in words)</div>
+            <div style="font-weight: bold; font-size: 7.5pt;">{{net_total_words}}</div>
           </div>
           <div class="calc-section">
             <table class="calc-table">
@@ -1656,7 +1696,7 @@ const generateSalesOrderPDF = async (salesOrderId) => {
               </tr>
               {{/sgst_total}}
               <tr>
-                <td>Total</td>
+                <td>Total Value</td>
                 <td>₹ {{net_total}}</td>
               </tr>
             </table>
@@ -1703,60 +1743,60 @@ const generateSalesOrderPDF = async (salesOrderId) => {
           </tbody>
         </table>
 
-        <div class="bank-declaration-section" style="display: flex; border-bottom: 1px solid #000; font-size: 9px;">
-          <div class="bank-details-box" style="flex: 1.5; padding: 10px; border-right: 1px solid #000;">
-            <div style="font-weight: bold; text-decoration: underline; margin-bottom: 5px; font-size: 10px;">Company's Bank Details:</div>
-            <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
+        <div class="bank-declaration-section">
+          <div class="bank-details-box">
+            <div style="font-weight: bold; text-decoration: underline; margin-bottom: 2px; font-size: 7.2pt;">Company's Bank Details:</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 6.8pt;">
               <tr>
-                <td style="font-weight: bold; width: 100px; padding: 2px 0;">Bank Name:</td>
+                <td style="font-weight: bold; width: 85px; padding: 1px 0;">Bank Name:</td>
                 <td>{{hostBankName}}</td>
               </tr>
               <tr>
-                <td style="font-weight: bold; padding: 2px 0;">Account Name:</td>
+                <td style="font-weight: bold; padding: 1px 0;">Account Name:</td>
                 <td>{{hostAccountName}}</td>
               </tr>
               <tr>
-                <td style="font-weight: bold; padding: 2px 0;">Account Number:</td>
+                <td style="font-weight: bold; padding: 1px 0;">Account Number:</td>
                 <td>{{hostAccountNumber}}</td>
               </tr>
               <tr>
-                <td style="font-weight: bold; padding: 2px 0;">IFSC Code:</td>
+                <td style="font-weight: bold; padding: 1px 0;">IFSC Code:</td>
                 <td style="font-family: monospace; font-weight: bold;">{{hostIFSCCode}}</td>
               </tr>
               <tr>
-                <td style="font-weight: bold; padding: 2px 0;">Branch:</td>
+                <td style="font-weight: bold; padding: 1px 0;">Branch:</td>
                 <td>{{hostBranchName}}</td>
               </tr>
             </table>
           </div>
-          <div class="declaration-box" style="flex: 1; padding: 10px;">
-            <div style="font-weight: bold; text-decoration: underline; margin-bottom: 5px;">Declaration:</div>
-            <div style="line-height: 1.4; color: #333;">
+          <div class="declaration-box">
+            <div style="font-weight: bold; text-decoration: underline; margin-bottom: 2px;">Declaration:</div>
+            <div style="line-height: 1.3; color: #333;">
               We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
             </div>
           </div>
         </div>
 
         {{#invoiceFooterNotes}}
-        <div style="padding: 10px; font-size: 8px; color: #444; border-top: 1px solid #000; margin-bottom: 120px;">
+        <div style="padding: 3px 6px; font-size: 6.8pt; color: #444; border-bottom: 1px solid #000;">
           <strong>Notes:</strong> {{invoiceFooterNotes}}
         </div>
         {{/invoiceFooterNotes}}
 
         <div class="footer-section">
           <div class="footer-col">
-            <div style="margin-bottom: 50px;">Customer's Seal and Signature</div>
+            <div style="margin-bottom: 20px;">Customer's Seal and Signature</div>
             <div class="signature-box">Authorized Signatory</div>
           </div>
           <div class="footer-col" style="text-align: right;">
             <div style="font-weight: bold;">for {{hostCompanyName}}</div>
             {{#signatureBase64}}
-            <div style="margin-top: 5px; margin-bottom: 5px; display: flex; justify-content: flex-end;"><img src="{{signatureBase64}}" style="max-height: 40px;" /></div>
+            <div style="margin-top: 2px; margin-bottom: 2px; display: flex; justify-content: flex-end;"><img src="{{signatureBase64}}" style="max-height: 28px;" /></div>
             {{/signatureBase64}}
             {{^signatureBase64}}
-            <div style="margin-top: 40px;"></div>
+            <div style="margin-top: 15px;"></div>
             {{/signatureBase64}}
-            <div class="signature-box" style="margin-top: 5px;">Authorized Signatory</div>
+            <div class="signature-box" style="margin-top: 2px;">Authorized Signatory</div>
           </div>
         </div>
       </div>
@@ -1805,6 +1845,9 @@ const generateSalesOrderPDF = async (salesOrderId) => {
     return {
       ...item,
       index: idx + 1,
+      drawing_no: item.drawing_no || item.item_code || '',
+      description: item.description || item.item_name || '',
+      delivery_date_formatted: formatDate(item.delivery_date),
       quantity: qty.toFixed(0),
       rate: formatCurrency(rate),
       item_amount: formatCurrency(taxable)
@@ -1824,6 +1867,9 @@ const generateSalesOrderPDF = async (salesOrderId) => {
   const viewData = {
     ...order,
     order_id: String(order.id).padStart(4, '0'),
+    order_no: order.so_number || ('SO-' + String(order.id).padStart(4, '0')),
+    status: (order.status || 'Created').toUpperCase().replace(/_/g, ' '),
+    target_dispatch_date: formatDate(order.target_dispatch_date),
     created_at: formatDate(order.created_at),
     po_date: formatDate(order.po_date),
     subtotal: formatCurrency(totalTaxableValue),
@@ -1834,7 +1880,7 @@ const generateSalesOrderPDF = async (salesOrderId) => {
     net_total_words: numberToWords(netTotal),
     tax_summary: taxSummary,
     items: formattedItems,
-    empty_rows: Array.from({ length: Math.max(0, 10 - items.length) }),
+    empty_rows: Array.from({ length: Math.max(0, (items.length <= 4 ? 4 - items.length : 0)) }),
     cgst_rate: Number(order.cgst_rate || 0).toFixed(1),
     sgst_rate: Number(order.sgst_rate || 0).toFixed(1),
     hostCompanyName,
