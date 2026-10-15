@@ -12,7 +12,8 @@ const getAvailableSalesOrders = async (req, res, next) => {
 const getOrderDetailsForInvoice = async (req, res, next) => {
   try {
     const orderId = req.params.orderId;
-    const details = await salesInvoiceService.getOrderDetailsForInvoice(orderId);
+    const excludeInvoiceId = req.query.excludeInvoiceId || null;
+    const details = await salesInvoiceService.getOrderDetailsForInvoice(orderId, excludeInvoiceId);
     res.json(details);
   } catch (error) {
     next(error);
@@ -88,6 +89,20 @@ const generateSalesInvoicePDF = async (req, res, next) => {
   }
 };
 
+const updateSalesInvoice = async (req, res, next) => {
+  try {
+    const userId = req.user?.id || null;
+    const result = await salesInvoiceService.updateSalesInvoice(req.params.id, req.body, userId);
+    res.json({
+      success: true,
+      message: 'Sales Invoice updated successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const sendInvoiceToAccounts = async (req, res, next) => {
   try {
     const userId = req.user?.id || null;
@@ -103,6 +118,7 @@ module.exports = {
   getOrderDetailsForInvoice,
   getNextInvoiceNo,
   createSalesInvoice,
+  updateSalesInvoice,
   listSalesInvoices,
   getSalesInvoiceById,
   deleteSalesInvoice,

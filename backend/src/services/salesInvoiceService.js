@@ -117,7 +117,7 @@ const getAvailableSalesOrders = async () => {
   });
 };
 
-const getOrderDetailsForInvoice = async (orderId) => {
+const getOrderDetailsForInvoice = async (orderId, excludeInvoiceId = null) => {
   const [orderRows] = await pool.query(`
     SELECT 
       o.*, 
@@ -185,13 +185,16 @@ const getOrderDetailsForInvoice = async (orderId) => {
   const itemIds = items.map(it => it.id);
   let invoicedMap = {};
   if (itemIds.length > 0) {
-    const [invRows] = await pool.query(
-      `SELECT order_item_id, COALESCE(SUM(invoice_qty), 0) as invoiced_qty 
+    let invQuery = `SELECT order_item_id, COALESCE(SUM(invoice_qty), 0) as invoiced_qty 
        FROM sales_invoice_items 
-       WHERE order_item_id IN (?)
-       GROUP BY order_item_id`,
-      [itemIds]
-    );
+       WHERE order_item_id IN (?)`;
+    const invParams = [itemIds];
+    if (excludeInvoiceId) {
+      invQuery += ' AND sales_invoice_id != ?';
+      invParams.push(excludeInvoiceId);
+    }
+    invQuery += ' GROUP BY order_item_id';
+    const [invRows] = await pool.query(invQuery, invParams);
     for (const r of invRows) {
       invoicedMap[r.order_item_id] = parseFloat(r.invoiced_qty) || 0;
     }
@@ -259,11 +262,21 @@ const getOrderDetailsForInvoice = async (orderId) => {
 
   const nextInvoiceNo = await getNextInvoiceNo();
 
-  const igstRate = parseFloat(order.igst_rate) || 0;
-  const isInterstate = Boolean(order.is_interstate) || igstRate > 0 || (order.company_gstin && !order.company_gstin.startsWith('27') && order.company_gstin !== '—');
-  const finalIgstRate = isInterstate ? (igstRate > 0 ? igstRate : 18) : 0;
-  const finalCgstRate = isInterstate ? 0 : (parseFloat(order.cgst_rate) || 9);
-  const finalSgstRate = isInterstate ? 0 : (parseFloat(order.sgst_rate) || 9);
+  const savedIsInterstate = (order.is_interstate !== null && order.is_interstate !== undefined)
+    ? (Number(order.is_interstate) === 1 || parseFloat(order.igst_rate) > 0)
+    : null;
+
+  const isInterstate = savedIsInterstate !== null
+    ? savedIsInterstate
+    : Boolean(order.company_gstin && !order.company_gstin.startsWith('27') && order.company_gstin !== '—');
+
+  const igstRateVal = parseFloat(order.igst_rate) || 0;
+  const cgstRateVal = parseFloat(order.cgst_rate) || 0;
+  const sgstRateVal = parseFloat(order.sgst_rate) || 0;
+
+  const finalIgstRate = isInterstate ? (igstRateVal > 0 ? igstRateVal : 18) : 0;
+  const finalCgstRate = isInterstate ? 0 : (cgstRateVal > 0 ? cgstRateVal : 9);
+  const finalSgstRate = isInterstate ? 0 : (sgstRateVal > 0 ? sgstRateVal : 9);
 
   return {
     orderId: order.id,
@@ -496,6 +509,205 @@ const createSalesInvoice = async (invoiceData, userId) => {
     return {
       invoiceId,
       invoiceNo: actualInvoiceNo,
+      totalAmount
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const updateSalesInvoice = async (invoiceId, invoiceData, userId) => {
+  const {
+    hostCompanyId,
+    host_company_id,
+    customerPoNo,
+    projectName,
+    invoiceDate,
+    dueDate,
+    billingAddress,
+    shippingAddress,
+    gstin,
+    paymentTerms,
+    notes,
+    items,
+    cgstRate = 9.0,
+    sgstRate = 9.0,
+    igstRate = 0.0
+  } = invoiceData;
+
+  const [existingRows] = await pool.query('SELECT * FROM sales_invoices WHERE id = ?', [invoiceId]);
+  if (existingRows.length === 0) {
+    throw new Error('Sales Invoice not found');
+  }
+  const existingInvoice = existingRows[0];
+  if (existingInvoice.status === 'Paid') {
+    throw new Error('Paid invoices cannot be edited');
+  }
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new Error('At least one item must be included in the invoice');
+  }
+
+  const activeItems = items.filter(it => (parseFloat(it.invoiceQty) || 0) > 0);
+  if (activeItems.length === 0) {
+    throw new Error('At least one item must have invoice quantity greater than 0');
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Verify invoiceable quantities from DB excluding the current invoice
+    const itemIds = activeItems.map(it => it.orderItemId).filter(Boolean);
+    const [dbItems] = await connection.query(
+      'SELECT id, quantity, rate FROM order_items WHERE id IN (?)',
+      [itemIds]
+    );
+
+    const [invoicedSums] = await connection.query(
+      `SELECT order_item_id, COALESCE(SUM(invoice_qty), 0) as total_invoiced 
+       FROM sales_invoice_items 
+       WHERE order_item_id IN (?) AND sales_invoice_id != ?
+       GROUP BY order_item_id`,
+      [itemIds, invoiceId]
+    );
+
+    const invoicedMap = {};
+    for (const r of invoicedSums) {
+      invoicedMap[r.order_item_id] = parseFloat(r.total_invoiced) || 0;
+    }
+
+    const dbItemsMap = {};
+    for (const r of dbItems) {
+      dbItemsMap[r.id] = r;
+    }
+
+    let subtotal = 0;
+    for (const it of activeItems) {
+      const dbItem = dbItemsMap[it.orderItemId];
+      if (dbItem) {
+        const ordered = parseFloat(dbItem.quantity) || 0;
+        const previouslyInvoiced = invoicedMap[it.orderItemId] || 0;
+        const maxAllowed = Math.max(0, ordered - previouslyInvoiced);
+        const reqQty = parseFloat(it.invoiceQty) || 0;
+
+        if (reqQty > maxAllowed + 0.001) {
+          throw new Error(
+            `Invoice quantity ${reqQty} exceeds available invoiceable balance of ${maxAllowed} for item ${it.itemCode || it.drawingNo}`
+          );
+        }
+      }
+
+      const qty = parseFloat(it.invoiceQty) || 0;
+      const rate = parseFloat(it.unitRate) || 0;
+      subtotal += (qty * rate);
+    }
+
+    const cRate = parseFloat(cgstRate) || 0;
+    const sRate = parseFloat(sgstRate) || 0;
+    const iRate = parseFloat(igstRate) || 0;
+
+    const cgstAmount = (subtotal * cRate) / 100;
+    const sgstAmount = (subtotal * sRate) / 100;
+    const igstAmount = (subtotal * iRate) / 100;
+    const totalAmount = subtotal + cgstAmount + sgstAmount + igstAmount;
+
+    const finalHostCompanyId = hostCompanyId || host_company_id || existingInvoice.host_company_id || null;
+
+    // 2. Update sales_invoices record
+    await connection.execute(`
+      UPDATE sales_invoices SET
+        host_company_id = ?,
+        customer_po_no = ?,
+        project_name = ?,
+        invoice_date = ?,
+        due_date = ?,
+        billing_address = ?,
+        shipping_address = ?,
+        gstin = ?,
+        subtotal = ?,
+        cgst_rate = ?,
+        cgst_amount = ?,
+        sgst_rate = ?,
+        sgst_amount = ?,
+        igst_rate = ?,
+        igst_amount = ?,
+        total_amount = ?,
+        payment_terms = ?,
+        notes = ?,
+        updated_at = NOW()
+      WHERE id = ?
+    `, [
+      finalHostCompanyId,
+      customerPoNo || null,
+      projectName || null,
+      invoiceDate || existingInvoice.invoice_date,
+      dueDate || null,
+      billingAddress || null,
+      shippingAddress || null,
+      gstin || null,
+      subtotal,
+      cRate,
+      cgstAmount,
+      sRate,
+      sgstAmount,
+      iRate,
+      igstAmount,
+      totalAmount,
+      paymentTerms || null,
+      notes || null,
+      invoiceId
+    ]);
+
+    // 3. Replace items in sales_invoice_items
+    await connection.execute('DELETE FROM sales_invoice_items WHERE sales_invoice_id = ?', [invoiceId]);
+
+    for (const it of activeItems) {
+      const qty = parseFloat(it.invoiceQty) || 0;
+      const rate = parseFloat(it.unitRate) || 0;
+      const lineAmt = qty * rate;
+
+      await connection.execute(`
+        INSERT INTO sales_invoice_items (
+          sales_invoice_id,
+          order_item_id,
+          item_code,
+          drawing_no,
+          description,
+          hsn_code,
+          uom,
+          ordered_qty,
+          dispatched_qty,
+          previously_invoiced_qty,
+          invoice_qty,
+          unit_rate,
+          amount
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        invoiceId,
+        it.orderItemId || null,
+        it.itemCode || null,
+        it.drawingNo || null,
+        it.description || null,
+        it.hsnCode || '84779000',
+        it.uom || 'Nos',
+        parseFloat(it.orderedQty) || 0,
+        parseFloat(it.dispatchedQty) || 0,
+        invoicedMap[it.orderItemId] || 0,
+        qty,
+        rate,
+        lineAmt
+      ]);
+    }
+
+    await connection.commit();
+
+    return {
+      invoiceId,
+      invoiceNo: existingInvoice.invoice_no,
       totalAmount
     };
   } catch (error) {
@@ -1352,6 +1564,7 @@ module.exports = {
   getAvailableSalesOrders,
   getOrderDetailsForInvoice,
   createSalesInvoice,
+  updateSalesInvoice,
   listSalesInvoices,
   getSalesInvoiceById,
   deleteSalesInvoice,

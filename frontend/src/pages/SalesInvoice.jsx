@@ -3,7 +3,7 @@ import {
   FileText, Plus, Search, Calendar, CheckCircle2, Eye, Printer, Trash2,
   ArrowLeft, ArrowRight, Building, Hash, Layers, ShieldCheck, AlertCircle, ShoppingBag,
   Download, Clock, X, ChevronRight, Check, RefreshCw, AlertTriangle,
-  Receipt, DollarSign, User, MapPin, Package, Send
+  Receipt, DollarSign, User, MapPin, Package, Send, Pencil
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { SearchableSelect, Card } from '../components/ui.jsx';
@@ -75,12 +75,15 @@ export default function SalesInvoice() {
   const [hostCompanies, setHostCompanies] = useState([]);
   const [selectedHostId, setSelectedHostId] = useState('');
   const [selectedHostCompany, setSelectedHostCompany] = useState(null);
+  const [editingInvoiceId, setEditingInvoiceId] = useState(null);
 
   // Invoice Copy Type Modal State
   const [copyModalOpen, setCopyModalOpen] = useState(false);
   const [copyModalInvoice, setCopyModalInvoice] = useState(null);
+  const [copyModalAction, setCopyModalAction] = useState('download'); // 'download' | 'print'
   const [selectedCopyType, setSelectedCopyType] = useState('Original for Recipient');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [printingPdf, setPrintingPdf] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -190,6 +193,7 @@ export default function SalesInvoice() {
   // Open Create Form & Preload Next Invoice No
   const handleOpenCreate = async () => {
     try {
+      setEditingInvoiceId(null);
       const res = await fetch(`${API_BASE}/sales-invoices/next-number`, {
         headers: getAuthHeaders()
       });
@@ -280,11 +284,11 @@ export default function SalesInvoice() {
 
       const isInterstate = data.isInterstate !== undefined
         ? Boolean(data.isInterstate)
-        : Boolean(data.gstin && !data.gstin.startsWith('27') && data.gstin !== '—');
+        : Boolean(data.igstRate > 0);
 
-      const cgstRate = data.cgstRate !== undefined ? Number(data.cgstRate) : (isInterstate ? 0 : 9);
-      const sgstRate = data.sgstRate !== undefined ? Number(data.sgstRate) : (isInterstate ? 0 : 9);
-      const igstRate = data.igstRate !== undefined ? Number(data.igstRate) : (isInterstate ? 18 : 0);
+      const cgstRate = isInterstate ? 0 : (data.cgstRate !== undefined ? Number(data.cgstRate) : 9);
+      const sgstRate = isInterstate ? 0 : (data.sgstRate !== undefined ? Number(data.sgstRate) : 9);
+      const igstRate = isInterstate ? (data.igstRate !== undefined && Number(data.igstRate) > 0 ? Number(data.igstRate) : 18) : 0;
 
       // Auto-filter items with 0 invoiceable balance so zero-qty items are not shown on new invoice
       const validItems = (data.items || []).filter(it => (parseFloat(it.invoiceableQty) || 0) > 0);
@@ -412,7 +416,7 @@ export default function SalesInvoice() {
     return { subtotal, cgst, sgst, igst, total, totalQty };
   }, [formData.items, formData.cgstRate, formData.sgstRate, formData.igstRate]);
 
-  // Save Invoice
+  // Save Invoice (Create or Update)
   const handleSaveInvoice = async () => {
     if (!formData.orderId) {
       Swal.fire({ icon: 'warning', title: 'Sales Order Required', text: 'Please select a Sales Order before saving.' });
@@ -445,25 +449,30 @@ export default function SalesInvoice() {
         items: formData.items.filter(it => (parseFloat(it.invoiceQty) || 0) > 0)
       };
 
-      const res = await fetch(`${API_BASE}/sales-invoices`, {
-        method: 'POST',
+      const isEditing = Boolean(editingInvoiceId);
+      const url = isEditing ? `${API_BASE}/sales-invoices/${editingInvoiceId}` : `${API_BASE}/sales-invoices`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || 'Failed to save invoice');
+        throw new Error(data.message || `Failed to ${isEditing ? 'update' : 'save'} invoice`);
       }
 
       await Swal.fire({
         icon: 'success',
-        title: 'Invoice Created!',
-        text: `Sales Invoice ${formData.invoiceNo} has been generated successfully.`,
+        title: isEditing ? 'Invoice Updated!' : 'Invoice Created!',
+        text: `Sales Invoice ${formData.invoiceNo} has been ${isEditing ? 'updated' : 'generated'} successfully.`,
         timer: 1800,
         showConfirmButton: false
       });
 
+      setEditingInvoiceId(null);
       await fetchInvoices();
       await fetchAvailableOrders();
       setViewMode('list');
@@ -471,11 +480,133 @@ export default function SalesInvoice() {
       console.error('Error saving invoice:', err);
       Swal.fire({
         icon: 'error',
-        title: 'Creation Failed',
-        text: err.message || 'An error occurred while generating the sales invoice.'
+        title: editingInvoiceId ? 'Update Failed' : 'Creation Failed',
+        text: err.message || 'An error occurred while saving the sales invoice.'
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Edit Invoice (Load into form)
+  const handleEditInvoice = async (invoice) => {
+    if (invoice.status === 'Paid') {
+      Swal.fire({
+        icon: 'info',
+        title: 'Paid Invoice',
+        text: 'This invoice has already been paid and cannot be edited.'
+      });
+      return;
+    }
+
+    try {
+      setLoadingOrderDetails(true);
+      // 1. Fetch complete invoice details
+      const resInv = await fetch(`${API_BASE}/sales-invoices/${invoice.id}`, {
+        headers: getAuthHeaders()
+      });
+      if (!resInv.ok) throw new Error('Failed to load invoice details');
+      const invData = await resInv.json();
+
+      // 2. Fetch order details excluding this invoice
+      const resOrd = await fetch(`${API_BASE}/sales-invoices/order-details/${invData.order_id}?excludeInvoiceId=${invData.id}`, {
+        headers: getAuthHeaders()
+      });
+      let orderData = null;
+      if (resOrd.ok) {
+        orderData = await resOrd.json();
+      }
+
+      // 3. Map items: take order items with their remaining invoiceable balance, and fill invoiceQty from existing invoice
+      const invItemsMap = {};
+      (invData.items || []).forEach(it => {
+        if (it.order_item_id) invItemsMap[it.order_item_id] = it;
+        else if (it.item_code) invItemsMap[it.item_code] = it;
+      });
+
+      let mergedItems = [];
+      if (orderData && Array.isArray(orderData.items) && orderData.items.length > 0) {
+        mergedItems = orderData.items.map(ordIt => {
+          const existingIt = invItemsMap[ordIt.orderItemId] || invItemsMap[ordIt.itemCode];
+          const currentQty = existingIt ? (parseFloat(existingIt.invoice_qty) || 0) : 0;
+          return {
+            ...ordIt,
+            invoiceQty: currentQty,
+            amount: currentQty * (parseFloat(ordIt.unitRate) || 0)
+          };
+        });
+      } else {
+        // Fallback to existing invoice items
+        mergedItems = (invData.items || []).map(it => ({
+          orderItemId: it.order_item_id,
+          itemCode: it.item_code || '',
+          drawingNo: it.drawing_no || '',
+          description: it.description || '',
+          hsnCode: it.hsn_code || '84779000',
+          uom: it.uom || 'Nos',
+          orderedQty: parseFloat(it.ordered_qty) || 0,
+          dispatchedQty: parseFloat(it.dispatched_qty) || 0,
+          previouslyInvoicedQty: parseFloat(it.previously_invoiced_qty) || 0,
+          invoiceableQty: (parseFloat(it.ordered_qty) || 0) - (parseFloat(it.previously_invoiced_qty) || 0),
+          invoiceQty: parseFloat(it.invoice_qty) || 0,
+          unitRate: parseFloat(it.unit_rate) || 0,
+          amount: (parseFloat(it.invoice_qty) || 0) * (parseFloat(it.unit_rate) || 0)
+        }));
+      }
+
+      const isInterstate = parseFloat(invData.igst_rate) > 0;
+
+      setEditingInvoiceId(invData.id);
+
+      const targetHostId = invData.host_company_id ? String(invData.host_company_id) : '';
+      setSelectedHostId(targetHostId);
+      if (targetHostId) {
+        const foundHost = hostCompanies.find(h => String(h.id) === targetHostId);
+        if (foundHost) setSelectedHostCompany(foundHost);
+      }
+
+      setFormData({
+        invoiceNo: invData.invoice_no,
+        invoiceDate: invData.invoice_date ? invData.invoice_date.split('T')[0] : new Date().toISOString().split('T')[0],
+        dueDate: invData.due_date ? invData.due_date.split('T')[0] : '',
+        orderId: invData.order_id,
+        orderNo: invData.order_no,
+        clientId: invData.client_id,
+        clientName: invData.client_name,
+        customerPoNo: invData.customer_po_no || '',
+        projectName: invData.project_name || '',
+        gstin: invData.gstin || '',
+        billingAddress: invData.billing_address || '',
+        shippingAddress: invData.shipping_address || '',
+        contactPerson: invData.contact_person || '',
+        contactEmail: invData.contact_email || '',
+        contactMobile: invData.contact_mobile || '',
+        paymentTerms: invData.payment_terms || 'Payment within 30 days',
+        notes: invData.notes || 'Thank you for your business!',
+        cgstRate: isInterstate ? 0 : (parseFloat(invData.cgst_rate) || 9),
+        sgstRate: isInterstate ? 0 : (parseFloat(invData.sgst_rate) || 9),
+        igstRate: isInterstate ? (parseFloat(invData.igst_rate) || 18) : 0,
+        isInterstate: isInterstate,
+        summary: orderData?.summary || {
+          totalOrderedQty: invData.total_qty || 0,
+          totalDispatchedQty: invData.total_qty || 0,
+          totalAlreadyInvoicedQty: 0,
+          totalInvoiceableQty: invData.total_qty || 0
+        },
+        items: mergedItems
+      });
+
+      setRemovedItems([]);
+      setViewMode('create');
+    } catch (err) {
+      console.error('Error loading invoice for edit:', err);
+      Swal.fire({
+        icon: 'error',
+        title: 'Edit Failed',
+        text: err.message || 'Could not load invoice details.'
+      });
+    } finally {
+      setLoadingOrderDetails(false);
     }
   };
 
@@ -566,9 +697,85 @@ export default function SalesInvoice() {
     }
   };
 
+  // Print Invoice PDF directly (generates official multi-page PDF & launches print preview)
+  const handlePrintInvoice = async (invoice, copyType = 'Original for Recipient') => {
+    if (!invoice?.id) return;
+    try {
+      setPrintingPdf(true);
+      Swal.fire({
+        title: 'Preparing Print...',
+        text: `Loading Tax Invoice PDF (${copyType})...`,
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
+      const res = await fetch(`${API_BASE}/sales-invoices/${invoice.id}/pdf?copyType=${encodeURIComponent(copyType)}`, {
+        headers: getAuthHeaders()
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to generate Tax Invoice PDF for printing');
+      }
+
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      Swal.close();
+
+      // Open PDF in print tab / trigger print dialog
+      const printWindow = window.open(blobUrl, '_blank');
+      if (printWindow) {
+        printWindow.focus();
+        printWindow.onload = () => {
+          try {
+            printWindow.print();
+          } catch (e) {
+            console.log('PDF print handled by browser viewer', e);
+          }
+        };
+      } else {
+        // Fallback for pop-up blocker: hidden iframe
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.src = blobUrl;
+        document.body.appendChild(iframe);
+        iframe.onload = () => {
+          setTimeout(() => {
+            try {
+              iframe.contentWindow.focus();
+              iframe.contentWindow.print();
+            } catch (e) {
+              console.error(e);
+            }
+          }, 400);
+        };
+      }
+
+      setTimeout(() => {
+        window.URL.revokeObjectURL(blobUrl);
+      }, 60000);
+    } catch (err) {
+      console.error('Error printing invoice:', err);
+      Swal.fire({
+        icon: 'error',
+        title: 'Print Failed',
+        text: err.message || 'Unable to print Tax Invoice PDF.'
+      });
+    } finally {
+      setPrintingPdf(false);
+    }
+  };
+
   // Open copy type popup modal
-  const handleOpenCopyModal = (invoice) => {
+  const handleOpenCopyModal = (invoice, action = 'download') => {
     setCopyModalInvoice(invoice);
+    setCopyModalAction(action);
     setSelectedCopyType('Original for Recipient'); // Default Copy Selection
     setCopyModalOpen(true);
   };
@@ -662,7 +869,7 @@ export default function SalesInvoice() {
 
   // Options for SearchableSelect
   const searchableOrderOptions = useMemo(() => {
-    return filteredSalesOrders.map(order => {
+    const list = filteredSalesOrders.map(order => {
       const oDateFormatted = order.order_date ? new Date(order.order_date).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '';
       const pDateFormatted = order.customer_po_date ? new Date(order.customer_po_date).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '';
       return {
@@ -674,7 +881,20 @@ export default function SalesInvoice() {
         client_name: order.client_name || ''
       };
     });
-  }, [filteredSalesOrders]);
+
+    if (formData.orderId && !list.some(o => String(o.value) === String(formData.orderId))) {
+      list.unshift({
+        value: formData.orderId,
+        label: `${formData.orderNo}${formData.customerPoNo ? ` | PO: ${formData.customerPoNo}` : ''} — ${formData.clientName}`,
+        sublabel: `PO: ${formData.customerPoNo || '—'} | Client: ${formData.clientName}`,
+        customer_po_no: formData.customerPoNo || '',
+        order_no: formData.orderNo || '',
+        client_name: formData.clientName || ''
+      });
+    }
+
+    return list;
+  }, [filteredSalesOrders, formData.orderId, formData.orderNo, formData.customerPoNo, formData.clientName]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 p-3 sm:p-4 md:p-6 font-sans">
@@ -838,10 +1058,20 @@ export default function SalesInvoice() {
                             <button
                               type="button"
                               onClick={() => handleViewInvoice(inv)}
-                              className="p-1 rounded text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
+                              className="p-1 rounded text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
                               title="View Preview"
                             >
                               <Eye className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleEditInvoice(inv)}
+                              disabled={inv.status === 'Paid'}
+                              className="p-1 rounded text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={inv.status === 'Paid' ? 'Paid invoices cannot be edited' : 'Edit Sales Invoice'}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
                             </button>
 
                             {/* Send to Accounts Button / Sent Badge */}
@@ -868,8 +1098,17 @@ export default function SalesInvoice() {
 
                             <button
                               type="button"
-                              onClick={() => handleOpenCopyModal(inv)}
-                              className="p-1 rounded text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition"
+                              onClick={() => handleOpenCopyModal(inv, 'print')}
+                              className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
+                              title="Print Tax Invoice"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCopyModal(inv, 'download')}
+                              className="p-1 rounded text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition cursor-pointer"
                               title="Download Tax Invoice PDF"
                             >
                               <Download className="w-3.5 h-3.5" />
@@ -877,7 +1116,7 @@ export default function SalesInvoice() {
                             <button
                               type="button"
                               onClick={() => handleDeleteInvoice(inv)}
-                              className="p-1 rounded text-slate-500 hover:text-red-600 hover:bg-red-50 transition"
+                              className="p-1 rounded text-slate-500 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
                               title="Delete"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -903,27 +1142,29 @@ export default function SalesInvoice() {
           <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <button
-                onClick={() => setViewMode('list')}
-                className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition"
+                onClick={() => { setEditingInvoiceId(null); setViewMode('list'); }}
+                className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <div>
                 <h1 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <span>Create Sales Invoice</span>
+                  <span>{editingInvoiceId ? 'Edit Sales Invoice' : 'Create Sales Invoice'}</span>
                   <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300 text-xs font-mono font-semibold">
                     {formData.invoiceNo}
                   </span>
                 </h1>
-                <p className="text-[11px] text-slate-500">Auto-populated from real sales order & dispatched quantities</p>
+                <p className="text-[11px] text-slate-500">
+                  {editingInvoiceId ? 'Modify billing profile, invoice dates, quantities, and tax configuration' : 'Auto-populated from real sales order & dispatched quantities'}
+                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setViewMode('list')}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium transition"
+                onClick={() => { setEditingInvoiceId(null); setViewMode('list'); }}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-medium transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -931,17 +1172,17 @@ export default function SalesInvoice() {
                 type="button"
                 onClick={handleSaveInvoice}
                 disabled={saving || loadingOrderDetails || !formData.orderId || calculation.totalQty <= 0}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg shadow-sm transition"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg shadow-sm transition cursor-pointer"
               >
                 {saving ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Generating...</span>
+                    <span>{editingInvoiceId ? 'Updating...' : 'Generating...'}</span>
                   </>
                 ) : (
                   <>
                     <Check className="w-3.5 h-3.5" />
-                    <span>Save & Generate Invoice</span>
+                    <span>{editingInvoiceId ? 'Update Sales Invoice' : 'Save & Generate Invoice'}</span>
                   </>
                 )}
               </button>
@@ -1364,33 +1605,104 @@ export default function SalesInvoice() {
                   />
                 </div>
 
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1.5 text-xs">
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span>Items Subtotal:</span>
-                    <span className="font-mono font-bold text-slate-800">{formatINR(calculation.subtotal)}</span>
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5 text-xs">
+                  {/* Tax Type 2 options toggle - EXACT match to Sales Order */}
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                    <span className="text-xs text-slate-700 font-semibold">Tax Type:</span>
+                    <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, isInterstate: false, cgstRate: 9, sgstRate: 9, igstRate: 0 }))}
+                        className={`px-2.5 py-1 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
+                          !formData.isInterstate ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Intra (CGST+SGST)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, isInterstate: true, igstRate: 18, cgstRate: 0, sgstRate: 0 }))}
+                        className={`px-2.5 py-1 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
+                          formData.isInterstate ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Inter (IGST)
+                      </button>
+                    </div>
                   </div>
 
+                  {/* Dynamic Tax Rate Inputs */}
                   {formData.isInterstate ? (
-                    <div className="flex justify-between items-center text-slate-600">
-                      <span>IGST {formData.igstRate || 18}%:</span>
-                      <span className="font-mono font-semibold text-slate-800">{formatINR(calculation.igst)}</span>
+                    <div className="flex items-center justify-between gap-2 py-1">
+                      <label className="text-[11px] font-semibold text-slate-600">IGST Rate (%):</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        className="w-24 p-1.5 border border-slate-200 rounded text-xs text-slate-900 bg-white font-mono font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 text-right"
+                        value={formData.igstRate}
+                        onChange={(e) => setFormData({ ...formData, igstRate: parseFloat(e.target.value) || 0 })}
+                      />
                     </div>
                   ) : (
-                    <>
-                      <div className="flex justify-between items-center text-slate-600">
-                        <span>CGST {formData.cgstRate || 9}%:</span>
-                        <span className="font-mono font-semibold text-slate-800">{formatINR(calculation.cgst)}</span>
+                    <div className="grid grid-cols-2 gap-2 py-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <label className="text-[11px] font-semibold text-slate-600">CGST (%):</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          className="w-16 p-1.5 border border-slate-200 rounded text-xs text-slate-900 bg-white font-mono font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 text-right"
+                          value={formData.cgstRate}
+                          onChange={(e) => setFormData({ ...formData, cgstRate: parseFloat(e.target.value) || 0 })}
+                        />
                       </div>
-                      <div className="flex justify-between items-center text-slate-600">
-                        <span>SGST {formData.sgstRate || 9}%:</span>
-                        <span className="font-mono font-semibold text-slate-800">{formatINR(calculation.sgst)}</span>
+                      <div className="flex items-center justify-between gap-1">
+                        <label className="text-[11px] font-semibold text-slate-600">SGST (%):</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          className="w-16 p-1.5 border border-slate-200 rounded text-xs text-slate-900 bg-white font-mono font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 text-right"
+                          value={formData.sgstRate}
+                          onChange={(e) => setFormData({ ...formData, sgstRate: parseFloat(e.target.value) || 0 })}
+                        />
                       </div>
-                    </>
+                    </div>
                   )}
 
-                  <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-slate-900 text-sm font-extrabold">
-                    <span>TOTAL AMOUNT:</span>
-                    <span className="text-base font-mono text-emerald-700">{formatINR(calculation.total)}</span>
+                  {/* Financial Breakdown */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span>Items Subtotal:</span>
+                      <span className="font-mono font-bold text-slate-800">{formatINR(calculation.subtotal)}</span>
+                    </div>
+
+                    {formData.isInterstate ? (
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span>Tax (IGST {Number(formData.igstRate || 0)}%):</span>
+                        <span className="font-mono font-semibold text-slate-800">{formatINR(calculation.igst)}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between items-center text-slate-600">
+                          <span>Tax (CGST {Number(formData.cgstRate || 0)}%):</span>
+                          <span className="font-mono font-semibold text-slate-800">{formatINR(calculation.cgst)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-600">
+                          <span>Tax (SGST {Number(formData.sgstRate || 0)}%):</span>
+                          <span className="font-mono font-semibold text-slate-800">{formatINR(calculation.sgst)}</span>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-slate-900 text-sm font-extrabold">
+                      <span>TOTAL AMOUNT:</span>
+                      <span className="text-base font-mono text-emerald-700">{formatINR(calculation.total)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1403,10 +1715,16 @@ export default function SalesInvoice() {
           MODAL: INVOICE DETAIL & TAX PRINT PREVIEW
       ────────────────────────────────────────────────────────────── */}
       {selectedInvoice && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
-          <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl border border-slate-200 overflow-hidden my-6">
-            {/* Modal Actions Header */}
-            <div className="p-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between print:hidden">
+        <div 
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6"
+          onClick={() => setSelectedInvoice(null)}
+        >
+          <div 
+            className="bg-white w-full max-w-4xl max-h-[92vh] flex flex-col rounded-xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Actions Header - Always sticky and visible at the top */}
+            <div className="p-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between shrink-0 sticky top-0 z-10 print:hidden">
               <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                 <Receipt className="w-4 h-4 text-emerald-700" />
                 <span>Tax Invoice Preview ({selectedInvoice.invoice_no})</span>
@@ -1415,7 +1733,7 @@ export default function SalesInvoice() {
                 <button
                   type="button"
                   onClick={() => handleOpenCopyModal(selectedInvoice)}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
                   title="Download Tax Invoice PDF"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -1423,28 +1741,21 @@ export default function SalesInvoice() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => window.print()}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold shadow-sm transition"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print</span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => setSelectedInvoice(null)}
-                  className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 transition"
+                  className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition cursor-pointer"
+                  title="Close Preview"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Printable Tax Invoice Document */}
-            <div className="p-6 md:p-8 space-y-4 bg-white text-slate-900 text-xs font-sans" id="printable-invoice">
+            {/* Printable Tax Invoice Document - Smoothly scrollable content body */}
+            <div className="overflow-y-auto flex-1 p-6 md:p-8 space-y-4 bg-white text-slate-900 text-xs font-sans" id="printable-invoice">
               {/* Header with Company Logo & Title */}
               <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4">
                 <div>
-                  <h1 className="text-lg font-black tracking-tight text-slate-900">SP TECHPIONEER PRIVATE LIMITED</h1>
+                  <h1 className="text-lg font-black tracking-tight text-slate-900">{selectedInvoice.host_company_name || 'SP TECHPIONEER PRIVATE LIMITED'}</h1>
                   <p className="text-[10px] text-slate-500 font-semibold tracking-wide uppercase">Engineering & Better Tomorrow</p>
                   <p className="text-[11px] text-slate-600 mt-0.5">Plot No. 12, Industrial Area, Chakan, Pune – 410501, Maharashtra, INDIA</p>
                   <p className="text-[11px] text-slate-600">GSTIN: <span className="font-mono font-bold">27AAHCS1234F1Z9</span> | State Code: 27</p>
@@ -1578,11 +1889,13 @@ export default function SalesInvoice() {
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
-                  <Receipt className="w-4 h-4" />
+                <div className={`p-1.5 rounded-lg ${copyModalAction === 'print' ? 'bg-slate-200 text-slate-800' : 'bg-emerald-100 text-emerald-700'}`}>
+                  {copyModalAction === 'print' ? <Printer className="w-4 h-4" /> : <Receipt className="w-4 h-4" />}
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-slate-800">Select Invoice Copy Type</h3>
+                  <h3 className="text-xs font-bold text-slate-800">
+                    {copyModalAction === 'print' ? 'Print Tax Invoice (Select Copy)' : 'Select Invoice Copy Type'}
+                  </h3>
                   {copyModalInvoice?.invoice_no && (
                     <p className="text-[10.5px] text-slate-500 font-medium">
                       Invoice: <span className="font-semibold text-slate-700 font-mono">{copyModalInvoice.invoice_no}</span>
@@ -1593,7 +1906,7 @@ export default function SalesInvoice() {
               <button
                 type="button"
                 onClick={() => setCopyModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1602,7 +1915,7 @@ export default function SalesInvoice() {
             {/* Options List */}
             <div className="p-4 space-y-2">
               <p className="text-[11px] font-semibold text-slate-500 mb-1">
-                Choose the copy type to print on top:
+                Choose the copy type to {copyModalAction === 'print' ? 'print' : 'download'}:
               </p>
               {INVOICE_COPY_TYPES.map((type) => {
                 const isSelected = selectedCopyType === type.label;
@@ -1642,15 +1955,48 @@ export default function SalesInvoice() {
               <button
                 type="button"
                 onClick={() => setCopyModalOpen(false)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/70 rounded-lg transition"
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/70 rounded-lg transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                onClick={() => {
+                  const inv = copyModalInvoice;
+                  const copy = selectedCopyType;
+                  setCopyModalOpen(false);
+                  handlePrintInvoice(inv, copy);
+                }}
+                disabled={printingPdf || downloadingPdf}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-white text-xs font-bold shadow-2xs transition disabled:opacity-50 cursor-pointer ${
+                  copyModalAction === 'print'
+                    ? 'bg-slate-900 hover:bg-black ring-2 ring-slate-900/20'
+                    : 'bg-slate-700 hover:bg-slate-800'
+                }`}
+                title="Print chosen copy"
+              >
+                {printingPdf ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Preparing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
                 onClick={handleConfirmDownloadPdf}
-                disabled={downloadingPdf}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold shadow-2xs transition disabled:opacity-50 cursor-pointer"
+                disabled={printingPdf || downloadingPdf}
+                className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-white text-xs font-bold shadow-2xs transition disabled:opacity-50 cursor-pointer ${
+                  copyModalAction === 'download'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 ring-2 ring-emerald-600/20'
+                    : 'bg-emerald-700 hover:bg-emerald-800'
+                }`}
+                title="Download PDF"
               >
                 {downloadingPdf ? (
                   <>
