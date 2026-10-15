@@ -117,6 +117,8 @@ const PaymentReceived = () => {
       }
 
       successToast('Invoice sent successfully');
+      setIsEmailModalOpen(false);
+      setEmailModalData(null);
     } catch (error) {
       console.error('Error sending email:', error);
       errorToast(error.message || 'Failed to send email');
@@ -410,14 +412,33 @@ const PaymentReceived = () => {
 
       <PaymentReceivedModal
         isOpen={isPaymentModalOpen}
-        onClose={() => navigate('/accounts/payment-received')}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedInvoice(null);
+          if (location.pathname !== '/accounts/payment-received' || searchParams.toString()) {
+            navigate('/accounts/payment-received');
+          }
+        }}
         invoice={selectedInvoice}
-        onSuccess={() => fetchOutstandingInvoices()}
+        onSuccess={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedInvoice(null);
+          fetchOutstandingInvoices();
+          if (location.pathname !== '/accounts/payment-received' || searchParams.toString()) {
+            navigate('/accounts/payment-received');
+          }
+        }}
       />
 
       <SendEmailModal
         isOpen={isEmailModalOpen}
-        onClose={() => navigate('/accounts/payment-received')}
+        onClose={() => {
+          setIsEmailModalOpen(false);
+          setEmailModalData(null);
+          if (location.pathname !== '/accounts/payment-received' || searchParams.toString()) {
+            navigate('/accounts/payment-received');
+          }
+        }}
         data={emailModalData}
         onSend={handleSendEmail}
         title="Send Invoice to Customer"

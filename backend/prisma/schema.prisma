@@ -7,15 +7,17 @@ datasource db {
 }
 
 model bank_accounts {
-  id                  Int                         @id @default(autoincrement())
-  bank_name           String                      @db.VarChar(255)
-  account_number      String                      @unique(map: "account_number") @db.VarChar(50)
-  ifsc_code           String?                     @db.VarChar(20)
-  account_holder_name String?                     @db.VarChar(255)
-  account_type        bank_accounts_account_type? @default(CURRENT)
-  is_active           Boolean?                    @default(true)
-  created_at          DateTime?                   @default(now()) @db.Timestamp(0)
-  updated_at          DateTime?                   @default(now()) @db.Timestamp(0)
+  id                  Int                 @id @default(autoincrement())
+  bank_name           String              @db.VarChar(255)
+  account_number      String              @unique(map: "account_number") @db.VarChar(50)
+  ifsc_code           String?             @db.VarChar(20)
+  branch_name         String?             @db.VarChar(255)
+  account_holder_name String?             @db.VarChar(255)
+  account_type        String              @default("CURRENT") @db.VarChar(50)
+  opening_balance     Decimal             @default(0.00) @db.Decimal(15, 2)
+  is_active           Boolean?            @default(true)
+  created_at          DateTime?           @default(now()) @db.Timestamp(0)
+  updated_at          DateTime?           @default(now()) @db.Timestamp(0)
   customer_payments   customer_payments[]
 }
 

@@ -163,7 +163,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.CLOSED],
-    allowedModules: ['dashboard', 'accounts-dashboard', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'accounts-report'],
+    allowedModules: ['dashboard', 'accounts-dashboard', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'record-payment-received', 'customer-payment-history', 'bank-accounts', 'accounts-report'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
@@ -176,6 +176,7 @@ const DEPARTMENT_ACCESS_RULES = {
       'PAYMENT_VIEW',
       'PAYMENT_PROCESS',
       'PAYMENT_EDIT',
+      'PAYMENT_SETUP',
       'VENDOR_VIEW',
       'VENDOR_EDIT'
     ]
@@ -220,7 +221,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canChangeStatusTo: Object.values(DOCUMENT_STATUS_FLOW),
     allowedModules: [
       'dashboard', 'active-clients', 'suppliers', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'quality-reports', 
-      'payment-history', 'customer-payment-history', 'accounts-report', 'shipment-tracking', 
+      'payment-history', 'customer-payment-history', 'bank-accounts', 'accounts-report', 'shipment-tracking', 
       'shipment-reports', 'project-analysis', 'material-consumption', 
       'oee-analysis', 'machine-analysis', 'admin-company-master', 'sales-invoice'
     ],

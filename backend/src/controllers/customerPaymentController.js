@@ -52,6 +52,17 @@ const getCustomerBalance = async (req, res, next) => {
   }
 };
 
+const getCustomerMonthlySummary = async (req, res, next) => {
+  try {
+    const { customerId } = req.params;
+    const { year, month, startDate, endDate } = req.query;
+    const summary = await customerPaymentService.getCustomerMonthlySummary(customerId, year, month, startDate, endDate);
+    res.json(summary);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getOutstandingInvoices = async (req, res, next) => {
   try {
     const invoices = await customerPaymentService.getOutstandingInvoices(req.params.customerId);
@@ -143,6 +154,7 @@ module.exports = {
   getPaymentsReceived,
   getPaymentReceivedById,
   getCustomerBalance,
+  getCustomerMonthlySummary,
   getOutstandingInvoices,
   getAllOutstandingInvoices,
   updatePaymentStatus,

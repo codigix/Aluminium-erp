@@ -11,6 +11,7 @@ router.get('/:paymentId/pdf', authorize(['PAYMENT_VIEW']), customerPaymentContro
 router.post('/:paymentId/send-email', authorize(['PAYMENT_PROCESS']), customerPaymentController.sendCustomerPaymentReceiptEmail);
 router.post('/invoice/:id/send-email', authorize(['PAYMENT_PROCESS']), customerPaymentController.sendCustomerInvoiceEmail);
 router.get('/customer/:customerId/balance', authorize(['PAYMENT_VIEW']), customerPaymentController.getCustomerBalance);
+router.get('/customer/:customerId/monthly-summary', authorize(['PAYMENT_VIEW']), customerPaymentController.getCustomerMonthlySummary);
 router.get('/customer/:customerId/outstanding', authorize(['PAYMENT_VIEW']), customerPaymentController.getOutstandingInvoices);
 router.patch('/:paymentId/status', authorize(['PAYMENT_EDIT']), customerPaymentController.updatePaymentStatus);
 router.delete('/:paymentId', authorize(['PAYMENT_EDIT']), customerPaymentController.deletePayment);

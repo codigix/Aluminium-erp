@@ -363,6 +363,101 @@ const getCustomerBalance = async (customerId) => {
   };
 };
 
+const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, customStartDate, customEndDate) => {
+  const now = new Date();
+  let startDate, endDate, monthName, year, month;
+
+  if (customStartDate && customEndDate) {
+    startDate = `${customStartDate.slice(0, 10)} 00:00:00`;
+    endDate = `${customEndDate.slice(0, 10)} 23:59:59`;
+    const dStart = new Date(customStartDate);
+    year = dStart.getFullYear();
+    month = dStart.getMonth() + 1;
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    monthName = (customStartDate.slice(0, 7) === customEndDate.slice(0, 7))
+      ? `${monthNames[month - 1]} ${year}`
+      : `${customStartDate} to ${customEndDate}`;
+  } else {
+    year = parseInt(yearInput, 10) || now.getFullYear();
+    month = parseInt(monthInput, 10) || (now.getMonth() + 1); // 1-12
+
+    const pad = (n) => String(n).padStart(2, '0');
+    startDate = `${year}-${pad(month)}-01 00:00:00`;
+    const lastDay = new Date(year, month, 0).getDate();
+    endDate = `${year}-${pad(month)}-${pad(lastDay)} 23:59:59`;
+
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    monthName = `${monthNames[month - 1]} ${year}`;
+  }
+
+  // 1. Prior Invoices (before current month)
+  const [priorInvRows] = await pool.query(
+    `SELECT COALESCE(SUM(total_amount), 0) as total
+     FROM sales_invoices
+     WHERE client_id = ? AND sent_to_accounts = 1 AND status != 'Cancelled'
+       AND COALESCE(invoice_date, created_at) < ?`,
+    [customerId, startDate]
+  );
+  const priorInvoiced = parseFloat(priorInvRows[0]?.total || 0);
+
+  // 2. Prior Payments (before current month)
+  const [priorPayRows] = await pool.query(
+    `SELECT COALESCE(SUM(payment_amount), 0) as total
+     FROM customer_payments
+     WHERE customer_id = ? AND status = 'CONFIRMED'
+       AND payment_date < ?`,
+    [customerId, startDate]
+  );
+  const priorPaid = parseFloat(priorPayRows[0]?.total || 0);
+
+  const openingBalance = Math.max(0, priorInvoiced - priorPaid);
+
+  // 3. Current Month Invoices
+  const [curInvRows] = await pool.query(
+    `SELECT COALESCE(SUM(total_amount), 0) as total
+     FROM sales_invoices
+     WHERE client_id = ? AND sent_to_accounts = 1 AND status != 'Cancelled'
+       AND COALESCE(invoice_date, created_at) >= ?
+       AND COALESCE(invoice_date, created_at) <= ?`,
+    [customerId, startDate, endDate]
+  );
+  const currentMonthInvoices = parseFloat(curInvRows[0]?.total || 0);
+
+  // 4. Current Month Payments
+  const [curPayRows] = await pool.query(
+    `SELECT COALESCE(SUM(payment_amount), 0) as total
+     FROM customer_payments
+     WHERE customer_id = ? AND status = 'CONFIRMED'
+       AND payment_date >= ?
+       AND payment_date <= ?`,
+    [customerId, startDate, endDate]
+  );
+  const currentMonthPayments = parseFloat(curPayRows[0]?.total || 0);
+
+  // 5. Closing Balance: Opening + Invoiced - Paid
+  const closingBalance = Math.max(0, openingBalance + currentMonthInvoices - currentMonthPayments);
+
+  return {
+    customerId: Number(customerId),
+    year,
+    month,
+    monthName,
+    startDate: startDate.split(' ')[0],
+    endDate: endDate.split(' ')[0],
+    openingBalance,
+    currentMonthInvoices,
+    currentMonthPayments,
+    currentBalance: currentMonthPayments,
+    closingBalance
+  };
+};
+
 const getOutstandingInvoices = async (customerId) => {
   const [invoices] = await pool.query(
     `SELECT 
@@ -803,6 +898,7 @@ module.exports = {
   getPaymentsReceived,
   getPaymentReceivedById,
   getCustomerBalance,
+  getCustomerMonthlySummary,
   getOutstandingInvoices,
   getAllOutstandingInvoices,
   updatePaymentStatus,
