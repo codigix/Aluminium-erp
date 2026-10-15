@@ -957,6 +957,8 @@ model orders {
   warehouse       String?       @db.VarChar(100)
   cgst_rate       Decimal?      @default(0.00) @db.Decimal(5, 2)
   sgst_rate       Decimal?      @default(0.00) @db.Decimal(5, 2)
+  igst_rate       Decimal?      @default(0.00) @db.Decimal(5, 2)
+  is_interstate   Boolean?      @default(false)
   profit_margin   Decimal?      @default(0.00) @db.Decimal(5, 2)
   subtotal        Decimal?      @default(0.00) @db.Decimal(12, 2)
   gst             Decimal?      @default(0.00) @db.Decimal(12, 2)
@@ -1789,6 +1791,8 @@ model sales_orders {
   bom_id                    Int?
   cgst_rate                 Decimal?                          @default(0.00) @db.Decimal(5, 2)
   sgst_rate                 Decimal?                          @default(0.00) @db.Decimal(5, 2)
+  igst_rate                 Decimal?                          @default(0.00) @db.Decimal(5, 2)
+  is_interstate             Boolean?                          @default(false)
   profit_margin             Decimal?                          @default(0.00) @db.Decimal(14, 2)
   material_available        Boolean?                          @default(false)
   created_at                DateTime?                         @default(now()) @db.Timestamp(0)
@@ -2787,6 +2791,7 @@ model sales_invoices {
   order_id            Int
   sales_order_id      Int?
   client_id           Int
+  host_company_id     Int?
   customer_po_no      String?               @db.VarChar(100)
   project_name        String?               @db.VarChar(255)
   invoice_date        DateTime              @db.Date

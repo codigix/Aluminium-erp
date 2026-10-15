@@ -271,6 +271,7 @@ const getOrderDetailsForInvoice = async (orderId) => {
     orderDate: order.order_date,
     clientId: order.client_id,
     clientName: order.client_name,
+    hostCompanyId: order.host_company_id || null,
     customerPoNo: order.customer_po_no || '—',
     projectName: order.project_name || '—',
     gstin: order.company_gstin || '—',
@@ -299,6 +300,8 @@ const createSalesInvoice = async (invoiceData, userId) => {
     invoiceNo,
     orderId,
     clientId,
+    hostCompanyId,
+    host_company_id,
     customerPoNo,
     projectName,
     invoiceDate,
@@ -388,12 +391,21 @@ const createSalesInvoice = async (invoiceData, userId) => {
 
     const actualInvoiceNo = invoiceNo || (await getNextInvoiceNo());
 
+    let finalHostCompanyId = hostCompanyId || host_company_id || null;
+    if (!finalHostCompanyId && orderId) {
+      const [ordRows] = await connection.query('SELECT host_company_id FROM orders WHERE id = ?', [orderId]);
+      if (ordRows.length > 0 && ordRows[0].host_company_id) {
+        finalHostCompanyId = ordRows[0].host_company_id;
+      }
+    }
+
     // 2. Insert into sales_invoices
     const [invResult] = await connection.execute(`
       INSERT INTO sales_invoices (
         invoice_no,
         order_id,
         client_id,
+        host_company_id,
         customer_po_no,
         project_name,
         invoice_date,
@@ -413,11 +425,12 @@ const createSalesInvoice = async (invoiceData, userId) => {
         payment_terms,
         notes,
         created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Created', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Created', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       actualInvoiceNo,
       orderId,
       clientId,
+      finalHostCompanyId,
       customerPoNo || null,
       projectName || null,
       invoiceDate || new Date(),
@@ -499,11 +512,13 @@ const listSalesInvoices = async (filters = {}) => {
       si.*,
       o.order_no,
       c.company_name AS client_name,
+      cm.company_name AS host_company_name,
       (SELECT COUNT(*) FROM sales_invoice_items WHERE sales_invoice_id = si.id) as item_count,
       (SELECT COALESCE(SUM(invoice_qty), 0) FROM sales_invoice_items WHERE sales_invoice_id = si.id) as total_qty
     FROM sales_invoices si
     JOIN orders o ON o.id = si.order_id
     JOIN companies c ON c.id = si.client_id
+    LEFT JOIN company_master cm ON cm.id = COALESCE(si.host_company_id, o.host_company_id)
   `;
 
   const whereConditions = [];
@@ -537,10 +552,12 @@ const getSalesInvoiceById = async (id) => {
       o.order_no,
       o.order_date,
       c.company_name AS client_name,
-      c.gstin as company_gstin
+      c.gstin as company_gstin,
+      cm.company_name AS host_company_name
     FROM sales_invoices si
     JOIN orders o ON o.id = si.order_id
     JOIN companies c ON c.id = si.client_id
+    LEFT JOIN company_master cm ON cm.id = COALESCE(si.host_company_id, o.host_company_id)
     WHERE si.id = ? OR si.invoice_no = ?
   `, [id, id]);
 
@@ -581,6 +598,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
       o.order_date,
       o.source_type,
       o.quotation_id,
+      o.host_company_id AS order_host_company_id,
       c.company_name AS client_name,
       c.company_code,
       c.gstin AS company_gstin,
@@ -607,7 +625,18 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
   `, [invoice.id]);
 
   const adminCompanyMasterService = require('./adminCompanyMasterService');
-  let activeCompany = await adminCompanyMasterService.getActiveCompany();
+  let activeCompany = null;
+  const targetHostId = invoice.host_company_id || invoice.order_host_company_id;
+  if (targetHostId) {
+    try {
+      activeCompany = await adminCompanyMasterService.getCompanyById(targetHostId);
+    } catch (e) {
+      console.warn(`Could not fetch company by id ${targetHostId}, falling back to active company`);
+    }
+  }
+  if (!activeCompany) {
+    activeCompany = await adminCompanyMasterService.getActiveCompany();
+  }
 
   const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PRIVATE LIMITED';
   const hostCompanyAddress = activeCompany?.company_address || 'Plot No. 97, Sector 7,\nPCNTDA, Bhosari, Pune - 26';
@@ -736,6 +765,40 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
   const roundOffNum = Number((netTotalRounded - rawNetTotal).toFixed(2));
   const totalTaxAmt = totalCgst + totalSgst + totalIgst;
 
+  const ITEMS_PER_PAGE = 10;
+  const pageChunks = [];
+  for (let i = 0; i < formattedItems.length; i += ITEMS_PER_PAGE) {
+    pageChunks.push(formattedItems.slice(i, i + ITEMS_PER_PAGE));
+  }
+  if (pageChunks.length === 0) {
+    pageChunks.push([]);
+  }
+  const totalPages = pageChunks.length;
+
+  const pages = pageChunks.map((chunk, idx) => {
+    const pageNum = idx + 1;
+    const isFirstPage = pageNum === 1;
+    const isLastPage = pageNum === totalPages;
+    const isSinglePage = totalPages === 1;
+
+    const pageTotalQty = chunk.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0);
+    const pageTotalAmt = chunk.reduce((sum, it) => sum + (parseFloat(String(it.item_amount).replace(/,/g, '')) || 0), 0);
+
+    return {
+      page_number: pageNum,
+      next_page: pageNum + 1,
+      total_pages: totalPages,
+      is_first_page: isFirstPage,
+      is_last_page: isLastPage,
+      is_single_page: isSinglePage,
+      show_page_number: totalPages > 1,
+      items: chunk,
+      page_total_qty: `${pageTotalQty.toFixed(3)} ${defaultUnit}`,
+      page_total_amt: formatCurrency(pageTotalAmt),
+      has_spacer_row: isLastPage && chunk.length < 8
+    };
+  });
+
   const htmlTemplate = `
     <!DOCTYPE html>
     <html>
@@ -744,29 +807,43 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
       <style>
         @page { size: A4 portrait; margin: 4mm 6mm; }
         * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        html, body { font-family: Arial, Helvetica, sans-serif; font-size: 7.2pt; line-height: 1.2; color: #000; margin: 0; padding: 0; background: #fff; height: 100%; }
-        .invoice-card { width: 100%; height: 287mm; border: 1px solid #000; display: flex; flex-direction: column; }
+        html, body { margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; font-size: 7.2pt; line-height: 1.2; color: #000; background: #fff; }
+        
+        .invoice-page {
+          width: 100%;
+          height: 287mm;
+          border: 1px solid #000;
+          display: flex;
+          flex-direction: column;
+          page-break-after: always;
+          box-sizing: border-box;
+        }
+        .invoice-page:last-child {
+          page-break-after: avoid;
+        }
+
         .title-header { position: relative; text-align: center; padding: 3px 8px; border-bottom: 1px solid #000; min-height: 20px; }
         .title-main { font-size: 10pt; font-weight: bold; line-height: 18px; }
-        .copy-type-title { position: absolute; right: 8px; top: 2.5px; font-size: 8pt; font-weight: bold; text-transform: uppercase; color: #000; background-color: #fffa65; padding: 1px 7px; border-radius: 2px; letter-spacing: 0.3px; }
+        .header-right-badges { position: absolute; right: 8px; top: 2.5px; display: flex; gap: 6px; align-items: center; }
+        .copy-type-title { font-size: 8pt; font-weight: bold; text-transform: uppercase; color: #000; background-color: #fffa65; padding: 1px 7px; border-radius: 2px; letter-spacing: 0.3px; }
+        .page-badge { font-size: 7.5pt; font-weight: bold; color: #333; background-color: #f0f0f0; border: 1px solid #bbb; padding: 1px 6px; border-radius: 2px; }
         
         .row-flex { display: flex; width: 100%; }
         .border-b { border-bottom: 1px solid #000; }
         .border-r { border-right: 1px solid #000; }
 
-        .seller-box { width: 48%; padding: 3px 6px; border-right: 1px solid #000; }
+        .seller-box { width: 58%; border-right: 1px solid #000; display: flex; flex-direction: column; }
         .seller-name { font-weight: bold; font-size: 8.5pt; margin-bottom: 1px; text-transform: uppercase; }
         .seller-line { font-size: 7.2pt; margin-bottom: 1px; line-height: 1.2; }
 
-        .meta-box { width: 52%; }
-        .meta-table { width: 100%; border-collapse: collapse; }
+        .meta-box { width: 42%; }
+        .meta-table { width: 100%; height: 100%; border-collapse: collapse; }
         .meta-table td { border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 1.5px 4px; vertical-align: top; font-size: 7.2pt; height: 16px; }
         .meta-table tr td:last-child { border-right: none; }
         .meta-table tr:last-child td { border-bottom: none; }
         .meta-lbl { font-size: 6.2pt; color: #333; display: block; margin-bottom: 0px; line-height: 1.1; }
         .meta-val { font-weight: bold; font-size: 7.2pt; line-height: 1.15; }
 
-        .party-col { width: 50%; padding: 3px 6px; }
         .party-title { font-size: 6.8pt; color: #333; font-weight: normal; margin-bottom: 1px; }
         .party-name { font-weight: bold; font-size: 8pt; margin-bottom: 1px; text-transform: uppercase; }
 
@@ -799,16 +876,21 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
       </style>
     </head>
     <body>
-      <div class="invoice-card">
+      {{#pages}}
+      <div class="invoice-page">
         <div class="title-header">
           <span class="title-main">Tax Invoice</span>
-          <span class="copy-type-title">({{copy_type}})</span>
+          <div class="header-right-badges">
+            <span class="copy-type-title">({{copy_type}})</span>
+            {{#show_page_number}}
+            <span class="page-badge">Page {{page_number}} of {{total_pages}}</span>
+            {{/show_page_number}}
+          </div>
         </div>
 
         <!-- Top Section: 58% Left Stacked Blocks, 42% Right Metadata Table -->
         <div class="row-flex border-b">
-          <!-- Left section (Company, Consignee & Buyer stacked) -->
-          <div style="width: 58%; border-right: 1px solid #000; display: flex; flex-direction: column;">
+          <div class="seller-box">
             <!-- Seller Box -->
             <div style="padding: 4px 6px; border-bottom: 1px solid #000; flex: 1;">
               <div class="seller-name">{{hostCompanyName}}</div>
@@ -837,70 +919,70 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
           </div>
 
           <!-- Right section (Invoice Details 7-row Metadata Table) -->
-          <div style="width: 42%;">
-            <table class="meta-table" style="width: 100%; height: 100%; border-collapse: collapse;">
+          <div class="meta-box">
+            <table class="meta-table">
               <tr>
-                <td style="width: 50%; border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td style="width: 50%;">
                   <span class="meta-lbl">Invoice No.</span>
                   <span class="meta-val">{{invoice_no}}</span>
                 </td>
-                <td style="width: 50%; border-bottom: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td style="width: 50%;">
                   <span class="meta-lbl">Dated</span>
                   <span class="meta-val">{{invoice_date}}</span>
                 </td>
               </tr>
               <tr>
-                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td>
                   <span class="meta-lbl">Delivery Note</span>
                   <span class="meta-val">{{delivery_note}}</span>
                 </td>
-                <td style="border-bottom: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td>
                   <span class="meta-lbl">Mode/Terms of Payment</span>
                   <span class="meta-val">{{payment_terms}}</span>
                 </td>
               </tr>
               <tr>
-                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td>
                   <span class="meta-lbl">Reference No. & Date</span>
                   <span class="meta-val">{{reference_no_date}}</span>
                 </td>
-                <td style="border-bottom: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td>
                   <span class="meta-lbl">Other References</span>
                   <span class="meta-val">{{other_references}}</span>
                 </td>
               </tr>
               <tr>
-                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td>
                   <span class="meta-lbl">Buyer's Order No.</span>
                   <span class="meta-val">{{po_number}}</span>
                 </td>
-                <td style="border-bottom: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td>
                   <span class="meta-lbl">Dated</span>
                   <span class="meta-val">{{po_date}}</span>
                 </td>
               </tr>
               <tr>
-                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td>
                   <span class="meta-lbl">Dispatch Doc No.</span>
                   <span class="meta-val">{{dispatch_doc_no}}</span>
                 </td>
-                <td style="border-bottom: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td>
                   <span class="meta-lbl">Delivery Note Date</span>
                   <span class="meta-val">{{delivery_note_date}}</span>
                 </td>
               </tr>
               <tr>
-                <td style="border-bottom: 1px solid #000; border-right: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td>
                   <span class="meta-lbl">Dispatched through</span>
                   <span class="meta-val">{{dispatched_through}}</span>
                 </td>
-                <td style="border-bottom: 1px solid #000; padding: 2px 4px; vertical-align: top;">
+                <td>
                   <span class="meta-lbl">Destination</span>
                   <span class="meta-val">{{destination}}</span>
                 </td>
               </tr>
               <tr>
-                <td colspan="2" style="padding: 2px 4px; vertical-align: top;">
+                <td colspan="2">
                   <span class="meta-lbl">Terms of Delivery</span>
                   <span class="meta-val">{{terms_of_delivery}}</span>
                 </td>
@@ -926,7 +1008,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
             </thead>
             <tbody>
               {{#items}}
-              <tr>
+              <tr class="item-row">
                 <td style="text-align: center;">{{index}}</td>
                 <td>
                   {{#drawing_no}}<div class="item-code">{{drawing_no}}</div>{{/drawing_no}}
@@ -941,87 +1023,87 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
               </tr>
               {{/items}}
 
-              {{#has_cgst}}
-              <tr class="tax-row" style="white-space: nowrap;">
-                <td></td>
-                <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
-                  Output CGST @ {{cgst_rate_str}}
-                </td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td style="text-align: center; font-size: 7.2pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{cgst_rate_str}}</td>
-                <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{cgst_total}}</td>
-              </tr>
-              {{/has_cgst}}
+              {{#is_last_page}}
+                {{#has_cgst}}
+                <tr class="tax-row" style="white-space: nowrap;">
+                  <td></td>
+                  <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
+                    Output CGST @ {{cgst_rate_str}}
+                  </td>
+                  <td></td><td></td><td></td><td></td>
+                  <td style="text-align: center; font-size: 7.2pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{cgst_rate_str}}</td>
+                  <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{cgst_total}}</td>
+                </tr>
+                {{/has_cgst}}
 
-              {{#has_sgst}}
-              <tr class="tax-row" style="white-space: nowrap;">
-                <td></td>
-                <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
-                  Output SGST @ {{sgst_rate_str}}
-                </td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td style="text-align: center; font-size: 7.2pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{sgst_rate_str}}</td>
-                <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{sgst_total}}</td>
-              </tr>
-              {{/has_sgst}}
+                {{#has_sgst}}
+                <tr class="tax-row" style="white-space: nowrap;">
+                  <td></td>
+                  <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
+                    Output SGST @ {{sgst_rate_str}}
+                  </td>
+                  <td></td><td></td><td></td><td></td>
+                  <td style="text-align: center; font-size: 7.2pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{sgst_rate_str}}</td>
+                  <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{sgst_total}}</td>
+                </tr>
+                {{/has_sgst}}
 
-              {{#has_igst}}
-              <tr class="tax-row" style="white-space: nowrap;">
-                <td></td>
-                <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
-                  Output IGST @ {{igst_rate_str}}
-                </td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td style="text-align: center; font-size: 7.2pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{igst_rate_str}}</td>
-                <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{igst_total}}</td>
-              </tr>
-              {{/has_igst}}
+                {{#has_igst}}
+                <tr class="tax-row" style="white-space: nowrap;">
+                  <td></td>
+                  <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
+                    Output IGST @ {{igst_rate_str}}
+                  </td>
+                  <td></td><td></td><td></td><td></td>
+                  <td style="text-align: center; font-size: 7.2pt; font-style: italic; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{igst_rate_str}}</td>
+                  <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{igst_total}}</td>
+                </tr>
+                {{/has_igst}}
 
-              {{#round_off_val}}
-              <tr class="tax-row" style="white-space: nowrap;">
-                <td></td>
-                <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
-                  Rounding Off.
-                </td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{round_off_val}}</td>
-              </tr>
-              {{/round_off_val}}
+                {{#round_off_val}}
+                <tr class="tax-row" style="white-space: nowrap;">
+                  <td></td>
+                  <td style="text-align: right; font-style: italic; font-size: 7.2pt; font-weight: bold; white-space: nowrap;">
+                    Rounding Off.
+                  </td>
+                  <td></td><td></td><td></td><td></td><td></td>
+                  <td style="text-align: right; font-size: 7.2pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">{{round_off_val}}</td>
+                </tr>
+                {{/round_off_val}}
 
-              {{#has_spacer_row}}
-              <tr class="spacer-row">
-                <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
-              </tr>
-              {{/has_spacer_row}}
+                {{#has_spacer_row}}
+                <tr class="spacer-row">
+                  <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+                </tr>
+                {{/has_spacer_row}}
 
-              <!-- Total Row -->
-              <tr class="total-row">
-                <td></td>
-                <td style="text-align: right;">Total</td>
-                <td></td>
-                <td style="text-align: right; white-space: nowrap;">{{total_quantity}}</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td style="text-align: right; white-space: nowrap;">₹ {{net_total}}</td>
-              </tr>
+                <!-- Grand Total Row -->
+                <tr class="total-row">
+                  <td></td>
+                  <td style="text-align: right;">Total</td>
+                  <td></td>
+                  <td style="text-align: right; white-space: nowrap;">{{total_quantity}}</td>
+                  <td></td><td></td><td></td>
+                  <td style="text-align: right; white-space: nowrap;">₹ {{net_total}}</td>
+                </tr>
+              {{/is_last_page}}
+
+              {{^is_last_page}}
+                <!-- Intermediate Page Carried Over Row -->
+                <tr class="total-row">
+                  <td></td>
+                  <td style="text-align: right; font-style: italic;">Carried Over to Page {{next_page}}</td>
+                  <td></td>
+                  <td style="text-align: right; white-space: nowrap;">{{page_total_qty}}</td>
+                  <td></td><td></td><td></td>
+                  <td style="text-align: right; white-space: nowrap;">₹ {{page_total_amt}}</td>
+                </tr>
+              {{/is_last_page}}
             </tbody>
           </table>
         </div>
 
+        {{#is_last_page}}
         <!-- Amount Chargeable (in words) -->
         <div class="charge-box">
           <div>
@@ -1117,14 +1199,38 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
             <div style="font-size: 7.2pt; font-weight: bold;">Authorised Signatory</div>
           </div>
         </div>
+        {{/is_last_page}}
 
-        <div class="computer-msg">This is a Computer Generated Invoice</div>
+        {{^is_last_page}}
+        <!-- Intermediate Page Footer -->
+        <div class="footer-flex" style="min-height: 48px;">
+          <div class="decl-box">
+            <strong>Declaration:</strong><br/>
+            We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.<br/>
+            <em>(Continued on Page {{next_page}}...)</em>
+          </div>
+          <div class="sig-box-right">
+            <div><strong>for {{hostCompanyName}}</strong></div>
+            {{#signatureBase64}}
+            <div style="margin-top: 2px; margin-bottom: 2px;"><img src="{{signatureBase64}}" style="max-height: 28px;" /></div>
+            {{/signatureBase64}}
+            {{^signatureBase64}}
+            <div style="margin-top: 20px;"></div>
+            {{/signatureBase64}}
+            <div style="font-size: 7.2pt; font-weight: bold;">Authorised Signatory</div>
+          </div>
+        </div>
+        {{/is_last_page}}
+
+        <div class="computer-msg">This is a Computer Generated Invoice{{#show_page_number}} — Page {{page_number}} of {{total_pages}}{{/show_page_number}}</div>
       </div>
+      {{/pages}}
     </body>
     </html>
   `;
 
   const viewData = {
+    pages,
     copy_type: copyType || 'Original for Recipient',
     invoice_no: invoice.invoice_no,
     invoice_date: formatDate(invoice.invoice_date || invoice.created_at),
@@ -1158,7 +1264,6 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
     buyer_state: buyerStateName,
     buyer_state_code: buyerStateCode,
 
-    items: formattedItems,
     has_cgst: !isInterstate && totalCgst > 0,
     cgst_rate_str: (cgstRate % 1 === 0 ? cgstRate : cgstRate.toFixed(1)) + '%',
     cgst_total: formatCurrency(totalCgst),
@@ -1178,8 +1283,6 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
     tax_total_summary: formatCurrency(totalTaxAmt),
     tax_total_words: numberToWords(totalTaxAmt),
 
-    empty_rows: Array.from({ length: Math.max(0, 4 - items.length) }),
-    has_spacer_row: formattedItems.length < 8,
     signatureBase64
   };
 

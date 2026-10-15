@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { SearchableSelect, Card } from '../components/ui.jsx';
+import { getFileUrl } from '../utils/url';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -69,6 +70,11 @@ export default function SalesInvoice() {
   const [removedItems, setRemovedItems] = useState([]);
   const [sendingId, setSendingId] = useState(null);
   const [poFilterDate, setPoFilterDate] = useState('');
+
+  // Host Company Billing Entity State
+  const [hostCompanies, setHostCompanies] = useState([]);
+  const [selectedHostId, setSelectedHostId] = useState('');
+  const [selectedHostCompany, setSelectedHostCompany] = useState(null);
 
   // Invoice Copy Type Modal State
   const [copyModalOpen, setCopyModalOpen] = useState(false);
@@ -152,9 +158,33 @@ export default function SalesInvoice() {
     }
   };
 
+  // 3. Fetch Host Billing Companies
+  const fetchHostCompanies = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin-company-master`, {
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : [];
+        setHostCompanies(list);
+        if (!selectedHostId) {
+          const active = list.find(c => c.status === 'ACTIVE') || list[0];
+          if (active) {
+            setSelectedHostId(String(active.id));
+            setSelectedHostCompany(active);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching host companies:', err);
+    }
+  };
+
   useEffect(() => {
     fetchInvoices();
     fetchAvailableOrders();
+    fetchHostCompanies();
   }, []);
 
   // Open Create Form & Preload Next Invoice No
@@ -164,6 +194,13 @@ export default function SalesInvoice() {
         headers: getAuthHeaders()
       });
       const data = res.ok ? await res.json() : { invoiceNo: `INV-${new Date().getFullYear()}-0001` };
+
+      // Reset to globally active host company if available
+      const active = hostCompanies.find(c => c.status === 'ACTIVE') || hostCompanies[0];
+      if (active) {
+        setSelectedHostId(String(active.id));
+        setSelectedHostCompany(active);
+      }
 
       setFormData({
         invoiceNo: data.invoiceNo,
@@ -253,6 +290,15 @@ export default function SalesInvoice() {
       const validItems = (data.items || []).filter(it => (parseFloat(it.invoiceableQty) || 0) > 0);
       const zeroItems = (data.items || []).filter(it => (parseFloat(it.invoiceableQty) || 0) <= 0);
       setRemovedItems(zeroItems);
+
+      // Auto-select host company from Sales Order if present
+      if (data.hostCompanyId) {
+        const matchingHost = hostCompanies.find(h => String(h.id) === String(data.hostCompanyId));
+        if (matchingHost) {
+          setSelectedHostId(String(matchingHost.id));
+          setSelectedHostCompany(matchingHost);
+        }
+      }
 
       setFormData(prev => ({
         ...prev,
@@ -383,6 +429,7 @@ export default function SalesInvoice() {
         invoiceNo: formData.invoiceNo,
         orderId: formData.orderId,
         clientId: formData.clientId,
+        host_company_id: selectedHostId ? parseInt(selectedHostId, 10) : null,
         customerPoNo: formData.customerPoNo,
         projectName: formData.projectName,
         invoiceDate: formData.invoiceDate,
@@ -901,6 +948,126 @@ export default function SalesInvoice() {
             </div>
           </div>
 
+          {/* Host Company Billing Profile Details Card */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between border-b border-slate-100 pb-3">
+              <div className="w-full md:max-w-md">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Select Issuing Billing Profile *
+                </label>
+                <select
+                  className="w-full p-2 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none bg-white text-slate-900 font-medium"
+                  value={selectedHostId}
+                  onChange={(e) => {
+                    const host = hostCompanies.find(h => String(h.id) === String(e.target.value));
+                    setSelectedHostId(e.target.value);
+                    setSelectedHostCompany(host || null);
+                  }}
+                >
+                  <option value="">Select billing profile...</option>
+                  {hostCompanies.map(h => (
+                    <option key={h.id} value={h.id}>
+                      {h.company_name} {h.status === 'ACTIVE' ? '(ACTIVE)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {selectedHostCompany && selectedHostCompany.status !== 'ACTIVE' && (
+                <button
+                  type="button"
+                  className="px-2.5 py-1 text-xs border border-rose-200 text-rose-600 hover:bg-rose-50 rounded font-medium transition cursor-pointer"
+                  onClick={async () => {
+                    const confirm = await Swal.fire({
+                      title: 'Set as Active Host Company?',
+                      text: `Do you want to make "${selectedHostCompany.company_name}" the active host company globally?`,
+                      icon: 'question',
+                      showCancelButton: true,
+                      confirmButtonText: 'Yes, Set Active'
+                    });
+                    if (confirm.isConfirmed) {
+                      try {
+                        const res = await fetch(`${API_BASE}/admin-company-master/${selectedHostCompany.id}`, {
+                          method: 'PUT',
+                          headers: getAuthHeaders(),
+                          body: JSON.stringify({ status: 'ACTIVE' })
+                        });
+                        if (res.ok) {
+                          Swal.fire({ icon: 'success', title: 'Updated', text: 'Billing profile activated globally', timer: 1500, showConfirmButton: false });
+                          fetchHostCompanies();
+                        }
+                      } catch (err) {
+                        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+                      }
+                    }
+                  }}
+                >
+                  Activate Globally
+                </button>
+              )}
+            </div>
+
+            {selectedHostCompany ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in duration-300">
+                <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-lg border border-slate-100 text-center">
+                  {selectedHostCompany.company_logo ? (
+                    <img
+                      src={getFileUrl(selectedHostCompany.company_logo)}
+                      alt="Logo"
+                      className="h-16 max-w-full object-contain mb-2 bg-white border border-slate-200 p-1.5 rounded shadow-xs"
+                    />
+                  ) : (
+                    <div className="h-14 w-14 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-500 font-bold text-lg mb-2">
+                      {selectedHostCompany.company_name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="text-xs font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
+                  <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${
+                    selectedHostCompany.status === 'ACTIVE'
+                      ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                      : 'bg-slate-100 border-slate-200 text-slate-500'
+                  }`}>
+                    {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
+                  </span>
+                </div>
+
+                <div className="space-y-2 p-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Office Details</p>
+                  <div className="space-y-1 text-slate-600 text-xs">
+                    <div className="flex gap-1.5 items-start">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                      <span className="leading-relaxed">{selectedHostCompany.company_address || '—'}</span>
+                    </div>
+                    <div className="pt-1 flex flex-col gap-1">
+                      <p className="font-mono text-[10px]">GSTIN: <span className="font-bold text-slate-700">{selectedHostCompany.gstin || '—'}</span></p>
+                      <p className="font-mono text-[10px]">PAN: <span className="font-bold text-slate-700">{selectedHostCompany.pan || '—'}</span></p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2 p-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bank Credentials</p>
+                  <div className="space-y-1.5 text-slate-600 text-xs font-mono">
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-sans">Bank Name</p>
+                      <p className="font-bold text-slate-700 font-sans text-xs truncate">{selectedHostCompany.bank_name || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-sans">Account & IFSC</p>
+                      <p className="font-semibold text-slate-800 text-xs">{selectedHostCompany.account_number || '—'}</p>
+                      {selectedHostCompany.ifsc_code && (
+                        <p className="text-[10px] text-slate-400">IFSC: {selectedHostCompany.ifsc_code.toUpperCase()}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 text-center border border-dashed border-slate-200 rounded-lg text-xs text-slate-500">
+                Select a host company profile above to preview its billing and banking credentials
+              </div>
+            )}
+          </div>
+
           {/* Section 1: Invoice Information with SearchableSelect */}
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
@@ -1387,7 +1554,7 @@ export default function SalesInvoice() {
                   <p>Customer Seal & Signature</p>
                 </div>
                 <div className="text-right space-y-8">
-                  <p className="font-bold text-slate-900">For SP TECHPIONEER PRIVATE LIMITED</p>
+                  <p className="font-bold text-slate-900">For {selectedInvoice.host_company_name || 'SP TECHPIONEER PRIVATE LIMITED'}</p>
                   <p>Authorized Signatory</p>
                 </div>
               </div>
