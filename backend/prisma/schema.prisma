@@ -2447,6 +2447,7 @@ enum customer_ledger_transaction_type {
 enum customer_payments_sales_order_source {
   SALES_ORDER
   DIRECT_ORDER
+  SALES_INVOICE
 }
 
 enum delivery_challans_delivery_status {

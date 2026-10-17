@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   CreditCard, Search, RefreshCw, Building2, Calendar, FileText, 
   CheckCircle2, Clock, AlertCircle, ChevronDown, Download, Check, 
-  ArrowRight, DollarSign, Wallet, History, X, Filter
+  ArrowRight, ArrowLeft, DollarSign, Wallet, History, X, Filter,
+  ArrowLeftRight, BookOpen, FileMinus, FilePlus, Layers, Receipt
 } from 'lucide-react';
 import { Button, DataTable, Card, SearchableSelect } from '../components/ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 import PaymentReceivedModal from '../components/PaymentReceivedModal.jsx';
+import { LEDGER_GROUPS, DEFAULT_CUSTOMER_LEDGER_GROUP, getLedgerGroupByName } from '../constants/ledgerGroups.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -62,15 +64,88 @@ const RecordPaymentReceived = () => {
     return `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   });
   const [applyDateFilterToTable, setApplyDateFilterToTable] = useState(false);
+  const [historyFilterMode, setHistoryFilterMode] = useState('period'); // 'period' | 'all'
   const [monthlySummary, setMonthlySummary] = useState(null);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
 
   // Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState(new Set());
+  const [selectedInvoicesForModal, setSelectedInvoicesForModal] = useState([]);
 
   // Active View Tab: 'invoices' | 'history'
   const [activeViewTab, setActiveViewTab] = useState('invoices');
+
+  // Step 1: Voucher Selection State: Default to 'RECEIPT' to preserve current workflow
+  const [selectedVoucherType, setSelectedVoucherType] = useState('RECEIPT');
+
+  // Step 2: Ledger Group Selection State (57 Official Ledger Groups)
+  const [selectedLedgerGroup, setSelectedLedgerGroup] = useState(DEFAULT_CUSTOMER_LEDGER_GROUP);
+
+  // ── 6 ACCOUNTING VOUCHERS ──
+  const VOUCHER_OPTIONS = [
+    {
+      id: 'RECEIPT',
+      name: 'Receipt',
+      shortcut: 'F6',
+      badge: 'Receivables',
+      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      activeColor: 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20',
+      icon: <ArrowLeft className="w-4 h-4" />,
+      desc: 'Customer receipts against outstanding invoices & sales orders'
+    },
+    {
+      id: 'PAYMENT',
+      name: 'Payment',
+      shortcut: 'F5',
+      badge: 'Payables',
+      badgeColor: 'bg-rose-50 text-rose-700 border-rose-200',
+      activeColor: 'bg-slate-900 text-white border-slate-900 shadow-md',
+      icon: <ArrowRight className="w-4 h-4" />,
+      desc: 'Vendor & supplier payments, operational expenses'
+    },
+    {
+      id: 'JOURNAL',
+      name: 'Journal',
+      shortcut: 'F7',
+      badge: 'Adjustments',
+      badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+      activeColor: 'bg-purple-700 text-white border-purple-700 shadow-md',
+      icon: <BookOpen className="w-4 h-4" />,
+      desc: 'General journal adjustments, depreciation & non-cash entries'
+    },
+    {
+      id: 'CONTRA',
+      name: 'Contra',
+      shortcut: 'F4',
+      badge: 'Banking',
+      badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      activeColor: 'bg-indigo-700 text-white border-indigo-700 shadow-md',
+      icon: <ArrowLeftRight className="w-4 h-4" />,
+      desc: 'Internal fund transfers between cash & bank accounts'
+    },
+    {
+      id: 'DEBIT_NOTE',
+      name: 'Debit Note',
+      shortcut: 'Alt+F9',
+      badge: 'Returns / Dr',
+      badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
+      activeColor: 'bg-amber-700 text-white border-amber-700 shadow-md',
+      icon: <FileMinus className="w-4 h-4" />,
+      desc: 'Debit notes for purchase returns, shortages & supplier rate revisions'
+    },
+    {
+      id: 'CREDIT_NOTE',
+      name: 'Credit Note',
+      shortcut: 'Alt+F8',
+      badge: 'Credits / Cr',
+      badgeColor: 'bg-teal-50 text-teal-700 border-teal-200',
+      activeColor: 'bg-teal-700 text-white border-teal-700 shadow-md',
+      icon: <FilePlus className="w-4 h-4" />,
+      desc: 'Credit notes for customer sales returns, rebates & discounts'
+    }
+  ];
 
   // 1. Fetch Companies on Load
   useEffect(() => {
@@ -94,6 +169,7 @@ const RecordPaymentReceived = () => {
 
   // 2. Fetch Invoices, Balance, and History when Customer or Month changes
   useEffect(() => {
+    setSelectedInvoiceIds(new Set());
     if (selectedCompanyId) {
       const found = companies.find(c => String(c.id) === String(selectedCompanyId));
       setSelectedCompany(found || null);
@@ -112,6 +188,7 @@ const RecordPaymentReceived = () => {
 
   const handleMonthChange = (newMonth) => {
     setSelectedMonth(newMonth);
+    setSelectedInvoiceIds(new Set());
     if (newMonth) {
       const [y, m] = newMonth.split('-');
       const year = parseInt(y, 10);
@@ -129,6 +206,7 @@ const RecordPaymentReceived = () => {
 
   const handleFromDateChange = (val) => {
     setFromDate(val);
+    setSelectedInvoiceIds(new Set());
     if (selectedCompanyId && val && toDate) {
       fetchMonthlySummary(selectedCompanyId, selectedMonth, val, toDate);
     }
@@ -136,6 +214,7 @@ const RecordPaymentReceived = () => {
 
   const handleToDateChange = (val) => {
     setToDate(val);
+    setSelectedInvoiceIds(new Set());
     if (selectedCompanyId && fromDate && val) {
       fetchMonthlySummary(selectedCompanyId, selectedMonth, fromDate, val);
     }
@@ -242,6 +321,18 @@ const RecordPaymentReceived = () => {
     }
   };
 
+  // 57 Ledger Groups Options for Step 2 SearchableSelect
+  const ledgerGroupOptions = useMemo(() => {
+    return [
+      { value: 'ALL', label: 'All Ledger Groups', sublabel: 'View all 57 groups' },
+      ...LEDGER_GROUPS.map(g => ({
+        value: g.name,
+        label: `${g.id}. ${g.name}`,
+        sublabel: `Category: ${g.category}`
+      }))
+    ];
+  }, []);
+
   // Options for SearchableSelect
   const companyOptions = useMemo(() => {
     return companies.map(c => ({
@@ -267,16 +358,24 @@ const RecordPaymentReceived = () => {
     });
   }, [allOutstandingInvoices, applyDateFilterToTable, fromDate, toDate]);
 
-  // Displayed Payment History (supports date-wise filter)
+  // Displayed Payment History (by default applies active month/period filter, e.g. Oct 2026)
   const displayedPaymentHistory = useMemo(() => {
-    if (!applyDateFilterToTable || !fromDate || !toDate) {
+    if (historyFilterMode === 'all' || !fromDate || !toDate) {
       return paymentHistory;
     }
     return paymentHistory.filter(p => {
       const d = (p.payment_date || p.created_at || '').slice(0, 10);
       return (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
     });
-  }, [paymentHistory, applyDateFilterToTable, fromDate, toDate]);
+  }, [paymentHistory, historyFilterMode, fromDate, toDate]);
+
+  const historyPeriodCount = useMemo(() => {
+    if (!fromDate || !toDate) return paymentHistory.length;
+    return paymentHistory.filter(p => {
+      const d = (p.payment_date || p.created_at || '').slice(0, 10);
+      return (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
+    }).length;
+  }, [paymentHistory, fromDate, toDate]);
 
   // Aggregate stats for selected customer
   const stats = useMemo(() => {
@@ -296,20 +395,53 @@ const RecordPaymentReceived = () => {
     };
   }, [invoices]);
 
-  // Open modal for a specific invoice
+  // Format invoice payload for modal
+  const formatInvoiceForModal = (row) => ({
+    ...row,
+    id: row.id,
+    customer_id: row.company_id || selectedCompanyId,
+    customer_name: row.company_name || selectedCompany?.company_name,
+    sales_order_id: row.source === 'SALES_INVOICE' ? (row.sales_order_id || row.order_id) : row.id,
+    invoice_id: row.invoice_id || (row.source === 'SALES_INVOICE' ? row.id : null),
+    sales_order_source: row.source || 'SALES_INVOICE',
+    po_number: row.invoice_no || row.so_number,
+    outstanding: row.outstanding,
+    already_paid: row.paid_amount,
+    total_amount: row.total_amount
+  });
+
+  // Selected invoices derived list and total outstanding
+  const selectedInvoicesList = useMemo(() => {
+    return displayedInvoices.filter(inv => selectedInvoiceIds.has(inv.id));
+  }, [displayedInvoices, selectedInvoiceIds]);
+
+  const selectedTotalOutstanding = useMemo(() => {
+    return selectedInvoicesList.reduce((sum, inv) => sum + (parseFloat(inv.outstanding) || 0), 0);
+  }, [selectedInvoicesList]);
+
+  // Open modal for a specific single invoice row
   const handleOpenRecordPayment = (row) => {
-    setSelectedInvoice({
-      ...row,
-      customer_id: row.company_id || selectedCompanyId,
-      customer_name: row.company_name || selectedCompany?.company_name,
-      sales_order_id: row.source === 'SALES_INVOICE' ? (row.sales_order_id || row.order_id) : row.id,
-      invoice_id: row.invoice_id || (row.source === 'SALES_INVOICE' ? row.id : null),
-      sales_order_source: row.source || 'SALES_INVOICE',
-      po_number: row.invoice_no || row.so_number,
-      outstanding: row.outstanding,
-      already_paid: row.paid_amount,
-      total_amount: row.total_amount
-    });
+    const formatted = formatInvoiceForModal(row);
+    setSelectedInvoice(formatted);
+    setSelectedInvoicesForModal([formatted]);
+    setIsPaymentModalOpen(true);
+  };
+
+  // Open modal for all selected invoices (or all company bill references if none checked)
+  const handleProceedToPayment = () => {
+    if (selectedInvoiceIds.size > 0) {
+      const formattedList = displayedInvoices
+        .filter(inv => selectedInvoiceIds.has(inv.id))
+        .map(formatInvoiceForModal);
+      setSelectedInvoicesForModal(formattedList);
+      setSelectedInvoice(formattedList.length === 1 ? formattedList[0] : null);
+    } else if (selectedCompanyId) {
+      // If 0 invoices were checked, start with empty list so user can add desired references via Add Agst Ref in modal
+      setSelectedInvoicesForModal([]);
+      setSelectedInvoice(null);
+    } else {
+      return;
+    }
     setIsPaymentModalOpen(true);
   };
 
@@ -336,24 +468,24 @@ const RecordPaymentReceived = () => {
     }
   };
 
-  // Invoices Table Columns
+  // Invoices Table Columns (Compact Space-Efficient Layout)
   const invoiceColumns = [
     {
       label: 'Invoice #',
       key: 'invoice_no',
       sortable: true,
       render: (val, row) => (
-        <div className="flex flex-col py-0.5 whitespace-nowrap">
-          <div className="flex items-center gap-1.5">
-            <span className="font-mono font-bold text-indigo-700 text-xs">
+        <div className="flex flex-col whitespace-nowrap leading-tight py-0">
+          <div className="flex items-center gap-1">
+            <span className="font-mono font-bold text-slate-900 text-[11px]">
               {row.invoice_no || val || '—'}
             </span>
-            <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+            <span className="text-[8.5px] font-bold px-1 py-0 rounded bg-slate-100 text-slate-600 border border-slate-200">
               INV
             </span>
           </div>
           {row.customer_po_no && (
-            <span className="text-[10px] text-slate-500 font-mono">
+            <span className="text-[9.5px] text-slate-400 font-mono">
               PO: {row.customer_po_no}
             </span>
           )}
@@ -365,7 +497,7 @@ const RecordPaymentReceived = () => {
       key: 'so_number',
       sortable: true,
       render: (val) => (
-        <span className="font-mono text-xs font-medium text-slate-700 whitespace-nowrap">
+        <span className="font-mono text-[11px] font-medium text-slate-700 whitespace-nowrap">
           {val || '—'}
         </span>
       )
@@ -375,9 +507,9 @@ const RecordPaymentReceived = () => {
       key: 'invoice_date',
       sortable: true,
       render: (val, row) => (
-        <div className="flex items-center gap-1.5 text-slate-600 whitespace-nowrap">
-          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          <span className="text-xs">{formatDate(val || row.created_at)}</span>
+        <div className="flex items-center gap-1 text-slate-600 whitespace-nowrap text-[11px]">
+          <Calendar className="w-3 h-3 text-slate-400" />
+          <span>{formatDate(val || row.created_at)}</span>
         </div>
       )
     },
@@ -386,7 +518,7 @@ const RecordPaymentReceived = () => {
       key: 'total_amount',
       sortable: true,
       render: (val) => (
-        <span className="text-slate-900 font-semibold font-mono text-xs whitespace-nowrap">
+        <span className="text-slate-900 font-bold font-mono text-[11px] whitespace-nowrap">
           {formatCurrency(val)}
         </span>
       )
@@ -400,22 +532,22 @@ const RecordPaymentReceived = () => {
         const received = parseFloat(row.paid_amount) || 0;
         if (outstanding <= 0) {
           return (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200 whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9.5px] bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 whitespace-nowrap">
+              <span className="w-1.2 h-1.2 rounded-full bg-emerald-500" />
               PAID
             </span>
           );
         } else if (received > 0) {
           return (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-amber-50 text-amber-700 font-semibold border border-amber-200 whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9.5px] bg-amber-50 text-amber-700 font-bold border border-amber-200 whitespace-nowrap">
+              <span className="w-1.2 h-1.2 rounded-full bg-amber-500" />
               PARTIAL
             </span>
           );
         } else {
           return (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-rose-50 text-rose-700 font-semibold border border-rose-200 whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9.5px] bg-rose-50 text-rose-700 font-bold border border-rose-200 whitespace-nowrap">
+              <span className="w-1.2 h-1.2 rounded-full bg-rose-500" />
               PENDING
             </span>
           );
@@ -435,14 +567,14 @@ const RecordPaymentReceived = () => {
             <button
               onClick={() => handleOpenRecordPayment(row)}
               disabled={isPaid}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap shadow-xs ${
+              className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold flex items-center gap-1 transition-all whitespace-nowrap shadow-2xs ${
                 isPaid 
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' 
-                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow-md active:scale-95'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95 cursor-pointer shadow-xs'
               }`}
               title={isPaid ? 'Invoice is fully paid' : 'Record payment for this invoice'}
             >
-              <CreditCard className="w-3.5 h-3.5" />
+              <CreditCard className="w-3 h-3" />
               <span>Record Payment</span>
             </button>
           </div>
@@ -487,14 +619,55 @@ const RecordPaymentReceived = () => {
       )
     },
     {
-      label: 'Payment Mode',
+      label: 'Payment Mode & Bank / Cheque',
       key: 'payment_mode',
       sortable: true,
-      render: (val) => (
-        <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 uppercase">
-          {val || 'CASH'}
-        </span>
-      )
+      render: (val, row) => {
+        const chequeNo = row.cheque_number || (row.remarks?.match(/Cheque No:\s*([^\s,;\]]+)/i)?.[1]);
+        const chequeBank = row.cheque_bank_name || (row.remarks?.match(/Cheque Bank:\s*([^|,;\[\]\n]+)/i)?.[1]?.trim());
+        const bankName = row.bank_name 
+          || row.manual_bank_account 
+          || row.remarks?.match(/Bank:\s*([^|,;\[\]\n]+)/i)?.[1]?.trim();
+        const refNo = row.transaction_ref_no;
+
+        return (
+          <div className="flex flex-col gap-1 items-start">
+            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase tracking-wider">
+              {val || 'CASH'}
+            </span>
+
+            {/* Bank details if available */}
+            {bankName ? (
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-900 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded shadow-2xs">
+                <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span className="truncate max-w-[180px]" title={bankName}>{bankName}</span>
+                {row.account_number && (
+                  <span className="text-[10px] text-blue-600 font-mono">
+                    (••{String(row.account_number).slice(-4)})
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-[10px] text-slate-400 italic">No bank specified</span>
+            )}
+
+            {/* Cheque Number & Cheque Bank Name */}
+            {chequeNo && (
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded shadow-2xs">
+                <span>Chq #{chequeNo}</span>
+                {chequeBank && <span className="text-amber-700 font-normal">({chequeBank})</span>}
+              </div>
+            )}
+
+            {/* Ref/UTR No if present and no cheque */}
+            {!chequeNo && refNo && (
+              <span className="text-[10px] text-slate-500 font-mono">
+                Ref: {refNo}
+              </span>
+            )}
+          </div>
+        );
+      }
     },
     {
       label: 'Received Amount',
@@ -533,6 +706,35 @@ const RecordPaymentReceived = () => {
     }
   ];
 
+  if (isPaymentModalOpen) {
+    return (
+      <PaymentReceivedModal
+        isOpen={true}
+        isPage={true}
+        initialVoucherType={selectedVoucherType}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedInvoice(null);
+          setSelectedInvoicesForModal([]);
+        }}
+        invoice={selectedInvoice}
+        invoices={selectedInvoicesForModal}
+        onSuccess={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedInvoice(null);
+          setSelectedInvoicesForModal([]);
+          setSelectedInvoiceIds(new Set());
+          if (selectedCompanyId) {
+            fetchCustomerInvoices(selectedCompanyId);
+            fetchCustomerBalance(selectedCompanyId);
+            fetchCustomerPaymentHistory(selectedCompanyId);
+            fetchMonthlySummary(selectedCompanyId, selectedMonth, fromDate, toDate);
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4 animate-in fade-in duration-300 pb-12">
       {/* 1. Page Header */}
@@ -566,19 +768,116 @@ const RecordPaymentReceived = () => {
         </div>
       </div>
 
-      {/* 2. Customer Selection Form Panel */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs relative z-20 overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between border-l-4 border-l-blue-600">
+      {/* ── 1. Select Voucher Type (Step 1 of 5) ── */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-l-4 border-l-blue-600">
           <div className="flex items-center gap-2">
+            <span className="text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded bg-blue-600 text-white">
+              Step 1
+            </span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+              Select Accounting Voucher Type
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">
+              Current Selection:
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-blue-50 text-blue-700 border border-blue-200">
+              {VOUCHER_OPTIONS.find(v => v.id === selectedVoucherType)?.name || 'Receipt'} Voucher
+            </span>
+          </div>
+        </div>
+
+        <div className="p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            {VOUCHER_OPTIONS.map((v) => {
+              const isSelected = selectedVoucherType === v.id;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setSelectedVoucherType(v.id)}
+                  className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+                    isSelected 
+                      ? `${v.activeColor} ring-2 ring-blue-500/20`
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300 shadow-2xs'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        {v.icon}
+                      </div>
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                        {v.shortcut}
+                      </span>
+                    </div>
+                    <div className="font-bold text-xs flex items-center justify-between">
+                      <span>{v.name}</span>
+                      {isSelected && <Check className="w-3.5 h-3.5 ml-1" />}
+                    </div>
+                  </div>
+                  <div className={`text-[10px] mt-1.5 line-clamp-2 leading-tight ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
+                    {v.desc}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Contextual notice if a non-Receipt voucher is selected */}
+          {selectedVoucherType !== 'RECEIPT' && (
+            <div className="mt-3.5 pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50/70 border border-amber-200 p-3 rounded-xl text-amber-900">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded bg-amber-100 text-amber-800">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div className="text-xs">
+                  <span className="font-bold text-slate-900">{VOUCHER_OPTIONS.find(v => v.id === selectedVoucherType)?.name} Voucher Selected:</span>
+                  <span className="text-amber-800 ml-1">
+                    Receipt is the default workflow for customer receivables against sales invoices. Click below to open the dedicated {VOUCHER_OPTIONS.find(v => v.id === selectedVoucherType)?.name} entry form.
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedVoucherType('RECEIPT')}
+                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 cursor-pointer"
+                >
+                  Back to Receipt
+                </button>
+                <button
+                  type="button"
+                  onClick={handleProceedToPayment}
+                  className="px-3.5 py-1 text-xs font-bold rounded-lg bg-amber-800 hover:bg-amber-900 text-white shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>Open {VOUCHER_OPTIONS.find(v => v.id === selectedVoucherType)?.name} Form</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── 2. Select Customer / Company & Receivables Filter (Step 2 of 5) ── */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs relative z-30">
+        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between border-l-4 border-l-blue-600 rounded-t-xl">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded bg-blue-600 text-white">
+              Step 2
+            </span>
             <div className="p-1 rounded bg-blue-50 text-blue-600 border border-blue-100">
               <Building2 className="w-3.5 h-3.5" />
             </div>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-800">Payment Entry & Receivables Filter</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-800">Select Customer / Company & Receivables Filter</span>
           </div>
           {selectedCompany && (
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Outstanding:</span>
-              <span className="font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full text-xs shadow-xs">
+              <span className="font-mono font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full text-xs shadow-xs">
                 {formatCurrency(stats.totalOutstanding)}
               </span>
             </div>
@@ -587,11 +886,39 @@ const RecordPaymentReceived = () => {
 
         <div className="p-5">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-            {/* Property 1: Customer Search Filter */}
-            <div className="col-span-12 md:col-span-4 lg:col-span-4 space-y-1.5">
+            {/* Property 1: Ledger Group Selector (57 Ledger Groups) */}
+            <div className="col-span-12 md:col-span-3 lg:col-span-3 space-y-1.5 relative z-20">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Ledger Group</span>
+                </label>
+                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded">
+                  57 Groups
+                </span>
+              </div>
+
+              <div>
+                <SearchableSelect
+                  options={ledgerGroupOptions}
+                  value={selectedLedgerGroup}
+                  onChange={(e) => setSelectedLedgerGroup(e.target.value)}
+                  placeholder="Select Ledger Group..."
+                  labelField="label"
+                  valueField="value"
+                  subLabelField="sublabel"
+                  allowCustom={false}
+                  showSearchIcon={true}
+                  className="w-full text-xs py-2 px-3 border-slate-300 focus:border-blue-600 focus:ring-blue-500/20 rounded-lg font-medium"
+                />
+              </div>
+            </div>
+
+            {/* Property 2: Customer Search Filter */}
+            <div className="col-span-12 md:col-span-4 lg:col-span-4 space-y-1.5 relative z-20">
               <label className="text-xs font-bold text-slate-800 flex items-center gap-1">
                 <span>Select Customer / Company</span>
-                <span className="text-blue-600 font-bold">*</span>
+                <span className="text-rose-600 font-bold">*</span>
               </label>
 
               <div className="flex items-center gap-2">
@@ -609,7 +936,7 @@ const RecordPaymentReceived = () => {
                     subLabelField="sublabel"
                     allowCustom={false}
                     showSearchIcon={true}
-                    className="w-full text-xs py-2 px-3 border-slate-300 focus:border-blue-600 focus:ring-blue-500/20 rounded-lg font-medium"
+                    className="w-full text-xs py-2 px-3 border-slate-300 focus:border-rose-600 focus:ring-rose-500/20 rounded-lg font-medium"
                   />
                 </div>
 
@@ -620,7 +947,7 @@ const RecordPaymentReceived = () => {
                       setSelectedCompanyId('');
                       setSelectedCompany(null);
                     }}
-                    className="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                    className="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-rose-700 bg-slate-100 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
                     title="Clear selection"
                   >
                     Clear
@@ -629,18 +956,13 @@ const RecordPaymentReceived = () => {
               </div>
             </div>
 
-            {/* Property 2: Month / Year Page Filter */}
-            <div className="col-span-12 md:col-span-3 lg:col-span-3 space-y-1.5">
+            {/* Property 3: Month / Year Page Filter */}
+            <div className="col-span-12 md:col-span-2 lg:col-span-2 space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                  <Calendar className="w-3.5 h-3.5 text-rose-600" />
                   <span>Month / Year</span>
                 </label>
-                {monthlySummary?.monthName && (
-                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded truncate max-w-[120px]">
-                    {monthlySummary.monthName}
-                  </span>
-                )}
               </div>
 
               <div>
@@ -648,36 +970,36 @@ const RecordPaymentReceived = () => {
                   type="month"
                   value={selectedMonth}
                   onChange={(e) => handleMonthChange(e.target.value)}
-                  className="w-full text-xs font-semibold py-2 px-3 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 shadow-xs cursor-pointer"
+                  className="w-full text-xs font-semibold py-2 px-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-600 shadow-xs cursor-pointer"
                 />
               </div>
             </div>
 
-            {/* Property 3: Date-wise Filter (Last Property) */}
-            <div className="col-span-12 md:col-span-5 lg:col-span-5 space-y-1.5">
+            {/* Property 4: Date-wise Filter */}
+            <div className="col-span-12 md:col-span-3 lg:col-span-3 space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                  <Calendar className="w-3.5 h-3.5 text-rose-600" />
                   <span>Date-wise Filter</span>
                 </label>
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => setApplyDateFilterToTable(!applyDateFilterToTable)}
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded border transition-all cursor-pointer ${
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all cursor-pointer ${
                       applyDateFilterToTable 
-                        ? 'bg-blue-600 text-white border-blue-700 shadow-xs' 
-                        : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200'
+                        ? 'bg-rose-600 text-white border-rose-700 shadow-xs' 
+                        : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
                     }`}
                     title="Toggle filtering invoice and payment list by this date range"
                   >
-                    {applyDateFilterToTable ? 'List Filtered ✓' : 'Filter List'}
+                    {applyDateFilterToTable ? 'Filtered ✓' : 'Filter'}
                   </button>
                   {selectedCompanyId && (
                     <button
                       type="button"
                       onClick={() => fetchMonthlySummary(selectedCompanyId, selectedMonth, fromDate, toDate)}
-                      className={`p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer ${monthlyLoading ? 'animate-spin' : ''}`}
+                      className={`p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer ${monthlyLoading ? 'animate-spin' : ''}`}
                       title="Refresh date-wise balance"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
@@ -686,67 +1008,87 @@ const RecordPaymentReceived = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 <div className="relative">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase pointer-events-none">From</span>
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 uppercase pointer-events-none">Fr</span>
                   <input
                     type="date"
                     value={fromDate}
                     onChange={(e) => handleFromDateChange(e.target.value)}
-                    className="w-full text-xs font-semibold py-2 pr-2 pl-12 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 shadow-xs cursor-pointer"
+                    className="w-full text-xs font-semibold py-2 pr-1 pl-7 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-600 shadow-xs cursor-pointer"
                   />
                 </div>
                 <div className="relative">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase pointer-events-none">To</span>
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 uppercase pointer-events-none">To</span>
                   <input
                     type="date"
                     value={toDate}
                     onChange={(e) => handleToDateChange(e.target.value)}
-                    className="w-full text-xs font-semibold py-2 pr-2 pl-8 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 shadow-xs cursor-pointer"
+                    className="w-full text-xs font-semibold py-2 pr-1 pl-7 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-600 shadow-xs cursor-pointer"
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Compact Customer Metadata Ribbon (Clean, Light Blue Backdrop) */}
+          {/* Ultra-Compact 1-Line Customer Metadata & Balance Ribbon (No Slider / No Scrollbar) */}
           {selectedCompany && (
-            <div className="mt-4 pt-3.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs bg-gradient-to-r from-blue-50/70 via-slate-50 to-blue-50/50 text-slate-700 -mx-5 -mb-5 px-5 py-3 rounded-b-xl border-b border-slate-200">
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-500 font-medium text-[11px] uppercase tracking-wider">Customer:</span>
-                  <span className="font-bold text-slate-900 text-sm">{selectedCompany.company_name}</span>
-                </div>
-                {selectedCompany.gstin && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-500 text-[11px]">GSTIN:</span>
-                    <span className="font-mono text-slate-800 bg-white px-2 py-0.5 rounded text-[11px] border border-slate-200 font-medium">{selectedCompany.gstin}</span>
-                  </div>
-                )}
-                {selectedCompany.city && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-500 text-[11px]">City:</span>
-                    <span className="text-slate-800 text-[11px] font-medium">{selectedCompany.city}</span>
-                  </div>
-                )}
+            <div className="mt-3 pt-2 border-t border-slate-200 -mx-5 -mb-5 px-4 py-1.5 rounded-b-xl bg-slate-50/90 text-slate-700 border-b border-slate-200 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 overflow-hidden text-[10px]">
+              {/* Left Details */}
+              <div className="flex items-center gap-2 shrink-0">
                 <div className="flex items-center gap-1">
-                  <span className="text-slate-500 text-[11px]">Period:</span>
-                  <span className="font-mono font-semibold text-blue-700 bg-blue-100/70 border border-blue-200 px-2 py-0.5 rounded text-[11px]">{fromDate} to {toDate}</span>
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Customer:</span>
+                  <span className="font-bold text-slate-900 text-[11px] truncate max-w-[180px]" title={selectedCompany.company_name}>
+                    {selectedCompany.company_name}
+                  </span>
+                </div>
+
+                <span className="text-slate-300">|</span>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Ledger:</span>
+                  <span className="font-bold text-blue-800 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded text-[9.5px]">
+                    {selectedLedgerGroup === 'ALL' ? 'Sundry Debtors (52)' : `${selectedLedgerGroup} (${getLedgerGroupByName(selectedLedgerGroup)?.id || 52})`}
+                  </span>
+                </div>
+
+                {selectedCompany.gstin && (
+                  <>
+                    <span className="text-slate-300">|</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-400 font-bold uppercase text-[9px]">GSTIN:</span>
+                      <span className="font-mono text-slate-700 bg-white px-1 py-0.2 rounded border border-slate-200 font-medium text-[9.5px]">{selectedCompany.gstin}</span>
+                    </div>
+                  </>
+                )}
+
+                <span className="text-slate-300">|</span>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Period:</span>
+                  <span className="font-mono font-medium text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded text-[9.5px]">{fromDate} to {toDate}</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-5">
-                <div>
-                  <span className="text-slate-500 text-[11px] block">Total Invoiced</span>
-                  <span className="font-mono font-bold text-slate-900 text-xs">{formatCurrency(stats.totalInvoiced)}</span>
+              {/* Right Totals in 1-line */}
+              <div className="flex items-center gap-2.5 shrink-0 pl-2 lg:border-l border-slate-200">
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Invoiced:</span>
+                  <span className="font-mono font-bold text-slate-800 text-[10.5px]">{formatCurrency(stats.totalInvoiced)}</span>
                 </div>
-                <div>
-                  <span className="text-slate-500 text-[11px] block">Received</span>
-                  <span className="font-mono font-bold text-emerald-700 text-xs bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded block">{formatCurrency(stats.totalReceived)}</span>
+
+                <span className="text-slate-300">•</span>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Received:</span>
+                  <span className="font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded text-[10.5px]">{formatCurrency(stats.totalReceived)}</span>
                 </div>
-                <div>
-                  <span className="text-slate-500 text-[11px] block">Outstanding</span>
-                  <span className="font-mono font-bold text-blue-700 text-xs bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded block shadow-xs">{formatCurrency(stats.totalOutstanding)}</span>
+
+                <span className="text-slate-300">•</span>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400 font-bold uppercase text-[9px]">Outstanding:</span>
+                  <span className="font-mono font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded text-[10.5px]">{formatCurrency(stats.totalOutstanding)}</span>
                 </div>
               </div>
             </div>
@@ -801,27 +1143,134 @@ const RecordPaymentReceived = () => {
                 </button>
               </div>
 
-              {applyDateFilterToTable && (
+              {historyFilterMode === 'period' && (
                 <span className="inline-flex items-center gap-1.5 text-[11px] bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-md font-bold shadow-xs">
                   <span>Filtered ({fromDate} to {toDate})</span>
-                  <button 
-                    onClick={() => setApplyDateFilterToTable(false)}
-                    className="hover:text-blue-900 ml-0.5 text-xs font-bold leading-none cursor-pointer"
-                    title="Remove date filter and show all"
-                  >
-                    ×
-                  </button>
                 </span>
               )}
             </div>
 
             <div className="text-xs text-slate-500">
               Showing {activeViewTab === 'invoices' ? `${displayedInvoices.length} invoices` : `${displayedPaymentHistory.length} receipts`} for <span className="font-semibold text-slate-800">{selectedCompany.company_name}</span>
+              {activeViewTab === 'history' && historyFilterMode === 'period' && (
+                <span className="text-blue-600 font-semibold ml-1">
+                  ({monthlySummary?.monthName || 'October 2026'})
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Table Content */}
-          <div className="p-4">
+          {/* Payment History Period Filter Ribbon */}
+          {activeViewTab === 'history' && (
+            <div className="px-4 py-2.5 bg-slate-50/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                  Receipts Filter:
+                </span>
+                <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-200/70 border border-slate-300 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryFilterMode('period')}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      historyFilterMode === 'period'
+                        ? 'bg-blue-600 text-white shadow-xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <span>{monthlySummary?.monthName || 'October 2026'} ({historyPeriodCount})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryFilterMode('all')}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      historyFilterMode === 'all'
+                        ? 'bg-blue-600 text-white shadow-xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <span>All Time ({paymentHistory.length})</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">
+                  {historyFilterMode === 'period' ? `${monthlySummary?.monthName?.split(' ')[0] || 'October'} Total Received:` : 'All Time Received:'}
+                </span>
+                <span className="font-mono font-extrabold text-emerald-700 text-sm">
+                  {formatCurrency(displayedPaymentHistory.reduce((sum, p) => sum + (parseFloat(p.payment_amount) || 0), 0))}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Invoice Selection Action Ribbon */}
+          {activeViewTab === 'invoices' && (
+            <div className={`px-4 py-2.5 border-b flex flex-wrap items-center justify-between gap-3 transition-colors ${
+              selectedInvoiceIds.size > 0 
+                ? 'bg-blue-50/80 border-blue-200 text-blue-900 shadow-2xs' 
+                : 'bg-slate-50/40 border-slate-100 text-slate-600'
+            }`}>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Invoices Selected:</span>
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                    selectedInvoiceIds.size > 0 
+                      ? 'bg-blue-600 text-white shadow-xs' 
+                      : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    {selectedInvoiceIds.size > 0 && <Check className="w-3 h-3 stroke-[3]" />}
+                    <span>{selectedInvoiceIds.size} of {displayedInvoices.length}</span>
+                  </span>
+                </div>
+
+                {selectedInvoiceIds.size > 0 && (
+                  <div className="flex items-center gap-3 border-l border-blue-200 pl-3">
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className="text-slate-500 font-medium">Selected Outstanding:</span>
+                      <span className="font-mono font-bold text-blue-700 text-sm">
+                        {formatCurrency(selectedTotalOutstanding)}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedInvoiceIds(new Set())}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-blue-600 underline cursor-pointer ml-1"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleProceedToPayment}
+                  disabled={!selectedCompanyId}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-xs ${
+                    selectedCompanyId
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 active:scale-95 cursor-pointer'
+                      : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                  }`}
+                  title={selectedInvoiceIds.size === 0 ? 'Open Bill-wise Details for all company bills' : 'Record receipt for selected invoices'}
+                >
+                  <Receipt className="w-4 h-4" />
+                  <span>{selectedVoucherType === 'RECEIPT' ? 'Record Receipt' : `Record ${VOUCHER_OPTIONS.find(v => v.id === selectedVoucherType)?.name || 'Voucher'}`}</span>
+                  {selectedInvoiceIds.size > 0 && (
+                    <span className="ml-0.5 px-1.5 py-0.2 bg-white/25 rounded-full text-[10px] font-extrabold">
+                      {selectedInvoiceIds.size}
+                    </span>
+                  )}
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Table Content (Compact Space-Saving Padding) */}
+          <div className="p-2 sm:p-2.5 overflow-x-auto">
             {activeViewTab === 'invoices' ? (
               <DataTable
                 columns={invoiceColumns}
@@ -834,7 +1283,13 @@ const RecordPaymentReceived = () => {
                   (row.customer_po_no && row.customer_po_no.toLowerCase().includes(term))
                 }
                 emptyMessage={`No outstanding invoices found for ${selectedCompany.company_name}.`}
-                className="border-none"
+                className="border-none text-xs"
+                selectable={true}
+                selectionColor="blue"
+                selectedRows={selectedInvoiceIds}
+                onSelectionChange={setSelectedInvoiceIds}
+                rowId="id"
+                isRowSelectable={(row) => (parseFloat(row.outstanding) || 0) > 0}
               />
             ) : (
               <DataTable
@@ -843,131 +1298,93 @@ const RecordPaymentReceived = () => {
                 loading={historyLoading}
                 searchPlaceholder="Search by receipt #, reference, mode..."
                 emptyMessage={`No payment receipts found for ${selectedCompany.company_name}.`}
-                className="border-none"
+                className="border-none text-xs"
               />
             )}
           </div>
         </div>
       )}
 
-      {/* 4. Monthly Balance Summary Section (3 Equal-Width Cards in a Single Horizontal Row) */}
+      {/* 4. Period Balance Analysis (Simple 3-Row Balance Statement) */}
       {selectedCompany && (
-        <div className="bg-white rounded-xl border border-slate-200/90 shadow-xs overflow-hidden">
-          {/* Compact Header Bar */}
-          <div className="px-4 py-2.5 border-b border-slate-100 bg-gradient-to-r from-blue-50/70 via-white to-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-l-4 border-l-blue-600">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          {/* Header Bar */}
+          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-l-4 border-l-blue-600">
             <div className="flex items-center gap-2">
-              <div className="p-1 rounded bg-blue-50 text-blue-600 border border-blue-200">
-                <Wallet className="w-4 h-4" />
+              <div className="p-1 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                <Wallet className="w-3.5 h-3.5" />
               </div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                Monthly Balance Summary
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                <span>Period Balance Statement</span>
+                {monthlySummary?.monthName && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    {monthlySummary.monthName}
+                  </span>
+                )}
               </h3>
-              {monthlySummary?.monthName && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
-                  {monthlySummary.monthName}
-                </span>
-              )}
             </div>
 
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <Calendar className="w-3.5 h-3.5 text-blue-600" />
-              <span>Statement Period: <strong className="text-slate-800 font-semibold">{monthlySummary?.monthName || selectedMonth}</strong></span>
+              <span>Statement Period: <strong className="text-slate-800 font-semibold">{fromDate} to {toDate}</strong></span>
               <button
                 type="button"
                 onClick={() => fetchMonthlySummary(selectedCompanyId, selectedMonth, fromDate, toDate)}
                 className={`p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors ml-0.5 cursor-pointer ${monthlyLoading ? 'animate-spin' : ''}`}
-                title="Refresh monthly balance summary"
-                aria-label="Refresh monthly balance summary"
+                title="Refresh statement analysis"
+                aria-label="Refresh statement analysis"
               >
                 <RefreshCw className="w-3 h-3" />
               </button>
             </div>
           </div>
 
-          {/* Exactly 3 Equal-Width Summary Cards in a Single Horizontal Row */}
-          <div className="p-3.5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
-              {/* 1) Opening Balance */}
-              <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between hover:border-slate-300 transition-all shadow-2xs">
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      1) Opening Balance
-                    </span>
-                    <span className="p-1 rounded-md bg-white text-slate-600 border border-slate-200 shadow-2xs">
-                      <Calendar className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                  <div className="text-xl font-bold font-mono text-slate-800 tracking-tight">
-                    {monthlyLoading ? (
-                      <span className="text-xs font-normal text-slate-400">Loading...</span>
-                    ) : (
-                      formatCurrency(monthlySummary?.openingBalance || 0)
-                    )}
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5 font-medium">
-                    Previous month carry-forward
-                  </p>
-                </div>
-                <div className="mt-2.5 pt-2 border-t border-slate-200/60 text-[10px] text-slate-400">
-                  As of 01 {monthlySummary?.monthName || 'selected month'}
-                </div>
+          {/* Statement Content: Statement info on left, 3 Balance Rows aligned on right */}
+          <div className="p-4 sm:p-6 bg-white flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            
+            {/* Left Context / Description */}
+            <div className="text-xs text-slate-500 max-w-md space-y-1">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                Account Statement Summary
+              </span>
+              <p className="text-slate-500 text-[11px] leading-relaxed">
+                Statement period reconciliation from <strong className="text-slate-700 font-medium">{fromDate}</strong> to <strong className="text-slate-700 font-medium">{toDate}</strong>.
+              </p>
+            </div>
+
+            {/* Right Summary Block: Both label and value together on the right side */}
+            <div className="w-full md:w-auto min-w-[340px] max-w-md ml-auto divide-y divide-slate-200 bg-slate-50/60 p-4 rounded-xl border border-slate-200 shadow-2xs">
+              {/* Row 1: Opening Balance */}
+              <div className="flex items-center justify-between gap-6 py-2">
+                <span className="text-xs sm:text-sm font-semibold text-slate-700">Opening Balance :</span>
+                <span className="font-mono text-xs sm:text-sm font-bold text-slate-800 text-right">
+                  {monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.openingBalance || 0)}
+                </span>
               </div>
 
-              {/* 2) Current Balance */}
-              <div className="bg-emerald-50/40 border border-emerald-200 rounded-xl p-3.5 flex flex-col justify-between hover:border-emerald-300 transition-all shadow-2xs">
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">
-                      2) Current Balance
-                    </span>
-                    <span className="p-1 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-2xs">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                  <div className="text-xl font-bold font-mono text-emerald-700 tracking-tight">
-                    {monthlyLoading ? (
-                      <span className="text-xs font-normal text-slate-400">Loading...</span>
-                    ) : (
-                      formatCurrency(monthlySummary?.currentMonthPayments || 0)
-                    )}
-                  </div>
-                  <p className="text-[10px] text-emerald-700/80 mt-0.5 font-medium">
-                    Payments received this month
-                  </p>
+              {/* Row 2: Current Total */}
+              <div className="flex items-center justify-between gap-6 py-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs sm:text-sm font-semibold text-slate-700">Current Total :</span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    ({monthlySummary?.monthName?.split(' ')[0] || 'Oct'} Received)
+                  </span>
                 </div>
-                <div className="mt-2.5 pt-2 border-t border-emerald-200/60 text-[10px] text-emerald-800 flex items-center justify-between font-medium">
-                  <span>Invoices raised:</span>
-                  <span className="font-mono font-bold text-slate-900">{formatCurrency(monthlySummary?.currentMonthInvoices || 0)}</span>
-                </div>
+                <span className="font-mono text-xs sm:text-sm font-bold text-emerald-700 text-right">
+                  {monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.currentMonthPayments ?? 0)}
+                </span>
               </div>
 
-              {/* 3) Closing Balance */}
-              <div className="bg-gradient-to-br from-blue-50/80 via-white to-blue-50/40 border-2 border-blue-600 rounded-xl p-3.5 flex flex-col justify-between hover:shadow-sm transition-all shadow-2xs relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-20 h-20 bg-blue-100/40 rounded-full blur-xl pointer-events-none" />
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-900">
-                      3) Closing Balance
-                    </span>
-                    <span className="p-1 rounded-md bg-blue-600 text-white shadow-xs">
-                      <Wallet className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                  <div className="text-xl font-bold font-mono text-blue-700 tracking-tight">
-                    {monthlyLoading ? (
-                      <span className="text-xs font-normal text-slate-400">Loading...</span>
-                    ) : (
-                      formatCurrency(monthlySummary?.closingBalance || 0)
-                    )}
-                  </div>
-                  <p className="text-[10px] text-blue-600 mt-0.5 font-medium">
-                    Month-end outstanding
-                  </p>
-                </div>
-                <div className="relative z-10 mt-2.5 pt-2 border-t border-blue-100 text-[10px] text-blue-700/90 font-medium">
-                  Opening + Invoices − Payments
-                </div>
+              {/* Row 3: Closing Balance (Highlighted & Bold) */}
+              <div className="flex items-center justify-between gap-6 py-2.5 bg-blue-50/50 px-3 rounded-lg border border-blue-200 mt-1">
+                <span className="text-xs sm:text-sm font-bold text-slate-900">Closing Balance :</span>
+                <span className="font-mono text-sm sm:text-base font-extrabold text-slate-900 text-right">
+                  {monthlyLoading ? 'Loading...' : formatCurrency(
+                    monthlySummary?.closingBalance !== undefined && monthlySummary?.closingBalance !== null
+                      ? monthlySummary.closingBalance
+                      : Math.max(0, (monthlySummary?.openingBalance || 0) + (monthlySummary?.currentMonthInvoices ?? stats.totalInvoiced ?? 0) - (monthlySummary?.currentMonthPayments || 0))
+                  )}
+                </span>
               </div>
             </div>
           </div>
@@ -977,15 +1394,21 @@ const RecordPaymentReceived = () => {
       {/* 5. Existing Record Payment Modal Integration */}
       <PaymentReceivedModal
         isOpen={isPaymentModalOpen}
+        initialVoucherType={selectedVoucherType}
+        customerId={selectedCompanyId}
+        companyId={selectedCompanyId}
         onClose={() => {
           setIsPaymentModalOpen(false);
           setSelectedInvoice(null);
+          setSelectedInvoicesForModal([]);
         }}
         invoice={selectedInvoice}
+        invoices={selectedInvoicesForModal}
         onSuccess={() => {
           setIsPaymentModalOpen(false);
           setSelectedInvoice(null);
-          successToast('Payment recorded successfully');
+          setSelectedInvoicesForModal([]);
+          setSelectedInvoiceIds(new Set());
           if (selectedCompanyId) {
             fetchCustomerInvoices(selectedCompanyId);
             fetchCustomerBalance(selectedCompanyId);

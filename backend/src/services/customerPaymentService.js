@@ -63,6 +63,11 @@ const recordPaymentReceived = async (payload) => {
   }
 
   try {
+    const validSources = ['SALES_ORDER', 'DIRECT_ORDER', 'SALES_INVOICE'];
+    const resolvedSource = validSources.includes(salesOrderSource) 
+      ? salesOrderSource 
+      : (invoiceId ? 'SALES_INVOICE' : 'SALES_ORDER');
+
     const [result] = await pool.execute(
       `INSERT INTO customer_payments (
         payment_receipt_no,
@@ -92,7 +97,7 @@ const recordPaymentReceived = async (payload) => {
         receiptNo,
         invoiceId || null,
         salesOrderId || null,
-        salesOrderSource || 'SALES_ORDER',
+        resolvedSource,
         customerId,
         parseFloat(paymentAmount),
         paymentDate,
@@ -453,7 +458,7 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
     openingBalance,
     currentMonthInvoices,
     currentMonthPayments,
-    currentBalance: currentMonthPayments,
+    currentBalance: closingBalance,
     closingBalance
   };
 };

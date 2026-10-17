@@ -800,7 +800,8 @@ export const DataTable = ({
   onSearchChange,
   customFilter,
   rowClassName,
-  hideSearch = false
+  hideSearch = false,
+  selectionColor = 'rose'
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(null);
@@ -974,7 +975,11 @@ export const DataTable = ({
                 <th className="p-4 border-b border-slate-200 w-10">
                   <input
                     type="checkbox"
-                    className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                    className={`rounded border-slate-300 cursor-pointer ${
+                      selectionColor === 'blue'
+                        ? 'text-blue-600 focus:ring-blue-500'
+                        : 'text-rose-600 focus:ring-rose-500'
+                    }`}
                     onChange={handleSelectAll}
                     checked={pageSelectableRows.length > 0 && pageSelectableRows.every(({ id }) => selectedRows.has(id))}
                     ref={el => {
@@ -1058,7 +1063,13 @@ export const DataTable = ({
                 return (
                   <React.Fragment key={rowId}>
                     <tr
-                      className={`group transition-all duration-150 ${onRowClick ? 'cursor-pointer hover:bg-slate-50/80' : 'hover:bg-slate-50/50'} ${isExpanded || isSelected ? 'bg-rose-50/30' : ''} ${rowClassName ? rowClassName(row, (currentPage - 1) * pageSize + rowIdx) : ''}`}
+                      className={`group transition-all duration-150 ${onRowClick ? 'cursor-pointer hover:bg-slate-50/80' : 'hover:bg-slate-50/50'} ${
+                        isExpanded
+                          ? 'bg-rose-50/30'
+                          : isSelected
+                            ? (selectionColor === 'blue' ? 'bg-blue-50/50' : 'bg-rose-50/30')
+                            : ''
+                      } ${rowClassName ? rowClassName(row, (currentPage - 1) * pageSize + rowIdx) : ''}`}
                       onClick={(e) => {
                         if (renderExpanded && !disableRowClickExpansion) toggleRow(rowId);
                         if (onRowClick) onRowClick(row, e);
@@ -1068,7 +1079,11 @@ export const DataTable = ({
                         <td className="p-2 w-10">
                           <input
                             type="checkbox"
-                            className="rounded border-slate-300 text-rose-600 focus:ring-rose-500 disabled:opacity-40 disabled:bg-slate-50"
+                            className={`rounded border-slate-300 disabled:opacity-40 disabled:bg-slate-50 cursor-pointer ${
+                              selectionColor === 'blue'
+                                ? 'text-blue-600 focus:ring-blue-500'
+                                : 'text-rose-600 focus:ring-rose-500'
+                            }`}
                             checked={isSelected}
                             disabled={isRowSelectable && !isRowSelectable(row)}
                             onChange={(e) => {

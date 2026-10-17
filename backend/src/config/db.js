@@ -3126,6 +3126,23 @@ const bootstrapDatabase = async () => {
   await ensureOutwardChallanTables();
   await ensureReturnsTable();
   await ensureStockIdentityIndex();
+  await ensureCustomerPaymentColumns();
+};
+
+const ensureCustomerPaymentColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [cols] = await connection.query("SHOW COLUMNS FROM customer_payments LIKE 'sales_order_source'");
+    if (cols.length > 0 && !cols[0].Type.includes('SALES_INVOICE')) {
+      await connection.query("ALTER TABLE customer_payments MODIFY COLUMN sales_order_source ENUM('SALES_ORDER', 'DIRECT_ORDER', 'SALES_INVOICE') NULL DEFAULT 'SALES_ORDER'");
+      console.log('Synchronized customer_payments.sales_order_source to include SALES_INVOICE');
+    }
+  } catch (error) {
+    console.error('Error synchronizing customer_payments columns:', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
 };
 
 bootstrapDatabase();
