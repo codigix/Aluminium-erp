@@ -569,6 +569,8 @@ const createSalesInvoice = async (invoiceData, userId) => {
 
 const updateSalesInvoice = async (invoiceId, invoiceData, userId) => {
   const {
+    invoiceNo,
+    invoice_no,
     hostCompanyId,
     host_company_id,
     customerPoNo,
@@ -593,6 +595,20 @@ const updateSalesInvoice = async (invoiceId, invoiceData, userId) => {
   const existingInvoice = existingRows[0];
   if (existingInvoice.status === 'Paid') {
     throw new Error('Paid invoices cannot be edited');
+  }
+
+  // Handle invoice number update & uniqueness check
+  const targetInvoiceNo = (invoiceNo || invoice_no || '').trim();
+  const finalInvoiceNo = targetInvoiceNo || existingInvoice.invoice_no;
+
+  if (targetInvoiceNo && targetInvoiceNo !== existingInvoice.invoice_no) {
+    const [dupRows] = await pool.query(
+      'SELECT id FROM sales_invoices WHERE invoice_no = ? AND id != ?',
+      [targetInvoiceNo, invoiceId]
+    );
+    if (dupRows.length > 0) {
+      throw new Error(`Invoice number "${targetInvoiceNo}" is already in use by another invoice.`);
+    }
   }
 
   if (!items || !Array.isArray(items) || items.length === 0) {
@@ -668,6 +684,7 @@ const updateSalesInvoice = async (invoiceId, invoiceData, userId) => {
     // 2. Update sales_invoices record
     await connection.execute(`
       UPDATE sales_invoices SET
+        invoice_no = ?,
         host_company_id = ?,
         customer_po_no = ?,
         project_name = ?,
@@ -689,6 +706,7 @@ const updateSalesInvoice = async (invoiceId, invoiceData, userId) => {
         updated_at = NOW()
       WHERE id = ?
     `, [
+      finalInvoiceNo,
       finalHostCompanyId,
       customerPoNo || null,
       projectName || null,
@@ -755,7 +773,7 @@ const updateSalesInvoice = async (invoiceId, invoiceData, userId) => {
 
     return {
       invoiceId,
-      invoiceNo: existingInvoice.invoice_no,
+      invoiceNo: finalInvoiceNo,
       totalAmount
     };
   } catch (error) {

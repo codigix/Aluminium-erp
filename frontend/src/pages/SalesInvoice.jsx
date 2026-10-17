@@ -595,10 +595,11 @@ export default function SalesInvoice() {
         throw new Error(data.message || `Failed to ${isEditing ? 'update' : 'save'} invoice`);
       }
 
+      const updatedInvNo = data.data?.invoiceNo || formData.invoiceNo;
       await Swal.fire({
         icon: 'success',
         title: isEditing ? 'Invoice Updated!' : 'Invoice Created!',
-        text: `Sales Invoice ${formData.invoiceNo} has been ${isEditing ? 'updated' : 'generated'} successfully.`,
+        text: `Sales Invoice ${updatedInvNo} has been ${isEditing ? 'updated' : 'generated'} successfully.`,
         timer: 1800,
         showConfirmButton: false
       });
@@ -655,19 +656,27 @@ export default function SalesInvoice() {
         else if (it.item_code) invItemsMap[it.item_code] = it;
       });
 
+      // 3. Map items: in Edit mode, ONLY load items that belong to THIS invoice (invoice_qty > 0)
       let mergedItems = [];
       if (orderData && Array.isArray(orderData.items) && orderData.items.length > 0) {
-        mergedItems = orderData.items.map(ordIt => {
-          const existingIt = invItemsMap[ordIt.orderItemId] || invItemsMap[ordIt.itemCode];
-          const currentQty = existingIt ? (parseFloat(existingIt.invoice_qty) || 0) : 0;
-          return {
-            ...ordIt,
-            invoiceQty: currentQty,
-            amount: currentQty * (parseFloat(ordIt.unitRate) || 0)
-          };
-        });
-      } else {
-        // Fallback to existing invoice items
+        mergedItems = orderData.items
+          .filter(ordIt => {
+            const existingIt = invItemsMap[ordIt.orderItemId] || invItemsMap[ordIt.itemCode];
+            return existingIt && (parseFloat(existingIt.invoice_qty) || 0) > 0;
+          })
+          .map(ordIt => {
+            const existingIt = invItemsMap[ordIt.orderItemId] || invItemsMap[ordIt.itemCode];
+            const currentQty = parseFloat(existingIt.invoice_qty) || 0;
+            return {
+              ...ordIt,
+              invoiceQty: currentQty,
+              amount: currentQty * (parseFloat(ordIt.unitRate) || 0)
+            };
+          });
+      }
+      
+      // Fallback directly to existing invoice items if not matched in orderData
+      if (mergedItems.length === 0 && Array.isArray(invData.items)) {
         mergedItems = (invData.items || []).map(it => ({
           orderItemId: it.order_item_id,
           itemCode: it.item_code || '',
@@ -678,12 +687,14 @@ export default function SalesInvoice() {
           orderedQty: parseFloat(it.ordered_qty) || 0,
           dispatchedQty: parseFloat(it.dispatched_qty) || 0,
           previouslyInvoicedQty: parseFloat(it.previously_invoiced_qty) || 0,
-          invoiceableQty: (parseFloat(it.ordered_qty) || 0) - (parseFloat(it.previously_invoiced_qty) || 0),
+          invoiceableQty: parseFloat(it.invoice_qty) || 0,
           invoiceQty: parseFloat(it.invoice_qty) || 0,
           unitRate: parseFloat(it.unit_rate) || 0,
           amount: (parseFloat(it.invoice_qty) || 0) * (parseFloat(it.unit_rate) || 0)
         }));
       }
+
+      setActiveItemTab('invoiceable');
 
       const isInterstate = parseFloat(invData.igst_rate) > 0;
 
@@ -1621,68 +1632,83 @@ export default function SalesInvoice() {
           {formData.orderId && (
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
               {/* Tab Navigation */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveItemTab('invoiceable')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer ${
-                      activeItemTab === 'invoiceable'
-                        ? 'bg-amber-500 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${activeItemTab === 'invoiceable' ? 'bg-white' : 'bg-slate-400'}`}></span>
-                    <span>Items to Invoice</span>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                      activeItemTab === 'invoiceable' ? 'bg-amber-600 text-white' : 'bg-slate-200 text-slate-700'
-                    }`}>
-                      {formData.items.length}
-                    </span>
-                  </button>
+              {!editingInvoiceId ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveItemTab('invoiceable')}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer ${
+                        activeItemTab === 'invoiceable'
+                          ? 'bg-amber-500 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${activeItemTab === 'invoiceable' ? 'bg-white' : 'bg-slate-400'}`}></span>
+                      <span>Items to Invoice</span>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                        activeItemTab === 'invoiceable' ? 'bg-amber-600 text-white' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {formData.items.length}
+                      </span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveItemTab('dispatched_history')}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer ${
-                      activeItemTab === 'dispatched_history'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${activeItemTab === 'dispatched_history' ? 'bg-white' : 'bg-slate-400'}`}></span>
-                    <span>Dispatched Items & Invoice History</span>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                      activeItemTab === 'dispatched_history' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
-                    }`}>
-                      {(orderAllItems.length > 0 ? orderAllItems : formData.items).length}
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveItemTab('dispatched_history')}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer ${
+                        activeItemTab === 'dispatched_history'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${activeItemTab === 'dispatched_history' ? 'bg-white' : 'bg-slate-400'}`}></span>
+                      <span>Dispatched Items & Invoice History</span>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                        activeItemTab === 'dispatched_history' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {(orderAllItems.length > 0 ? orderAllItems : formData.items).length}
+                      </span>
+                    </button>
+                  </div>
+
+                  {activeItemTab === 'invoiceable' ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] text-slate-400">Showing only dispatchable/invoiceable balance</span>
+                      {removedItems.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleRestoreAllItems}
+                          className="text-[11px] text-emerald-600 hover:text-emerald-700 font-semibold underline inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Restore ({removedItems.length}) removed item{removedItems.length > 1 ? 's' : ''}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
+                      <span>Summary of dispatch & prior billing per item</span>
+                    </div>
+                  )}
                 </div>
-
-                {activeItemTab === 'invoiceable' ? (
-                  <div className="flex items-center gap-3">
-                    <span className="text-[11px] text-slate-400">Showing only dispatchable/invoiceable balance</span>
-                    {removedItems.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleRestoreAllItems}
-                        className="text-[11px] text-emerald-600 hover:text-emerald-700 font-semibold underline inline-flex items-center gap-1 cursor-pointer"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        Restore ({removedItems.length}) removed item{removedItems.length > 1 ? 's' : ''}
-                      </button>
-                    )}
+              ) : (
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 text-white shadow-xs flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
+                      <span>Items to Invoice</span>
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-600 text-white">
+                        {formData.items.length}
+                      </span>
+                    </span>
                   </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                    <span>Summary of dispatch & prior billing per item</span>
-                  </div>
-                )}
-              </div>
+                  <span className="text-[11px] text-slate-400">Items billed on this invoice (Invoice quantity is fixed in edit mode)</span>
+                </div>
+              )}
 
               {/* Tab 1: Items to Invoice (Untouched logic) */}
-              {activeItemTab === 'invoiceable' && (
+              {(activeItemTab === 'invoiceable' || editingInvoiceId) && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
@@ -1730,14 +1756,22 @@ export default function SalesInvoice() {
                                 <input
                                   type="number"
                                   min="0"
-                                  max={item.invoiceableQty}
+                                  max={editingInvoiceId ? item.invoiceQty : item.invoiceableQty}
                                   step="1"
                                   value={item.invoiceQty}
                                   onChange={e => handleQuantityChange(item.orderItemId, e.target.value)}
-                                  disabled={item.invoiceableQty <= 0}
-                                  className="w-16 px-1.5 py-0.5 text-center font-bold text-slate-800 border border-slate-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono"
+                                  disabled={Boolean(editingInvoiceId) || item.invoiceableQty <= 0}
+                                  readOnly={Boolean(editingInvoiceId)}
+                                  className={`w-16 px-1.5 py-0.5 text-center font-bold text-slate-800 border rounded text-xs font-mono ${
+                                    editingInvoiceId
+                                      ? 'bg-slate-100 border-slate-200 text-slate-600 cursor-not-allowed select-none'
+                                      : 'bg-white border-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500'
+                                  }`}
+                                  title={editingInvoiceId ? "Invoice quantity cannot be changed in edit mode" : undefined}
                                 />
-                                <span className="text-[10px] text-slate-400 font-mono">/ {item.invoiceableQty}</span>
+                                {!editingInvoiceId && (
+                                  <span className="text-[10px] text-slate-400 font-mono">/ {item.invoiceableQty}</span>
+                                )}
                               </div>
                             </td>
                             <td className="py-2 px-3 text-right font-medium text-slate-800 font-mono text-xs">
@@ -1747,15 +1781,21 @@ export default function SalesInvoice() {
                               {formatINR(item.amount)}
                             </td>
                             <td className="py-2 px-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItem(item.orderItemId)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-md transition shadow-2xs cursor-pointer"
-                                title="Remove item from this invoice"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                <span>Remove</span>
-                              </button>
+                              {!editingInvoiceId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveItem(item.orderItemId)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-md transition shadow-2xs cursor-pointer"
+                                  title="Remove item from this invoice"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Remove</span>
+                                </button>
+                              ) : (
+                                <span className="text-[10.5px] font-semibold text-slate-400 px-2 py-0.5 rounded bg-slate-50 border border-slate-200">
+                                  Billed
+                                </span>
+                              )}
                             </td>
                           </tr>
                         ))
