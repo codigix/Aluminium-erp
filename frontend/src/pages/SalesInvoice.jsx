@@ -3,7 +3,7 @@ import {
   FileText, Plus, Search, Calendar, CheckCircle2, Eye, Printer, Trash2,
   ArrowLeft, ArrowRight, Building, Hash, Layers, ShieldCheck, AlertCircle, ShoppingBag,
   Download, Clock, X, ChevronRight, Check, RefreshCw, AlertTriangle,
-  Receipt, DollarSign, User, MapPin, Package, Send, Pencil
+  Receipt, DollarSign, User, MapPin, Package, Send, Pencil, Filter, BarChart3, TrendingUp
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { SearchableSelect, Card } from '../components/ui.jsx';
@@ -70,6 +70,11 @@ export default function SalesInvoice() {
   const [removedItems, setRemovedItems] = useState([]);
   const [sendingId, setSendingId] = useState(null);
   const [poFilterDate, setPoFilterDate] = useState('');
+  const [activeItemTab, setActiveItemTab] = useState('invoiceable'); // 'invoiceable' | 'dispatched_history'
+  const [orderAllItems, setOrderAllItems] = useState([]);
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
+  const [historyInvoiceFilter, setHistoryInvoiceFilter] = useState('ALL'); // 'ALL' | 'INVOICED' | 'PENDING' | specific invoiceNo
+  const [invoiceHistoryModal, setInvoiceHistoryModal] = useState(null);
 
   // Host Company Billing Entity State
   const [hostCompanies, setHostCompanies] = useState([]);
@@ -237,6 +242,8 @@ export default function SalesInvoice() {
         items: []
       });
       setPoFilterDate('');
+      setOrderAllItems([]);
+      setActiveItemTab('invoiceable');
       setViewMode('create');
     } catch (err) {
       console.error('Error loading next invoice no:', err);
@@ -269,6 +276,7 @@ export default function SalesInvoice() {
         },
         items: []
       }));
+      setOrderAllItems([]);
       return;
     }
 
@@ -294,6 +302,7 @@ export default function SalesInvoice() {
       const validItems = (data.items || []).filter(it => (parseFloat(it.invoiceableQty) || 0) > 0);
       const zeroItems = (data.items || []).filter(it => (parseFloat(it.invoiceableQty) || 0) <= 0);
       setRemovedItems(zeroItems);
+      setOrderAllItems(data.items || []);
 
       // Auto-select host company from Sales Order if present
       if (data.hostCompanyId) {
@@ -415,6 +424,128 @@ export default function SalesInvoice() {
     const total = subtotal + cgst + sgst + igst;
     return { subtotal, cgst, sgst, igst, total, totalQty };
   }, [formData.items, formData.cgstRate, formData.sgstRate, formData.igstRate]);
+
+  // Unique invoices across items for this order
+  const uniqueInvoicesForOrder = useMemo(() => {
+    const items = orderAllItems.length > 0 ? orderAllItems : formData.items;
+    const invMap = new Map();
+    items.forEach(it => {
+      (it.invoiceHistory || []).forEach(h => {
+        if (h.invoiceNo && !invMap.has(h.invoiceNo)) {
+          invMap.set(h.invoiceNo, h);
+        }
+      });
+    });
+    return Array.from(invMap.values());
+  }, [orderAllItems, formData.items]);
+
+  // Comprehensive analysis metrics for Dispatched Items & Invoice History
+  const historyAnalysis = useMemo(() => {
+    const items = orderAllItems.length > 0 ? orderAllItems : formData.items;
+    let totalOrdered = 0;
+    let totalDispatched = 0;
+    let totalInvoicedQty = 0;
+    let totalInvoicedAmount = 0;
+    let totalRemainingQty = 0;
+    let totalRemainingAmount = 0;
+    let fullyInvoicedCount = 0;
+    let partialInvoicedCount = 0;
+    let pendingCount = 0;
+
+    items.forEach(it => {
+      const ord = parseFloat(it.orderedQty) || 0;
+      const disp = parseFloat(it.dispatchedQty ?? it.orderedQty) || 0;
+      const inv = parseFloat(it.previouslyInvoicedQty) || 0;
+      const rem = parseFloat(it.invoiceableQty) || 0;
+      const rate = parseFloat(it.unitRate) || 0;
+
+      totalOrdered += ord;
+      totalDispatched += disp;
+      totalInvoicedQty += inv;
+      totalInvoicedAmount += (inv * rate);
+      totalRemainingQty += rem;
+      totalRemainingAmount += (rem * rate);
+
+      if (rem <= 0 && inv > 0) {
+        fullyInvoicedCount++;
+      } else if (inv > 0 && rem > 0) {
+        partialInvoicedCount++;
+      } else {
+        pendingCount++;
+      }
+    });
+
+    const invoiceProgressPct = totalDispatched > 0 
+      ? Math.min(100, Math.round((totalInvoicedQty / totalDispatched) * 100)) 
+      : 0;
+
+    return {
+      totalItems: items.length,
+      totalOrdered,
+      totalDispatched,
+      totalInvoicedQty,
+      totalInvoicedAmount,
+      totalRemainingQty,
+      totalRemainingAmount,
+      fullyInvoicedCount,
+      partialInvoicedCount,
+      pendingCount,
+      invoiceProgressPct,
+      uniqueInvoicesCount: uniqueInvoicesForOrder.length
+    };
+  }, [orderAllItems, formData.items, uniqueInvoicesForOrder]);
+
+  // Search & Filtered items for Dispatched Items & Invoice History tab
+  const filteredHistoryItems = useMemo(() => {
+    const items = orderAllItems.length > 0 ? orderAllItems : formData.items;
+    return items.filter(item => {
+      const prevInvoiced = parseFloat(item.previouslyInvoicedQty) || 0;
+      const invBalance = parseFloat(item.invoiceableQty) || 0;
+
+      // 1. Invoice filter
+      if (historyInvoiceFilter === 'INVOICED') {
+        if (prevInvoiced <= 0) return false;
+      } else if (historyInvoiceFilter === 'PENDING') {
+        if (invBalance <= 0) return false;
+      } else if (historyInvoiceFilter !== 'ALL') {
+        const hasInv = (item.invoiceHistory || []).some(h => h.invoiceNo === historyInvoiceFilter) ||
+          (item.invoiceNumbers && item.invoiceNumbers.includes(historyInvoiceFilter));
+        if (!hasInv) return false;
+      }
+
+      // 2. Search filter (item code, description, invoice no)
+      if (historySearchTerm.trim()) {
+        const q = historySearchTerm.toLowerCase().trim();
+        const codeMatch = String(item.itemCode || item.drawingNo || '').toLowerCase().includes(q);
+        const nameMatch = String(item.description || item.itemName || '').toLowerCase().includes(q);
+        const invMatch = (item.invoiceHistory || []).some(h => String(h.invoiceNo || '').toLowerCase().includes(q)) ||
+          String(item.invoiceNumbers || '').toLowerCase().includes(q);
+        if (!codeMatch && !nameMatch && !invMatch) return false;
+      }
+
+      return true;
+    });
+  }, [orderAllItems, formData.items, historyInvoiceFilter, historySearchTerm]);
+
+  // Active filtered invoice number (from dropdown/chip or invoice search term)
+  const activeFilteredInvoiceNo = useMemo(() => {
+    if (historyInvoiceFilter && !['ALL', 'INVOICED', 'PENDING'].includes(historyInvoiceFilter)) {
+      return historyInvoiceFilter.trim();
+    }
+    const q = (historySearchTerm || '').trim().toLowerCase();
+    if (q) {
+      const found = uniqueInvoicesForOrder.find(inv => 
+        inv.invoiceNo && (
+          inv.invoiceNo.toLowerCase() === q ||
+          inv.invoiceNo.toLowerCase().includes(q)
+        )
+      );
+      if (found) {
+        return found.invoiceNo;
+      }
+    }
+    return null;
+  }, [historyInvoiceFilter, historySearchTerm, uniqueInvoicesForOrder]);
 
   // Save Invoice (Create or Update)
   const handleSaveInvoice = async () => {
@@ -1489,106 +1620,446 @@ export default function SalesInvoice() {
           {/* Section 3: Items to Invoice (Only when Order is selected) */}
           {formData.orderId && (
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                  <span>Items to Invoice</span>
-                </h2>
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-slate-400">Showing only dispatchable/invoiceable balance</span>
-                  {removedItems.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleRestoreAllItems}
-                      className="text-[11px] text-emerald-600 hover:text-emerald-700 font-semibold underline inline-flex items-center gap-1"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      Restore ({removedItems.length}) removed item{removedItems.length > 1 ? 's' : ''}
-                    </button>
-                  )}
+              {/* Tab Navigation */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveItemTab('invoiceable')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer ${
+                      activeItemTab === 'invoiceable'
+                        ? 'bg-amber-500 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItemTab === 'invoiceable' ? 'bg-white' : 'bg-slate-400'}`}></span>
+                    <span>Items to Invoice</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                      activeItemTab === 'invoiceable' ? 'bg-amber-600 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      {formData.items.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveItemTab('dispatched_history')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer ${
+                      activeItemTab === 'dispatched_history'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeItemTab === 'dispatched_history' ? 'bg-white' : 'bg-slate-400'}`}></span>
+                    <span>Dispatched Items & Invoice History</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                      activeItemTab === 'dispatched_history' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      {(orderAllItems.length > 0 ? orderAllItems : formData.items).length}
+                    </span>
+                  </button>
                 </div>
+
+                {activeItemTab === 'invoiceable' ? (
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-slate-400">Showing only dispatchable/invoiceable balance</span>
+                    {removedItems.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleRestoreAllItems}
+                        className="text-[11px] text-emerald-600 hover:text-emerald-700 font-semibold underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Restore ({removedItems.length}) removed item{removedItems.length > 1 ? 's' : ''}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
+                    <span>Summary of dispatch & prior billing per item</span>
+                  </div>
+                )}
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-y border-slate-200 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                      <th className="py-2 px-3">Item Code & Drawing</th>
-                      <th className="py-2 px-3">Item Name / Description</th>
-                      <th className="py-2 px-3 text-center">HSN</th>
-                      <th className="py-2 px-3 text-center">Dispatch</th>
-                      <th className="py-2 px-3 text-center">Invoiced</th>
-                      <th className="py-2 px-3 text-center">Invoice Qty</th>
-                      <th className="py-2 px-3 text-right">Rate (₹)</th>
-                      <th className="py-2 px-3 text-right">Amount (₹)</th>
-                      <th className="py-2 px-3 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs">
-                    {formData.items.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="py-6 text-center text-slate-400">
-                          No items remaining to invoice.
-                        </td>
+              {/* Tab 1: Items to Invoice (Untouched logic) */}
+              {activeItemTab === 'invoiceable' && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-y border-slate-200 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                        <th className="py-2 px-3">Item Code & Drawing</th>
+                        <th className="py-2 px-3">Item Name / Description</th>
+                        <th className="py-2 px-3 text-center">HSN</th>
+                        <th className="py-2 px-3 text-center">Dispatch</th>
+                        <th className="py-2 px-3 text-center">Invoiced</th>
+                        <th className="py-2 px-3 text-center">Invoice Qty</th>
+                        <th className="py-2 px-3 text-right">Rate (₹)</th>
+                        <th className="py-2 px-3 text-right">Amount (₹)</th>
+                        <th className="py-2 px-3 text-center">Action</th>
                       </tr>
-                    ) : (
-                      formData.items.map((item) => (
-                        <tr key={item.orderItemId} className="hover:bg-slate-50/60">
-                          <td className="py-2 px-3 font-mono font-medium text-slate-800 text-[11px]">
-                            <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200">
-                              {item.itemCode || item.drawingNo || '—'}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 font-medium text-slate-800 text-xs">
-                            {item.description || item.itemName || '—'}
-                          </td>
-                          <td className="py-2 px-3 text-center text-[11px] font-mono text-slate-500">
-                            {item.hsnCode || '84779000'}
-                          </td>
-                          <td className="py-2 px-3 text-center font-semibold text-slate-700 font-mono">
-                            {item.dispatchedQty}
-                          </td>
-                          <td className="py-2 px-3 text-center text-slate-500 font-mono">
-                            {item.previouslyInvoicedQty}
-                          </td>
-                          <td className="py-2 px-3 text-center">
-                            <div className="inline-flex items-center gap-1">
-                              <input
-                                type="number"
-                                min="0"
-                                max={item.invoiceableQty}
-                                step="1"
-                                value={item.invoiceQty}
-                                onChange={e => handleQuantityChange(item.orderItemId, e.target.value)}
-                                disabled={item.invoiceableQty <= 0}
-                                className="w-16 px-1.5 py-0.5 text-center font-bold text-slate-800 border border-slate-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono"
-                              />
-                              <span className="text-[10px] text-slate-400 font-mono">/ {item.invoiceableQty}</span>
-                            </div>
-                          </td>
-                          <td className="py-2 px-3 text-right font-medium text-slate-800 font-mono text-xs">
-                            {formatINR(item.unitRate)}
-                          </td>
-                          <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono text-xs">
-                            {formatINR(item.amount)}
-                          </td>
-                          <td className="py-2 px-3 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(item.orderItemId)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-md transition shadow-2xs cursor-pointer"
-                              title="Remove item from this invoice"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              <span>Remove</span>
-                            </button>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {formData.items.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="py-6 text-center text-slate-400">
+                            No items remaining to invoice.
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      ) : (
+                        formData.items.map((item) => (
+                          <tr key={item.orderItemId} className="hover:bg-slate-50/60">
+                            <td className="py-2 px-3 font-mono font-medium text-slate-800 text-[11px]">
+                              <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200">
+                                {item.itemCode || item.drawingNo || '—'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 font-medium text-slate-800 text-xs">
+                              {item.description || item.itemName || '—'}
+                            </td>
+                            <td className="py-2 px-3 text-center text-[11px] font-mono text-slate-500">
+                              {item.hsnCode || '84779000'}
+                            </td>
+                            <td className="py-2 px-3 text-center font-semibold text-slate-700 font-mono">
+                              {item.dispatchedQty}
+                            </td>
+                            <td className="py-2 px-3 text-center text-slate-500 font-mono">
+                              {item.previouslyInvoicedQty}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <div className="inline-flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={item.invoiceableQty}
+                                  step="1"
+                                  value={item.invoiceQty}
+                                  onChange={e => handleQuantityChange(item.orderItemId, e.target.value)}
+                                  disabled={item.invoiceableQty <= 0}
+                                  className="w-16 px-1.5 py-0.5 text-center font-bold text-slate-800 border border-slate-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono"
+                                />
+                                <span className="text-[10px] text-slate-400 font-mono">/ {item.invoiceableQty}</span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-right font-medium text-slate-800 font-mono text-xs">
+                              {formatINR(item.unitRate)}
+                            </td>
+                            <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono text-xs">
+                              {formatINR(item.amount)}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(item.orderItemId)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-md transition shadow-2xs cursor-pointer"
+                                title="Remove item from this invoice"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Remove</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Tab 2: Dispatched Items & Invoice History */}
+              {activeItemTab === 'dispatched_history' && (
+                <div className="space-y-3">
+                  {/* Search & Invoice Filters Toolbar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-slate-50/70 p-2.5 rounded-lg border border-slate-200">
+                    <div className="flex flex-wrap items-center gap-2 flex-1">
+                      {/* Searchable input */}
+                      <div className="relative min-w-[200px] flex-1 max-w-xs">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={historySearchTerm}
+                          onChange={e => setHistorySearchTerm(e.target.value)}
+                          placeholder="Search Invoice No, Item, Drawing..."
+                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        {historySearchTerm && (
+                          <button
+                            type="button"
+                            onClick={() => setHistorySearchTerm('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Filter by Invoice Dropdown */}
+                      <div className="flex items-center gap-1.5">
+                        <Filter className="w-3.5 h-3.5 text-slate-400" />
+                        <select
+                          value={historyInvoiceFilter}
+                          onChange={e => setHistoryInvoiceFilter(e.target.value)}
+                          className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                        >
+                          <option value="ALL">All Invoices & Items ({historyAnalysis.totalItems})</option>
+                          <option value="INVOICED">Only Invoiced Items ({historyAnalysis.fullyInvoicedCount + historyAnalysis.partialInvoicedCount})</option>
+                          <option value="PENDING">Only Pending Items ({historyAnalysis.pendingCount + historyAnalysis.partialInvoicedCount})</option>
+                          {uniqueInvoicesForOrder.length > 0 && (
+                            <optgroup label="Filter by Invoice No.">
+                              {uniqueInvoicesForOrder.map((inv, idx) => (
+                                <option key={idx} value={inv.invoiceNo}>
+                                  {inv.invoiceNo} {inv.invoiceDate ? `(${formatDate(inv.invoiceDate)})` : ''}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </select>
+                      </div>
+
+                      {/* Quick Invoice Filter Chips */}
+                      {uniqueInvoicesForOrder.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                          <span className="text-slate-400 text-[10px] uppercase font-bold mr-0.5">Filter:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHistoryInvoiceFilter('ALL');
+                              setHistorySearchTerm('');
+                            }}
+                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition cursor-pointer ${
+                              !activeFilteredInvoiceNo && historyInvoiceFilter === 'ALL'
+                                ? 'bg-slate-800 text-white shadow-2xs'
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                            }`}
+                          >
+                            All ({historyAnalysis.totalItems})
+                          </button>
+                          {uniqueInvoicesForOrder.map((inv, idx) => {
+                            const isChipActive = activeFilteredInvoiceNo && activeFilteredInvoiceNo.toLowerCase() === inv.invoiceNo.toLowerCase();
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  if (isChipActive) {
+                                    setHistoryInvoiceFilter('ALL');
+                                    setHistorySearchTerm('');
+                                  } else {
+                                    setHistoryInvoiceFilter(inv.invoiceNo);
+                                    setHistorySearchTerm('');
+                                  }
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                                  isChipActive
+                                    ? 'bg-blue-600 text-white shadow-2xs'
+                                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                                }`}
+                              >
+                                <FileText className="w-2.5 h-2.5" />
+                                <span>{inv.invoiceNo}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-[11px] text-slate-400 font-medium shrink-0">
+                      Showing <strong className="text-slate-700 font-mono">{filteredHistoryItems.length}</strong> of {historyAnalysis.totalItems} items
+                    </div>
+                  </div>
+
+                  {/* Table fitted 100% without horizontal slider */}
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-y border-slate-200 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                        <th className="py-2 px-2.5">Item Code & Drawing</th>
+                        <th className="py-2 px-2.5">Item Name / Description</th>
+                        <th className="py-2 px-2 text-center">HSN</th>
+                        <th className="py-2 px-2 text-center">Dispatch</th>
+                        <th className="py-2 px-2 text-center">Invoiced</th>
+                        <th className="py-2 px-2 text-center">Remaining</th>
+                        <th className="py-2 px-2 text-center">Invoice No.</th>
+                        <th className="py-2 px-2 text-right">Rate (₹)</th>
+                        <th className="py-2 px-2 text-right">Invoiced Amt (₹)</th>
+                        <th className="py-2 px-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {filteredHistoryItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={10} className="py-8 text-center text-slate-400">
+                            No items match the current search or invoice filter.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredHistoryItems.map((item) => {
+                          const prevInvoiced = parseFloat(item.previouslyInvoicedQty) || 0;
+                          const invBalance = parseFloat(item.invoiceableQty) || 0;
+                          const isFullyInvoiced = invBalance <= 0 && prevInvoiced > 0;
+                          const isPartiallyInvoiced = prevInvoiced > 0 && invBalance > 0;
+                          const isNotInvoiced = prevInvoiced === 0;
+
+                          const invoicedAmt = prevInvoiced * (parseFloat(item.unitRate) || 0);
+
+                          return (
+                            <tr key={item.orderItemId || item.id} className="hover:bg-slate-50/70 transition">
+                              <td className="py-2 px-2.5 font-mono font-medium text-slate-800 text-[11px]">
+                                <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200">
+                                  {item.itemCode || item.drawingNo || '—'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-2.5 font-medium text-slate-800 text-xs">
+                                {item.description || item.itemName || '—'}
+                              </td>
+                              <td className="py-2 px-2 text-center text-[11px] font-mono text-slate-500">
+                                {item.hsnCode || '84779000'}
+                              </td>
+                              <td className="py-2 px-2 text-center font-bold text-slate-800 font-mono">
+                                {item.dispatchedQty ?? item.orderedQty ?? 0}
+                              </td>
+                              <td className="py-2 px-2 text-center font-bold text-emerald-700 font-mono">
+                                {item.previouslyInvoicedQty ?? 0}
+                              </td>
+                              <td className="py-2 px-2 text-center font-bold text-amber-700 font-mono">
+                                {item.invoiceableQty ?? 0}
+                              </td>
+                              <td className="py-2 px-2 text-center whitespace-nowrap">
+                                {(() => {
+                                  // 1. If item has structured invoiceHistory objects
+                                  if (item.invoiceHistory && item.invoiceHistory.length > 0) {
+                                    // When a particular invoice is filtered, find THAT specific invoice
+                                    const matchingHist = activeFilteredInvoiceNo
+                                      ? item.invoiceHistory.find(h => h.invoiceNo && h.invoiceNo.toLowerCase() === activeFilteredInvoiceNo.toLowerCase())
+                                      : null;
+                                    const displayHist = matchingHist || item.invoiceHistory[0];
+                                    // When filtering by a particular invoice, show NO "+ more" button!
+                                    const showMoreBtn = !activeFilteredInvoiceNo && item.invoiceHistory.length > 1;
+
+                                    return (
+                                      <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
+                                        <button
+                                          type="button"
+                                          onClick={() => setInvoiceHistoryModal({
+                                            itemCode: item.itemCode,
+                                            drawingNo: item.drawingNo,
+                                            description: item.description || item.itemName,
+                                            previouslyInvoicedQty: item.previouslyInvoicedQty,
+                                            unitRate: item.unitRate,
+                                            invoices: item.invoiceHistory
+                                          })}
+                                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-mono font-bold whitespace-nowrap transition cursor-pointer ${
+                                            matchingHist
+                                              ? 'bg-blue-100 hover:bg-blue-200 text-blue-800 border border-blue-300 ring-1 ring-blue-400/40 shadow-xs'
+                                              : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs'
+                                          }`}
+                                          title={`Invoice: ${displayHist.invoiceNo} | Qty: ${displayHist.invoiceQty} | Click to view details`}
+                                        >
+                                          <FileText className="w-2.5 h-2.5 text-blue-500 shrink-0" />
+                                          <span>{displayHist.invoiceNo}</span>
+                                          <span className="text-slate-400 font-normal">({displayHist.invoiceQty})</span>
+                                        </button>
+
+                                        {/* +more button ONLY shown when NOT filtering by a specific invoice */}
+                                        {showMoreBtn && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setInvoiceHistoryModal({
+                                              itemCode: item.itemCode,
+                                              drawingNo: item.drawingNo,
+                                              description: item.description || item.itemName,
+                                              previouslyInvoicedQty: item.previouslyInvoicedQty,
+                                              unitRate: item.unitRate,
+                                              invoices: item.invoiceHistory
+                                            })}
+                                            className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-600 hover:bg-blue-700 text-white border border-blue-600 transition shadow-2xs cursor-pointer inline-flex items-center whitespace-nowrap active:scale-95"
+                                            title={`Item invoiced across ${item.invoiceHistory.length} invoices. Click to view all.`}
+                                          >
+                                            +{item.invoiceHistory.length - 1} more
+                                          </button>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+
+                                  // 2. Fallback when only comma-separated invoiceNumbers string is present
+                                  if (item.invoiceNumbers && item.invoiceNumbers !== '—') {
+                                    const rawInvoices = item.invoiceNumbers.split(',').map(s => s.trim()).filter(Boolean);
+                                    const matchingRaw = activeFilteredInvoiceNo
+                                      ? rawInvoices.find(inv => inv.toLowerCase() === activeFilteredInvoiceNo.toLowerCase())
+                                      : null;
+                                    const displayRaw = matchingRaw || rawInvoices[0];
+                                    const showRawMoreBtn = !activeFilteredInvoiceNo && rawInvoices.length > 1;
+
+                                    return (
+                                      <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
+                                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-mono font-bold whitespace-nowrap ${
+                                          matchingRaw
+                                            ? 'bg-blue-100 text-blue-800 border border-blue-300 ring-1 ring-blue-400/40'
+                                            : 'bg-blue-50 text-blue-700 border border-blue-200'
+                                        }`}>
+                                          <FileText className="w-2.5 h-2.5 text-blue-500 shrink-0" />
+                                          <span>{displayRaw}</span>
+                                        </span>
+                                        {showRawMoreBtn && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setInvoiceHistoryModal({
+                                              itemCode: item.itemCode,
+                                              drawingNo: item.drawingNo,
+                                              description: item.description || item.itemName,
+                                              previouslyInvoicedQty: item.previouslyInvoicedQty,
+                                              unitRate: item.unitRate,
+                                              invoices: rawInvoices.map(invNo => ({
+                                                invoiceNo: invNo,
+                                                invoiceQty: '—',
+                                                invoiceDate: null,
+                                                amount: 0
+                                              }))
+                                            })}
+                                            className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-600 hover:bg-blue-700 text-white border border-blue-600 transition shadow-2xs cursor-pointer inline-flex items-center whitespace-nowrap"
+                                            title="Click to view all invoices"
+                                          >
+                                            +{rawInvoices.length - 1} more
+                                          </button>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+
+                                  return <span className="text-[11px] text-slate-400 italic">Not Invoiced</span>;
+                                })()}
+                              </td>
+                              <td className="py-2 px-2 text-right font-medium text-slate-800 font-mono text-xs">
+                                {formatINR(item.unitRate)}
+                              </td>
+                              <td className="py-2 px-2 text-right font-bold text-slate-900 font-mono text-xs">
+                                {formatINR(invoicedAmt)}
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                {isFullyInvoiced && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">
+                                    Fully Invoiced
+                                  </span>
+                                )}
+                                {isPartiallyInvoiced && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">
+                                    Partially Invoiced
+                                  </span>
+                                )}
+                                {isNotInvoiced && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
+                                    Pending
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {/* Taxation & Financial Summary Grid */}
               <div className="pt-3 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2009,6 +2480,134 @@ export default function SalesInvoice() {
                     <span>Download PDF</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item Multiple Invoices Modal */}
+      {invoiceHistoryModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+          onClick={() => setInvoiceHistoryModal(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg p-5 space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-100">
+                    <FileText className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800">
+                      Dispatched Invoice History
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Invoices generated for this dispatched item
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    {invoiceHistoryModal.itemCode || invoiceHistoryModal.drawingNo || '—'}
+                  </span>
+                  <span className="text-xs text-slate-600 truncate max-w-xs font-medium">
+                    {invoiceHistoryModal.description || invoiceHistoryModal.itemName}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInvoiceHistoryModal(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Invoices List */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-1">
+                <span>Invoices ({invoiceHistoryModal.invoices.length})</span>
+                <span>Total Invoiced: <strong className="text-slate-800 font-mono">{invoiceHistoryModal.previouslyInvoicedQty} Nos</strong></span>
+              </div>
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden text-xs max-h-72 overflow-y-auto">
+                {invoiceHistoryModal.invoices.map((inv, idx) => (
+                  <div key={idx} className="p-3 flex items-center justify-between bg-white hover:bg-slate-50 transition gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded font-mono font-bold text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                          {inv.invoiceNo}
+                        </span>
+                        {inv.status && (
+                          <span className="px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-slate-100 text-slate-600 border border-slate-200 uppercase tracking-wide">
+                            {inv.status}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-400 font-mono">
+                        Date: {formatDate(inv.invoiceDate)}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <div className="font-extrabold text-slate-800 font-mono text-xs">
+                          {inv.invoiceQty} Nos
+                        </div>
+                        <div className="text-[11px] text-emerald-700 font-mono font-semibold">
+                          {formatINR(inv.amount || (inv.invoiceQty * (invoiceHistoryModal.unitRate || 0)))}
+                        </div>
+                      </div>
+                      
+                      {/* Action buttons: View Preview & Download PDF */}
+                      {inv.invoiceId && (
+                        <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleViewInvoice({ id: inv.invoiceId, invoice_no: inv.invoiceNo });
+                            }}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                            title="View Invoice Preview"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleDownloadInvoice(inv.invoiceId, inv.invoiceNo);
+                            }}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition cursor-pointer"
+                            title="Download Tax Invoice PDF"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-between items-center pt-2 border-t border-slate-100 text-xs">
+              <span className="text-[11px] text-slate-400">
+                Click preview or download icons to access invoice copy
+              </span>
+              <button
+                type="button"
+                onClick={() => setInvoiceHistoryModal(null)}
+                className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer transition"
+              >
+                Close
               </button>
             </div>
           </div>

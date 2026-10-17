@@ -184,6 +184,7 @@ const getOrderDetailsForInvoice = async (orderId, excludeInvoiceId = null) => {
   // Check already invoiced qty for each item from sales_invoice_items
   const itemIds = items.map(it => it.id);
   let invoicedMap = {};
+  let invoiceHistoryMap = {};
   if (itemIds.length > 0) {
     let invQuery = `SELECT order_item_id, COALESCE(SUM(invoice_qty), 0) as invoiced_qty 
        FROM sales_invoice_items 
@@ -197,6 +198,47 @@ const getOrderDetailsForInvoice = async (orderId, excludeInvoiceId = null) => {
     const [invRows] = await pool.query(invQuery, invParams);
     for (const r of invRows) {
       invoicedMap[r.order_item_id] = parseFloat(r.invoiced_qty) || 0;
+    }
+
+    // Detailed history of invoices where these items were invoiced
+    try {
+      let histQuery = `
+        SELECT 
+          sii.order_item_id,
+          si.id as invoice_id,
+          si.invoice_no,
+          si.invoice_date,
+          sii.invoice_qty,
+          sii.unit_rate,
+          sii.amount,
+          si.status as invoice_status
+        FROM sales_invoice_items sii
+        JOIN sales_invoices si ON si.id = sii.sales_invoice_id
+        WHERE sii.order_item_id IN (?)
+      `;
+      const histParams = [itemIds];
+      if (excludeInvoiceId) {
+        histQuery += ' AND si.id != ?';
+        histParams.push(excludeInvoiceId);
+      }
+      histQuery += ' ORDER BY si.invoice_date DESC, si.id DESC';
+      const [histRows] = await pool.query(histQuery, histParams);
+      for (const h of histRows) {
+        if (!invoiceHistoryMap[h.order_item_id]) {
+          invoiceHistoryMap[h.order_item_id] = [];
+        }
+        invoiceHistoryMap[h.order_item_id].push({
+          invoiceId: h.invoice_id,
+          invoiceNo: h.invoice_no,
+          invoiceDate: h.invoice_date,
+          invoiceQty: parseFloat(h.invoice_qty) || 0,
+          unitRate: parseFloat(h.unit_rate) || 0,
+          amount: parseFloat(h.amount) || 0,
+          status: h.invoice_status
+        });
+      }
+    } catch (e) {
+      console.error('Error fetching invoice history for items:', e.message);
     }
   }
 
@@ -243,6 +285,10 @@ const getOrderDetailsForInvoice = async (orderId, excludeInvoiceId = null) => {
     totalAlreadyInvoiced += previouslyInvoiced;
     totalInvoiceable += invoiceableQty;
 
+    const historyList = invoiceHistoryMap[item.id] || [];
+    const invoiceNumbers = historyList.map(h => h.invoiceNo).filter(Boolean);
+    const invoiceNumbersStr = invoiceNumbers.join(', ');
+
     return {
       orderItemId: item.id,
       itemCode: item.item_code || '',
@@ -256,7 +302,9 @@ const getOrderDetailsForInvoice = async (orderId, excludeInvoiceId = null) => {
       invoiceableQty,
       invoiceQty: currentInvoiceQty,
       unitRate,
-      amount: lineAmount
+      amount: lineAmount,
+      invoiceHistory: historyList,
+      invoiceNumbers: invoiceNumbersStr || '—'
     };
   });
 
