@@ -852,9 +852,22 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
 
   const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PRIVATE LIMITED';
   const hostCompanyAddress = activeCompany?.company_address || 'Plot No. 97, Sector 7,\nPCNTDA, Bhosari, Pune - 26';
-  const hostCompanyAddressLines = hostCompanyAddress ? hostCompanyAddress.split('\n') : ['Plot No. 97, Sector 7', 'PCNTDA, Bhosari, Pune - 26'];
-  const hostCompanyAddressLinesFiltered = hostCompanyAddressLines.filter(line => !line.toLowerCase().includes('code:') && !line.toLowerCase().includes('code :'));
-  const hostGSTIN = activeCompany?.gstin || '27AAPCS1193L1ZQ';
+  const rawAddressLines = hostCompanyAddress ? hostCompanyAddress.split('\n').map(l => l.trim().replace(/\r/g, '')).filter(Boolean) : [];
+  let hostCompanyAddressLinesFiltered = rawAddressLines.filter(line => 
+    !line.toLowerCase().includes('code:') && 
+    !line.toLowerCase().includes('code :') &&
+    !line.toLowerCase().startsWith('gst') &&
+    !line.toLowerCase().startsWith('state')
+  );
+
+  if (hostCompanyName.toUpperCase().includes('S.P.') || rawAddressLines.some(l => l.includes('Sector No 7') || l.includes('Plot No 97'))) {
+    hostCompanyAddressLinesFiltered = [
+      'Sector No 7,Plot No 97 ,PCNTDA , Bhosari',
+      'Pune - 411026  ,Maharashtra'
+    ];
+  }
+
+  const hostGSTIN = (activeCompany?.gstin || '27ANRPP4356J1ZA').toUpperCase();
   const hostStateName = activeCompany?.state || 'Maharashtra';
 
   const fs = require('fs');
@@ -1083,7 +1096,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
 
         .footer-flex { display: flex; border-bottom: 1px solid #000; min-height: 48px; }
         .decl-box { width: 50%; padding: 3px 6px; font-size: 6.8pt; line-height: 1.2; border-right: 1px solid #000; }
-        .sig-box-right { width: 50%; padding: 3px 6px; display: flex; flex-direction: column; justify-content: space-between; text-align: right; font-size: 7.2pt; }
+        .sig-box-right { width: 50%; padding: 3px 6px; display: flex; flex-direction: column; justify-content: space-between; text-align: center; font-size: 7.2pt; }
         .computer-msg { text-align: center; font-size: 6.5pt; padding: 2px 0; }
       </style>
     </head>
@@ -1109,7 +1122,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
               {{#hostCompanyAddressLines}}
               <div class="seller-line">{{.}}</div>
               {{/hostCompanyAddressLines}}
-              <div class="seller-line"><strong>GSTIN/UIN:</strong> {{hostGSTIN}}</div>
+              <div class="seller-line"><strong>GST No:</strong> {{hostGSTIN}}</div>
               <div class="seller-line"><strong>State Name :</strong> {{hostStateName}}</div>
             </div>
             <!-- Consignee Box -->
@@ -1118,7 +1131,6 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
               <div class="party-name">{{consignee_name}}</div>
               <div class="seller-line">{{consignee_address}}</div>
               <div class="seller-line"><strong>GSTIN/UIN :</strong> {{consignee_gstin}}</div>
-              <div class="seller-line"><strong>State Name :</strong> {{consignee_state}}</div>
             </div>
             <!-- Buyer Box -->
             <div style="padding: 4px 6px; flex: 1;">
@@ -1126,7 +1138,6 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
               <div class="party-name">{{buyer_name}}</div>
               <div class="seller-line">{{buyer_address}}</div>
               <div class="seller-line"><strong>GSTIN/UIN :</strong> {{buyer_gstin}}</div>
-              <div class="seller-line"><strong>State Name :</strong> {{buyer_state}}</div>
             </div>
           </div>
 

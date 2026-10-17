@@ -602,8 +602,22 @@ const generateOrderPDF = async (orderId) => {
 
   const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PVT LTD';
   const hostCompanyAddress = activeCompany?.company_address || 'PLOT NO.97, SECTOR NO 07, PCNDTA\nBHOSARI, PUNE-411026';
-  const hostCompanyAddressLines = hostCompanyAddress ? hostCompanyAddress.split('\n') : ['PLOT NO.97, SECTOR NO 07, PCNDTA', 'BHOSARI, PUNE-411026'];
-  const hostGSTIN = activeCompany?.gstin || '27AAPCS1193L1ZQ';
+  const rawHostAddressLines = hostCompanyAddress ? hostCompanyAddress.split('\n').map(l => l.trim().replace(/\r/g, '')).filter(Boolean) : [];
+  let hostCompanyAddressLines = rawHostAddressLines.filter(line => 
+    !line.toLowerCase().includes('code:') && 
+    !line.toLowerCase().includes('code :') &&
+    !line.toLowerCase().startsWith('gst') &&
+    !line.toLowerCase().startsWith('state')
+  );
+
+  if (hostCompanyName.toUpperCase().includes('S.P.') || rawHostAddressLines.some(l => l.includes('Sector No 7') || l.includes('Plot No 97'))) {
+    hostCompanyAddressLines = [
+      'Sector No 7,Plot No 97 ,PCNTDA , Bhosari',
+      'Pune - 411026  ,Maharashtra'
+    ];
+  }
+
+  const hostGSTIN = (activeCompany?.gstin || '27ANRPP4356J1ZA').toUpperCase();
   const hostPAN = activeCompany?.pan || 'N/A';
   const invoiceFooterNotes = activeCompany?.invoice_footer_notes || '';
 
@@ -794,7 +808,7 @@ const generateOrderPDF = async (orderId) => {
 
         .footer-flex { display: flex; border-bottom: 1px solid #000; min-height: 75px; }
         .decl-box { width: 50%; padding: 6px 10px; font-size: 7.5pt; border-right: 1px solid #000; }
-        .sig-box-right { width: 50%; padding: 6px 10px; display: flex; flex-direction: column; justify-content: space-between; text-align: right; font-size: 8pt; }
+        .sig-box-right { width: 50%; padding: 6px 10px; display: flex; flex-direction: column; justify-content: space-between; text-align: center; font-size: 8pt; }
         .computer-msg { text-align: center; font-size: 7.5pt; padding: 3px 0; }
       </style>
     </head>
@@ -812,7 +826,7 @@ const generateOrderPDF = async (orderId) => {
               {{#hostCompanyAddressLines}}
               <div class="seller-line">{{.}}</div>
               {{/hostCompanyAddressLines}}
-              <div class="seller-line"><strong>GSTIN/UIN:</strong> {{hostGSTIN}}</div>
+              <div class="seller-line"><strong>GST No:</strong> {{hostGSTIN}}</div>
               <div class="seller-line"><strong>State Name :</strong> {{hostStateName}}</div>
             </div>
             <!-- Consignee Box -->
@@ -821,7 +835,6 @@ const generateOrderPDF = async (orderId) => {
               <div class="party-name">{{consignee_name}}</div>
               <div class="seller-line">{{consignee_address}}</div>
               <div class="seller-line"><strong>GSTIN/UIN :</strong> {{consignee_gstin}}</div>
-              <div class="seller-line"><strong>State Name :</strong> {{consignee_state}}</div>
             </div>
             <!-- Buyer Box -->
             <div style="padding: 4px 6px; flex: 1;">
@@ -829,7 +842,6 @@ const generateOrderPDF = async (orderId) => {
               <div class="party-name">{{buyer_name}}</div>
               <div class="seller-line">{{buyer_address}}</div>
               <div class="seller-line"><strong>GSTIN/UIN :</strong> {{buyer_gstin}}</div>
-              <div class="seller-line"><strong>State Name :</strong> {{buyer_state}}</div>
             </div>
           </div>
 
