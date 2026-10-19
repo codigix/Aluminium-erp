@@ -2220,7 +2220,7 @@ const refreshJobCardQuality = async (connection, jobCardId) => {
 };
 
 const addQualityLog = async (data) => {
-  const { jobCardId, day, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status, inwardItems, vendorInvoice, subTotal, gstAmount, grandTotal } = data;
+  const { jobCardId, day, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status, inwardItems, vendorInvoice, subTotal, gstAmount, grandTotal, reworkRoutingType, reworkTargetJobCardId } = data;
   const canApprove = Boolean(data.canApprove);
   const userId = data.userId || null;
 
@@ -2286,11 +2286,12 @@ const addQualityLog = async (data) => {
 
     const [result] = await connection.execute(
       `INSERT INTO job_card_quality_logs
-       (job_card_id, day, check_date, shift, inspected_qty, accepted_qty, rejected_qty, scrap_qty, rejection_reason, notes, status, vendor_invoice, sub_total, gst_amount, grand_total, created_by, approved_by, approved_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${reviewedNow ? 'NOW()' : 'NULL'})`,
+       (job_card_id, day, check_date, shift, inspected_qty, accepted_qty, rejected_qty, scrap_qty, rejection_reason, notes, status, vendor_invoice, sub_total, gst_amount, grand_total, rework_routing_type, rework_target_job_card_id, created_by, approved_by, approved_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${reviewedNow ? 'NOW()' : 'NULL'})`,
       [
         jobCardId, finalDay, checkDate, shift, inspected, accepted, rejected, scrap, rejectionReason || null, notes || null, finalStatus,
         vendorInvoice || null, subTotal || 0, gstAmount || 0, grandTotal || 0,
+        reworkRoutingType || 'SAME_OPERATION', reworkTargetJobCardId || null,
         userId, reviewedNow ? userId : null
       ]
     );
@@ -2325,7 +2326,7 @@ const addQualityLog = async (data) => {
 };
 
 const updateQualityLog = async (id, data) => {
-  const { day, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status } = data;
+  const { day, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status, reworkRoutingType, reworkTargetJobCardId } = data;
   const canApprove = Boolean(data.canApprove);
   const userId = data.userId || null;
 
@@ -2371,6 +2372,8 @@ const updateQualityLog = async (id, data) => {
     if (scrapQty !== undefined) { updates.push('scrap_qty = ?'); params.push(scrap); }
     if (rejectionReason !== undefined) { updates.push('rejection_reason = ?'); params.push(rejectionReason); }
     if (notes !== undefined) { updates.push('notes = ?'); params.push(notes); }
+    if (reworkRoutingType !== undefined) { updates.push('rework_routing_type = ?'); params.push(reworkRoutingType); }
+    if (reworkTargetJobCardId !== undefined) { updates.push('rework_target_job_card_id = ?'); params.push(reworkTargetJobCardId || null); }
     if (requestedStatus && requestedStatus !== existing.status) {
       updates.push('status = ?');
       params.push(requestedStatus);
@@ -2402,6 +2405,118 @@ const updateQualityLog = async (id, data) => {
   } catch (error) {
     await connection.rollback();
     throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const reRouteReworkJobCard = async (jobCardId, { targetJobCardId, reworkRoutingType }, userId = null) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query('SELECT * FROM job_cards WHERE id = ? FOR UPDATE', [jobCardId]);
+    if (rows.length === 0) throw productionError('Job Card not found', 404);
+    const jc = rows[0];
+
+    if (!jc.is_rework) {
+      throw productionError('Only rework job cards can be re-routed to another operation.');
+    }
+    if (num(jc.produced_qty) > 0 || ['COMPLETED', 'CANCELLED'].includes(jc.status)) {
+      throw productionError('Cannot re-route a rework job card that has already produced pieces or is closed.');
+    }
+
+    // Original job card from which rejection occurred
+    const [[source]] = jc.rework_of_job_card_id
+      ? await connection.query('SELECT * FROM job_cards WHERE id = ?', [jc.rework_of_job_card_id])
+      : [[jc]];
+
+    let target = null;
+    const routing = reworkRoutingType || (targetJobCardId ? 'SELECT_OPERATION' : 'FIRST_OPERATION');
+
+    if (targetJobCardId) {
+      const [[customTarget]] = await connection.query(
+        'SELECT * FROM job_cards WHERE id = ? AND work_order_id = ? AND is_rework = 0 AND status != "CANCELLED"',
+        [targetJobCardId, jc.work_order_id]
+      );
+      if (!customTarget) throw productionError('Selected target operation not found for this work order', 404);
+      target = customTarget;
+    } else if (routing === 'FIRST_OPERATION') {
+      const [[firstOp]] = await connection.query(
+        `SELECT * FROM job_cards
+         WHERE work_order_id = ? AND is_rework = 0 AND status != 'CANCELLED'
+         ORDER BY sequence_no ASC, id ASC LIMIT 1`,
+        [jc.work_order_id]
+      );
+      if (!firstOp) throw productionError('First operation not found for this work order', 404);
+      target = firstOp;
+    } else {
+      target = source || jc;
+    }
+
+    const isSameOp = target.id === source.id;
+    const reworkOpName = isSameOp
+      ? `Rework: ${source.operation_name || 'Operation'}`
+      : `Rework: ${target.operation_name || 'Operation'} (for ${source.operation_name || 'Op'})`;
+    const reworkRemarks = isSameOp
+      ? `Rework of ${source.job_card_no} (rejected, not scrapped)`
+      : `Rework of ${source.job_card_no} (rejected at ${source.operation_name || 'Op'}, routed to ${target.operation_name})`;
+
+    await connection.execute(
+      `UPDATE job_cards SET
+         operation_id = ?,
+         workstation_id = ?,
+         operation_name = ?,
+         sequence_no = ?,
+         cycle_time = ?,
+         std_time = ?,
+         time_uom = ?,
+         hourly_rate = ?,
+         execution_type = ?,
+         execution_mode = ?,
+         remarks = ?
+       WHERE id = ?`,
+      [
+        target.operation_id,
+        target.workstation_id,
+        reworkOpName,
+        target.sequence_no,
+        target.cycle_time,
+        target.std_time,
+        target.time_uom,
+        target.hourly_rate,
+        target.execution_type,
+        target.execution_mode,
+        reworkRemarks,
+        jobCardId
+      ]
+    );
+
+    // Sync quality log records
+    if (jc.rework_of_job_card_id) {
+      await connection.execute(
+        `UPDATE job_card_quality_logs
+         SET rework_routing_type = ?, rework_target_job_card_id = ?
+         WHERE job_card_id = ?`,
+        [routing, target.id, jc.rework_of_job_card_id]
+      );
+    }
+
+    await logProductionEvent(connection, {
+      entityType: 'JOB_CARD',
+      entityId: jobCardId,
+      action: 'REWORK_REROUTED',
+      oldValue: jc.operation_name,
+      newValue: reworkOpName,
+      reason: `Rework re-routed to sequence ${target.sequence_no} (${target.operation_name})`,
+      userId
+    });
+
+    await connection.commit();
+    return { success: true, message: `Rework re-routed to ${target.operation_name}`, targetJobCardId: target.id };
+  } catch (err) {
+    await connection.rollback();
+    throw err;
   } finally {
     connection.release();
   }
@@ -2684,13 +2799,24 @@ const deleteJobCard = async (id, userId = null) => {
       throw productionError('Cannot delete Shipment (Dispatch) operation: it is a required sequence.');
     }
 
-    if (!['DRAFT', 'PENDING', 'READY', 'CANCELLED'].includes(jc.status) || parseFloat(jc.produced_qty) > 0) {
-      throw productionError(`Job Card ${jc.job_card_no} is ${jc.status} with recorded production and cannot be deleted. Cancel its Work Order instead.`);
-    }
-    const history = await describeJobCardHistory(connection, id);
-    if (history.length > 0) {
-      throw productionError(`Job Card ${jc.job_card_no} cannot be deleted: it has ${history.join(', ')}.`);
-    }
+    // Clean up production, quality, and downtime history for this job card
+    await connection.execute('DELETE FROM job_card_time_logs WHERE job_card_id = ?', [id]);
+    await connection.execute('DELETE FROM job_card_quality_logs WHERE job_card_id = ?', [id]);
+    await connection.execute('DELETE FROM job_card_downtime_logs WHERE job_card_id = ?', [id]);
+    try {
+      await connection.execute('DELETE FROM job_card_inward_item_rates WHERE job_card_id = ?', [id]);
+    } catch (err) {}
+
+    // Unlink any challans or shipment orders
+    try {
+      await connection.execute('UPDATE outward_challans SET job_card_id = NULL WHERE job_card_id = ?', [id]);
+    } catch (err) {}
+    try {
+      await connection.execute('UPDATE inward_challans SET job_card_id = NULL WHERE job_card_id = ?', [id]);
+    } catch (err) {}
+    try {
+      await connection.execute('UPDATE shipment_orders SET job_card_id = NULL WHERE job_card_id = ?', [id]);
+    } catch (err) {}
 
     await connection.execute('DELETE FROM job_cards WHERE id = ?', [id]);
 
@@ -2708,33 +2834,41 @@ const deleteJobCard = async (id, userId = null) => {
   }
 };
 
-// Clean-slate reset only: refused as soon as any job card has been worked on.
+// Reset queue: removes all job cards along with their production and quality history
 const deleteAllJobCards = async (userId = null) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    const [[started]] = await connection.query(
-      `SELECT COUNT(*) AS cnt FROM job_cards jc
-       WHERE jc.status IN ('IN_PROGRESS', 'COMPLETED', 'PAUSED', 'ON_HOLD') OR COALESCE(jc.produced_qty, 0) > 0
-          OR EXISTS (SELECT 1 FROM job_card_time_logs tl WHERE tl.job_card_id = jc.id)
-          OR EXISTS (SELECT 1 FROM job_card_quality_logs ql WHERE ql.job_card_id = jc.id)`
-    );
-    if (Number(started.cnt) > 0) {
-      throw productionError(`Cannot delete all Job Cards: ${started.cnt} job card(s) already have production or quality history. Cancel individual work orders instead.`);
-    }
+    // 1. Clean up all child logs (time, quality, downtime, inward rates)
+    await connection.execute('DELETE FROM job_card_time_logs');
+    await connection.execute('DELETE FROM job_card_quality_logs');
+    await connection.execute('DELETE FROM job_card_downtime_logs');
+    try {
+      await connection.execute('DELETE FROM job_card_inward_item_rates');
+    } catch (err) {}
 
-    // Clear outward challans job_card_id if table exists
+    // 2. Unlink outward/inward challans and shipment orders
     try {
       await connection.execute('UPDATE outward_challans SET job_card_id = NULL WHERE job_card_id IS NOT NULL');
-    } catch (err) {
-      // ignore if column or table not present
-    }
+    } catch (err) {}
+    try {
+      await connection.execute('UPDATE inward_challans SET job_card_id = NULL WHERE job_card_id IS NOT NULL');
+    } catch (err) {}
+    try {
+      await connection.execute('UPDATE shipment_orders SET job_card_id = NULL WHERE job_card_id IS NOT NULL');
+    } catch (err) {}
 
+    // 3. Delete all job cards
     const [result] = await connection.execute('DELETE FROM job_cards');
 
+    // 4. Reset produced_qty on work orders so production can be fresh
+    try {
+      await connection.execute('UPDATE work_orders SET produced_qty = 0');
+    } catch (err) {}
+
     await logProductionEvent(connection, {
-      entityType: 'JOB_CARD', action: 'DELETE_ALL', newValue: `${result.affectedRows} job cards`, userId
+      entityType: 'JOB_CARD', action: 'DELETE_ALL', newValue: `${result.affectedRows} job cards and history cleared`, userId
     });
 
     await connection.commit();
@@ -3204,5 +3338,6 @@ module.exports = {
   getActiveAllocations,
   getQuantityAvailability: async (id) => { const c = await pool.getConnection(); try { return await productionFlowService.getOperationAvailability(c, id); } finally { c.release(); } },
   syncUnaccountedDowntime,
-  syncReworkQuantities
+  syncReworkQuantities,
+  reRouteReworkJobCard
 };

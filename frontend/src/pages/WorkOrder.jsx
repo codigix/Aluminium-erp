@@ -195,14 +195,14 @@ const WorkOrder = () => {
     if (reason && await changeStatus(wo, 'CANCELLED', reason)) { successToast('Work order cancelled'); await load(); }
   };
   const remove = async (wo) => {
-    const ok = await Swal.fire({ title: `Delete ${wo.wo_number}?`, text: 'Only work orders with no production history can be deleted.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#e11d48', confirmButtonText: 'Delete' });
+    const ok = await Swal.fire({ title: `Delete ${wo.wo_number}?`, text: 'Deletes this work order along with its job cards and linked material issues/history.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#e11d48', confirmButtonText: 'Delete' });
     if (!ok.isConfirmed) return;
     const response = await fetch(`${API_BASE}/work-orders/${wo.id}`, { method: 'DELETE', headers: authHeaders() });
     if (response.ok) { successToast('Work order deleted'); await load(); } else await explain(await response.json().catch(() => ({})));
   };
   const resetQueue = async () => {
     const ok = await Swal.fire({
-      title: 'Reset the whole queue?', text: 'Deletes ALL work orders and their job cards. This only works when nothing has been produced yet.',
+      title: 'Reset the whole queue?', text: 'Deletes ALL work orders, job cards, and linked material issues/history. This action cannot be undone.',
       icon: 'warning', showCancelButton: true, confirmButtonText: 'Yes, delete all', confirmButtonColor: '#e11d48'
     });
     if (!ok.isConfirmed) return;

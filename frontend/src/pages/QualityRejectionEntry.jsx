@@ -46,6 +46,7 @@ const QualityRejectionEntry = () => {
   const [editReason, setEditReason] = useState('');
   const [editScrap, setEditScrap] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [editReworkRoutingType, setEditReworkRoutingType] = useState('SAME_OPERATION');
 
   const openViewModal = (record) => {
     setSelectedRecord(record);
@@ -60,6 +61,7 @@ const QualityRejectionEntry = () => {
     setEditReason(record.reason);
     setEditScrap(record.scrapQty);
     setEditNotes(record.notes);
+    setEditReworkRoutingType(record.reworkRoutingType || 'SAME_OPERATION');
   };
 
   const handleEditAcceptedChange = (val) => {
@@ -125,7 +127,8 @@ const QualityRejectionEntry = () => {
         rejectedQty: rejectedVal,
         rejectionReason: editReason || null,
         scrapQty: scrapVal,
-        notes: editNotes
+        notes: editNotes,
+        reworkRoutingType: editReworkRoutingType
       };
 
       const response = await fetch(`${API_BASE}/job-cards/quality-logs/${selectedRecord.id}`, {
@@ -675,6 +678,41 @@ const QualityRejectionEntry = () => {
                       }}
                     />
                   </div>
+
+                  {Math.max(0, (parseFloat(editRejected) || 0) - (parseFloat(editScrap) || 0)) > 0 && (
+                    <div className="p-2 bg-indigo-50/70 border border-indigo-100 rounded space-y-1">
+                      <label className="text-[10px] font-semibold text-indigo-900 block uppercase tracking-wider">
+                        Rework Disposition ({Number((Math.max(0, (parseFloat(editRejected) || 0) - (parseFloat(editScrap) || 0))).toFixed(3))} pcs)
+                      </label>
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        <label className={`flex items-center gap-1.5 p-1.5 rounded border text-[10px] cursor-pointer transition-colors ${editReworkRoutingType === 'SAME_OPERATION' ? 'bg-white border-indigo-500 font-semibold text-indigo-900 shadow-sm' : 'bg-transparent border-slate-200 text-slate-600'}`}>
+                          <input
+                            type="radio"
+                            name="editReworkRouting"
+                            value="SAME_OPERATION"
+                            checked={editReworkRoutingType === 'SAME_OPERATION'}
+                            onChange={() => setEditReworkRoutingType('SAME_OPERATION')}
+                            className="text-indigo-600 focus:ring-indigo-500 w-3 h-3"
+                          />
+                          <span>Same Operation</span>
+                        </label>
+                        <label className={`flex items-center gap-1.5 p-1.5 rounded border text-[10px] cursor-pointer transition-colors ${editReworkRoutingType === 'FIRST_OPERATION' ? 'bg-white border-indigo-500 font-semibold text-indigo-900 shadow-sm' : 'bg-transparent border-slate-200 text-slate-600'}`}>
+                          <input
+                            type="radio"
+                            name="editReworkRouting"
+                            value="FIRST_OPERATION"
+                            checked={editReworkRoutingType === 'FIRST_OPERATION'}
+                            onChange={() => setEditReworkRoutingType('FIRST_OPERATION')}
+                            className="text-indigo-600 focus:ring-indigo-500 w-3 h-3"
+                          />
+                          <span className="text-indigo-700 font-bold">First Operation (Op 1)</span>
+                        </label>
+                      </div>
+                      <p className="text-[9px] text-slate-500 italic mt-0.5">
+                        Select "First Operation" to loop rework back to step 1 of this work order.
+                      </p>
+                    </div>
+                  )}
 
                   <div>
                     <label className="text-slate-500 block mb-0.5">Notes / Remarks</label>

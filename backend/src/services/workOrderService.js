@@ -1040,23 +1040,82 @@ const deleteWorkOrder = async (id, userId = null) => {
     if (woRows.length === 0) throw productionError('Work Order not found', 404);
     const productionPlanItemId = woRows[0].production_plan_item_id;
 
-    const started = await countStartedProduction(connection, id);
-    if (started.startedJobCards > 0 || started.materialIssues > 0 || started.consumptionEntries > 0) {
-      throw productionError(
-        `Work Order ${woRows[0].wo_number} cannot be deleted: ${describeStartedProduction(started)}. Cancel it instead so stock and history stay consistent.`
-      );
-    }
-
     // Dissociate payments linked to the job card quality logs to avoid FK constraint fails
-    await connection.execute(`
-      UPDATE payments p
-      JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
-      JOIN job_cards jc ON ql.job_card_id = jc.id
-      SET p.job_card_quality_log_id = NULL
-      WHERE jc.work_order_id = ?
-    `, [id]);
+    try {
+      await connection.execute(`
+        UPDATE payments p
+        JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
+        JOIN job_cards jc ON ql.job_card_id = jc.id
+        SET p.job_card_quality_log_id = NULL
+        WHERE jc.work_order_id = ?
+      `, [id]);
+    } catch (e) {}
+
+    // Unlink challans and shipment orders
+    try {
+      await connection.execute(`
+        UPDATE outward_challans oc
+        JOIN job_cards jc ON oc.job_card_id = jc.id
+        SET oc.job_card_id = NULL
+        WHERE jc.work_order_id = ?
+      `, [id]);
+    } catch (e) {}
+    try {
+      await connection.execute(`
+        UPDATE inward_challans ic
+        JOIN job_cards jc ON ic.job_card_id = jc.id
+        SET ic.job_card_id = NULL
+        WHERE jc.work_order_id = ?
+      `, [id]);
+    } catch (e) {}
+    try {
+      await connection.execute(`
+        UPDATE shipment_orders so
+        JOIN job_cards jc ON so.job_card_id = jc.id
+        SET so.job_card_id = NULL
+        WHERE jc.work_order_id = ?
+      `, [id]);
+    } catch (e) {}
+
+    // Delete job card logs and job cards
+    try {
+      await connection.execute(`
+        DELETE tl FROM job_card_time_logs tl
+        JOIN job_cards jc ON tl.job_card_id = jc.id
+        WHERE jc.work_order_id = ?
+      `, [id]);
+    } catch (e) {}
+    try {
+      await connection.execute(`
+        DELETE ql FROM job_card_quality_logs ql
+        JOIN job_cards jc ON ql.job_card_id = jc.id
+        WHERE jc.work_order_id = ?
+      `, [id]);
+    } catch (e) {}
+    try {
+      await connection.execute(`
+        DELETE dl FROM job_card_downtime_logs dl
+        JOIN job_cards jc ON dl.job_card_id = jc.id
+        WHERE jc.work_order_id = ?
+      `, [id]);
+    } catch (e) {}
 
     await connection.execute('DELETE FROM job_cards WHERE work_order_id = ?', [id]);
+
+    // Delete material issues and returns
+    try {
+      await connection.execute(`
+        DELETE mii FROM material_issue_items mii
+        JOIN material_issues mi ON mii.material_issue_id = mi.id
+        WHERE mi.work_order_id = ?
+      `, [id]);
+      await connection.execute('DELETE FROM material_issues WHERE work_order_id = ?', [id]);
+    } catch (e) {}
+    try { await connection.execute('DELETE FROM work_order_material_consumption WHERE work_order_id = ?', [id]); } catch (e) {}
+    try { await connection.execute('DELETE FROM work_order_material_returns WHERE work_order_id = ?', [id]); } catch (e) {}
+    try { await connection.execute('DELETE FROM work_order_dependencies WHERE predecessor_wo_id = ? OR successor_wo_id = ?', [id, id]); } catch (e) {}
+    try { await connection.execute('UPDATE work_orders SET parent_wo_id = NULL WHERE parent_wo_id = ?', [id]); } catch (e) {}
+
     await connection.execute('DELETE FROM work_orders WHERE id = ?', [id]);
 
     // Revert Production Plan Item status if applicable
@@ -1082,43 +1141,60 @@ const deleteWorkOrder = async (id, userId = null) => {
   }
 };
 
-// "Reset queue" is only for a clean slate: it refuses to run once any work
-// order has production, material issue or consumption behind it.
+// Reset queue: removes all work orders along with their material issues, job cards, and history
 const deleteAllWorkOrders = async (userId = null) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    const started = await countStartedProduction(connection);
-    if (started.startedJobCards > 0 || started.materialIssues > 0 || started.consumptionEntries > 0) {
-      throw productionError(
-        `Cannot delete all Work Orders: ${describeStartedProduction(started)}. Cancel or complete individual work orders instead.`
-      );
-    }
+    // 1. Dissociate payments linked to job card quality logs to avoid FK constraint fails
+    try {
+      await connection.execute(`
+        UPDATE payments p
+        JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
+        SET p.job_card_quality_log_id = NULL
+      `);
+    } catch (e) {}
 
-    // Dissociate payments linked to job card quality logs to avoid FK constraint fails
-    await connection.execute(`
-      UPDATE payments p
-      JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
-      SET p.job_card_quality_log_id = NULL
-    `);
-
-    // Clear outward challans job_card_id
+    // 2. Unlink outward/inward challans and shipment orders
     try {
       await connection.execute('UPDATE outward_challans SET job_card_id = NULL WHERE job_card_id IS NOT NULL');
-    } catch (err) {
-      // ignore if column or table not present
-    }
+    } catch (e) {}
+    try {
+      await connection.execute('UPDATE inward_challans SET job_card_id = NULL WHERE job_card_id IS NOT NULL');
+    } catch (e) {}
+    try {
+      await connection.execute('UPDATE shipment_orders SET job_card_id = NULL WHERE job_card_id IS NOT NULL');
+    } catch (e) {}
 
-    await connection.execute('DELETE FROM job_cards');
+    // 3. Delete job card child logs
+    try { await connection.execute('DELETE FROM job_card_time_logs'); } catch (e) {}
+    try { await connection.execute('DELETE FROM job_card_quality_logs'); } catch (e) {}
+    try { await connection.execute('DELETE FROM job_card_downtime_logs'); } catch (e) {}
+    try { await connection.execute('DELETE FROM job_card_inward_item_rates'); } catch (e) {}
+
+    // 4. Delete all job cards
+    try { await connection.execute('DELETE FROM job_cards'); } catch (e) {}
+
+    // 5. Delete material issues, consumption, returns, and dependencies
+    try { await connection.execute('DELETE FROM material_issue_items'); } catch (e) {}
+    try { await connection.execute('DELETE FROM material_issues'); } catch (e) {}
+    try { await connection.execute('DELETE FROM work_order_material_consumption'); } catch (e) {}
+    try { await connection.execute('DELETE FROM work_order_material_returns'); } catch (e) {}
+    try { await connection.execute('DELETE FROM work_order_dependencies'); } catch (e) {}
+
+    // 6. Break parent_wo_id hierarchy to allow clean delete
+    try { await connection.execute('UPDATE work_orders SET parent_wo_id = NULL WHERE parent_wo_id IS NOT NULL'); } catch (e) {}
+
+    // 7. Delete all work orders
     const [result] = await connection.execute('DELETE FROM work_orders');
 
-    // Revert production plan items and production plans status to PENDING
-    await connection.execute('UPDATE production_plan_items SET status = "PENDING"');
-    await connection.execute('UPDATE production_plans SET status = "PENDING" WHERE status = "IN_PROGRESS"');
+    // 8. Revert production plan items and production plans status to PENDING
+    try { await connection.execute('UPDATE production_plan_items SET status = "PENDING"'); } catch (e) {}
+    try { await connection.execute('UPDATE production_plans SET status = "PENDING" WHERE status = "IN_PROGRESS"'); } catch (e) {}
 
     await logProductionEvent(connection, {
-      entityType: 'WORK_ORDER', action: 'DELETE_ALL', newValue: `${result.affectedRows} work orders`, userId
+      entityType: 'WORK_ORDER', action: 'DELETE_ALL', newValue: `${result.affectedRows} work orders and linked history cleared`, userId
     });
 
     await connection.commit();

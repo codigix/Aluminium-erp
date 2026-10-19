@@ -139,7 +139,9 @@ const syncReworkJobCard = async (connection, sourceJobCardId, userId = null) => 
   if (['CANCELLED', 'COMPLETED'].includes(source.wo_status)) return null;
 
   const [[approved]] = await connection.query(
-    `SELECT COALESCE(SUM(GREATEST(rejected_qty - scrap_qty, 0)), 0) AS reworkable
+    `SELECT COALESCE(SUM(GREATEST(rejected_qty - scrap_qty, 0)), 0) AS reworkable,
+            SUBSTRING_INDEX(GROUP_CONCAT(rework_routing_type ORDER BY id DESC), ',', 1) AS rework_routing_type,
+            SUBSTRING_INDEX(GROUP_CONCAT(COALESCE(rework_target_job_card_id, '') ORDER BY id DESC), ',', 1) AS rework_target_job_card_id
      FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'`,
     [sourceJobCardId]
   );
@@ -148,16 +150,71 @@ const syncReworkJobCard = async (connection, sourceJobCardId, userId = null) => 
     [sourceJobCardId]
   );
 
-  const target = num(approved.reworkable);
+  const targetQty = num(approved.reworkable);
   const covered = existing.reduce((sum, r) => sum + num(r.planned_qty), 0);
-  const delta = target - covered;
+  const delta = targetQty - covered;
   if (Math.abs(delta) < 0.001) return null;
+
+  // Determine target operation for rework (Same Op, First Op, or Custom Target Op)
+  let target = source;
+  const routingType = approved.rework_routing_type || 'SAME_OPERATION';
+  const targetJcId = approved.rework_target_job_card_id ? parseInt(approved.rework_target_job_card_id, 10) : null;
+
+  if (targetJcId) {
+    const [[customTarget]] = await connection.query(
+      'SELECT * FROM job_cards WHERE id = ? AND work_order_id = ? AND status != "CANCELLED"',
+      [targetJcId, source.work_order_id]
+    );
+    if (customTarget) target = customTarget;
+  } else if (routingType === 'FIRST_OPERATION') {
+    const [[firstOp]] = await connection.query(
+      `SELECT * FROM job_cards
+       WHERE work_order_id = ? AND is_rework = 0 AND status != 'CANCELLED'
+       ORDER BY sequence_no ASC, id ASC LIMIT 1`,
+      [source.work_order_id]
+    );
+    if (firstOp) target = firstOp;
+  }
+
+  const isSameOp = target.id === source.id;
+  const reworkOpName = isSameOp 
+    ? `Rework: ${source.operation_name || 'Operation'}` 
+    : `Rework: ${target.operation_name || 'Operation'} (for ${source.operation_name || 'Op'})`;
+  const reworkRemarks = isSameOp 
+    ? `Rework of ${source.job_card_no} (rejected, not scrapped)` 
+    : `Rework of ${source.job_card_no} (rejected at ${source.operation_name || 'Op'}, routed to ${target.operation_name})`;
 
   const openCard = existing.find(r => r.status === 'PENDING' && num(r.produced_qty) === 0);
 
   if (delta > 0) {
     if (openCard) {
-      await connection.execute('UPDATE job_cards SET planned_qty = planned_qty + ? WHERE id = ?', [delta, openCard.id]);
+      await connection.execute(
+        `UPDATE job_cards SET
+           planned_qty = planned_qty + ?,
+           operation_id = ?,
+           workstation_id = ?,
+           operation_name = ?,
+           sequence_no = ?,
+           cycle_time = ?,
+           std_time = ?,
+           time_uom = ?,
+           hourly_rate = ?,
+           remarks = ?
+         WHERE id = ?`,
+        [
+          delta,
+          target.operation_id,
+          target.workstation_id,
+          reworkOpName,
+          target.sequence_no,
+          target.cycle_time,
+          target.std_time,
+          target.time_uom,
+          target.hourly_rate,
+          reworkRemarks,
+          openCard.id
+        ]
+      );
       return openCard.id;
     }
     const { nextDocumentNumber } = require('../utils/documentNumber');
@@ -168,15 +225,15 @@ const syncReworkJobCard = async (connection, sourceJobCardId, userId = null) => 
         operation_name, execution_type, execution_mode, sequence_no, cycle_time, setup_time, is_rework, rework_of_job_card_id, remarks)
        VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)`,
       [
-        jobCardNo, source.work_order_id, source.operation_id, source.workstation_id, delta,
-        source.std_time, source.time_uom, source.hourly_rate, `Rework: ${source.operation_name || 'Operation'}`,
-        source.execution_type, source.execution_mode, source.sequence_no, source.cycle_time, source.setup_time,
-        source.id, `Rework of ${source.job_card_no} (rejected, not scrapped)`
+        jobCardNo, source.work_order_id, target.operation_id, target.workstation_id, delta,
+        target.std_time, target.time_uom, target.hourly_rate, reworkOpName,
+        target.execution_type, target.execution_mode, target.sequence_no, target.cycle_time, target.setup_time,
+        source.id, reworkRemarks
       ]
     );
     await logProductionEvent(connection, {
       entityType: 'JOB_CARD', entityId: result.insertId, action: 'REWORK_CREATED',
-      newValue: `${delta} pcs from ${source.job_card_no}`, userId
+      newValue: `${delta} pcs from ${source.job_card_no} to ${target.operation_name}`, userId
     });
     return result.insertId;
   }

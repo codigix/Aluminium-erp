@@ -126,6 +126,15 @@ const updateQualityLog = async (req, res) => {
   }
 };
 
+const reRouteRework = async (req, res) => {
+  try {
+    const result = await jobCardService.reRouteReworkJobCard(req.params.id, req.body, req.user?.id || null);
+    res.json(result);
+  } catch (error) {
+    respondWithError(res, error);
+  }
+};
+
 const addDowntimeLog = async (req, res) => {
   try {
     const id = await jobCardService.addDowntimeLog({ ...req.body, jobCardId: req.params.id });
@@ -302,5 +311,6 @@ module.exports = {
   sendVendorReceiptToPayment,
   downloadQualityReport,
   getJobCardDetails,
-  getActiveAllocations
+  getActiveAllocations,
+  reRouteRework
 };

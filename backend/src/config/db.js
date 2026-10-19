@@ -1870,7 +1870,7 @@ const ensureWorkOrderTables = async () => {
         item_code VARCHAR(120),
         item_name VARCHAR(255),
         bom_no VARCHAR(100),
-        source_type ENUM('FG', 'SA') DEFAULT 'FG',
+        source_type VARCHAR(50) DEFAULT 'FG',
         workstation_id INT,
         quantity DECIMAL(12, 3) NOT NULL,
         start_date DATE,
@@ -1913,7 +1913,8 @@ const ensureWorkOrderTables = async () => {
     if (!existingWoCols.has('item_code')) await connection.query('ALTER TABLE work_orders ADD COLUMN item_code VARCHAR(120) AFTER sales_order_item_id');
     if (!existingWoCols.has('item_name')) await connection.query('ALTER TABLE work_orders ADD COLUMN item_name VARCHAR(255) AFTER item_code');
     if (!existingWoCols.has('bom_no')) await connection.query('ALTER TABLE work_orders ADD COLUMN bom_no VARCHAR(100) AFTER item_name');
-    if (!existingWoCols.has('source_type')) await connection.query('ALTER TABLE work_orders ADD COLUMN source_type ENUM("FG", "SA") DEFAULT "FG" AFTER bom_no');
+    if (!existingWoCols.has('source_type')) await connection.query('ALTER TABLE work_orders ADD COLUMN source_type VARCHAR(50) DEFAULT "FG" AFTER bom_no');
+    try { await connection.query("ALTER TABLE work_orders MODIFY COLUMN source_type VARCHAR(50) DEFAULT 'FG'"); } catch (e) { }
     if (!existingWoCols.has('source_fg')) await connection.query('ALTER TABLE work_orders ADD COLUMN source_fg VARCHAR(120) AFTER source_type');
     if (!existingWoCols.has('public_id')) await connection.query('ALTER TABLE work_orders ADD COLUMN public_id VARCHAR(100) UNIQUE NULL');
 
@@ -2031,6 +2032,8 @@ const ensureWorkOrderTables = async () => {
       if (!existingQlCols.has('created_by')) await connection.query('ALTER TABLE job_card_quality_logs ADD COLUMN created_by INT NULL');
       if (!existingQlCols.has('approved_by')) await connection.query('ALTER TABLE job_card_quality_logs ADD COLUMN approved_by INT NULL');
       if (!existingQlCols.has('approved_at')) await connection.query('ALTER TABLE job_card_quality_logs ADD COLUMN approved_at DATETIME NULL');
+      if (!existingQlCols.has('rework_routing_type')) await connection.query("ALTER TABLE job_card_quality_logs ADD COLUMN rework_routing_type VARCHAR(30) DEFAULT 'SAME_OPERATION'");
+      if (!existingQlCols.has('rework_target_job_card_id')) await connection.query('ALTER TABLE job_card_quality_logs ADD COLUMN rework_target_job_card_id INT NULL');
     } catch (qlErr) {
       console.error('Error adding quality log accountability columns:', qlErr.message);
     }

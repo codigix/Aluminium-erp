@@ -99,7 +99,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: ['sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DISPATCH_PENDING],
-    allowedModules: ['dashboard', 'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'production-report'],
+    allowedModules: ['dashboard', 'incoming-orders', 'operation-master', 'workstation-master', 'operator-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'production-report'],
     permissions: [
       'ORDER_VIEW', 'ORDER_EDIT',
       'PO_VIEW',
@@ -222,7 +222,7 @@ const DEPARTMENT_ACCESS_RULES = {
       'dashboard', 'active-clients', 'suppliers', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'quality-reports', 
       'payment-history', 'customer-payment-history', 'accounts-report', 'shipment-tracking', 
       'shipment-reports', 'project-analysis', 'material-consumption', 
-      'oee-analysis', 'machine-analysis', 'admin-company-master', 'sales-invoice'
+      'oee-analysis', 'machine-analysis', 'admin-company-master', 'sales-invoice', 'operator-master'
     ],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT', 'PO_DELETE',

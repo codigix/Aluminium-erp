@@ -923,7 +923,7 @@ const JobCard = () => {
     try {
       const result = await Swal.fire({
         title: 'Reset Queue?',
-        text: 'Are you sure you want to delete all Job Cards? This action cannot be undone.',
+        text: 'Are you sure you want to delete all Job Cards along with their production and quality history? This action cannot be undone.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#e11d48',
@@ -7303,9 +7303,11 @@ const JobCard = () => {
             String(selectedOp.operation_name || '').toLowerCase() === 'dispatch' ||
             String(selectedOp.operation_type || '').toLowerCase() === 'dispatch'
           ));
+          const isUnassigned = activeJC && (!activeJC.workstation_id || !activeJC.assigned_to);
+          const modalAction = formData.id ? (isUnassigned ? "Assign / Edit Job Card" : "Edit Job Card") : "Create Job Card";
           return isShipment
             ? `Shipment Assignment: ${formData.jcNumber || 'New Job Card'}`
-            : `${formData.id ? "Edit Job Card" : "Create Job Card"}${formData.jcNumber ? `: ${formData.jcNumber}` : ''}${selectedWO ? ` - ${selectedWO.wo_number}` : ''}`;
+            : `${modalAction}${formData.jcNumber ? `: ${formData.jcNumber}` : ''}${selectedWO ? ` - ${selectedWO.wo_number}` : ''}`;
         })()}
         size="4xl"
       >
@@ -7840,7 +7842,11 @@ const JobCard = () => {
                   type="submit"
                   className="px-6 py-2 bg-indigo-600 text-white  rounded-md hover:bg-indigo-700 transition-all text-xs shadow-lg shadow-indigo-100"
                 >
-                  Update Job Card
+                  {(() => {
+                    const activeJC = jobCards.find(j => String(j.id) === String(formData.id));
+                    const isUnassigned = activeJC && (!activeJC.workstation_id || !activeJC.assigned_to);
+                    return isUnassigned ? "Assign & Save Job Card" : "Update Job Card";
+                  })()}
                 </button>
               </div>
             </form>

@@ -50,6 +50,7 @@ import ProcessSheet from './pages/ProcessSheet'
 import BOMApproval from './pages/BOMApproval'
 import BOMFormPage from './pages/BOMFormPage'
 import WorkstationMaster from './pages/WorkstationMaster'
+import OperatorMaster from './pages/OperatorMaster'
 import OperationMaster from './pages/OperationMaster'
 import ProjectRequests from './pages/ProjectRequests'
 import MaterialRequirements from './pages/MaterialRequirements'
@@ -107,7 +108,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'sales-invoice', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'po-receipt-details', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-workspace', 'shop-floor', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details', 'admin-company-master', 'database-backup']
+const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'sales-invoice', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'po-receipt-details', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operator-master', 'operation-master', 'project-requests', 'material-requirements', 'production-workspace', 'shop-floor', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details', 'admin-company-master', 'database-backup']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -201,7 +202,7 @@ const getContactStatusActionLabel = status => {
 const DEPARTMENT_MODULES = {
   SALES: ['dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'sales-invoice', 'customer-drawing', 'client-quotations', 'quotation-form', 'sales-report', 'approved-quotations', 'sales-report-details'],
   DESIGN_ENG: ['dashboard', 'item-master', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet'],
-  PRODUCTION: ['dashboard', 'production-workspace', 'shop-floor', 'item-master', 'project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'routing-operations', 'process-sheet', 'production-report', 'work-order-details'],
+  PRODUCTION: ['dashboard', 'production-workspace', 'shop-floor', 'item-master', 'project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'operator-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'routing-operations', 'process-sheet', 'production-report', 'work-order-details'],
   QUALITY: ['dashboard', 'item-master', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'qc-inspections'],
   SHIPMENT: ['dashboard', 'item-master', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'],
   ACCOUNTS: ['dashboard', 'payment-history', 'customer-payment-history', 'accounts-report', 'transaction-details'],
@@ -257,6 +258,10 @@ function App() {
       secondSegment = segments[2]
     }
 
+    if (firstSegment === 'operators') {
+      firstSegment = 'operator-master';
+    }
+
     // Handle special cases for dash-separated module names that might have subpaths
     // For example /item-master/add-items should map to item-master
     if (MODULE_IDS.includes(firstSegment)) {
@@ -274,6 +279,9 @@ function App() {
       }
       if (firstSegment === 'workstation-master' && secondSegment === 'form') {
         return 'workstation-master';
+      }
+      if (firstSegment === 'operator-master' || firstSegment === 'operators') {
+        return 'operator-master';
       }
       if (firstSegment === 'operation-master' && secondSegment === 'form') {
         return 'operation-master';
@@ -384,6 +392,9 @@ function App() {
     }
     if (modules.includes('production-report') && !modules.includes('operation-master')) {
       modules.push('operation-master')
+    }
+    if ((modules.includes('workstation-master') || modules.includes('job-card') || user?.department_code === 'PRODUCTION' || user?.department_code === 'ADMIN') && !modules.includes('operator-master')) {
+      modules.push('operator-master')
     }
     if (modules.includes('sales-report') && !modules.includes('sales-report-details')) {
       modules.push('sales-report-details')
@@ -1258,6 +1269,7 @@ function App() {
     { label: 'Job Card', moduleId: 'job-card', icon: 'signature', indent: true, prefix: '/production' },
     { label: 'Subcontract Challans', moduleId: 'sub-contract-challans', icon: 'truck', indent: true, prefix: '/production' },
     { label: 'Workstations', moduleId: 'workstation-master', icon: 'cpu', indent: true, prefix: '/production' },
+    { label: 'Operators', moduleId: 'operator-master', icon: 'users', indent: true, prefix: '/production' },
     { label: 'Operations', moduleId: 'operation-master', icon: 'activity', indent: true, prefix: '/production' },
     { label: 'Production Report', moduleId: 'production-report', icon: 'file-bar-chart', indent: true, deptCode: 'PRODUCTION', prefix: '/production' },
 
@@ -2332,6 +2344,9 @@ function App() {
 
                 {activeModule === 'workstation-master' && (
                   <WorkstationMaster showForm={showWorkstationForm} setShowForm={setShowWorkstationForm} />
+                )}
+                {activeModule === 'operator-master' && (
+                  <OperatorMaster />
                 )}
                 {activeModule === 'operation-master' && (
                   <OperationMaster showForm={showOperationForm} setShowForm={setShowOperationForm} />

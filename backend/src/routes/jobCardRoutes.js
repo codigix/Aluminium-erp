@@ -42,5 +42,6 @@ router.delete('/quality-logs/:logId', authorize(['PROD_MANAGE', 'QC_EDIT', 'PAYM
 
 router.post('/:id/downtime-logs', authorize(['PROD_MANAGE']), jobCardController.addDowntimeLog);
 router.delete('/downtime-logs/:logId', authorize(['PROD_MANAGE']), jobCardController.deleteDowntimeLog);
+router.post('/:id/re-route-rework', authorize(['PROD_MANAGE', 'QC_EDIT']), jobCardController.reRouteRework);
 
 module.exports = router;

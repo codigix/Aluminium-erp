@@ -80,6 +80,7 @@ const JobCardList = ({
   const [menuFor, setMenuFor] = useState(null);
   const [pageMenu, setPageMenu] = useState(false);
   const [scheduling, setScheduling] = useState(null);
+  const [reroutingRework, setReroutingRework] = useState(null);
 
   const counts = useMemo(() => Object.fromEntries(FILTERS.map(f => [f.id, jobCards.filter(f.match).length])), [jobCards]);
   const lateCount = useMemo(() => jobCards.filter(isLate).length, [jobCards]);
@@ -128,7 +129,7 @@ const JobCardList = ({
     if (key === 'start') return onStart(jc);
     if (key === 'production') return onProduction(jc);
     if (key === 'outward') return onOutward(jc);
-    if (key === 'edit') return setScheduling(jc);
+    if (key === 'edit') return onEdit(jc);
     if (key === 'resume') return resume(jc);
     return onView(jc);
   };
@@ -248,6 +249,11 @@ const JobCardList = ({
                               <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded shadow-lg z-20 text-xs">
                                 <button onClick={() => { setMenuFor(null); onView(jc); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2"><Eye className="w-3 h-3" /> View details</button>
                                 {['IN_PROGRESS', 'COMPLETED'].includes(jc.status) && !isSubcontract(jc) && <button onClick={() => { setMenuFor(null); onProduction(jc); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2"><ClipboardEdit className="w-3 h-3" /> Production &amp; quality logs</button>}
+                                {jc.is_rework && (!jc.produced_qty || parseFloat(jc.produced_qty) === 0) && (
+                                  <button onClick={() => { setMenuFor(null); setReroutingRework(jc); }} className="w-full text-left px-3 py-2 hover:bg-indigo-50 flex items-center gap-2 text-indigo-700 font-medium">
+                                    <RotateCcw className="w-3 h-3 text-indigo-600" /> Re-route rework to...
+                                  </button>
+                                )}
                                 {!['COMPLETED', 'CANCELLED', 'ON_HOLD'].includes(jc.status) && !isShipment(jc) && !isSubcontract(jc) && <button onClick={() => { setMenuFor(null); setScheduling(jc); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2"><CalendarClock className="w-3 h-3" /> Schedule machine &amp; time</button>}
                                 {!['COMPLETED', 'CANCELLED'].includes(jc.status) && <button onClick={() => { setMenuFor(null); onEdit(jc); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2"><Pencil className="w-3 h-3" /> Edit / assign</button>}
                                 {['PENDING', 'READY', 'IN_PROGRESS', 'PAUSED'].includes(jc.status) && !isShipment(jc) && <button onClick={() => { setMenuFor(null); hold(jc); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-amber-700"><PauseCircle className="w-3 h-3" /> Put on hold</button>}
@@ -267,6 +273,120 @@ const JobCardList = ({
         );
       })}
       {scheduling && <ScheduleJobModal jc={scheduling} onClose={() => setScheduling(null)} onDone={() => { setScheduling(null); onRefresh(); }} />}
+
+      {/* Re-route Rework Modal */}
+      {reroutingRework && (() => {
+        const woOps = jobCards
+          .filter(j => String(j.work_order_id) === String(reroutingRework.work_order_id) && !j.is_rework && j.status !== 'CANCELLED')
+          .sort((a, b) => (num(a.sequence_no) - num(b.sequence_no)));
+        const firstOp = woOps[0];
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden text-xs">
+              <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+                    <RotateCcw className="w-4 h-4 text-indigo-600" /> Re-route Rework Operation
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {reroutingRework.job_card_no} · Qty: {reroutingRework.planned_qty} pcs
+                  </p>
+                </div>
+                <button onClick={() => setReroutingRework(null)} className="text-slate-400 hover:text-slate-600 text-lg leading-none">&times;</button>
+              </div>
+
+              <div className="p-4 space-y-3">
+                <div className="p-2.5 bg-amber-50 border border-amber-200/60 rounded text-amber-800 text-[11px]">
+                  <b>Current Rework Step:</b> {reroutingRework.operation_name} (Sequence {reroutingRework.sequence_no})
+                  <div className="text-amber-700 mt-0.5">
+                    Choose which operation should perform this rework (e.g. send back to the First Operation if the defect requires re-machining the base geometry).
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="font-semibold text-slate-700 block text-xs">Target Operation in Work Order:</label>
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                    {firstOp && (
+                      <label className="flex items-start gap-2.5 p-2 rounded border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 cursor-pointer transition-colors">
+                        <input
+                          type="radio"
+                          name="targetOp"
+                          defaultChecked
+                          value={firstOp.id}
+                          id="first-op-choice"
+                          className="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-indigo-900">
+                              (1) First Operation: {firstOp.operation_name}
+                            </span>
+                            <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-700 rounded text-[10px] font-semibold">Recommended</span>
+                          </div>
+                          <p className="text-[10px] text-indigo-600 mt-0.5">
+                            Re-machines from the initial stage ({firstOp.workstation_name || 'Machine 1'}), passing output downstream.
+                          </p>
+                        </div>
+                      </label>
+                    )}
+
+                    {woOps.filter(op => !firstOp || op.id !== firstOp.id).map(op => (
+                      <label key={op.id} className="flex items-start gap-2.5 p-2 rounded border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors">
+                        <input
+                          type="radio"
+                          name="targetOp"
+                          value={op.id}
+                          className="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div className="flex-1">
+                          <span className="font-medium text-slate-800">
+                            ({op.sequence_no}) {op.operation_name}
+                          </span>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {op.workstation_name || 'No machine'} · {op.job_card_no}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReroutingRework(null)}
+                  className="px-3 py-1.5 border border-slate-200 rounded text-slate-600 hover:bg-slate-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const selected = document.querySelector('input[name="targetOp"]:checked');
+                    if (!selected) {
+                      Swal.fire({ icon: 'warning', title: 'Please select an operation', confirmButtonColor: '#4f46e5' });
+                      return;
+                    }
+                    const targetId = parseInt(selected.value, 10);
+                    const isFirst = firstOp && targetId === firstOp.id;
+                    await call(
+                      `/job-cards/${reroutingRework.id}/re-route-rework`,
+                      { targetJobCardId: targetId, reworkRoutingType: isFirst ? 'FIRST_OPERATION' : 'SELECT_OPERATION' },
+                      'Rework job card successfully moved to target operation!'
+                    );
+                    setReroutingRework(null);
+                  }}
+                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium shadow-sm transition-colors flex items-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Move Rework to Selected Operation
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
