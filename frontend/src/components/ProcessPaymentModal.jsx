@@ -126,8 +126,9 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         }
       });
       if (response.ok) {
-        const data = await response.json();
-        setBankAccounts(Array.isArray(data) ? data : []);
+        const json = await response.json();
+        const list = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+        setBankAccounts(list.filter(b => b.is_active !== false && b.is_active !== 0));
       }
     } catch (error) {
       console.error('Error fetching bank accounts:', error);

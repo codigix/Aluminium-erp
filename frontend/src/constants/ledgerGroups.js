@@ -64,6 +64,7 @@ export const LEDGER_GROUPS = [
 ];
 
 export const DEFAULT_CUSTOMER_LEDGER_GROUP = 'Sundry Debtors';
+export const DEFAULT_VENDOR_LEDGER_GROUP = 'Sundry Creditors';
 
 export const getLedgerGroupById = (id) => LEDGER_GROUPS.find((g) => g.id === Number(id));
 export const getLedgerGroupByName = (name) => LEDGER_GROUPS.find((g) => g.name.toLowerCase() === String(name).toLowerCase());

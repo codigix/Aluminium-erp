@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   CreditCard, Calendar, Check, AlertCircle, RefreshCw, 
-  Building2, FileText, Layers, ArrowRight, ArrowLeft, DollarSign, 
+  Building2, FileText, Layers, ArrowRight, ArrowLeft, DollarSign, Wallet,
   SlidersHorizontal, CheckCircle2, History, ArrowLeftRight, FileMinus, FilePlus, BookOpen, AlertTriangle, Printer, X,
   Plus, Trash2, Search
 } from 'lucide-react';
@@ -33,6 +33,10 @@ const PaymentReceivedModal = ({
   invoices,
   customerId,
   companyId,
+  vendorId,
+  vendor,
+  isVendorMode = false,
+  hasExplicitSelection = true,
   onSuccess,
   isPage = false,
   initialVoucherType = 'RECEIPT'
@@ -95,14 +99,37 @@ const PaymentReceivedModal = ({
   ];
 
   // Active Voucher Type State (Default to initialVoucherType or RECEIPT)
-  const [voucherType, setVoucherType] = useState(initialVoucherType || 'RECEIPT');
+  const [voucherType, setVoucherType] = useState(initialVoucherType || (isVendorMode ? 'PAYMENT' : 'RECEIPT'));
 
   useEffect(() => {
     if (initialVoucherType) {
       setVoucherType(initialVoucherType);
+    } else if (isVendorMode) {
+      setVoucherType('PAYMENT');
     }
-  }, [initialVoucherType]);
+  }, [initialVoucherType, isVendorMode]);
   const [previewVoucherData, setPreviewVoucherData] = useState(null);
+
+  // ── 4 BILL-WISE DETAILS ALLOCATION OPTIONS ──
+  // 1. Agst Ref — Existing invoice
+  // 2. Advance — Advance balance
+  // 3. On Account — Unallocated amount
+  // 4. New Ref — New bill reference
+  const [billAllocationOption, setBillAllocationOption] = useState('AGST_REF'); // 'AGST_REF' | 'ADVANCE' | 'ON_ACCOUNT' | 'NEW_REF'
+
+  // Preserved state for each allocation option
+  const [advanceDetails, setAdvanceDetails] = useState({
+    refNote: '',
+    amount: ''
+  });
+  const [onAccountDetails, setOnAccountDetails] = useState({
+    amount: ''
+  });
+  const [newRefDetails, setNewRefDetails] = useState({
+    refNo: `REF-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`,
+    date: new Date().toISOString().split('T')[0],
+    amount: ''
+  });
 
   // Allocations mapping for company bills: { [invId]: stringAmount }
   const [allocations, setAllocations] = useState({});
@@ -202,12 +229,30 @@ const PaymentReceivedModal = ({
   const [installments, setInstallments] = useState([]);
   const [fetchingInstallments, setFetchingInstallments] = useState(false);
   const [lastFetchedCheque, setLastFetchedCheque] = useState(null);
+  const [dynamicPaymentVoucherNo, setDynamicPaymentVoucherNo] = useState(null);
+
+  const fetchNextPaymentVoucherNo = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/payments/next-voucher-no`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.voucherNo) {
+          setDynamicPaymentVoucherNo(data.voucherNo);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching next payment voucher no:', err);
+    }
+  };
 
   // Generate realistic voucher numbering
   const getVoucherNumber = (type) => {
     const year = new Date().getFullYear();
     switch (type) {
-      case 'PAYMENT': return `PV-${year}-0185`;
+      case 'PAYMENT': return dynamicPaymentVoucherNo || `PAY-${year}-0003`;
       case 'RECEIPT': return `RCP-${year}-0428`;
       case 'JOURNAL': return `JV-${year}-0092`;
       case 'CONTRA': return `CV-${year}-0034`;
@@ -447,6 +492,7 @@ const PaymentReceivedModal = ({
       fetchBankAccounts();
       fetchCustomers();
       fetchVendors();
+      fetchNextPaymentVoucherNo();
 
       const incomingCustId = customerId
         || companyId
@@ -471,11 +517,15 @@ const PaymentReceivedModal = ({
         let totalOut = 0;
         selectedInvoices.forEach(inv => {
           const out = parseFloat(inv.outstanding) || 0;
-          initialAlloc[inv.id] = out > 0 ? out.toFixed(2) : '0.00';
-          totalOut += out;
+          if (hasExplicitSelection) {
+            initialAlloc[inv.id] = out > 0 ? out.toFixed(2) : '0.00';
+            totalOut += out;
+          } else {
+            initialAlloc[inv.id] = '';
+          }
         });
         setAllocations(initialAlloc);
-        setLumpSumAmount(totalOut > 0 ? totalOut.toFixed(2) : '');
+        setLumpSumAmount(hasExplicitSelection && totalOut > 0 ? totalOut.toFixed(2) : '');
 
         setFullSODetail(null);
         setFormData({
@@ -484,7 +534,7 @@ const PaymentReceivedModal = ({
           invoiceId: null,
           soId: '',
           salesOrderSource: 'SALES_INVOICE',
-          paymentAmount: totalOut > 0 ? totalOut.toFixed(2) : '',
+          paymentAmount: hasExplicitSelection && totalOut > 0 ? totalOut.toFixed(2) : '',
           paymentDate: new Date().toISOString().split('T')[0],
           paymentMode: '',
           bankAccount: '',
@@ -512,8 +562,8 @@ const PaymentReceivedModal = ({
           ? parseFloat(singleInvoice.outstanding).toFixed(2) 
           : (singleInvoice.total_amount ? parseFloat(singleInvoice.total_amount).toFixed(2) : '');
 
-        setAllocations({ [singleInvoice.id]: outAmt });
-        setLumpSumAmount(outAmt);
+        setAllocations(hasExplicitSelection ? { [singleInvoice.id]: outAmt } : { [singleInvoice.id]: '' });
+        setLumpSumAmount(hasExplicitSelection ? outAmt : '');
 
         setFormData({
           customerId: incomingCustId,
@@ -521,7 +571,7 @@ const PaymentReceivedModal = ({
           invoiceId: invId,
           soId: singleInvoice.soId || (source && soId ? `${source}_${soId}` : ''),
           salesOrderSource: source,
-          paymentAmount: outAmt,
+          paymentAmount: hasExplicitSelection ? outAmt : '',
           paymentDate: new Date().toISOString().split('T')[0],
           paymentMode: '',
           bankAccount: '',
@@ -580,12 +630,16 @@ const PaymentReceivedModal = ({
     }
   }, [formData.customerId, singleInvoice, isMultiMode, isOpen]);
 
-  // Combined list of bill references for the selected company (only explicitly selected or manually added references with outstanding > 0)
+  // Combined list of bill references for the selected company (only explicitly selected or all pending references with outstanding > 0)
   const companyBillReferences = useMemo(() => {
     const map = new Map();
 
-    // 1. Initial base list: start ONLY with selectedInvoices (invoices selected on main page or single invoice)
-    (selectedInvoices || []).forEach(inv => {
+    // 1. Initial base list: start with selectedInvoices or fallback to customer pending invoices
+    const baseList = (selectedInvoices && selectedInvoices.length > 0)
+      ? selectedInvoices
+      : (customerInvoices || []);
+
+    baseList.forEach(inv => {
       const out = parseFloat(inv?.outstanding) || 0;
       if (inv && inv.id && !removedBillIds.has(String(inv.id)) && out > 0) {
         if (!map.has(String(inv.id))) {
@@ -608,7 +662,7 @@ const PaymentReceivedModal = ({
       const dateB = new Date(b.invoice_date || b.created_at || 0).getTime();
       return dateA - dateB;
     });
-  }, [selectedInvoices, manuallyAddedInvoices, removedBillIds]);
+  }, [selectedInvoices, customerInvoices, manuallyAddedInvoices, removedBillIds]);
 
   // List of available unadded invoices of this customer that user can add via + Add Agst Ref
   const unaddedCustomerInvoices = useMemo(() => {
@@ -772,14 +826,19 @@ const PaymentReceivedModal = ({
     successToast(`Added Agst Ref ${newRef.invoice_no}`);
   };
 
-  const currentCustomerObj = customers.find(c => String(c.id) === String(formData.customerId));
-  const customerName = currentCustomerObj?.company_name
-    || selectedInvoices[0]?.company_name 
-    || selectedInvoices[0]?.customer_name 
-    || singleInvoice?.customer_name 
-    || singleInvoice?.company_name 
-    || customerInvoices[0]?.company_name 
-    || 'Select Company / Customer';
+  const activeCustId = formData.customerId || customerId || companyId || vendorId;
+  const currentCustomerObj = customers.find(c => String(c.id) === String(activeCustId));
+  const currentVendorObj = vendors.find(v => String(v.id) === String(vendorId || activeCustId));
+
+  const customerName = (isVendorMode || voucherType === 'PAYMENT')
+    ? (vendor?.vendor_name || currentVendorObj?.vendor_name || selectedInvoices[0]?.vendor_name || selectedInvoices[0]?.company_name || 'Select Vendor')
+    : (currentCustomerObj?.company_name
+      || selectedInvoices[0]?.company_name 
+      || selectedInvoices[0]?.customer_name 
+      || singleInvoice?.customer_name 
+      || singleInvoice?.company_name 
+      || customerInvoices[0]?.company_name 
+      || 'Select Company / Customer');
 
   // Calculations for company bills
   const totalSelectedInvoiced = useMemo(() => {
@@ -791,16 +850,27 @@ const PaymentReceivedModal = ({
   }, [companyBillReferences]);
 
   const totalAllocated = useMemo(() => {
+    if (billAllocationOption === 'ADVANCE') {
+      return parseFloat(advanceDetails.amount) || 0;
+    }
+    if (billAllocationOption === 'ON_ACCOUNT') {
+      return parseFloat(onAccountDetails.amount) || 0;
+    }
+    if (billAllocationOption === 'NEW_REF') {
+      return parseFloat(newRefDetails.amount) || 0;
+    }
     return companyBillReferences.reduce((sum, inv) => sum + (parseFloat(allocations[inv.id]) || 0), 0);
-  }, [companyBillReferences, allocations]);
+  }, [billAllocationOption, companyBillReferences, allocations, advanceDetails.amount, onAccountDetails.amount, newRefDetails.amount]);
 
   // Dynamic Up To Balance (from Customer Ledger or Outstanding sum)
-  const rawLedgerBalance = customerBalance?.outstanding !== undefined
-    ? parseFloat(customerBalance.outstanding)
-    : totalSelectedOutstanding;
+  const rawLedgerBalance = (isVendorMode || voucherType === 'PAYMENT')
+    ? (totalSelectedOutstanding || parseFloat(vendor?.totalOutstanding || 0))
+    : (customerBalance?.outstanding !== undefined
+        ? parseFloat(customerBalance.outstanding)
+        : totalSelectedOutstanding);
 
   const upToAmount = Math.abs(rawLedgerBalance);
-  const upToDrCr = rawLedgerBalance < 0 ? 'Cr' : 'Dr';
+  const upToDrCr = (isVendorMode || voucherType === 'PAYMENT') ? 'Dr' : (rawLedgerBalance < 0 ? 'Cr' : 'Dr');
 
   // Allocation handlers with validation
   const handleAllocationChange = (invId, val) => {
@@ -990,30 +1060,49 @@ const PaymentReceivedModal = ({
       newErrors.customerId = 'Customer is required';
     }
 
-    if (companyBillReferences.length > 0) {
-      const sumAllocated = companyBillReferences.reduce((s, inv) => s + (parseFloat(allocations[inv.id]) || 0), 0);
-      const enteredTotal = parseFloat(formData.paymentAmount) || 0;
+    if (billAllocationOption === 'AGST_REF') {
+      if (companyBillReferences.length > 0) {
+        const sumAllocated = companyBillReferences.reduce((s, inv) => s + (parseFloat(allocations[inv.id]) || 0), 0);
+        const enteredTotal = parseFloat(formData.paymentAmount) || 0;
 
-      if (sumAllocated <= 0 && enteredTotal <= 0) {
-        newErrors.paymentAmount = 'Please allocate an amount against at least one bill';
-      }
-
-      // 1. Validate each allocation does not exceed invoice outstanding
-      for (const inv of companyBillReferences) {
-        const out = parseFloat(inv.outstanding) || 0;
-        const alloc = parseFloat(allocations[inv.id]) || 0;
-        if (alloc > out + 0.01) {
-          newErrors.paymentAmount = `Allocation for ${inv.invoice_no || ('INV-' + inv.id)} (${formatCurrency(alloc)}) cannot exceed outstanding amount (${formatCurrency(out)})`;
-          break;
+        if (sumAllocated <= 0 && enteredTotal <= 0) {
+          newErrors.paymentAmount = 'Please allocate an amount against at least one bill';
         }
-      }
 
-      // 2. Validate total allocated does not exceed entered receipt amount (when entered)
-      if (!newErrors.paymentAmount && enteredTotal > 0 && sumAllocated > enteredTotal + 0.01) {
-        newErrors.paymentAmount = `Total allocated amount (${formatCurrency(sumAllocated)}) exceeds entered receipt amount (${formatCurrency(enteredTotal)})`;
+        // Validate each allocation does not exceed invoice outstanding
+        for (const inv of companyBillReferences) {
+          const out = parseFloat(inv.outstanding) || 0;
+          const alloc = parseFloat(allocations[inv.id]) || 0;
+          if (alloc > out + 0.01) {
+            newErrors.paymentAmount = `Allocation for ${inv.invoice_no || ('INV-' + inv.id)} (${formatCurrency(alloc)}) cannot exceed outstanding amount (${formatCurrency(out)})`;
+            break;
+          }
+        }
+
+        if (!newErrors.paymentAmount && enteredTotal > 0 && sumAllocated > enteredTotal + 0.01) {
+          newErrors.paymentAmount = `Total allocated amount (${formatCurrency(sumAllocated)}) exceeds entered receipt amount (${formatCurrency(enteredTotal)})`;
+        }
+      } else if (!formData.paymentAmount || parseFloat(formData.paymentAmount) <= 0) {
+        newErrors.paymentAmount = 'Valid payment amount is required';
       }
-    } else if (!formData.paymentAmount || parseFloat(formData.paymentAmount) <= 0) {
-      newErrors.paymentAmount = 'Valid payment amount is required';
+    } else if (billAllocationOption === 'ADVANCE') {
+      const advAmt = parseFloat(advanceDetails.amount);
+      if (isNaN(advAmt) || advAmt <= 0) {
+        newErrors.paymentAmount = 'Advance amount must be greater than 0';
+      }
+    } else if (billAllocationOption === 'ON_ACCOUNT') {
+      const onAccAmt = parseFloat(onAccountDetails.amount);
+      if (isNaN(onAccAmt) || onAccAmt <= 0) {
+        newErrors.paymentAmount = 'On-account amount must be greater than 0';
+      }
+    } else if (billAllocationOption === 'NEW_REF') {
+      if (!newRefDetails.refNo || !newRefDetails.refNo.trim()) {
+        newErrors.paymentAmount = 'Reference number is required for New Ref';
+      }
+      const newRefAmt = parseFloat(newRefDetails.amount);
+      if (isNaN(newRefAmt) || newRefAmt <= 0) {
+        newErrors.paymentAmount = 'Reference amount must be greater than 0';
+      }
     }
 
     if (!formData.paymentDate) {
@@ -1070,76 +1159,326 @@ const PaymentReceivedModal = ({
         ? (formData.manualBankAccount || 'Other Bank') 
         : formData.bankAccount;
 
-      const activeInvoices = companyBillReferences.filter(inv => {
-        const amt = parseFloat(allocations[inv.id]);
-        return !isNaN(amt) && amt > 0;
-      });
+      const finalCustId = formData.customerId || customerId || companyId || singleInvoice?.customer_id;
 
-      if (activeInvoices.length > 0) {
-        let recordedCount = 0;
-        let totalRecordedAmt = 0;
-
-        for (const inv of activeInvoices) {
-          const allocAmt = parseFloat(allocations[inv.id]);
-          const custId = inv.customer_id || inv.company_id || inv.client_id || formData.customerId || customerId || companyId;
-          const isCustom = String(inv.id).startsWith('custom-') || inv.is_custom;
-          const numId = parseInt(inv.id, 10);
-          const validNumId = !isNaN(numId) && numId > 0 ? numId : null;
-
-          const soId = isCustom ? null : (inv.sales_order_id ? parseInt(inv.sales_order_id, 10) : validNumId);
-          const invId = isCustom ? null : (inv.invoice_id ? parseInt(inv.invoice_id, 10) : validNumId);
-
-          const finalCustId = custId ? (parseInt(custId, 10) || custId) : null;
-
-          const paymentPayload = {
-            invoiceId: invId,
-            salesOrderId: soId,
-            salesOrderSource: isCustom ? 'DIRECT_ORDER' : (inv.sales_order_source || inv.source || 'SALES_INVOICE'),
-            customerId: finalCustId,
-            paymentAmount: allocAmt,
-            paymentDate: formData.paymentDate,
-            paymentMode: formData.paymentMode,
-            transactionRefNo: formData.transactionRefNo,
-            remarks: formData.remarks 
-              ? `${formData.remarks} [Ref: ${inv.invoice_no || invId || 'Manual'}]` 
-              : `Payment against ${inv.invoice_no || ('Ref #' + (invId || 'Manual'))}`,
-            bankAccount: actualBank,
-            upiApp: formData.upiApp,
-            upiTransactionId: formData.upiTransactionId,
-            chequeNumber: formData.chequeNumber,
-            bankName: formData.bankName,
-            chequeDate: formData.chequeDate,
-            cardType: formData.cardType,
-            last4Digits: formData.last4Digits,
-            authorizationCode: formData.authorizationCode,
-          };
-
-          const response = await fetch(`${API_BASE}/customer-payments`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(paymentPayload)
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || `Failed to record payment for bill ${inv.invoice_no || invId}`);
-          }
-
-          recordedCount += 1;
-          totalRecordedAmt += allocAmt;
+      // === VENDOR PAYMENT LIVE EXECUTION (POST /api/payments) ===
+      if (voucherType === 'PAYMENT' || isVendorMode) {
+        const finalVendorId = vendorId || activeCustId || selectedInvoices[0]?.vendor_id;
+        if (!finalVendorId) {
+          errorToast('Vendor is required for payment voucher');
+          setLoading(false);
+          return;
         }
 
-        successToast(`Successfully recorded ${formatCurrency(totalRecordedAmt)} across ${recordedCount} bill reference(s)`);
+        const isCustomBank = formData.bankAccount === '__custom__';
+        const numBankId = !isCustomBank && formData.bankAccount && !isNaN(parseInt(formData.bankAccount, 10)) ? parseInt(formData.bankAccount, 10) : null;
+        const bankNameStr = isCustomBank 
+          ? (formData.manualBankAccount || 'Other Bank') 
+          : (bankAccounts.find(b => String(b.id) === String(formData.bankAccount))?.bank_name || undefined);
+
+        let vendorAllocations = [];
+        let totalAmt = 0;
+
+        if (billAllocationOption === 'AGST_REF') {
+          const activeBills = companyBillReferences.filter(inv => {
+            const amt = parseFloat(allocations[inv.id]);
+            return !isNaN(amt) && amt > 0;
+          });
+
+          if (activeBills.length === 0) {
+            errorToast('Please allocate an amount against at least one bill reference');
+            setLoading(false);
+            return;
+          }
+
+          vendorAllocations = activeBills.map(inv => {
+            const allocAmt = parseFloat(allocations[inv.id]);
+            totalAmt += allocAmt;
+            return {
+              type: 'Agst Ref',
+              bill_id: inv.id,
+              po_id: inv.po_id || inv.id,
+              ref_no: inv.invoice_no || inv.display_invoice_no || inv.po_number || `BILL-${inv.id}`,
+              amount: allocAmt
+            };
+          });
+        } else if (billAllocationOption === 'ADVANCE') {
+          const advAmt = parseFloat(advanceDetails.amount);
+          totalAmt = advAmt;
+          vendorAllocations = [{
+            type: 'Advance',
+            bill_id: null,
+            po_id: null,
+            ref_no: advanceDetails.refNote || 'Advance Payment',
+            amount: advAmt
+          }];
+        } else if (billAllocationOption === 'ON_ACCOUNT') {
+          const onAccAmt = parseFloat(onAccountDetails.amount);
+          totalAmt = onAccAmt;
+          vendorAllocations = [{
+            type: 'On Account',
+            bill_id: null,
+            po_id: null,
+            ref_no: 'On Account',
+            amount: onAccAmt
+          }];
+        } else if (billAllocationOption === 'NEW_REF') {
+          const newRefAmt = parseFloat(newRefDetails.amount);
+          totalAmt = newRefAmt;
+          vendorAllocations = [{
+            type: 'New Ref',
+            bill_id: null,
+            po_id: null,
+            ref_no: newRefDetails.refNo || 'New Ref',
+            amount: newRefAmt
+          }];
+        }
+
+        const vNo = dynamicPaymentVoucherNo || getVoucherNumber('PAYMENT');
+        const paymentPayload = {
+          vendorId: parseInt(finalVendorId, 10),
+          bankAccountId: numBankId,
+          bankAccount: bankNameStr,
+          paymentAmount: totalAmt,
+          paymentDate: formData.paymentDate,
+          paymentMode: formData.paymentMode,
+          transactionRefNo: formData.transactionRefNo || formData.chequeNumber,
+          chequeNumber: formData.chequeNumber || formData.transactionRefNo,
+          chequeDate: formData.chequeDate || null,
+          bankName: formData.bankName,
+          narration: formData.remarks || `Payment to ${customerName} (${billAllocationOption})`,
+          remarks: formData.remarks || `Payment to ${customerName} (${billAllocationOption})`,
+          voucherNumber: vNo,
+          allocations: vendorAllocations
+        };
+
+        const res = await fetch(`${API_BASE}/payments`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(paymentPayload)
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Failed to record vendor payment voucher');
+        }
+
+        const result = await res.json();
+        const recordedVNo = result.data?.paymentVoucherNo || result.paymentVoucherNo || vNo;
+        successToast(`Payment voucher ${recordedVNo} for ${formatCurrency(totalAmt)} recorded successfully!`);
+        fetchNextPaymentVoucherNo();
+        onSuccess?.(result);
+        onClose();
+        return;
+      }
+
+      // ── Option 1: Agst Ref (Existing Invoices) ──
+      if (billAllocationOption === 'AGST_REF') {
+        const activeInvoices = companyBillReferences.filter(inv => {
+          const amt = parseFloat(allocations[inv.id]);
+          return !isNaN(amt) && amt > 0;
+        });
+
+        if (activeInvoices.length > 0) {
+          let recordedCount = 0;
+          let totalRecordedAmt = 0;
+
+          for (const inv of activeInvoices) {
+            const allocAmt = parseFloat(allocations[inv.id]);
+            const custId = inv.customer_id || inv.company_id || inv.client_id || finalCustId;
+            const isCustom = String(inv.id).startsWith('custom-') || inv.is_custom;
+            const numId = parseInt(inv.id, 10);
+            const validNumId = !isNaN(numId) && numId > 0 ? numId : null;
+
+            const soId = isCustom ? null : (inv.sales_order_id ? parseInt(inv.sales_order_id, 10) : validNumId);
+            const invId = isCustom ? null : (inv.invoice_id ? parseInt(inv.invoice_id, 10) : validNumId);
+            const rowCustId = custId ? (parseInt(custId, 10) || custId) : null;
+
+            const paymentPayload = {
+              invoiceId: invId,
+              salesOrderId: soId,
+              salesOrderSource: isCustom ? 'DIRECT_ORDER' : (inv.sales_order_source || inv.source || 'SALES_INVOICE'),
+              customerId: rowCustId,
+              paymentAmount: allocAmt,
+              paymentDate: formData.paymentDate,
+              paymentMode: formData.paymentMode,
+              transactionRefNo: formData.transactionRefNo || formData.chequeNumber,
+              remarks: formData.remarks 
+                ? `${formData.remarks} [Agst Ref: ${inv.invoice_no || invId || 'Manual'}]` 
+                : `Payment against ${inv.invoice_no || ('Ref #' + (invId || 'Manual'))}`,
+              bankAccount: actualBank,
+              upiApp: formData.upiApp,
+              upiTransactionId: formData.upiTransactionId,
+              chequeNumber: formData.chequeNumber || formData.transactionRefNo,
+              bankName: formData.bankName,
+              chequeDate: formData.chequeDate,
+              cardType: formData.cardType,
+              last4Digits: formData.last4Digits,
+              authorizationCode: formData.authorizationCode,
+            };
+
+            const response = await fetch(`${API_BASE}/customer-payments`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(paymentPayload)
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.message || `Failed to record payment for bill ${inv.invoice_no || invId}`);
+            }
+
+            recordedCount += 1;
+            totalRecordedAmt += allocAmt;
+          }
+
+          successToast(`Successfully recorded ${formatCurrency(totalRecordedAmt)} against ${recordedCount} invoice reference(s)`);
+          onSuccess?.();
+          onClose();
+          return;
+        }
+      }
+
+      // ── Option 2: Advance (Advance Balance) ──
+      if (billAllocationOption === 'ADVANCE') {
+        const advAmt = parseFloat(advanceDetails.amount);
+        const advPayload = {
+          invoiceId: null,
+          salesOrderId: null,
+          salesOrderSource: 'SALES_ORDER',
+          customerId: finalCustId,
+          paymentAmount: advAmt,
+          paymentDate: formData.paymentDate,
+          paymentMode: formData.paymentMode,
+          transactionRefNo: formData.transactionRefNo || formData.chequeNumber || advanceDetails.refNote || 'ADVANCE',
+          remarks: advanceDetails.refNote ? `[Advance] ${advanceDetails.refNote}` : `[Advance Balance] Stored for future invoice adjustment`,
+          bankAccount: actualBank,
+          upiApp: formData.upiApp,
+          upiTransactionId: formData.upiTransactionId,
+          chequeNumber: formData.chequeNumber || formData.transactionRefNo,
+          bankName: formData.bankName,
+          chequeDate: formData.chequeDate,
+          cardType: formData.cardType,
+          last4Digits: formData.last4Digits,
+          authorizationCode: formData.authorizationCode,
+        };
+
+        const response = await fetch(`${API_BASE}/customer-payments`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(advPayload)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to record advance payment');
+        }
+
+        successToast(`Advance payment of ${formatCurrency(advAmt)} recorded successfully`);
+        onSuccess?.();
+        onClose();
+        return;
+      }
+
+      // ── Option 3: On Account (Unallocated Amount) ──
+      if (billAllocationOption === 'ON_ACCOUNT') {
+        const onAccAmt = parseFloat(onAccountDetails.amount);
+        const onAccPayload = {
+          invoiceId: null,
+          salesOrderId: null,
+          salesOrderSource: 'SALES_ORDER',
+          customerId: finalCustId,
+          paymentAmount: onAccAmt,
+          paymentDate: formData.paymentDate,
+          paymentMode: formData.paymentMode,
+          transactionRefNo: formData.transactionRefNo || formData.chequeNumber || 'ON_ACCOUNT',
+          remarks: formData.remarks ? `[On Account] ${formData.remarks}` : `[On Account] Unallocated party ledger credit`,
+          bankAccount: actualBank,
+          upiApp: formData.upiApp,
+          upiTransactionId: formData.upiTransactionId,
+          chequeNumber: formData.chequeNumber || formData.transactionRefNo,
+          bankName: formData.bankName,
+          chequeDate: formData.chequeDate,
+          cardType: formData.cardType,
+          last4Digits: formData.last4Digits,
+          authorizationCode: formData.authorizationCode,
+        };
+
+        const response = await fetch(`${API_BASE}/customer-payments`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(onAccPayload)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to record on-account payment');
+        }
+
+        successToast(`On-account payment of ${formatCurrency(onAccAmt)} recorded successfully`);
+        onSuccess?.();
+        onClose();
+        return;
+      }
+
+      // ── Option 4: New Ref (New Bill Reference) ──
+      if (billAllocationOption === 'NEW_REF') {
+        const newRefAmt = parseFloat(newRefDetails.amount);
+        const newRefPayload = {
+          invoiceId: null,
+          salesOrderId: null,
+          salesOrderSource: 'DIRECT_ORDER',
+          customerId: finalCustId,
+          paymentAmount: newRefAmt,
+          paymentDate: newRefDetails.date || formData.paymentDate,
+          paymentMode: formData.paymentMode,
+          transactionRefNo: newRefDetails.refNo || formData.transactionRefNo || formData.chequeNumber,
+          remarks: `[New Ref: ${newRefDetails.refNo}] ${formData.remarks || ''}`,
+          bankAccount: actualBank,
+          upiApp: formData.upiApp,
+          upiTransactionId: formData.upiTransactionId,
+          chequeNumber: formData.chequeNumber || formData.transactionRefNo,
+          bankName: formData.bankName,
+          chequeDate: formData.chequeDate,
+          cardType: formData.cardType,
+          last4Digits: formData.last4Digits,
+          authorizationCode: formData.authorizationCode,
+        };
+
+        const response = await fetch(`${API_BASE}/customer-payments`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(newRefPayload)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to record new reference payment');
+        }
+
+        successToast(`New reference ${newRefDetails.refNo} (${formatCurrency(newRefAmt)}) recorded successfully`);
         onSuccess?.();
         onClose();
         return;
       }
 
       if (!formData.paymentAmount || parseFloat(formData.paymentAmount) <= 0) {
-        errorToast('Please enter an amount or allocate funds to at least one bill reference');
+        errorToast('Please enter an amount or allocate funds');
         setLoading(false);
         return;
       }
@@ -1148,16 +1487,16 @@ const PaymentReceivedModal = ({
         invoiceId: formData.invoiceId || (formData.salesOrderSource === 'SALES_INVOICE' ? (singleInvoice?.id || formData.salesOrderId) : formData.salesOrderId) || null,
         salesOrderId: formData.salesOrderId || null,
         salesOrderSource: formData.salesOrderSource,
-        customerId: formData.customerId,
+        customerId: finalCustId,
         paymentAmount: parseFloat(formData.paymentAmount),
         paymentDate: formData.paymentDate,
         paymentMode: formData.paymentMode,
-        transactionRefNo: formData.transactionRefNo,
+        transactionRefNo: formData.transactionRefNo || formData.chequeNumber,
         remarks: formData.remarks,
         bankAccount: actualBank,
         upiApp: formData.upiApp,
         upiTransactionId: formData.upiTransactionId,
-        chequeNumber: formData.chequeNumber,
+        chequeNumber: formData.chequeNumber || formData.transactionRefNo,
         bankName: formData.bankName,
         chequeDate: formData.chequeDate,
         cardType: formData.cardType,
@@ -1442,18 +1781,18 @@ const PaymentReceivedModal = ({
             </div>
           )}
 
-          {/* Company / Customer Selection & Up To Balance Banner */}
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-            <div className="p-4 bg-gradient-to-r from-slate-50 via-white to-blue-50/20 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
-              <div className="flex-1 min-w-[260px]">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Company / Customer
+          {/* Company / Customer Selection & Up To Balance Banner (Compact Layout) */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+            <div className="px-3.5 py-2 bg-gradient-to-r from-slate-50 via-white to-blue-50/20 border-b border-slate-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0">
+                  Party:
                 </span>
-                {customers.length > 0 ? (
+                {customers.length > 0 && !isVendorMode && voucherType !== 'PAYMENT' ? (
                   <select
                     value={formData.customerId || ''}
                     onChange={(e) => handleCustomerChange(e.target.value)}
-                    className="w-full max-w-md px-3 py-1.5 bg-slate-50 hover:bg-white border border-slate-300 rounded-lg text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors cursor-pointer"
+                    className="w-full max-w-sm px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                   >
                     <option value="">Select Company / Customer</option>
                     {customers.map(c => (
@@ -1463,298 +1802,456 @@ const PaymentReceivedModal = ({
                     ))}
                   </select>
                 ) : (
-                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                  <span className="text-xs font-extrabold text-slate-900 truncate">
                     {customerName}
-                  </h3>
+                  </span>
                 )}
               </div>
 
-              <div className="text-right">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Up to
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Up to:
                 </span>
-                <div className="text-base font-extrabold font-mono text-slate-900 flex items-center justify-end gap-1.5">
-                  <span>{formatCurrency(upToAmount)}</span>
-                  <span className={`text-xs font-bold px-1.5 py-0.2 rounded border ${
-                    upToDrCr === 'Cr'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : 'bg-blue-50 text-blue-700 border-blue-200'
-                  }`}>
-                    {upToDrCr}
-                  </span>
-                </div>
+                <span className="text-xs font-mono font-extrabold text-slate-900">
+                  {formatCurrency(upToAmount)}
+                </span>
+                <span className={`text-[10px] font-bold px-1 py-0.2 rounded border ${
+                  upToDrCr === 'Cr'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                }`}>
+                  {upToDrCr}
+                </span>
               </div>
             </div>
 
-            {/* Auto Distribute Toolbar */}
-            <div className="px-4 py-2.5 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2 flex-wrap">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-                <span className="font-bold text-slate-700">Auto Distribute Lump Sum</span>
-                <div className="relative w-32">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">₹</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={lumpSumAmount}
-                    onChange={(e) => setLumpSumAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full pl-6 pr-2 py-1 text-xs font-mono font-bold border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDistributeLumpSum}
-                  className="px-3 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-all shadow-xs cursor-pointer"
-                >
-                  Distribute
-                </button>
+            {/* ── 3. BILL-WISE DETAILS — COMPACT 4 ALLOCATION OPTIONS ── */}
+            <div className="p-2.5 bg-slate-50/80 border-b border-slate-200 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                  3. Bill-wise Details • Allocation Type
+                </span>
+                <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.2 rounded border border-blue-200">
+                  Allocated: {formatCurrency(totalAllocated)}
+                </span>
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAddAgstRefModalOpen(true);
-                    setAgstRefSearch('');
-                  }}
-                  className="px-2.5 py-1 text-[11px] font-bold rounded bg-blue-600 hover:bg-blue-700 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                  title="Add specific outstanding invoices or custom references"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Agst Ref.</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAllocateAllFull}
-                  className="px-2.5 py-1 text-[11px] font-bold rounded bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer"
-                >
-                  Allocate Full to All
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClearAllAllocations}
-                  className="px-2 py-1 text-[11px] font-medium rounded text-slate-500 hover:text-rose-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  Clear All
-                </button>
+
+              {/* Compact Segmented Allocation Tabs */}
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { id: 'AGST_REF', label: 'Agst Ref', sub: 'Existing invoice' },
+                  { id: 'ADVANCE', label: 'Advance', sub: 'Advance balance' },
+                  { id: 'ON_ACCOUNT', label: 'On Account', sub: 'Unallocated amount' },
+                  { id: 'NEW_REF', label: 'New Ref', sub: 'New bill reference' }
+                ].map((opt) => {
+                  const isSelected = billAllocationOption === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        setBillAllocationOption(opt.id);
+                        if (opt.id === 'ADVANCE') {
+                          if (advanceDetails.amount) setFormData(f => ({ ...f, paymentAmount: advanceDetails.amount }));
+                        } else if (opt.id === 'ON_ACCOUNT') {
+                          if (onAccountDetails.amount) setFormData(f => ({ ...f, paymentAmount: onAccountDetails.amount }));
+                        } else if (opt.id === 'NEW_REF') {
+                          if (newRefDetails.amount) setFormData(f => ({ ...f, paymentAmount: newRefDetails.amount }));
+                        } else if (opt.id === 'AGST_REF') {
+                          const sum = companyBillReferences.reduce((s, b) => s + (parseFloat(allocations[b.id]) || 0), 0);
+                          setFormData(f => ({ ...f, paymentAmount: sum > 0 ? sum.toFixed(2) : '' }));
+                        }
+                      }}
+                      className={`py-1.5 px-2 rounded-lg border text-center transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                          : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      <div className="text-[11px] font-bold leading-tight">{opt.label}</div>
+                      <div className={`text-[9.5px] leading-tight truncate mt-0.5 ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
+                        {opt.sub}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Bill-wise Details Table (Automatic Bill Reference Linking) */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wide">
-                    <th className="py-2.5 px-3.5">Invoice Reference</th>
-                    <th className="py-2.5 px-3.5">Due Date / Credit Days</th>
-                    <th className="py-2.5 px-3.5 text-right w-36">Outstanding</th>
-                    <th className="py-2.5 px-3.5 text-right w-44">Allocated Amount</th>
-                    <th className="py-2.5 px-3.5 text-center w-16">Dr / Cr</th>
-                    <th className="py-2.5 px-2 text-center w-8"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium bg-white">
-                  {companyBillReferences.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-10 text-center text-slate-500 bg-slate-50/50">
-                        <div className="space-y-2.5 max-w-sm mx-auto">
-                          <FilePlus className="w-8 h-8 text-blue-500 mx-auto opacity-75" />
-                          <p className="text-xs font-bold text-slate-700">No invoice references added yet</p>
-                          <p className="text-[11px] text-slate-500">
-                            Add outstanding invoices of {customerName} to record payment against them.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsAddAgstRefModalOpen(true);
-                              setAgstRefSearch('');
-                            }}
-                            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer active:scale-95"
-                          >
-                            <Plus className="w-4 h-4" />
-                            <span>Add Agst Ref. ({unaddedCustomerInvoices.length} Available)</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    companyBillReferences.map((inv, idx) => {
-                      const out = parseFloat(inv.outstanding) || 0;
-                      const currentAlloc = parseFloat(allocations[inv.id]) || 0;
-                      const isFull = currentAlloc >= out && out > 0;
-                      const invDate = inv.invoice_date || inv.created_at;
-                      const creditDays = inv.credit_days || 60;
+            {/* ── OPTION 1: AGST REF (COMPACT INVOICES TABLE WITHOUT HORIZONTAL SLIDER) ── */}
+            {billAllocationOption === 'AGST_REF' && (
+              <div>
+                <div className="px-3 py-1.5 bg-blue-50/40 border-b border-blue-100 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <FileText className="w-3 h-3 text-blue-600 shrink-0" />
+                    <span className="text-[11px] font-semibold text-slate-700">
+                      Select outstanding invoices to settle against:
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleAllocateAllFull}
+                      className="px-2 py-0.5 text-[10.5px] font-bold rounded bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors cursor-pointer"
+                    >
+                      Allocate Full
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearAllAllocations}
+                      className="px-1.5 py-0.5 text-[10.5px] font-medium text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
 
-                      return (
-                        <tr key={inv.id || idx} className={`hover:bg-slate-50/80 transition-colors ${currentAlloc > 0 ? 'bg-blue-50/20' : ''}`}>
-                          {/* 1. Invoice Reference (Automatic Linking) */}
-                          <td className="py-2.5 px-3.5 align-middle">
-                            <span className="font-mono font-bold text-slate-900 text-xs block">
-                              {inv.invoice_no || inv.so_number || `INV-${inv.id}`}
-                            </span>
-                            {inv.so_number && inv.invoice_no && (
-                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                SO: {inv.so_number}
-                              </div>
-                            )}
-                          </td>
-
-                          {/* 2. Due Date / Credit Days */}
-                          <td className="py-2.5 px-3.5 align-middle text-slate-600">
-                            <span className="font-medium text-slate-800">{formatDate(invDate)}</span>
-                            <span className="text-slate-400 text-[11px] font-normal"> / {creditDays} Days</span>
-                          </td>
-
-                          {/* 3. Outstanding Amount */}
-                          <td className="py-2.5 px-3.5 align-middle text-right">
-                            <span className="font-mono font-bold text-slate-800 text-xs">
-                              {formatCurrency(out)}
-                            </span>
-                          </td>
-
-                          {/* 4. Allocated Amount + Full Option */}
-                          <td className="py-2.5 px-3.5 align-middle text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <div className="relative w-28">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">₹</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  max={out > 0 ? out : undefined}
-                                  value={allocations[inv.id] !== undefined ? allocations[inv.id] : ''}
-                                  onChange={(e) => handleAllocationChange(inv.id, e.target.value)}
-                                  className={`w-full pl-5 pr-1.5 py-1 text-xs font-mono font-bold text-right border rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white ${
-                                    currentAlloc > 0 ? 'border-blue-400 text-blue-900 shadow-2xs' : 'border-slate-300 text-slate-800'
-                                  }`}
-                                  placeholder="0.00"
-                                />
-                              </div>
+                {/* Compact Invoices Table (Sized to fit perfectly with NO horizontal slider) */}
+                <div className="w-full">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[10.5px] uppercase tracking-wide">
+                        <th className="py-2 px-2.5">Invoice Reference</th>
+                        <th className="py-2 px-2">Due Date</th>
+                        <th className="py-2 px-2 text-right">Outstanding</th>
+                        <th className="py-2 px-2 text-right w-36">Allocated Amount</th>
+                        <th className="py-2 px-1 text-center w-10">Dr/Cr</th>
+                        <th className="py-2 px-1 text-center w-7"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium bg-white">
+                      {companyBillReferences.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-500 bg-slate-50/50">
+                            <div className="space-y-2 max-w-sm mx-auto">
+                              <FilePlus className="w-7 h-7 text-blue-500 mx-auto opacity-75" />
+                              <p className="text-xs font-bold text-slate-700">No invoice references added yet</p>
+                              <p className="text-[11px] text-slate-500">
+                                Add outstanding invoices of {customerName} to record payment against them.
+                              </p>
                               <button
                                 type="button"
-                                onClick={() => handleSetFullAllocation(inv)}
-                                className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors cursor-pointer ${
-                                  isFull
-                                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-                                }`}
-                                title={`Allocate full bill amount ${formatCurrency(out)}`}
+                                onClick={() => {
+                                  setIsAddAgstRefModalOpen(true);
+                                  setAgstRefSearch('');
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs cursor-pointer active:scale-95"
                               >
-                                Full
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Add Agst Ref. ({unaddedCustomerInvoices.length} Available)</span>
                               </button>
                             </div>
                           </td>
-
-                          {/* 5. Dr/Cr (Customer Receipt is a Credit Entry) */}
-                          <td className="py-2.5 px-3.5 align-middle text-center">
-                            <span className="font-bold text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title="Credit Entry">
-                              Cr
-                            </span>
-                          </td>
-
-                          {/* 6. Remove Bill from selection */}
-                          <td className="py-2.5 px-2 align-middle text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveBill(inv.id)}
-                              className="p-1 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                              title="Exclude from this receipt"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
                         </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-                {/* Total Footer */}
-                <tfoot>
-                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-bold text-slate-900 text-xs">
-                    <td colSpan={2} className="py-3 px-3.5 text-left uppercase tracking-wider font-bold text-slate-800">
-                      Total Allocated
-                    </td>
-                    <td className="py-3 px-3.5 text-right font-mono text-xs text-slate-500">
-                      Total Due: {formatCurrency(companyBillReferences.reduce((s, b) => s + (parseFloat(b.outstanding) || 0), 0))}
-                    </td>
-                    <td className="py-3 px-3.5 text-right font-mono text-sm text-blue-700 font-extrabold">
-                      {formatCurrency(totalAllocated)}
-                    </td>
-                    <td className="py-3 px-3.5 text-center text-xs text-emerald-700 font-extrabold">
-                      Cr
-                    </td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                      ) : (
+                        companyBillReferences.map((inv, idx) => {
+                          const out = parseFloat(inv.outstanding) || 0;
+                          const currentAlloc = parseFloat(allocations[inv.id]) || 0;
+                          const isFull = currentAlloc >= out && out > 0;
+                          const invDate = inv.invoice_date || inv.created_at;
+                          const creditDays = inv.credit_days || 60;
 
-            {/* Bottom Add Agst Ref Bar */}
-            <div className="px-3.5 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAddAgstRefModalOpen(true);
-                  setAgstRefSearch('');
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-700 bg-white hover:bg-blue-50 border border-blue-300 rounded-lg shadow-2xs transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5 text-blue-600" />
-                <span>Add Agst Ref.</span>
-              </button>
-              <div className="text-[11px] text-slate-500 font-medium">
-                <span>{companyBillReferences.length} reference(s) allocated</span>
-                {unaddedCustomerInvoices.length > 0 && (
+                          return (
+                            <tr key={inv.id || idx} className={`hover:bg-slate-50/80 transition-colors ${currentAlloc > 0 ? 'bg-blue-50/20' : ''}`}>
+                              <td className="py-2 px-2.5 align-middle">
+                                <span className="font-mono font-bold text-slate-900 text-[11px] block leading-tight">
+                                  {inv.invoice_no || inv.so_number || `INV-${inv.id}`}
+                                </span>
+                                {(() => {
+                                  const poVal = inv.customer_po_no || inv.po_number || inv.po_no || inv.client_po_no || inv.so_number;
+                                  if (!poVal) return null;
+                                  return (
+                                    <div className="text-[9.5px] text-orange-600 font-mono font-bold leading-tight mt-0.5">
+                                      PO: {poVal}
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+
+                              <td className="py-2 px-2 align-middle text-slate-600 text-[11px]">
+                                <span className="font-medium text-slate-800">{formatDate(invDate)}</span>
+                                <span className="text-slate-400 text-[10px] font-normal block leading-tight">{creditDays}d</span>
+                              </td>
+
+                              <td className="py-2 px-2 align-middle text-right">
+                                <span className="font-mono font-bold text-slate-800 text-xs">
+                                  {formatCurrency(out)}
+                                </span>
+                              </td>
+
+                              <td className="py-2 px-2 align-middle text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <div className="relative w-24">
+                                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-slate-400">₹</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      max={out > 0 ? out : undefined}
+                                      value={allocations[inv.id] !== undefined ? allocations[inv.id] : ''}
+                                      onChange={(e) => handleAllocationChange(inv.id, e.target.value)}
+                                      className={`w-full pl-4 pr-1 py-1 text-xs font-mono font-bold text-right border rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white ${
+                                        currentAlloc > 0 ? 'border-blue-400 text-blue-900' : 'border-slate-300 text-slate-800'
+                                      }`}
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetFullAllocation(inv)}
+                                    className={`px-1.5 py-1 text-[9.5px] font-bold rounded border transition-colors cursor-pointer shrink-0 ${
+                                      isFull
+                                        ? 'bg-blue-600 text-white border-blue-600'
+                                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                                    }`}
+                                    title={`Allocate full ${formatCurrency(out)}`}
+                                  >
+                                    Full
+                                  </button>
+                                </div>
+                              </td>
+
+                              <td className="py-2 px-1 align-middle text-center">
+                                <span className="font-bold text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200" title="Credit Entry">
+                                  Cr
+                                </span>
+                              </td>
+
+                              <td className="py-2 px-1 align-middle text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveBill(inv.id)}
+                                  className="p-1 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                  title="Exclude bill"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-50 border-t-2 border-slate-300 font-bold text-slate-900 text-xs">
+                        <td colSpan={2} className="py-2 px-2.5 text-left uppercase tracking-wider font-bold text-slate-800 text-[10.5px]">
+                          Total Allocated (Agst Ref)
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono text-[11px] text-slate-500">
+                          Due: {formatCurrency(companyBillReferences.reduce((s, b) => s + (parseFloat(b.outstanding) || 0), 0))}
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono text-xs text-blue-700 font-extrabold">
+                          {formatCurrency(totalAllocated)}
+                        </td>
+                        <td className="py-2 px-1 text-center text-[10.5px] text-emerald-700 font-extrabold">
+                          Cr
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Bottom Add Agst Ref Bar */}
+                <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
                   <button
                     type="button"
                     onClick={() => {
                       setIsAddAgstRefModalOpen(true);
                       setAgstRefSearch('');
                     }}
-                    className="ml-2 text-blue-600 font-semibold hover:underline cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-white hover:bg-blue-50 border border-blue-300 rounded shadow-2xs transition-colors cursor-pointer"
                   >
-                    ({unaddedCustomerInvoices.length} more available to add)
+                    <Plus className="w-3 h-3 text-blue-600" />
+                    <span>Add Agst Ref.</span>
                   </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Simple Minimal Receipts History Space */}
-          <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs shadow-2xs">
-            <div className="flex items-center justify-between text-slate-700 font-semibold mb-2 pb-1.5 border-b border-slate-100">
-              <div className="flex items-center gap-1.5">
-                <History className="w-3.5 h-3.5 text-blue-600" />
-                <span className="text-xs font-bold text-slate-800">Payment Receipt History</span>
-                <span className="text-[11px] text-slate-400 font-normal">
-                  ({installments.length})
-                </span>
-              </div>
-              {alreadyReceived > 0 && (
-                <span className="text-[11px] font-semibold text-emerald-700 font-mono">
-                  Total Received: {formatCurrency(alreadyReceived)}
-                </span>
-              )}
-            </div>
-
-            {fetchingInstallments ? (
-              <p className="text-[11px] text-slate-400 py-2 text-center">Loading receipt history...</p>
-            ) : installments.length === 0 ? (
-              <p className="text-[11px] text-slate-400 py-2 text-center">No prior payment receipts recorded for this company.</p>
-            ) : (
-              <div className="max-h-[105px] overflow-y-auto divide-y divide-slate-100">
-                {installments.map((inst, idx) => (
-                  <div key={inst.id || idx} className="py-1 flex items-center justify-between text-[11px] hover:bg-slate-50 px-1 rounded transition-colors">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-slate-800">{inst.payment_receipt_no || `REC-${inst.id}`}</span>
-                      <span className="text-slate-300">•</span>
-                      <span className="text-slate-500">{formatDate(inst.payment_date)}</span>
-                      <span className="text-slate-400">({inst.payment_mode?.replace('_', ' ') || 'Payment'})</span>
-                      {inst.cheque_number && <span className="text-slate-400 font-mono">Chq: #{inst.cheque_number}</span>}
-                    </div>
-                    <span className="font-mono font-bold text-emerald-700">{formatCurrency(inst.payment_amount)}</span>
+                  <div className="text-[10.5px] text-slate-500 font-medium">
+                    <span>{companyBillReferences.length} reference(s) allocated</span>
+                    {unaddedCustomerInvoices.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddAgstRefModalOpen(true);
+                          setAgstRefSearch('');
+                        }}
+                        className="ml-2 text-blue-600 font-semibold hover:underline cursor-pointer"
+                      >
+                        ({unaddedCustomerInvoices.length} more available)
+                      </button>
+                    )}
                   </div>
-                ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── OPTION 2: ADVANCE ALLOCATION (COMPACT) ── */}
+            {billAllocationOption === 'ADVANCE' && (
+              <div className="p-3 space-y-2.5 bg-white animate-in fade-in duration-200">
+                <div className="p-2.5 bg-emerald-50/70 border border-emerald-200/80 rounded-lg text-xs text-emerald-900 flex items-start gap-2">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-emerald-800 leading-tight">
+                    <strong className="text-emerald-950 font-bold">Advance Entry:</strong> Holds an unadjusted advance against {customerName} for upcoming orders or contract adjustments.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                      Advance Amount (₹) *
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">₹</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={advanceDetails.amount}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAdvanceDetails(prev => ({ ...prev, amount: val }));
+                          setFormData(f => ({ ...f, paymentAmount: val }));
+                        }}
+                        placeholder="0.00"
+                        className="w-full pl-6 pr-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                      Advance Reference / Note
+                    </label>
+                    <input
+                      type="text"
+                      value={advanceDetails.refNote}
+                      onChange={(e) => setAdvanceDetails(prev => ({ ...prev, refNote: e.target.value }))}
+                      placeholder="e.g. Advance against contract"
+                      className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-100">
+                  <span>Current Outstanding: <strong className="font-mono">{formatCurrency(totalSelectedOutstanding)}</strong></span>
+                  {advanceDetails.amount && (
+                    <span className="text-emerald-700 font-bold font-mono">
+                      Advance: {formatCurrency(parseFloat(advanceDetails.amount) || 0)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── OPTION 3: ON ACCOUNT ALLOCATION (COMPACT) ── */}
+            {billAllocationOption === 'ON_ACCOUNT' && (
+              <div className="p-3 space-y-2.5 bg-white animate-in fade-in duration-200">
+                <div className="p-2.5 bg-purple-50/70 border border-purple-200/80 rounded-lg text-xs text-purple-900 flex items-start gap-2">
+                  <Wallet className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-purple-800 leading-tight">
+                    <strong className="text-purple-950 font-bold">On Account:</strong> Unallocated ledger credit that will not reduce specific invoice balances until later settlement.
+                  </p>
+                </div>
+
+                <div className="max-w-xs">
+                  <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                    Unallocated Amount (₹) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">₹</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={onAccountDetails.amount}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setOnAccountDetails(prev => ({ ...prev, amount: val }));
+                        setFormData(f => ({ ...f, paymentAmount: val }));
+                      }}
+                      placeholder="0.00"
+                      className="w-full pl-6 pr-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-100">
+                  <span>Party: <strong>{customerName}</strong></span>
+                  {onAccountDetails.amount && (
+                    <span className="text-purple-700 font-bold font-mono">
+                      Credit: {formatCurrency(parseFloat(onAccountDetails.amount) || 0)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── OPTION 4: NEW REF ALLOCATION (COMPACT) ── */}
+            {billAllocationOption === 'NEW_REF' && (
+              <div className="p-3 space-y-2.5 bg-white animate-in fade-in duration-200">
+                <div className="p-2.5 bg-amber-50/70 border border-amber-200/80 rounded-lg text-xs text-amber-900 flex items-start gap-2">
+                  <Plus className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-800 leading-tight">
+                    <strong className="text-amber-950 font-bold">New Bill Reference:</strong> Registers a fresh tracking reference number and amount for future matching.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                      New Reference No *
+                    </label>
+                    <input
+                      type="text"
+                      value={newRefDetails.refNo}
+                      onChange={(e) => setNewRefDetails(prev => ({ ...prev, refNo: e.target.value }))}
+                      placeholder="REF-2026-001"
+                      className="w-full px-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                      Applicable Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={newRefDetails.date}
+                      onChange={(e) => setNewRefDetails(prev => ({ ...prev, date: e.target.value }))}
+                      className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                      Reference Amount (₹) *
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">₹</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newRefDetails.amount}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewRefDetails(prev => ({ ...prev, amount: val }));
+                          setFormData(f => ({ ...f, paymentAmount: val }));
+                        }}
+                        placeholder="0.00"
+                        className="w-full pl-6 pr-2 py-1.5 text-xs font-mono font-bold text-slate-900 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-100">
+                  <span>Ref: <strong className="font-mono text-slate-800">{newRefDetails.refNo || '—'}</strong></span>
+                  {newRefDetails.amount && (
+                    <span className="text-amber-700 font-bold font-mono">
+                      Ref Amount: {formatCurrency(parseFloat(newRefDetails.amount) || 0)}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1763,87 +2260,30 @@ const PaymentReceivedModal = ({
         {/* ── RIGHT PANEL: VOUCHER TYPE SELECTOR & TRANSACTION ENTRY FORM ── */}
         <div className="lg:col-span-5 p-5 space-y-4 bg-white">
           
-          {/* 1. Accounts — Voucher Entry Selection Header & Pills */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between pb-1 border-b border-slate-200">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                  Accounts — Voucher Entry
-                </span>
-                <p className="text-xs font-bold text-slate-800">
-                  Select the accounting transaction type
-                </p>
-              </div>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 uppercase tracking-wide">
-                {activeVoucherMeta.name} Voucher
-              </span>
-            </div>
-
-            {/* 6 Voucher Type Options */}
+          {/* Voucher Details Header (Voucher Type pre-selected on previous page) */}
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-200">
             <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                Voucher Type
-              </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {voucherTypes.map((vt) => {
-                  const isActive = voucherType === vt.id;
-                  return (
-                    <button
-                      key={vt.id}
-                      type="button"
-                      onClick={() => {
-                        setVoucherType(vt.id);
-                        setVoucherErrors({});
-                      }}
-                      className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border ${
-                        isActive
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                          : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-                      }`}
-                    >
-                      {vt.icon}
-                      <span>{vt.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                Voucher Details
+              </span>
+              <p className="text-xs font-bold text-slate-800">
+                {activeVoucherMeta.title} <span className="text-slate-400 font-normal">•</span> <span className="font-mono text-[11px] font-semibold text-slate-600">Ref: #{getVoucherNumber(voucherType)}</span>
+              </p>
             </div>
-
-            {/* Active Voucher Summary Banner */}
-            <div className="bg-white border border-slate-200 rounded-lg p-2.5 flex items-start gap-2.5 shadow-2xs">
-              <div className="p-1 rounded bg-blue-50 text-blue-600 border border-blue-100 shrink-0 mt-0.5">
-                {activeVoucherMeta.icon}
-              </div>
-              <div className="text-xs flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-1">
-                  <h4 className="font-bold text-slate-900 leading-tight">
-                    {activeVoucherMeta.title}
-                  </h4>
-                  <span className="text-[10px] font-mono font-semibold text-slate-500">
-                    Ref: #{getVoucherNumber(voucherType)}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  {activeVoucherMeta.desc}
-                </p>
-                {voucherType !== 'RECEIPT' && (
-                  <span className="inline-block mt-1 text-[9px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded">
-                    Interactive UI concept only • Selecting previews intended entry
-                  </span>
-                )}
-              </div>
-            </div>
+            <span className="text-[10px] font-extrabold px-2.5 py-1 rounded bg-blue-50 text-blue-800 border border-blue-200 uppercase tracking-wide">
+              {activeVoucherMeta.name} Voucher
+            </span>
           </div>
 
           {/* ── 2. DYNAMIC FORM BODY PER VOUCHER TYPE ── */}
 
-          {/* A. RECEIPT VOUCHER (Active ERP Payment Received Workflow) */}
-          {voucherType === 'RECEIPT' && (
+          {/* A. RECEIPT / PAYMENT VOUCHER FORM (Full ERP Settlement Workflow) */}
+          {(voucherType === 'RECEIPT' || voucherType === 'PAYMENT') && (
             <div className="space-y-3.5">
               {/* Payment Amount (Enter once, auto-distributes oldest first) */}
               <div>
                 <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                  Amount Received *
+                  {voucherType === 'PAYMENT' ? 'Amount Paid *' : 'Amount Received *'}
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base font-bold text-slate-400">₹</span>
@@ -1862,7 +2302,9 @@ const PaymentReceivedModal = ({
                   />
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Enter total receipt amount to automatically allocate across oldest due invoices first, or manually adjust allocations on the left.
+                  {voucherType === 'PAYMENT'
+                    ? 'Enter total payment amount to automatically allocate across oldest due bills first, or manually adjust allocations on the left.'
+                    : 'Enter total receipt amount to automatically allocate across oldest due invoices first, or manually adjust allocations on the left.'}
                 </p>
                 {errors.paymentAmount && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentAmount}</span>}
               </div>
@@ -1870,7 +2312,9 @@ const PaymentReceivedModal = ({
               {/* Date + Mode */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Receipt Date *</label>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                    {voucherType === 'PAYMENT' ? 'Payment Date *' : 'Receipt Date *'}
+                  </label>
                   <input
                     type="date"
                     value={formData.paymentDate}
@@ -1882,7 +2326,9 @@ const PaymentReceivedModal = ({
                   {errors.paymentDate && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentDate}</span>}
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Receipt Mode *</label>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                    {voucherType === 'PAYMENT' ? 'Payment Mode *' : 'Receipt Mode *'}
+                  </label>
                   <select
                     value={formData.paymentMode}
                     onChange={(e) => handleInputChange('paymentMode', e.target.value)}
@@ -1901,7 +2347,9 @@ const PaymentReceivedModal = ({
               {(['BANK_TRANSFER', 'CHEQUE'].includes(formData.paymentMode)) && (
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
-                    {formData.paymentMode === 'CHEQUE' ? 'Deposit Into Bank Account *' : 'Bank Account *'}
+                    {formData.paymentMode === 'CHEQUE' 
+                      ? (voucherType === 'PAYMENT' ? 'Issue From Bank Account *' : 'Deposit Into Bank Account *') 
+                      : 'Bank Account *'}
                   </label>
                   {bankAccounts.length > 0 ? (
                     <select
@@ -1943,6 +2391,77 @@ const PaymentReceivedModal = ({
                 </div>
               )}
 
+              {/* Cheque No. / Ref No. (Directly after Bank Account) */}
+              {(['BANK_TRANSFER', 'CHEQUE'].includes(formData.paymentMode) || !formData.paymentMode) && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                      Cheque No. / Ref No. {formData.paymentMode === 'CHEQUE' ? '*' : ''}
+                    </label>
+                    {lastFetchedCheque && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleInputChange('chequeNumber', lastFetchedCheque);
+                          handleInputChange('transactionRefNo', lastFetchedCheque);
+                        }}
+                        className="text-[10px] text-blue-600 hover:underline font-mono cursor-pointer"
+                      >
+                        Auto-fill: #{lastFetchedCheque}
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={formData.chequeNumber || formData.transactionRefNo || ''}
+                    onChange={(e) => {
+                      handleInputChange('chequeNumber', e.target.value);
+                      handleInputChange('transactionRefNo', e.target.value);
+                    }}
+                    className={`w-full px-3 py-2 border rounded-xl text-xs font-mono font-bold bg-white focus:outline-none focus:ring-2 transition-all ${
+                      errors.chequeNumber ? 'border-rose-500 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/20 focus:border-blue-500'
+                    }`}
+                    placeholder="e.g. 12345 / Cheque No / UTR Ref"
+                  />
+                  {errors.chequeNumber && <span className="text-[10px] text-rose-600 mt-0.5 block">{errors.chequeNumber}</span>}
+                </div>
+              )}
+
+              {/* Additional Cheque Details (Customer / Vendor's Bank & Cheque Date) */}
+              {formData.paymentMode === 'CHEQUE' && (
+                <div className="grid grid-cols-2 gap-3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl shadow-2xs">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                      {voucherType === 'PAYMENT' ? "Vendor's Bank" : "Customer's Bank *"}
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.bankName}
+                      onChange={(e) => handleInputChange('bankName', e.target.value)}
+                      className={`w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white focus:outline-none focus:ring-2 ${
+                        errors.bankName ? 'border-rose-500 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/20 focus:border-blue-500'
+                      }`}
+                      placeholder="Issuing bank name"
+                    />
+                    {errors.bankName && <span className="text-[10px] text-rose-600 mt-0.5 block">{errors.bankName}</span>}
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wide block mb-1">
+                      Cheque Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.chequeDate}
+                      onChange={(e) => handleInputChange('chequeDate', e.target.value)}
+                      className={`w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white focus:outline-none focus:ring-2 ${
+                        errors.chequeDate ? 'border-rose-500 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/20 focus:border-blue-500'
+                      }`}
+                    />
+                    {errors.chequeDate && <span className="text-[10px] text-rose-600 mt-0.5 block">{errors.chequeDate}</span>}
+                  </div>
+                </div>
+              )}
+
               {/* UPI Details */}
               {formData.paymentMode === 'UPI' && (
                 <div className="grid grid-cols-2 gap-3">
@@ -1972,78 +2491,21 @@ const PaymentReceivedModal = ({
                 </div>
               )}
 
-              {/* Cheque Details */}
-              {formData.paymentMode === 'CHEQUE' && (
-                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 shadow-2xs">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-800 pb-1 border-b border-slate-200">
-                    <div className="flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Cheque Details</span>
-                    </div>
-                    {lastFetchedCheque && (
-                      <span className="text-[9px] text-blue-700 font-semibold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 shadow-2xs">
-                        Auto-fetched: #{lastFetchedCheque}
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wide block mb-0.5">Cheque No *</label>
-                      <input
-                        type="text"
-                        value={formData.chequeNumber}
-                        onChange={(e) => handleInputChange('chequeNumber', e.target.value)}
-                        className={`w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono bg-white focus:outline-none focus:ring-2 ${
-                          errors.chequeNumber ? 'border-rose-500 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/20 focus:border-blue-500'
-                        }`}
-                        placeholder="Cheque #"
-                      />
-                      {errors.chequeNumber && <span className="text-[10px] text-rose-600 mt-0.5 block">{errors.chequeNumber}</span>}
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wide block mb-0.5">Customer's Bank *</label>
-                      <input
-                        type="text"
-                        value={formData.bankName}
-                        onChange={(e) => handleInputChange('bankName', e.target.value)}
-                        className={`w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white focus:outline-none focus:ring-2 ${
-                          errors.bankName ? 'border-rose-500 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/20 focus:border-blue-500'
-                        }`}
-                        placeholder="Issuing bank"
-                      />
-                      {errors.bankName && <span className="text-[10px] text-rose-600 mt-0.5 block">{errors.bankName}</span>}
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wide block mb-0.5">Cheque Date *</label>
-                      <input
-                        type="date"
-                        value={formData.chequeDate}
-                        onChange={(e) => handleInputChange('chequeDate', e.target.value)}
-                        className={`w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white focus:outline-none focus:ring-2 ${
-                          errors.chequeDate ? 'border-rose-500 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/20 focus:border-blue-500'
-                        }`}
-                      />
-                      {errors.chequeDate && <span className="text-[10px] text-rose-600 mt-0.5 block">{errors.chequeDate}</span>}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Remarks / Description */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
                     Narration / Remarks
                   </label>
-                  {(formData.bankAccount || formData.chequeNumber) && (
+                  {(formData.bankAccount || formData.chequeNumber || formData.transactionRefNo) && (
                     <button
                       type="button"
                       onClick={() => {
                         const bank = bankAccounts.find(b => String(b.id) === String(formData.bankAccount));
                         const parts = [];
-                        if (bank) parts.push(`Bank: ${bank.bank_name} (A/C: ${bank.account_number}, IFSC: ${bank.ifsc_code || '—'})`);
-                        if (formData.chequeNumber) parts.push(`Cheque No: ${formData.chequeNumber}`);
-                        if (formData.transactionRefNo) parts.push(`Ref: ${formData.transactionRefNo}`);
+                        if (bank) parts.push(`Bank: ${bank.bank_name} (A/C: ${bank.account_number || '—'})`);
+                        const chk = formData.chequeNumber || formData.transactionRefNo;
+                        if (chk) parts.push(`Cheque No: ${chk}`);
                         handleInputChange('remarks', parts.join(' | '));
                       }}
                       className="text-[10px] text-blue-600 hover:text-blue-700 font-semibold hover:underline cursor-pointer flex items-center gap-1"
@@ -2057,16 +2519,62 @@ const PaymentReceivedModal = ({
                   onChange={(e) => handleInputChange('remarks', e.target.value)}
                   className="w-full px-3 py-1.5 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none bg-white"
                   rows="2"
-                  placeholder="Enter receipt narration or auto-fill details"
+                  placeholder={voucherType === 'PAYMENT' ? "Enter payment narration or auto-fill details" : "Enter receipt narration or auto-fill details"}
                 />
               </div>
 
-              {/* Receipt Action Buttons */}
-              <div className="flex gap-3 pt-3 border-t border-slate-200">
+              {/* Voucher Amount Preview & Summary Card (Matching Screenshot) */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                    Voucher amount
+                  </span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-base font-extrabold font-mono text-slate-900">
+                      {formatCurrency(totalAllocated || parseFloat(formData.paymentAmount) || 0)}
+                    </span>
+                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 uppercase tracking-wide">
+                      Preview only
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase">
+                    Mode
+                  </span>
+                  <span className="text-xs font-bold text-slate-700 font-mono">
+                    {formData.paymentMode || 'NEFT'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons (Clear, Cancel, Save) */}
+              <div className="flex gap-2.5 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (billAllocationOption === 'AGST_REF') {
+                      handleClearAllAllocations();
+                    } else if (billAllocationOption === 'ADVANCE') {
+                      setAdvanceDetails({ refNote: '', amount: '' });
+                      setFormData(f => ({ ...f, paymentAmount: '' }));
+                    } else if (billAllocationOption === 'ON_ACCOUNT') {
+                      setOnAccountDetails({ amount: '' });
+                      setFormData(f => ({ ...f, paymentAmount: '' }));
+                    } else if (billAllocationOption === 'NEW_REF') {
+                      setNewRefDetails(prev => ({ ...prev, amount: '' }));
+                      setFormData(f => ({ ...f, paymentAmount: '' }));
+                    }
+                  }}
+                  className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-semibold transition-all cursor-pointer border border-slate-200"
+                  title="Clear allocation fields"
+                >
+                  Clear
+                </button>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-none px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer border border-slate-200"
+                  className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer border border-slate-200"
                 >
                   Cancel
                 </button>
@@ -2079,188 +2587,16 @@ const PaymentReceivedModal = ({
                   {loading ? (
                     <>
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Recording Receipt...</span>
+                      <span>{voucherType === 'PAYMENT' ? 'Recording Payment...' : 'Recording Receipt...'}</span>
                     </>
                   ) : (
                     <>
-                      <CreditCard className="w-4 h-4" />
+                      <Check className="w-4 h-4" />
                       <span>
-                        Record Payment Received ({companyBillReferences.filter(i => (parseFloat(allocations[i.id]) || 0) > 0).length} Bills)
+                        Save & Record Payment ({formatCurrency(totalAllocated || parseFloat(formData.paymentAmount) || 0)})
                       </span>
                     </>
                   )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* B. PAYMENT VOUCHER */}
-          {voucherType === 'PAYMENT' && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Date *</label>
-                  <input
-                    type="date"
-                    value={voucherForm.date}
-                    onChange={(e) => handleVoucherInputChange('date', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                  {voucherErrors.date && <span className="text-[10px] text-rose-600">{voucherErrors.date}</span>}
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Voucher Number</label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={getVoucherNumber('PAYMENT')}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold bg-slate-50 text-slate-700"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Payee (Vendor / Supplier) *</label>
-                {vendors.length > 0 ? (
-                  <select
-                    value={voucherForm.payee}
-                    onChange={(e) => handleVoucherInputChange('payee', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  >
-                    <option value="">Select Payee / Vendor</option>
-                    {vendors.map(v => (
-                      <option key={v.id} value={v.vendor_name || v.name}>{v.vendor_name || v.name}</option>
-                    ))}
-                    <option value="__custom__">Custom Payee...</option>
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={voucherForm.payee}
-                    onChange={(e) => handleVoucherInputChange('payee', e.target.value)}
-                    placeholder="Enter vendor or payee name"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                )}
-                {voucherForm.payee === '__custom__' && (
-                  <input
-                    type="text"
-                    placeholder="Type custom payee name"
-                    onChange={(e) => handleVoucherInputChange('payee', e.target.value)}
-                    className="mt-2 w-full px-3 py-2 border border-slate-300 rounded-xl text-xs"
-                  />
-                )}
-                {voucherErrors.payee && <span className="text-[10px] text-rose-600">{voucherErrors.payee}</span>}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Debit Ledger *</label>
-                  <select
-                    value={voucherForm.paymentDebitLedger}
-                    onChange={(e) => handleVoucherInputChange('paymentDebitLedger', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white"
-                  >
-                    <option value="Sundry Creditors (Vendors)">Sundry Creditors (Vendors)</option>
-                    <option value="Purchase Account">Purchase Account</option>
-                    <option value="Raw Material Consumption">Raw Material Consumption</option>
-                    <option value="Freight & Transport">Freight & Transport</option>
-                    <option value="Factory Electricity / Power">Factory Electricity / Power</option>
-                    <option value="Office & Administrative">Office & Administrative</option>
-                    <optgroup label="57 Master Ledger Groups">
-                      {LEDGER_GROUPS.map(g => (
-                        <option key={g.id} value={g.name}>{g.id}. {g.name} ({g.category})</option>
-                      ))}
-                    </optgroup>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Payment Mode *</label>
-                  <select
-                    value={voucherForm.paymentMode}
-                    onChange={(e) => handleVoucherInputChange('paymentMode', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white"
-                  >
-                    <option value="BANK_TRANSFER">Bank Transfer (NEFT/RTGS)</option>
-                    <option value="CHEQUE">Cheque / Demand Draft</option>
-                    <option value="CASH">Cash in Hand</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Bank / Cash Account *</label>
-                  <select
-                    value={voucherForm.paymentBankAccount}
-                    onChange={(e) => handleVoucherInputChange('paymentBankAccount', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white"
-                  >
-                    <option value="">Select Account</option>
-                    <option value="Cash in Hand">Cash in Hand</option>
-                    {bankAccounts.map(b => (
-                      <option key={b.id} value={`${b.bank_name} - ${b.account_number}`}>
-                        {b.bank_name} ({b.account_number})
-                      </option>
-                    ))}
-                  </select>
-                  {voucherErrors.paymentBankAccount && <span className="text-[10px] text-rose-600">{voucherErrors.paymentBankAccount}</span>}
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Amount *</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={voucherForm.paymentAmount}
-                      onChange={(e) => handleVoucherInputChange('paymentAmount', e.target.value)}
-                      placeholder="0.00"
-                      className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold"
-                    />
-                  </div>
-                  {voucherErrors.paymentAmount && <span className="text-[10px] text-rose-600">{voucherErrors.paymentAmount}</span>}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Cheque / Ref No</label>
-                <input
-                  type="text"
-                  value={voucherForm.paymentChequeRef}
-                  onChange={(e) => handleVoucherInputChange('paymentChequeRef', e.target.value)}
-                  placeholder="Cheque # or UTR / NEFT reference"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Narration</label>
-                <textarea
-                  value={voucherForm.narration}
-                  onChange={(e) => handleVoucherInputChange('narration', e.target.value)}
-                  placeholder="Being payment made towards..."
-                  rows="2"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded-xl text-xs resize-none"
-                />
-              </div>
-
-              {/* Action */}
-              <div className="flex gap-3 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleVoucherPreviewSubmit}
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <ArrowRight className="w-4 h-4" />
-                  <span>Preview Payment Voucher (PV)</span>
                 </button>
               </div>
             </div>
@@ -3093,11 +3429,15 @@ const PaymentReceivedModal = ({
                                 <span className="font-mono font-bold text-xs text-slate-900 truncate">
                                   {inv.invoice_no || inv.so_number || `INV-${inv.id}`}
                                 </span>
-                                {inv.so_number && inv.invoice_no && (
-                                  <span className="text-[10px] text-slate-400 font-mono">
-                                    (SO: {inv.so_number})
-                                  </span>
-                                )}
+                                {(() => {
+                                  const po = inv.customer_po_no || inv.po_number || inv.po_no || inv.client_po_no || inv.so_number;
+                                  if (!po) return null;
+                                  return (
+                                    <span className="text-[10px] text-orange-600 font-mono font-bold">
+                                      (PO: {po})
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-1">
                                 <span>Date: <strong className="text-slate-700 font-medium">{formatDate(invDate)}</strong></span>
@@ -3241,7 +3581,7 @@ const PaymentReceivedModal = ({
 
   if (isPage) {
     return (
-      <div className="space-y-4 animate-in fade-in duration-300 pb-12 max-w-7xl mx-auto">
+      <div className="w-full space-y-3 animate-in fade-in duration-300 pb-4">
         {modalContent}
       </div>
     );

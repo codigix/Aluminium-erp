@@ -6,12 +6,27 @@ const fs = require('fs');
 const emailService = require('./emailService');
 
 const generatePaymentVoucherNo = async () => {
-  const [rows] = await pool.query(
-    'SELECT COUNT(*) as count FROM payments WHERE YEAR(created_at) = YEAR(NOW())'
-  );
-  const count = rows[0].count + 1;
   const year = new Date().getFullYear();
-  return `PV-${year}-${String(count).padStart(5, '0')}`;
+  const [rows] = await pool.query(
+    `SELECT payment_voucher_no as vno FROM payments WHERE payment_voucher_no LIKE ?
+     UNION
+     SELECT voucher_no as vno FROM payment_vouchers WHERE voucher_no LIKE ?`,
+    [`PAY-${year}-%`, `PAY-${year}-%`]
+  );
+  let maxSeq = 0;
+  for (const r of rows) {
+    if (r.vno) {
+      const match = r.vno.match(/PAY-\d+-(\d+)/i);
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (!isNaN(seq) && seq > maxSeq) {
+          maxSeq = seq;
+        }
+      }
+    }
+  }
+  const nextSeq = maxSeq + 1;
+  return `PAY-${year}-${String(nextSeq).padStart(4, '0')}`;
 };
 
 const processPayment = async (payload) => {
@@ -25,7 +40,10 @@ const processPayment = async (payload) => {
     paymentMode,
     transactionRefNo,
     remarks,
+    narration,
     bankAccount,
+    bankAccountId: inputBankAccountId,
+    voucherNumber,
     upiApp,
     upiTransactionId,
     chequeNumber,
@@ -34,19 +52,268 @@ const processPayment = async (payload) => {
     cardType,
     last4Digits,
     authorizationCode,
+    allocations,
     createdBy
   } = payload;
 
-  if ((!poId && !jobCardQualityLogId) || !vendorId || !paymentAmount || !paymentDate || !paymentMode) {
+  const hasAllocations = Array.isArray(allocations) && allocations.length > 0;
+
+  if (!hasAllocations && (!poId && !jobCardQualityLogId)) {
+    const error = new Error('Missing required payment reference or allocation');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!vendorId || !paymentAmount || !paymentDate || !paymentMode) {
     const error = new Error('Missing required payment fields');
     error.statusCode = 400;
     throw error;
   }
 
-  const voucherNo = await generatePaymentVoucherNo();
+  let voucherNo = voucherNumber?.trim();
+  if (!voucherNo) {
+    voucherNo = await generatePaymentVoucherNo();
+  } else {
+    // If the provided voucher number already exists in payments or payment_vouchers, auto-generate next
+    const [existing] = await pool.query(
+      'SELECT id FROM payments WHERE payment_voucher_no = ? UNION SELECT id FROM payment_vouchers WHERE voucher_no = ?',
+      [voucherNo, voucherNo]
+    );
+    if (existing.length > 0) {
+      voucherNo = await generatePaymentVoucherNo();
+    }
+  }
 
   try {
-    // Get Reference Number
+    let bankAccountId = inputBankAccountId || null;
+    let manualBankAccount = null;
+
+    if (!bankAccountId && bankAccount) {
+      const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
+      if (isNumericId) {
+        const [banks] = await pool.query('SELECT id FROM bank_accounts WHERE id = ?', [parseInt(bankAccount)]);
+        if (banks.length > 0) {
+          bankAccountId = parseInt(bankAccount);
+        } else {
+          manualBankAccount = bankAccount;
+        }
+      } else {
+        manualBankAccount = bankAccount;
+      }
+    }
+
+    // Normalize payment mode to valid enum: 'BANK_TRANSFER','UPI','CHEQUE','CREDIT_CARD','DEBIT_CARD','CASH'
+    const validModes = ['BANK_TRANSFER', 'UPI', 'CHEQUE', 'CREDIT_CARD', 'DEBIT_CARD', 'CASH'];
+    let normalizedPaymentMode = 'BANK_TRANSFER';
+    if (paymentMode) {
+      const upper = String(paymentMode).toUpperCase();
+      if (upper === 'NEFT' || upper === 'RTGS' || upper === 'IMPS' || upper === 'BANK_TRANSFER') {
+        normalizedPaymentMode = 'BANK_TRANSFER';
+      } else if (upper === 'CHEQUE' || upper === 'CHECK') {
+        normalizedPaymentMode = 'CHEQUE';
+      } else if (upper === 'UPI') {
+        normalizedPaymentMode = 'UPI';
+      } else if (upper === 'CASH') {
+        normalizedPaymentMode = 'CASH';
+      } else if (upper === 'CREDIT_CARD') {
+        normalizedPaymentMode = 'CREDIT_CARD';
+      } else if (upper === 'DEBIT_CARD') {
+        normalizedPaymentMode = 'DEBIT_CARD';
+      } else if (validModes.includes(upper)) {
+        normalizedPaymentMode = upper;
+      }
+    }
+
+    if (hasAllocations) {
+      // Multi-reference Bill Allocation Workflow:
+      // Records ONE payment record under this voucher, with bill-wise allocations in payment_allocations
+      let calculatedTotal = 0;
+      const validAllocs = [];
+
+      for (const alloc of allocations) {
+        const allocAmt = parseFloat(alloc.amount || alloc.settlementAmount) || 0;
+        if (allocAmt <= 0) continue;
+        calculatedTotal += allocAmt;
+
+        // Resolve integer invoice_id (must be integer or null)
+        const rawInvoiceId = alloc.bill_id || alloc.invoice_id || alloc.invoiceId || (typeof invoiceId === 'number' ? invoiceId : null);
+        const allocInvoiceId = (rawInvoiceId && !isNaN(parseInt(rawInvoiceId, 10))) ? parseInt(rawInvoiceId, 10) : null;
+
+        // Resolve integer po_id
+        let allocPoId = (alloc.po_id || alloc.poId || poId) ? parseInt(alloc.po_id || alloc.poId || poId, 10) : null;
+        if (isNaN(allocPoId)) allocPoId = null;
+
+        if (!allocPoId && allocInvoiceId) {
+          const [invRows] = await pool.query('SELECT po_id FROM vendor_invoices WHERE id = ?', [allocInvoiceId]);
+          if (invRows.length > 0 && invRows[0].po_id) {
+            allocPoId = invRows[0].po_id;
+          }
+        }
+
+        const allocRef = alloc.ref_no || alloc.referenceNo || (allocPoId ? `PO-${allocPoId}` : null);
+        validAllocs.push({
+          allocAmt,
+          allocInvoiceId,
+          allocPoId,
+          allocRef,
+          type: alloc.type || 'Agst Ref',
+          jobCardQualityLogId: alloc.jobCardQualityLogId || null
+        });
+      }
+
+      const finalPaymentAmount = parseFloat(paymentAmount) || calculatedTotal;
+      const primaryInvoiceId = validAllocs.length === 1 ? validAllocs[0].allocInvoiceId : null;
+      const primaryPoId = validAllocs.length === 1 ? validAllocs[0].allocPoId : null;
+      const primaryJobCardId = validAllocs.length === 1 ? validAllocs[0].jobCardQualityLogId : null;
+
+      const refsSummary = validAllocs.map(a => `${a.type || 'Ref'}: ${a.allocRef || a.allocPoId || 'Bill'}`).join(', ');
+      const voucherDesc = narration || remarks || (refsSummary ? `Payment against ${refsSummary}` : 'Vendor Payment');
+
+      // 1. Insert EXACTLY ONE master payment record into `payments` under this voucher
+      const [paymentResult] = await pool.execute(
+        `INSERT INTO payments (
+          payment_voucher_no,
+          invoice_id,
+          po_id,
+          job_card_quality_log_id,
+          vendor_id,
+          payment_amount,
+          payment_date,
+          payment_mode,
+          transaction_ref_no,
+          bank_account_id,
+          manual_bank_account,
+          remarks,
+          upi_app,
+          upi_transaction_id,
+          cheque_number,
+          cheque_bank_name,
+          cheque_date,
+          card_type,
+          card_last_4_digits,
+          authorization_code,
+          status,
+          created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          voucherNo,
+          primaryInvoiceId,
+          primaryPoId,
+          primaryJobCardId,
+          vendorId,
+          finalPaymentAmount,
+          paymentDate,
+          normalizedPaymentMode,
+          transactionRefNo || (validAllocs.length === 1 ? validAllocs[0].allocRef : null),
+          bankAccountId,
+          manualBankAccount || null,
+          voucherDesc,
+          upiApp || null,
+          upiTransactionId || null,
+          chequeNumber || null,
+          bankName || null,
+          chequeDate || null,
+          cardType || null,
+          last4Digits || null,
+          authorizationCode || null,
+          'CONFIRMED',
+          createdBy || null
+        ]
+      );
+
+      const paymentId = paymentResult.insertId;
+
+      // 2. Insert bill-wise allocations under this voucher in `payment_allocations`
+      for (const item of validAllocs) {
+        await pool.execute(
+          `INSERT INTO payment_allocations (
+            payment_id,
+            voucher_no,
+            vendor_id,
+            po_id,
+            invoice_id,
+            allocation_type,
+            reference_no,
+            amount
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            paymentId,
+            voucherNo,
+            vendorId,
+            item.allocPoId,
+            item.allocInvoiceId,
+            item.type,
+            item.allocRef,
+            item.allocAmt
+          ]
+        );
+
+        // Update PO status if fully paid
+        if (item.allocPoId) {
+          const [poRows] = await pool.query('SELECT total_amount FROM purchase_orders WHERE id = ?', [item.allocPoId]);
+          const [paidRows] = await pool.query(
+            `SELECT 
+              COALESCE((SELECT SUM(amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = ? AND p.status = 'CONFIRMED'), 0) +
+              COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = ? AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0) as total_paid`,
+            [item.allocPoId, item.allocPoId]
+          );
+          if (poRows.length > 0 && parseFloat(paidRows[0].total_paid) >= parseFloat(poRows[0].total_amount)) {
+            await pool.execute('UPDATE purchase_orders SET status = ? WHERE id = ?', ['PAID', item.allocPoId]);
+          }
+        }
+      }
+
+      // 3. Insert unified Payment Voucher
+      await pool.execute(
+        `INSERT INTO payment_vouchers (
+          voucher_no,
+          voucher_date,
+          payment_id,
+          vendor_id,
+          amount,
+          description
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          voucherNo,
+          paymentDate,
+          paymentId,
+          vendorId,
+          finalPaymentAmount,
+          voucherDesc
+        ]
+      );
+
+      // 4. Insert Ledger record
+      await pool.execute(
+        `INSERT INTO vendor_ledger (
+          vendor_id,
+          reference_doc_id,
+          reference_doc_type,
+          transaction_type,
+          amount,
+          description,
+          ledger_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          vendorId,
+          paymentId,
+          'PAYMENT',
+          'CREDIT',
+          finalPaymentAmount,
+          voucherDesc,
+          paymentDate
+        ]
+      );
+
+      return {
+        id: paymentId,
+        paymentVoucherNo: voucherNo,
+        status: 'success',
+        message: 'Payment voucher processed successfully'
+      };
+    }
+
+    // Get Reference Number for Single Allocation
     let referenceNo = invoiceId || '';
     if (!invoiceId) {
       if (poId) {
@@ -64,23 +331,6 @@ const processPayment = async (payload) => {
         if (qlRows.length > 0) {
           referenceNo = qlRows[0].vendor_invoice_no || qlRows[0].job_card_no;
         }
-      }
-    }
-
-    let bankAccountId = null;
-    let manualBankAccount = null;
-
-    if (bankAccount) {
-      const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
-      if (isNumericId) {
-        const [banks] = await pool.query('SELECT id FROM bank_accounts WHERE id = ?', [parseInt(bankAccount)]);
-        if (banks.length > 0) {
-          bankAccountId = parseInt(bankAccount);
-        } else {
-          manualBankAccount = bankAccount;
-        }
-      } else {
-        manualBankAccount = bankAccount;
       }
     }
 
@@ -111,14 +361,14 @@ const processPayment = async (payload) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         voucherNo,
-        invoiceId || null,
-        poId || null,
+        (invoiceId && !isNaN(parseInt(invoiceId, 10))) ? parseInt(invoiceId, 10) : null,
+        (poId && !isNaN(parseInt(poId, 10))) ? parseInt(poId, 10) : null,
         jobCardQualityLogId || null,
         vendorId,
         parseFloat(paymentAmount),
         paymentDate,
-        paymentMode,
-        transactionRefNo || null,
+        normalizedPaymentMode,
+        transactionRefNo || (typeof invoiceId === 'string' && isNaN(parseInt(invoiceId, 10)) ? invoiceId : null),
         bankAccountId,
         manualBankAccount || null,
         remarks || null,
@@ -177,12 +427,43 @@ const processPayment = async (payload) => {
       ]
     );
 
+    // Record in payment_allocations for bill tracking
+    if (poId || invoiceId) {
+      await pool.execute(
+        `INSERT INTO payment_allocations (
+          payment_id,
+          voucher_no,
+          vendor_id,
+          po_id,
+          invoice_id,
+          allocation_type,
+          reference_no,
+          amount
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          paymentId,
+          voucherNo,
+          vendorId,
+          (poId && !isNaN(parseInt(poId, 10))) ? parseInt(poId, 10) : null,
+          (invoiceId && !isNaN(parseInt(invoiceId, 10))) ? parseInt(invoiceId, 10) : null,
+          'Agst Ref',
+          referenceNo || null,
+          parseFloat(paymentAmount)
+        ]
+      );
+    }
+
     // Update status if fully paid
     if (poId) {
       const [poRows] = await pool.query('SELECT total_amount FROM purchase_orders WHERE id = ?', [poId]);
-      const [paymentRows] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM payments WHERE po_id = ? AND status = ?', [poId, 'CONFIRMED']);
+      const [paidRows] = await pool.query(
+        `SELECT 
+          COALESCE((SELECT SUM(amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = ? AND p.status = 'CONFIRMED'), 0) +
+          COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = ? AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0) as total_paid`,
+        [poId, poId]
+      );
 
-      if (poRows.length > 0 && paymentRows[0].total_paid >= poRows[0].total_amount) {
+      if (poRows.length > 0 && parseFloat(paidRows[0].total_paid) >= parseFloat(poRows[0].total_amount)) {
         await pool.execute('UPDATE purchase_orders SET status = ? WHERE id = ?', ['PAID', poId]);
       }
     } else if (jobCardQualityLogId) {
@@ -258,6 +539,31 @@ const getPayments = async (filters = {}) => {
   query += ' ORDER BY p.created_at DESC';
 
   const [payments] = await pool.query(query, params);
+  if (payments.length > 0) {
+    const paymentIds = payments.map(p => p.id);
+    const [allocRows] = await pool.query(
+      `SELECT pa.*,
+        po.po_number,
+        vi.vendor_invoice_no,
+        COALESCE(NULLIF(vi.vendor_invoice_no, ''), po.po_number, pa.reference_no) as display_ref_no
+      FROM payment_allocations pa
+      LEFT JOIN purchase_orders po ON pa.po_id = po.id
+      LEFT JOIN vendor_invoices vi ON pa.invoice_id = vi.id
+      WHERE pa.payment_id IN (${paymentIds.map(() => '?').join(',')})`,
+      paymentIds
+    );
+    const allocMap = {};
+    for (const a of allocRows) {
+      if (!allocMap[a.payment_id]) allocMap[a.payment_id] = [];
+      allocMap[a.payment_id].push(a);
+    }
+    for (const p of payments) {
+      p.allocations = allocMap[p.id] || [];
+      if (!p.po_number && p.allocations.length > 0) {
+        p.po_number = p.allocations.map(a => a.display_ref_no || a.reference_no).filter(Boolean).join(', ');
+      }
+    }
+  }
   return payments;
 };
 
@@ -283,6 +589,22 @@ const getPaymentById = async (paymentId) => {
     const error = new Error('Payment not found');
     error.statusCode = 404;
     throw error;
+  }
+
+  const [allocs] = await pool.query(
+    `SELECT pa.*,
+      po.po_number,
+      vi.vendor_invoice_no,
+      COALESCE(NULLIF(vi.vendor_invoice_no, ''), po.po_number, pa.reference_no) as display_ref_no
+    FROM payment_allocations pa
+    LEFT JOIN purchase_orders po ON pa.po_id = po.id
+    LEFT JOIN vendor_invoices vi ON pa.invoice_id = vi.id
+    WHERE pa.payment_id = ?`,
+    [paymentId]
+  );
+  rows[0].allocations = allocs || [];
+  if (!rows[0].po_number && allocs.length > 0) {
+    rows[0].po_number = allocs.map(a => a.display_ref_no || a.reference_no).filter(Boolean).join(', ');
   }
 
   return rows[0];
@@ -315,8 +637,14 @@ const getPendingPayments = async () => {
       v.vendor_name,
       v.id as vendor_id,
       'PURCHASE_ORDER' as type,
-      COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = vi.po_id AND status = 'CONFIRMED'), 0) as already_paid,
-      (vi.po_amount - COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = vi.po_id AND status = 'CONFIRMED'), 0)) as outstanding
+      (
+        COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = vi.po_id AND p.status = 'CONFIRMED'), 0) +
+        COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = vi.po_id AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0)
+      ) as already_paid,
+      (vi.po_amount - (
+        COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = vi.po_id AND p.status = 'CONFIRMED'), 0) +
+        COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = vi.po_id AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0)
+      )) as outstanding
     FROM vendor_invoices vi
     LEFT JOIN vendors v ON vi.vendor_id = v.id
     WHERE vi.status IN ('VERIFIED', 'COMPLETED')
@@ -1289,6 +1617,7 @@ SPTECHPIONEER PVT LTD`;
 };
 
 module.exports = {
+  generatePaymentVoucherNo,
   processPayment,
   getPayments,
   getPaymentById,

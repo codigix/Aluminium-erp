@@ -138,7 +138,17 @@ const sendVendorInvoiceEmail = async (req, res, next) => {
   }
 };
 
+const getNextVoucherNo = async (req, res, next) => {
+  try {
+    const voucherNo = await paymentService.generatePaymentVoucherNo();
+    res.json({ voucherNo });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
+  getNextVoucherNo,
   processPayment,
   getPayments,
   getPendingPayments,
@@ -150,3 +160,4 @@ module.exports = {
   getVendorInvoicePDF,
   sendVendorInvoiceEmail
 };
+

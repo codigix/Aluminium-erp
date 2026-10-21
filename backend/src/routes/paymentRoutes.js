@@ -4,6 +4,7 @@ const paymentController = require('../controllers/paymentController');
 const { authorize } = require('../middleware/authMiddleware');
 
 router.post('/', authorize(['PAYMENT_PROCESS']), paymentController.processPayment);
+router.get('/next-voucher-no', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS']), paymentController.getNextVoucherNo);
 router.get('/', authorize(['PAYMENT_VIEW']), paymentController.getPayments);
 router.get('/pending', authorize(['PAYMENT_VIEW']), paymentController.getPendingPayments);
 router.get('/:paymentId', authorize(['PAYMENT_VIEW']), paymentController.getPaymentById);
