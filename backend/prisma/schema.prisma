@@ -2848,3 +2848,51 @@ model sales_invoice_items {
   @@index([order_item_id], map: "idx_sales_invoice_items_item_id")
 }
 
+model journal_vouchers {
+  id                    Int                     @id @default(autoincrement())
+  voucher_no            String                  @unique(map: "voucher_no") @db.VarChar(100)
+  voucher_date          DateTime                @db.Date
+  reference_no          String?                 @db.VarChar(255)
+  total_debit           Decimal                 @db.Decimal(14, 2)
+  total_credit          Decimal                 @db.Decimal(14, 2)
+  narration             String                  @db.Text
+  created_by            Int?
+  created_at            DateTime?               @default(now()) @db.Timestamp(0)
+  updated_at            DateTime?               @default(now()) @db.Timestamp(0)
+  journal_voucher_items journal_voucher_items[]
+
+  @@index([voucher_date], map: "idx_jv_date")
+  @@index([voucher_no], map: "idx_jv_no")
+}
+
+model journal_voucher_items {
+  id                 Int              @id @default(autoincrement())
+  journal_voucher_id Int
+  ledger_account     String           @db.VarChar(255)
+  debit_amount       Decimal?         @default(0.00) @db.Decimal(14, 2)
+  credit_amount      Decimal?         @default(0.00) @db.Decimal(14, 2)
+  created_at         DateTime?        @default(now()) @db.Timestamp(0)
+  journal_vouchers   journal_vouchers @relation(fields: [journal_voucher_id], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "journal_voucher_items_jv_fk")
+
+  @@index([journal_voucher_id], map: "idx_jvi_voucher")
+}
+
+model contra_vouchers {
+  id                   Int       @id @default(autoincrement())
+  voucher_no           String    @unique(map: "voucher_no") @db.VarChar(50)
+  voucher_date         DateTime  @db.Date
+  from_account         String    @db.VarChar(255)
+  from_bank_account_id Int?
+  to_account           String    @db.VarChar(255)
+  to_bank_account_id   Int?
+  amount               Decimal   @db.Decimal(15, 2)
+  reference_no         String?   @db.VarChar(100)
+  narration            String?   @db.Text
+  created_by           Int?
+  created_at           DateTime? @default(now()) @db.Timestamp(0)
+  updated_at           DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([voucher_date], map: "idx_contra_voucher_date")
+  @@index([voucher_no], map: "idx_contra_voucher_no")
+}
+

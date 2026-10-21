@@ -147,8 +147,82 @@ const getNextVoucherNo = async (req, res, next) => {
   }
 };
 
+const getNextJournalVoucherNo = async (req, res, next) => {
+  try {
+    const voucherNo = await paymentService.generateNextJournalVoucherNo();
+    res.json({ voucherNo });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const recordJournalVoucher = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    const result = await paymentService.recordJournalVoucher({
+      ...req.body,
+      createdBy: userId
+    });
+    res.status(201).json({
+      message: 'Journal voucher saved successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getJournalVouchers = async (req, res, next) => {
+  try {
+    const vouchers = await paymentService.getJournalVouchers();
+    res.json(vouchers);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getNextContraVoucherNo = async (req, res, next) => {
+  try {
+    const voucherNo = await paymentService.generateNextContraVoucherNo();
+    res.json({ voucherNo });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const recordContraVoucher = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    const result = await paymentService.recordContraVoucher({
+      ...req.body,
+      createdBy: userId
+    });
+    res.status(201).json({
+      message: 'Contra voucher recorded successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getContraVouchers = async (req, res, next) => {
+  try {
+    const vouchers = await paymentService.getContraVouchers();
+    res.json(vouchers);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getNextVoucherNo,
+  getNextJournalVoucherNo,
+  recordJournalVoucher,
+  getJournalVouchers,
+  getNextContraVoucherNo,
+  recordContraVoucher,
+  getContraVouchers,
   processPayment,
   getPayments,
   getPendingPayments,
@@ -160,4 +234,5 @@ module.exports = {
   getVendorInvoicePDF,
   sendVendorInvoiceEmail
 };
+
 

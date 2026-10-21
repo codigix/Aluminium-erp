@@ -5,6 +5,12 @@ const { authorize } = require('../middleware/authMiddleware');
 
 router.post('/', authorize(['PAYMENT_PROCESS']), paymentController.processPayment);
 router.get('/next-voucher-no', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS']), paymentController.getNextVoucherNo);
+router.get('/journal/next-voucher-no', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS']), paymentController.getNextJournalVoucherNo);
+router.post('/journal', authorize(['PAYMENT_PROCESS']), paymentController.recordJournalVoucher);
+router.get('/journal', authorize(['PAYMENT_VIEW']), paymentController.getJournalVouchers);
+router.get('/contra/next-voucher-no', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS']), paymentController.getNextContraVoucherNo);
+router.post('/contra', authorize(['PAYMENT_PROCESS']), paymentController.recordContraVoucher);
+router.get('/contra', authorize(['PAYMENT_VIEW']), paymentController.getContraVouchers);
 router.get('/', authorize(['PAYMENT_VIEW']), paymentController.getPayments);
 router.get('/pending', authorize(['PAYMENT_VIEW']), paymentController.getPendingPayments);
 router.get('/:paymentId', authorize(['PAYMENT_VIEW']), paymentController.getPaymentById);

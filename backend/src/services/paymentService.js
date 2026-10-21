@@ -1616,8 +1616,317 @@ SPTECHPIONEER PVT LTD`;
   return await emailService.sendEmail(recipientEmail, subject, message, attachments);
 };
 
+const generateNextJournalVoucherNo = async () => {
+  const year = new Date().getFullYear();
+  const [rows] = await pool.query(
+    `SELECT voucher_no FROM journal_vouchers WHERE voucher_no LIKE ?`,
+    [`JV-${year}-%`]
+  );
+  let maxSeq = 0;
+  for (const r of rows) {
+    if (r.voucher_no) {
+      const match = r.voucher_no.match(/JV-\d+-(\d+)/i);
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (!isNaN(seq) && seq > maxSeq) {
+          maxSeq = seq;
+        }
+      }
+    }
+  }
+  const nextSeq = maxSeq + 1;
+  return `JV-${year}-${String(nextSeq).padStart(4, '0')}`;
+};
+
+const recordJournalVoucher = async (payload) => {
+  const {
+    voucherNo: inputVoucherNo,
+    date,
+    referenceNo,
+    rows,
+    totalDebit,
+    totalCredit,
+    narration,
+    createdBy
+  } = payload;
+
+  if (!rows || rows.length < 2) {
+    throw new Error('At least 2 ledger rows are required for journal voucher');
+  }
+
+  const drTotal = parseFloat(totalDebit) || 0;
+  const crTotal = parseFloat(totalCredit) || 0;
+  if (Math.abs(drTotal - crTotal) > 0.01) {
+    throw new Error('Total Debit must equal Total Credit for double-entry balance');
+  }
+
+  const voucherNo = inputVoucherNo || (await generateNextJournalVoucherNo());
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [result] = await connection.query(
+      `INSERT INTO journal_vouchers (voucher_no, voucher_date, reference_no, total_debit, total_credit, narration, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        voucherNo,
+        date || new Date().toISOString().split('T')[0],
+        referenceNo || null,
+        drTotal,
+        crTotal,
+        narration,
+        createdBy || null
+      ]
+    );
+
+    const journalVoucherId = result.insertId;
+
+    for (const item of rows) {
+      if (item.ledger && ((parseFloat(item.debit) > 0) || (parseFloat(item.credit) > 0))) {
+        const ledgerLabel = item.partyName ? `${item.ledger} (${item.partyName})` : item.ledger;
+        await connection.query(
+          `INSERT INTO journal_voucher_items (journal_voucher_id, ledger_account, debit_amount, credit_amount)
+           VALUES (?, ?, ?, ?)`,
+          [
+            journalVoucherId,
+            ledgerLabel,
+            parseFloat(item.debit) || 0,
+            parseFloat(item.credit) || 0
+          ]
+        );
+
+        // If this entry affects a vendor, post to vendor_ledger to update Vendor Payables
+        const isVendorRow = item.partyId && (
+          item.ledger.toLowerCase().includes('creditor') || 
+          item.ledger.toLowerCase().includes('vendor') || 
+          item.ledger.toLowerCase().includes('supplier')
+        );
+
+        if (isVendorRow) {
+          const isDebit = (parseFloat(item.debit) || 0) > 0;
+          const amt = isDebit ? parseFloat(item.debit) : parseFloat(item.credit);
+          await connection.query(
+            `INSERT INTO vendor_ledger (
+              vendor_id,
+              reference_doc_id,
+              reference_doc_type,
+              transaction_type,
+              amount,
+              description,
+              ledger_date
+            ) VALUES (?, ?, 'JOURNAL', ?, ?, ?, ?)`,
+            [
+              parseInt(item.partyId, 10),
+              journalVoucherId,
+              isDebit ? 'DEBIT' : 'CREDIT',
+              amt,
+              `Journal Adjustment (${voucherNo}): ${narration || item.ledger}`,
+              date || new Date().toISOString().split('T')[0]
+            ]
+          );
+        }
+      }
+    }
+
+    await connection.commit();
+    return {
+      id: journalVoucherId,
+      voucherNo,
+      date,
+      totalDebit: drTotal,
+      totalCredit: crTotal,
+      narration,
+      rowsCount: rows.length
+    };
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+};
+
+const getJournalVouchers = async (vendorId = null) => {
+  const [rows] = await pool.query(
+    `SELECT jv.*,
+            COALESCE(
+              (
+                SELECT JSON_ARRAYAGG(
+                  JSON_OBJECT(
+                    'id', jvi.id,
+                    'ledger_account', jvi.ledger_account,
+                    'debit_amount', jvi.debit_amount,
+                    'credit_amount', jvi.credit_amount
+                  )
+                )
+                FROM journal_voucher_items jvi
+                WHERE jvi.journal_voucher_id = jv.id
+              ), '[]'
+            ) as items
+     FROM journal_vouchers jv
+     ORDER BY jv.id DESC`
+  );
+  return rows.map(r => ({
+    ...r,
+    items: typeof r.items === 'string' ? JSON.parse(r.items) : (r.items || [])
+  }));
+};
+
+const generateNextContraVoucherNo = async () => {
+  const year = new Date().getFullYear();
+  const [rows] = await pool.query(
+    `SELECT voucher_no FROM contra_vouchers WHERE voucher_no LIKE ?`,
+    [`CV-${year}-%`]
+  );
+  let maxSeq = 0;
+  for (const r of rows) {
+    if (r.voucher_no) {
+      const match = r.voucher_no.match(/CV-\d+-(\d+)/i);
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (!isNaN(seq) && seq > maxSeq) {
+          maxSeq = seq;
+        }
+      }
+    }
+  }
+  const nextSeq = maxSeq + 1;
+  return `CV-${year}-${String(nextSeq).padStart(4, '0')}`;
+};
+
+const recordContraVoucher = async (payload) => {
+  const {
+    voucherNo: inputVoucherNo,
+    date,
+    fromAccount,
+    fromBankAccountId,
+    toAccount,
+    toBankAccountId,
+    amount,
+    referenceNo,
+    narration,
+    createdBy
+  } = payload;
+
+  if (!fromAccount || !toAccount) {
+    throw new Error('Both Source (From) and Destination (To) accounts are required for a Contra Voucher.');
+  }
+
+  if (fromAccount.trim().toLowerCase() === toAccount.trim().toLowerCase()) {
+    throw new Error('Source and Destination accounts must be different for a Contra Voucher.');
+  }
+
+  const numericAmount = parseFloat(amount);
+  if (isNaN(numericAmount) || numericAmount <= 0) {
+    throw new Error('Valid transfer amount greater than 0 is required.');
+  }
+
+  const voucherNo = inputVoucherNo || (await generateNextContraVoucherNo());
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    let resolvedFromBankId = fromBankAccountId ? parseInt(fromBankAccountId, 10) : null;
+    let resolvedToBankId = toBankAccountId ? parseInt(toBankAccountId, 10) : null;
+
+    if (!resolvedFromBankId) {
+      const [banks] = await connection.query('SELECT id, bank_name, account_number FROM bank_accounts');
+      for (const b of banks) {
+        if (fromAccount.includes(b.bank_name) || fromAccount.includes(b.account_number)) {
+          resolvedFromBankId = b.id;
+          break;
+        }
+      }
+    }
+
+    if (!resolvedToBankId) {
+      const [banks] = await connection.query('SELECT id, bank_name, account_number FROM bank_accounts');
+      for (const b of banks) {
+        if (toAccount.includes(b.bank_name) || toAccount.includes(b.account_number)) {
+          resolvedToBankId = b.id;
+          break;
+        }
+      }
+    }
+
+    const [result] = await connection.query(
+      `INSERT INTO contra_vouchers (
+        voucher_no, voucher_date, from_account, from_bank_account_id,
+        to_account, to_bank_account_id, amount, reference_no, narration, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        voucherNo,
+        date || new Date().toISOString().split('T')[0],
+        fromAccount.trim(),
+        resolvedFromBankId,
+        toAccount.trim(),
+        resolvedToBankId,
+        numericAmount,
+        referenceNo || null,
+        narration || `Transfer from ${fromAccount} to ${toAccount}`,
+        createdBy || null
+      ]
+    );
+
+    const contraVoucherId = result.insertId;
+
+    if (resolvedFromBankId) {
+      await connection.query(
+        `UPDATE bank_accounts SET opening_balance = opening_balance - ?, updated_at = NOW() WHERE id = ?`,
+        [numericAmount, resolvedFromBankId]
+      );
+    }
+
+    if (resolvedToBankId) {
+      await connection.query(
+        `UPDATE bank_accounts SET opening_balance = opening_balance + ?, updated_at = NOW() WHERE id = ?`,
+        [numericAmount, resolvedToBankId]
+      );
+    }
+
+    await connection.commit();
+
+    return {
+      id: contraVoucherId,
+      voucherNo,
+      voucherDate: date || new Date().toISOString().split('T')[0],
+      fromAccount,
+      toAccount,
+      amount: numericAmount,
+      referenceNo,
+      narration: narration || `Transfer from ${fromAccount} to ${toAccount}`
+    };
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+};
+
+const getContraVouchers = async () => {
+  const [rows] = await pool.query(
+    `SELECT cv.*,
+            b_from.bank_name as from_bank_name, b_from.account_number as from_bank_account_number,
+            b_to.bank_name as to_bank_name, b_to.account_number as to_bank_account_number
+     FROM contra_vouchers cv
+     LEFT JOIN bank_accounts b_from ON cv.from_bank_account_id = b_from.id
+     LEFT JOIN bank_accounts b_to ON cv.to_bank_account_id = b_to.id
+     ORDER BY cv.id DESC`
+  );
+  return rows;
+};
+
 module.exports = {
   generatePaymentVoucherNo,
+  generateNextJournalVoucherNo,
+  recordJournalVoucher,
+  getJournalVouchers,
+  generateNextContraVoucherNo,
+  recordContraVoucher,
+  getContraVouchers,
   processPayment,
   getPayments,
   getPaymentById,
@@ -1630,3 +1939,4 @@ module.exports = {
   generateVendorInvoicePDF,
   sendVendorInvoiceEmail
 };
+

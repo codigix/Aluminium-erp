@@ -7,7 +7,12 @@ import {
 } from 'lucide-react';
 import { Modal, FormControl, SearchableSelect } from './ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
-import { LEDGER_GROUPS } from '../constants/ledgerGroups.js';
+import { 
+  LEDGER_GROUPS, 
+  LEDGER_PARTY_TYPES, 
+  getLedgerGroupType, 
+  getLedgerPartyMeta 
+} from '../constants/ledgerGroups.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -26,6 +31,25 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
+// Cash and Bank ledgers are blocked for Journal Voucher
+const JOURNAL_BLOCKED_KEYWORDS = ['cash', 'bank', 'in-hand', 'od', 'occ'];
+const isJournalAllowedGroup = (groupName) => {
+  const lower = (groupName || '').toLowerCase();
+  return !JOURNAL_BLOCKED_KEYWORDS.some(k => lower.includes(k));
+};
+
+const isVendorLedger = (ledgerName) => {
+  if (!ledgerName) return false;
+  const lower = ledgerName.toLowerCase();
+  return lower.includes('creditor') || lower.includes('vendor') || lower.includes('supplier');
+};
+
+const isCustomerLedger = (ledgerName) => {
+  if (!ledgerName) return false;
+  const lower = ledgerName.toLowerCase();
+  return lower.includes('debtor') || lower.includes('customer');
+};
+
 const PaymentReceivedModal = ({
   isOpen,
   onClose,
@@ -39,7 +63,8 @@ const PaymentReceivedModal = ({
   hasExplicitSelection = true,
   onSuccess,
   isPage = false,
-  initialVoucherType = 'RECEIPT'
+  initialVoucherType = 'RECEIPT',
+  hideHeader = false
 }) => {
   // Normalize incoming selection
   const selectedInvoices = useMemo(() => {
@@ -190,6 +215,16 @@ const PaymentReceivedModal = ({
     // Journal fields
     journalDebitLedger: 'Office Equipment',
     journalCreditLedger: 'Accumulated Depreciation',
+    journalDebitCustomer: '',
+    journalDebitSupplier: '',
+    journalDebitBank: '',
+    journalDebitCash: '',
+    journalDebitGeneral: '',
+    journalCreditCustomer: '',
+    journalCreditSupplier: '',
+    journalCreditBank: '',
+    journalCreditCash: '',
+    journalCreditGeneral: '',
     journalDebitAmount: '',
     journalCreditAmount: '',
     journalRefDoc: '',
@@ -254,11 +289,341 @@ const PaymentReceivedModal = ({
     switch (type) {
       case 'PAYMENT': return dynamicPaymentVoucherNo || `PAY-${year}-0003`;
       case 'RECEIPT': return `RCP-${year}-0428`;
-      case 'JOURNAL': return `JV-${year}-0092`;
-      case 'CONTRA': return `CV-${year}-0034`;
+      case 'JOURNAL': return journalVoucherNo || `JV-${year}-0001`;
+      case 'CONTRA': return contraVoucherNo || `CV-${year}-0001`;
       case 'DEBIT_NOTE': return `DN-${year}-0067`;
       case 'CREDIT_NOTE': return `CN-${year}-0051`;
       default: return `VCH-${year}-0001`;
+    }
+  };
+
+  // ── CONTRA VOUCHER STATE ──
+  const [contraVoucherNo, setContraVoucherNo] = useState(() => {
+    const year = new Date().getFullYear();
+    return `CV-${year}-0001`;
+  });
+
+  const fetchNextContraVoucherNo = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/payments/contra/next-voucher-no`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.voucherNo) {
+          setContraVoucherNo(data.voucherNo);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching next contra voucher no:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (voucherType === 'CONTRA') {
+      fetchNextContraVoucherNo();
+      fetchBankAccounts();
+    }
+  }, [voucherType]);
+
+  // ── MULTI-LINE JOURNAL VOUCHER STATE (Double-entry, Cash/Bank Blocked) ──
+  const [journalVoucherNo, setJournalVoucherNo] = useState(() => {
+    const year = new Date().getFullYear();
+    try {
+      const saved = localStorage.getItem('erp_last_jv_num');
+      const num = saved ? parseInt(saved, 10) + 1 : 1;
+      return `JV-${year}-${String(num).padStart(4, '0')}`;
+    } catch {
+      return `JV-${year}-0001`;
+    }
+  });
+  const [journalDate, setJournalDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [journalRefNo, setJournalRefNo] = useState('');
+  const [journalNarration, setJournalNarration] = useState('');
+  const [journalRows, setJournalRows] = useState([
+    { id: 1, ledger: '', debit: '', credit: '', partyId: '', partyName: '' },
+    { id: 2, ledger: '', debit: '', credit: '', partyId: '', partyName: '' }
+  ]);
+  const [journalSubmitted, setJournalSubmitted] = useState(false);
+
+  // Ensure vendors and customers are loaded for Journal Voucher selection
+  useEffect(() => {
+    fetchCustomers();
+    fetchVendors();
+  }, []);
+
+  const fetchNextJournalVoucherNo = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/payments/journal/next-voucher-no`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.voucherNo) {
+          setJournalVoucherNo(data.voucherNo);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching next journal voucher no:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (voucherType === 'JOURNAL') {
+      fetchNextJournalVoucherNo();
+    }
+  }, [voucherType]);
+
+  const totalJournalDebit = useMemo(() => {
+    return journalRows.reduce((sum, r) => sum + (parseFloat(r.debit) || 0), 0);
+  }, [journalRows]);
+
+  const totalJournalCredit = useMemo(() => {
+    return journalRows.reduce((sum, r) => sum + (parseFloat(r.credit) || 0), 0);
+  }, [journalRows]);
+
+  const journalDifference = useMemo(() => {
+    return Math.abs(totalJournalDebit - totalJournalCredit);
+  }, [totalJournalDebit, totalJournalCredit]);
+
+  const validJournalRowsCount = useMemo(() => {
+    return journalRows.filter(r => {
+      const hasAmt = (parseFloat(r.debit) > 0) || (parseFloat(r.credit) > 0);
+      if (!r.ledger || !hasAmt) return false;
+      if (isVendorLedger(r.ledger) && !r.partyId) return false;
+      if (isCustomerLedger(r.ledger) && !r.partyId) return false;
+      return true;
+    }).length;
+  }, [journalRows]);
+
+  const isJournalBalanced = validJournalRowsCount >= 2 && journalDifference < 0.01 && totalJournalDebit > 0;
+
+  const handleAddJournalRow = () => {
+    setJournalRows(prev => [
+      ...prev,
+      { id: Date.now() + Math.random(), ledger: '', debit: '', credit: '', partyId: '', partyName: '' }
+    ]);
+  };
+
+  const handleRemoveJournalRow = (id) => {
+    setJournalRows(prev => {
+      if (prev.length <= 2) {
+        return prev.map(r => r.id === id ? { ...r, ledger: '', debit: '', credit: '', partyId: '', partyName: '' } : r);
+      }
+      return prev.filter(r => r.id !== id);
+    });
+  };
+
+  const handleJournalRowChange = (id, field, value) => {
+    setJournalRows(prev => prev.map(r => {
+      if (r.id !== id) return r;
+      if (field === 'debit') {
+        return {
+          ...r,
+          debit: value,
+          credit: value ? '' : r.credit
+        };
+      }
+      if (field === 'credit') {
+        return {
+          ...r,
+          credit: value,
+          debit: value ? '' : r.debit
+        };
+      }
+      return { ...r, [field]: value };
+    }));
+  };
+
+  const handleClearJournal = () => {
+    setJournalRows([
+      { id: 1, ledger: '', debit: '', credit: '', partyId: '', partyName: '' },
+      { id: 2, ledger: '', debit: '', credit: '', partyId: '', partyName: '' }
+    ]);
+    setJournalRefNo('');
+    setJournalNarration('');
+    setJournalSubmitted(false);
+  };
+
+  const handleSaveJournalVoucher = async () => {
+    setJournalSubmitted(true);
+
+    const activeRowsWithAmount = journalRows.filter(r => 
+      (parseFloat(r.debit) > 0) || (parseFloat(r.credit) > 0)
+    );
+
+    if (activeRowsWithAmount.length < 2) {
+      errorToast('At least 2 ledger rows with amounts are required.');
+      return;
+    }
+
+    const unassignedLedger = activeRowsWithAmount.some(r => !r.ledger);
+    if (unassignedLedger) {
+      errorToast('Please select a ledger account for all entered rows.');
+      return;
+    }
+
+    const missingSupplier = activeRowsWithAmount.some(r => isVendorLedger(r.ledger) && !r.partyId);
+    if (missingSupplier) {
+      errorToast('Please select a supplier for Sundry Creditors ledger.');
+      return;
+    }
+
+    const missingCustomer = activeRowsWithAmount.some(r => isCustomerLedger(r.ledger) && !r.partyId);
+    if (missingCustomer) {
+      errorToast('Please select a customer for Sundry Debtors ledger.');
+      return;
+    }
+
+    if (totalJournalDebit <= 0) {
+      errorToast('Valid debit and credit amounts are required.');
+      return;
+    }
+
+    if (journalDifference >= 0.01) {
+      errorToast(`Debit and Credit amounts must be equal. Difference: ${formatCurrency(journalDifference)}`);
+      return;
+    }
+
+    if (!journalNarration.trim()) {
+      errorToast('Narration is required before saving the journal voucher.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        voucherNo: journalVoucherNo,
+        date: journalDate,
+        referenceNo: journalRefNo || '',
+        rows: activeRowsWithAmount,
+        totalDebit: totalJournalDebit,
+        totalCredit: totalJournalCredit,
+        narration: journalNarration.trim()
+      };
+
+      const token = localStorage.getItem('authToken');
+      let savedData = payload;
+      const res = await fetch(`${API_BASE}/payments/journal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const json = await res.json();
+        savedData = json.data || payload;
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || errJson.message || 'Failed to save journal voucher to database');
+      }
+
+      // Persist in localStorage backup
+      try {
+        const hist = JSON.parse(localStorage.getItem('erp_journal_vouchers') || '[]');
+        hist.unshift({ ...savedData, createdAt: new Date().toISOString() });
+        localStorage.setItem('erp_journal_vouchers', JSON.stringify(hist));
+
+        const match = journalVoucherNo.match(/JV-\d+-(\d+)/);
+        if (match) {
+          const currentNum = parseInt(match[1], 10);
+          localStorage.setItem('erp_last_jv_num', currentNum.toString());
+        }
+      } catch (storageErr) {
+        console.error('Storage error:', storageErr);
+      }
+
+      successToast(`Journal Voucher ${journalVoucherNo} saved successfully (${formatCurrency(totalJournalDebit)})`);
+      handleClearJournal();
+      fetchNextJournalVoucherNo();
+      onSuccess?.(savedData);
+      if (!isPage) {
+        onClose();
+      }
+    } catch (err) {
+      console.error('Error saving journal voucher:', err);
+      errorToast(err.message || 'Failed to save journal voucher');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveContraVoucher = async (e) => {
+    if (e) e.preventDefault();
+    const newErrors = {};
+    if (!voucherForm.contraFromAccount) newErrors.contraFromAccount = 'Source account required';
+    if (!voucherForm.contraToAccount) newErrors.contraToAccount = 'Destination account required';
+    if (voucherForm.contraFromAccount && voucherForm.contraFromAccount === voucherForm.contraToAccount) {
+      newErrors.contraToAccount = 'Source and destination accounts must be different';
+    }
+    const amt = parseFloat(voucherForm.contraAmount);
+    if (isNaN(amt) || amt <= 0) {
+      newErrors.contraAmount = 'Valid transfer amount greater than 0 is required';
+    }
+    if (!voucherForm.date) newErrors.date = 'Date is required';
+
+    if (Object.keys(newErrors).length > 0) {
+      setVoucherErrors(newErrors);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const vNum = contraVoucherNo || getVoucherNumber('CONTRA');
+      const payload = {
+        voucherNo: vNum,
+        date: voucherForm.date || new Date().toISOString().split('T')[0],
+        fromAccount: voucherForm.contraFromAccount,
+        toAccount: voucherForm.contraToAccount,
+        amount: amt,
+        referenceNo: voucherForm.contraRefNo || '',
+        narration: voucherForm.narration || `Transfer from ${voucherForm.contraFromAccount} to ${voucherForm.contraToAccount}`
+      };
+
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/payments/contra`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || errJson.message || 'Failed to save contra voucher to database');
+      }
+
+      const json = await res.json();
+      const savedData = json.data || payload;
+
+      successToast(`Contra Voucher ${vNum} recorded successfully (${formatCurrency(amt)})`);
+      
+      // Clear form
+      setVoucherForm(prev => ({
+        ...prev,
+        contraAmount: '',
+        contraRefNo: '',
+        narration: ''
+      }));
+      setVoucherErrors({});
+      fetchNextContraVoucherNo();
+      fetchBankAccounts();
+
+      onSuccess?.(savedData);
+      if (!isPage) {
+        onClose();
+      }
+    } catch (err) {
+      console.error('Error saving contra voucher:', err);
+      errorToast(err.message || 'Failed to save contra voucher');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1041,7 +1406,32 @@ const PaymentReceivedModal = ({
   };
 
   const handleVoucherInputChange = (field, value) => {
-    setVoucherForm(prev => ({ ...prev, [field]: value }));
+    setVoucherForm(prev => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'journalDebitLedger') {
+        const oldType = getLedgerGroupType(prev.journalDebitLedger);
+        const newType = getLedgerGroupType(value);
+        if (oldType !== newType) {
+          updated.journalDebitCustomer = '';
+          updated.journalDebitSupplier = '';
+          updated.journalDebitBank = '';
+          updated.journalDebitCash = '';
+          updated.journalDebitGeneral = '';
+        }
+      }
+      if (field === 'journalCreditLedger') {
+        const oldType = getLedgerGroupType(prev.journalCreditLedger);
+        const newType = getLedgerGroupType(value);
+        if (oldType !== newType) {
+          updated.journalCreditCustomer = '';
+          updated.journalCreditSupplier = '';
+          updated.journalCreditBank = '';
+          updated.journalCreditCash = '';
+          updated.journalCreditGeneral = '';
+        }
+      }
+      return updated;
+    });
     if (voucherErrors[field]) {
       setVoucherErrors(prev => {
         const copy = { ...prev };
@@ -1599,34 +1989,7 @@ const PaymentReceivedModal = ({
     }
 
     if (voucherType === 'CONTRA') {
-      if (!voucherForm.contraFromAccount) newErrors.contraFromAccount = 'Source account required';
-      if (!voucherForm.contraToAccount) newErrors.contraToAccount = 'Destination account required';
-      if (voucherForm.contraFromAccount && voucherForm.contraFromAccount === voucherForm.contraToAccount) {
-        newErrors.contraToAccount = 'Source and destination accounts must be different';
-      }
-      if (!voucherForm.contraAmount || parseFloat(voucherForm.contraAmount) <= 0) {
-        newErrors.contraAmount = 'Valid transfer amount required';
-      }
-      if (!voucherForm.date) newErrors.date = 'Date is required';
-
-      if (Object.keys(newErrors).length > 0) {
-        setVoucherErrors(newErrors);
-        return;
-      }
-
-      setPreviewVoucherData({
-        type: 'CONTRA',
-        title: 'Contra Voucher',
-        voucherNo: vNum,
-        date: voucherForm.date,
-        fromAccount: voucherForm.contraFromAccount,
-        toAccount: voucherForm.contraToAccount,
-        amount: parseFloat(voucherForm.contraAmount),
-        ref: voucherForm.contraRefNo,
-        narration: voucherForm.narration || `Transfer from ${voucherForm.contraFromAccount} to ${voucherForm.contraToAccount}`,
-      });
-      successToast(`[Preview Mode] Contra Voucher ${vNum} for ${formatCurrency(voucherForm.contraAmount)} validated successfully.`);
-      return;
+      return handleSaveContraVoucher(e);
     }
 
     if (voucherType === 'DEBIT_NOTE') {
@@ -1689,43 +2052,348 @@ const PaymentReceivedModal = ({
   const activeVoucherMeta = voucherTypes.find(v => v.id === voucherType) || voucherTypes[1];
 
   const modalContent = (
-    <div className={isPage ? "bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden" : ""}>
+    <div className={isPage ? (hideHeader ? "w-full space-y-3" : "bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden") : ""}>
       {/* ── HEADER ── */}
-      <div className={`sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-slate-200 ${isPage ? 'bg-white shadow-2xs' : 'bg-slate-50'}`}>
-        <div className="flex items-center gap-3">
-          {isPage && (
+      {!hideHeader && (
+        <div className={`sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-slate-200 ${isPage ? 'bg-white shadow-2xs' : 'bg-slate-50'}`}>
+          <div className="flex items-center gap-3">
+            {isPage && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer border border-slate-200 flex items-center gap-1.5 text-xs font-semibold mr-1"
+              >
+                <ArrowLeft className="w-4 h-4 text-slate-700" />
+                <span>Back to Invoices</span>
+              </button>
+            )}
+            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/25 shrink-0">
+              {voucherType === 'JOURNAL' ? (
+                <BookOpen className="w-5 h-5 text-white" />
+              ) : (
+                <CreditCard className="w-5 h-5 text-white" />
+              )}
+            </div>
+            <div>
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
+                {voucherType === 'JOURNAL' ? 'Journal Voucher Entry' : 'Accounts — Voucher Entry & Settlement'}
+              </h2>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+                {voucherType === 'JOURNAL'
+                  ? 'Accounts · SP TECHPIONEER ERP · Double-entry, multiple ledger lines'
+                  : 'SP TECHPIONEER ERP • Double-entry voucher accounting & bill-wise ledger allocation'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full shadow-2xs">
+              {activeVoucherMeta.name} Voucher
+            </span>
+            {voucherType !== 'JOURNAL' && (
+              <span className="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full font-mono shadow-2xs">
+                {formatCurrency(totalSelectedOutstanding)} Due
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {voucherType === 'JOURNAL' ? (
+        <div className={`p-4 sm:p-5 space-y-3 max-w-4xl mx-auto bg-slate-50/30 ${isPage ? '' : 'overflow-y-auto max-h-[78vh] custom-scrollbar'}`}>
+          {/* Card 1: Voucher Header Details (No Cost Centre) */}
+          <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                  VOUCHER NO.
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={journalVoucherNo}
+                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                  DATE *
+                </label>
+                <input
+                  type="date"
+                  value={journalDate}
+                  onChange={(e) => setJournalDate(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                  REFERENCE NO.
+                </label>
+                <input
+                  type="text"
+                  value={journalRefNo}
+                  onChange={(e) => setJournalRefNo(e.target.value)}
+                  placeholder="Optional"
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Ledger Entries (Table) */}
+          <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs space-y-2.5">
+            <div>
+              <h3 className="text-xs font-bold text-slate-900">Ledger Entries</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Enter either a debit or a credit per row. Cash and bank ledgers are blocked here; use Payment, Receipt or Contra.
+              </p>
+            </div>
+
+            {/* Table Header */}
+            <div className="grid grid-cols-12 gap-2 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+              <div className="col-span-12 sm:col-span-6 md:col-span-7">LEDGER ACCOUNT</div>
+              <div className="col-span-5 sm:col-span-3 md:col-span-2 text-right">DEBIT ₹</div>
+              <div className="col-span-5 sm:col-span-2 md:col-span-2 text-right">CREDIT ₹</div>
+              <div className="col-span-2 sm:col-span-1 md:col-span-1 text-center"></div>
+            </div>
+
+            {/* Rows */}
+            <div className="space-y-3">
+              {journalRows.map((row) => (
+                <div key={row.id} className="grid grid-cols-12 gap-2 items-start p-2 rounded-lg bg-slate-50/50 border border-slate-100">
+                  <div className="col-span-12 sm:col-span-6 md:col-span-7 space-y-1.5">
+                    <select
+                      value={row.ledger}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        handleJournalRowChange(row.id, 'ledger', val);
+                        handleJournalRowChange(row.id, 'partyId', '');
+                        handleJournalRowChange(row.id, 'partyName', '');
+                      }}
+                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-medium bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">Select ledger...</option>
+                      <optgroup label="Standard Accounting Ledgers">
+                        <option value="Office Equipment (Assets)">Office Equipment (Assets)</option>
+                        <option value="Plant & Machinery (Assets)">Plant & Machinery (Assets)</option>
+                        <option value="Furniture & Fixtures (Assets)">Furniture & Fixtures (Assets)</option>
+                        <option value="Depreciation Account (Expenses)">Depreciation Account (Expenses)</option>
+                        <option value="Accumulated Depreciation (Provision)">Accumulated Depreciation (Provision)</option>
+                        <option value="Bad Debts Written Off (Expenses)">Bad Debts Written Off (Expenses)</option>
+                        <option value="Provision for Doubtful Debts">Provision for Doubtful Debts</option>
+                        <option value="Sundry Debtors (Customers)">Sundry Debtors (Customers)</option>
+                        <option value="Sundry Creditors (Vendors)">Sundry Creditors (Vendors)</option>
+                        <option value="Discount Allowed (Expenses)">Discount Allowed (Expenses)</option>
+                        <option value="Discount Received (Income)">Discount Received (Income)</option>
+                        <option value="TDS Receivable (Assets)">TDS Receivable (Assets)</option>
+                        <option value="TDS Payable (Liabilities)">TDS Payable (Liabilities)</option>
+                        <option value="GST Input Tax Credit (ITC)">GST Input Tax Credit (ITC)</option>
+                        <option value="GST Output Tax Payable">GST Output Tax Payable</option>
+                        <option value="Rent Expense (Expenses)">Rent Expense (Expenses)</option>
+                        <option value="Electricity Charges (Expenses)">Electricity Charges (Expenses)</option>
+                        <option value="Audit Fees Provision">Audit Fees Provision</option>
+                        <option value="Salary & Wages Payable">Salary & Wages Payable</option>
+                        <option value="Telephone & Internet Charges">Telephone & Internet Charges</option>
+                        <option value="Interest on Loan (Expenses)">Interest on Loan (Expenses)</option>
+                        <option value="Insurance Premium (Expenses)">Insurance Premium (Expenses)</option>
+                      </optgroup>
+                      <optgroup label="Master Chart of Accounts (Cash & Bank Blocked)">
+                        {LEDGER_GROUPS.filter(g => isJournalAllowedGroup(g.name)).map(g => (
+                          <option key={g.id} value={g.name}>{g.id}. {g.name} ({g.category})</option>
+                        ))}
+                      </optgroup>
+                    </select>
+
+                    {/* Dynamic Supplier Selection when Sundry Creditors is chosen */}
+                    {isVendorLedger(row.ledger) && (
+                      <div className="space-y-0.5 animate-in fade-in duration-150 pt-0.5">
+                        <label className="text-[10px] font-bold text-slate-600 flex items-center justify-between">
+                          <span>Select Supplier / Vendor *</span>
+                          {row.partyName && <span className="text-emerald-700 font-medium font-mono text-[9.5px]">Selected: {row.partyName}</span>}
+                        </label>
+                        <select
+                          value={row.partyId || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const found = vendors.find(v => String(v.id) === String(val));
+                            handleJournalRowChange(row.id, 'partyId', val);
+                            handleJournalRowChange(row.id, 'partyName', found ? (found.vendor_name || found.name) : '');
+                          }}
+                          className={`w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium ${
+                            !row.partyId ? 'border-amber-400 bg-amber-50/20' : 'border-slate-300'
+                          }`}
+                        >
+                          <option value="">Select Supplier → RK Laser Unit 2</option>
+                          {vendors.map(v => (
+                            <option key={v.id} value={v.id}>{v.vendor_name || v.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Dynamic Customer Selection when Sundry Debtors is chosen */}
+                    {isCustomerLedger(row.ledger) && (
+                      <div className="space-y-0.5 animate-in fade-in duration-150 pt-0.5">
+                        <label className="text-[10px] font-bold text-slate-600 flex items-center justify-between">
+                          <span>Select Customer / Client *</span>
+                          {row.partyName && <span className="text-emerald-700 font-medium font-mono text-[9.5px]">Selected: {row.partyName}</span>}
+                        </label>
+                        <select
+                          value={row.partyId || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const found = customers.find(c => String(c.id) === String(val));
+                            handleJournalRowChange(row.id, 'partyId', val);
+                            handleJournalRowChange(row.id, 'partyName', found ? (found.company_name || found.name) : '');
+                          }}
+                          className={`w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium ${
+                            !row.partyId ? 'border-amber-400 bg-amber-50/20' : 'border-slate-300'
+                          }`}
+                        >
+                          <option value="">Select Customer → Sidel India Pvt Ltd</option>
+                          {customers.map(c => (
+                            <option key={c.id} value={c.id}>{c.company_name || c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="col-span-5 sm:col-span-3 md:col-span-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={row.debit}
+                      onChange={(e) => handleJournalRowChange(row.id, 'debit', e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono font-bold text-right text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="col-span-5 sm:col-span-2 md:col-span-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={row.credit}
+                      onChange={(e) => handleJournalRowChange(row.id, 'credit', e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono font-bold text-right text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="col-span-2 sm:col-span-1 md:col-span-1 flex justify-center pt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveJournalRow(row.id)}
+                      title="Delete row"
+                      className="p-1 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Add Row Button */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={handleAddJournalRow}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold transition-all shadow-2xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Ledger Row</span>
+              </button>
+            </div>
+
+            {/* Totals Summary */}
+            <div className="flex flex-wrap items-center justify-end gap-5 pt-2.5 border-t border-slate-100 text-xs">
+              <span className="text-slate-600">
+                Total Debit: <strong className="font-mono text-slate-900 font-bold ml-1">₹{totalJournalDebit.toFixed(2)}</strong>
+              </span>
+              <span className="text-slate-600">
+                Total Credit: <strong className="font-mono text-slate-900 font-bold ml-1">₹{totalJournalCredit.toFixed(2)}</strong>
+              </span>
+              <span className="text-slate-600">
+                Difference: <strong className={`font-mono font-bold ml-1 ${journalDifference < 0.01 && totalJournalDebit > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>₹{journalDifference.toFixed(2)}</strong>
+              </span>
+            </div>
+          </div>
+
+          {/* Card 3: Validation Guidance Box */}
+          {(!isJournalBalanced || !journalNarration.trim()) ? (
+            <div className="p-2.5 sm:p-3 bg-rose-50/70 border border-rose-200/80 rounded-xl text-xs space-y-1">
+              <p className="font-bold text-slate-800 text-xs">Enter ledger amounts</p>
+              {validJournalRowsCount < 2 && (
+                <p className="text-rose-600 text-[11px]">• At least 2 ledger rows with amounts are required.</p>
+              )}
+              {journalRows.some(r => isVendorLedger(r.ledger) && !r.partyId && ((parseFloat(r.debit) > 0) || (parseFloat(r.credit) > 0))) && (
+                <p className="text-rose-600 text-[11px]">• Please select a Supplier for Sundry Creditors row.</p>
+              )}
+              {journalRows.some(r => isCustomerLedger(r.ledger) && !r.partyId && ((parseFloat(r.debit) > 0) || (parseFloat(r.credit) > 0))) && (
+                <p className="text-rose-600 text-[11px]">• Please select a Customer for Sundry Debtors row.</p>
+              )}
+              {(journalDifference >= 0.01 || totalJournalDebit === 0) && validJournalRowsCount >= 1 && (
+                <p className="text-rose-600 text-[11px]">• Total Debit must equal Total Credit.</p>
+              )}
+              {!journalNarration.trim() && (
+                <p className="text-rose-600 text-[11px]">• Narration is required.</p>
+              )}
+            </div>
+          ) : (
+            <div className="p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-semibold flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
+              <span>Double-entry balanced: Total Debit ({formatCurrency(totalJournalDebit)}) equals Total Credit ({formatCurrency(totalJournalCredit)}). Ready to save.</span>
+            </div>
+          )}
+
+          {/* Card 4: Narration */}
+          <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs space-y-1">
+            <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+              NARRATION *
+            </label>
+            <textarea
+              rows="2"
+              value={journalNarration}
+              onChange={(e) => setJournalNarration(e.target.value)}
+              placeholder="Being adjustment entry passed for..."
+              className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none bg-white font-normal"
+            />
+          </div>
+
+          {/* Card 5: Bottom Buttons */}
+          <div className="flex items-center justify-end gap-2.5 pt-1">
             <button
               type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer border border-slate-200 flex items-center gap-1.5 text-xs font-semibold mr-1"
+              onClick={handleClearJournal}
+              className="px-4 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold transition-all shadow-2xs cursor-pointer"
             >
-              <ArrowLeft className="w-4 h-4 text-slate-700" />
-              <span>Back to Invoices</span>
+              Clear
             </button>
-          )}
-          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/25 shrink-0">
-            <CreditCard className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
-              Accounts — Voucher Entry & Settlement
-            </h2>
-            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-              SP TECHPIONEER ERP • Double-entry voucher accounting & bill-wise ledger allocation
-            </p>
+            <button
+              type="button"
+              onClick={handleSaveJournalVoucher}
+              disabled={loading}
+              className="px-5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving Journal Voucher...</span>
+                </>
+              ) : (
+                <span>Save Journal Voucher</span>
+              )}
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full shadow-2xs">
-            {activeVoucherMeta.name} Voucher
-          </span>
-          <span className="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full font-mono shadow-2xs">
-            {formatCurrency(totalSelectedOutstanding)} Due
-          </span>
-        </div>
-      </div>
-
-      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-0 ${isPage ? '' : 'overflow-y-auto max-h-[78vh] custom-scrollbar'}`}>
+      ) : (
+        <div className={`grid grid-cols-1 lg:grid-cols-12 gap-0 ${isPage ? '' : 'overflow-y-auto max-h-[78vh] custom-scrollbar'}`}>
 
         {/* ── LEFT PANEL: COMPANY-WISE BILL-WISE DETAILS (TALLY PRIME STANDARD) ── */}
         <div className="lg:col-span-7 border-r border-slate-200 p-5 space-y-4 bg-slate-50/50">
@@ -1786,25 +2454,50 @@ const PaymentReceivedModal = ({
             <div className="px-3.5 py-2 bg-gradient-to-r from-slate-50 via-white to-blue-50/20 border-b border-slate-200 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0">
-                  Party:
+                  {isVendorMode || voucherType === 'PAYMENT' || getLedgerGroupType(voucherForm.journalDebitLedger) === LEDGER_PARTY_TYPES.SUPPLIER || getLedgerGroupType(voucherForm.journalCreditLedger) === LEDGER_PARTY_TYPES.SUPPLIER ? 'Supplier:' : 'Party:'}
                 </span>
-                {customers.length > 0 && !isVendorMode && voucherType !== 'PAYMENT' ? (
-                  <select
-                    value={formData.customerId || ''}
-                    onChange={(e) => handleCustomerChange(e.target.value)}
-                    className="w-full max-w-sm px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                  >
-                    <option value="">Select Company / Customer</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.company_name}
-                      </option>
-                    ))}
-                  </select>
+                {(isVendorMode || voucherType === 'PAYMENT') ? (
+                  vendors.length > 0 ? (
+                    <select
+                      value={vendorId || formData.vendorId || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (typeof handleCustomerChange === 'function') handleCustomerChange(val);
+                        setFormData(prev => ({ ...prev, customerId: val, vendorId: val }));
+                      }}
+                      className="w-full max-w-sm px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="">Select Supplier → RK Laser Unit 2</option>
+                      {vendors.map(v => (
+                        <option key={v.id} value={v.id}>
+                          {v.vendor_name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-xs font-extrabold text-slate-900 truncate">
+                      {customerName}
+                    </span>
+                  )
                 ) : (
-                  <span className="text-xs font-extrabold text-slate-900 truncate">
-                    {customerName}
-                  </span>
+                  customers.length > 0 && voucherType !== 'PAYMENT' ? (
+                    <select
+                      value={formData.customerId || ''}
+                      onChange={(e) => handleCustomerChange(e.target.value)}
+                      className="w-full max-w-sm px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="">Select Customer → Sidel India Pvt Ltd</option>
+                      {customers.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.company_name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-xs font-extrabold text-slate-900 truncate">
+                      {customerName}
+                    </span>
+                  )
                 )}
               </div>
 
@@ -2662,6 +3355,92 @@ const PaymentReceivedModal = ({
                   </optgroup>
                 </select>
                 {voucherErrors.journalDebitLedger && <span className="text-[10px] text-rose-600">{voucherErrors.journalDebitLedger}</span>}
+                {(() => {
+                  const dType = getLedgerGroupType(voucherForm.journalDebitLedger);
+                  if (dType === LEDGER_PARTY_TYPES.CUSTOMER) {
+                    return (
+                      <div className="mt-1.5 space-y-0.5">
+                        <label className="text-[10px] font-bold text-slate-600 block">Select Customer *</label>
+                        <select
+                          value={voucherForm.journalDebitCustomer || ''}
+                          onChange={(e) => handleVoucherInputChange('journalDebitCustomer', e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800"
+                        >
+                          <option value="">Select Customer → Sidel India Pvt Ltd</option>
+                          {customers.map(c => (
+                            <option key={c.id} value={c.company_name}>{c.company_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+                  if (dType === LEDGER_PARTY_TYPES.SUPPLIER) {
+                    return (
+                      <div className="mt-1.5 space-y-0.5">
+                        <label className="text-[10px] font-bold text-slate-600 block">Select Supplier *</label>
+                        <select
+                          value={voucherForm.journalDebitSupplier || ''}
+                          onChange={(e) => handleVoucherInputChange('journalDebitSupplier', e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800"
+                        >
+                          <option value="">Select Supplier → RK Laser Unit 2</option>
+                          {vendors.map(v => (
+                            <option key={v.id} value={v.vendor_name}>{v.vendor_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+                  if (dType === LEDGER_PARTY_TYPES.BANK) {
+                    return (
+                      <div className="mt-1.5 space-y-0.5">
+                        <label className="text-[10px] font-bold text-slate-600 block">Select Bank Account *</label>
+                        <select
+                          value={voucherForm.journalDebitBank || ''}
+                          onChange={(e) => handleVoucherInputChange('journalDebitBank', e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800"
+                        >
+                          <option value="">Select Bank Account → SBI Current Account</option>
+                          {bankAccounts.map(b => (
+                            <option key={b.id} value={b.bank_name || b.account_name}>
+                              {b.bank_name || b.account_name} {b.account_number ? `(${b.account_number})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+                  if (dType === LEDGER_PARTY_TYPES.CASH) {
+                    return (
+                      <div className="mt-1.5 space-y-0.5">
+                        <label className="text-[10px] font-bold text-slate-600 block">Select Cash Account *</label>
+                        <select
+                          value={voucherForm.journalDebitCash || 'Cash in Hand'}
+                          onChange={(e) => handleVoucherInputChange('journalDebitCash', e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800"
+                        >
+                          <option value="Cash in Hand">Select Cash Ledger</option>
+                          <option value="Petty Cash Ledger">Petty Cash Ledger</option>
+                        </select>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="mt-1.5 space-y-0.5">
+                      <label className="text-[10px] font-bold text-slate-600 block">General Ledger *</label>
+                      <select
+                        value={voucherForm.journalDebitGeneral || voucherForm.journalDebitLedger}
+                        onChange={(e) => handleVoucherInputChange('journalDebitGeneral', e.target.value)}
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800"
+                      >
+                        <option value="">Select relevant ledger from existing chart of accounts...</option>
+                        {LEDGER_GROUPS.map(g => (
+                          <option key={g.id} value={g.name}>{g.id}. {g.name} ({g.category})</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
@@ -2687,6 +3466,92 @@ const PaymentReceivedModal = ({
                   </optgroup>
                 </select>
                 {voucherErrors.journalCreditLedger && <span className="text-[10px] text-rose-600">{voucherErrors.journalCreditLedger}</span>}
+                {(() => {
+                  const cType = getLedgerGroupType(voucherForm.journalCreditLedger);
+                  if (cType === LEDGER_PARTY_TYPES.CUSTOMER) {
+                    return (
+                      <div className="mt-1.5 space-y-0.5">
+                        <label className="text-[10px] font-bold text-slate-600 block">Select Customer *</label>
+                        <select
+                          value={voucherForm.journalCreditCustomer || ''}
+                          onChange={(e) => handleVoucherInputChange('journalCreditCustomer', e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800"
+                        >
+                          <option value="">Select Customer → Sidel India Pvt Ltd</option>
+                          {customers.map(c => (
+                            <option key={c.id} value={c.company_name}>{c.company_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+                  if (cType === LEDGER_PARTY_TYPES.SUPPLIER) {
+                    return (
+                      <div className="mt-1.5 space-y-0.5">
+                        <label className="text-[10px] font-bold text-slate-600 block">Select Supplier *</label>
+                        <select
+                          value={voucherForm.journalCreditSupplier || ''}
+                          onChange={(e) => handleVoucherInputChange('journalCreditSupplier', e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800"
+                        >
+                          <option value="">Select Supplier → RK Laser Unit 2</option>
+                          {vendors.map(v => (
+                            <option key={v.id} value={v.vendor_name}>{v.vendor_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+                  if (cType === LEDGER_PARTY_TYPES.BANK) {
+                    return (
+                      <div className="mt-1.5 space-y-0.5">
+                        <label className="text-[10px] font-bold text-slate-600 block">Select Bank Account *</label>
+                        <select
+                          value={voucherForm.journalCreditBank || ''}
+                          onChange={(e) => handleVoucherInputChange('journalCreditBank', e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800"
+                        >
+                          <option value="">Select Bank Account → SBI Current Account</option>
+                          {bankAccounts.map(b => (
+                            <option key={b.id} value={b.bank_name || b.account_name}>
+                              {b.bank_name || b.account_name} {b.account_number ? `(${b.account_number})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+                  if (cType === LEDGER_PARTY_TYPES.CASH) {
+                    return (
+                      <div className="mt-1.5 space-y-0.5">
+                        <label className="text-[10px] font-bold text-slate-600 block">Select Cash Account *</label>
+                        <select
+                          value={voucherForm.journalCreditCash || 'Cash in Hand'}
+                          onChange={(e) => handleVoucherInputChange('journalCreditCash', e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800"
+                        >
+                          <option value="Cash in Hand">Select Cash Ledger</option>
+                          <option value="Petty Cash Ledger">Petty Cash Ledger</option>
+                        </select>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="mt-1.5 space-y-0.5">
+                      <label className="text-[10px] font-bold text-slate-600 block">General Ledger *</label>
+                      <select
+                        value={voucherForm.journalCreditGeneral || voucherForm.journalCreditLedger}
+                        onChange={(e) => handleVoucherInputChange('journalCreditGeneral', e.target.value)}
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800"
+                      >
+                        <option value="">Select relevant ledger from existing chart of accounts...</option>
+                        {LEDGER_GROUPS.map(g => (
+                          <option key={g.id} value={g.name}>{g.id}. {g.name} ({g.category})</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -2807,31 +3672,46 @@ const PaymentReceivedModal = ({
               </div>
 
               {/* Quick Template Buttons */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    const firstBank = bankAccounts[0]?.bank_name || 'Bank Account';
+                    const firstBank = bankAccounts[0] ? `${bankAccounts[0].bank_name} (${bankAccounts[0].account_number})` : 'Bank Account';
                     handleVoucherInputChange('contraFromAccount', 'Cash in Hand');
                     handleVoucherInputChange('contraToAccount', firstBank);
-                    handleVoucherInputChange('narration', 'Cash deposited into bank account');
+                    handleVoucherInputChange('narration', 'Cash deposited into company bank account');
                   }}
-                  className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                  className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors"
                 >
                   Deposit Cash to Bank
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    const firstBank = bankAccounts[0]?.bank_name || 'Bank Account';
+                    const firstBank = bankAccounts[0] ? `${bankAccounts[0].bank_name} (${bankAccounts[0].account_number})` : 'Bank Account';
                     handleVoucherInputChange('contraFromAccount', firstBank);
                     handleVoucherInputChange('contraToAccount', 'Cash in Hand');
-                    handleVoucherInputChange('narration', 'Cash withdrawn for petty expenses');
+                    handleVoucherInputChange('narration', 'Cash withdrawn for office petty expenses');
                   }}
-                  className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300"
+                  className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 transition-colors"
                 >
                   Withdraw for Petty Cash
                 </button>
+                {bankAccounts.length >= 2 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const bank1 = `${bankAccounts[0].bank_name} (${bankAccounts[0].account_number})`;
+                      const bank2 = `${bankAccounts[1].bank_name} (${bankAccounts[1].account_number})`;
+                      handleVoucherInputChange('contraFromAccount', bank1);
+                      handleVoucherInputChange('contraToAccount', bank2);
+                      handleVoucherInputChange('narration', 'Inter-bank fund transfer between company bank accounts');
+                    }}
+                    className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors"
+                  >
+                    Inter-Bank Transfer
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -2840,36 +3720,36 @@ const PaymentReceivedModal = ({
                   <select
                     value={voucherForm.contraFromAccount}
                     onChange={(e) => handleVoucherInputChange('contraFromAccount', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
                   >
                     <option value="">Select Account</option>
                     <option value="Cash in Hand">Cash in Hand</option>
                     <option value="Petty Cash Account">Petty Cash Account</option>
                     {bankAccounts.map(b => (
                       <option key={`from_${b.id}`} value={`${b.bank_name} (${b.account_number})`}>
-                        {b.bank_name} ({b.account_number})
+                        {b.bank_name} ({b.account_number}) — Bal: ₹{parseFloat(b.opening_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </option>
                     ))}
                   </select>
-                  {voucherErrors.contraFromAccount && <span className="text-[10px] text-rose-600">{voucherErrors.contraFromAccount}</span>}
+                  {voucherErrors.contraFromAccount && <span className="text-[10px] text-rose-600 font-semibold">{voucherErrors.contraFromAccount}</span>}
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Transfer To (Destination) *</label>
                   <select
                     value={voucherForm.contraToAccount}
                     onChange={(e) => handleVoucherInputChange('contraToAccount', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
                   >
                     <option value="">Select Account</option>
                     <option value="Cash in Hand">Cash in Hand</option>
                     <option value="Petty Cash Account">Petty Cash Account</option>
                     {bankAccounts.map(b => (
                       <option key={`to_${b.id}`} value={`${b.bank_name} (${b.account_number})`}>
-                        {b.bank_name} ({b.account_number})
+                        {b.bank_name} ({b.account_number}) — Bal: ₹{parseFloat(b.opening_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </option>
                     ))}
                   </select>
-                  {voucherErrors.contraToAccount && <span className="text-[10px] text-rose-600">{voucherErrors.contraToAccount}</span>}
+                  {voucherErrors.contraToAccount && <span className="text-[10px] text-rose-600 font-semibold">{voucherErrors.contraToAccount}</span>}
                 </div>
               </div>
 
@@ -2884,10 +3764,10 @@ const PaymentReceivedModal = ({
                       value={voucherForm.contraAmount}
                       onChange={(e) => handleVoucherInputChange('contraAmount', e.target.value)}
                       placeholder="0.00"
-                      className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold"
+                      className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
-                  {voucherErrors.contraAmount && <span className="text-[10px] text-rose-600">{voucherErrors.contraAmount}</span>}
+                  {voucherErrors.contraAmount && <span className="text-[10px] text-rose-600 font-semibold">{voucherErrors.contraAmount}</span>}
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide block mb-1">Slip / Cheque / Ref No</label>
@@ -2896,7 +3776,7 @@ const PaymentReceivedModal = ({
                     value={voucherForm.contraRefNo}
                     onChange={(e) => handleVoucherInputChange('contraRefNo', e.target.value)}
                     placeholder="Chq # or deposit slip #"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -2908,7 +3788,7 @@ const PaymentReceivedModal = ({
                   onChange={(e) => handleVoucherInputChange('narration', e.target.value)}
                   placeholder="Being cash transferred..."
                   rows="2"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded-xl text-xs resize-none"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-xl text-xs resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 
@@ -2917,17 +3797,18 @@ const PaymentReceivedModal = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold"
+                  className="flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={handleVoucherPreviewSubmit}
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm"
+                  onClick={handleSaveContraVoucher}
+                  disabled={loading}
+                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
                 >
-                  <ArrowLeftRight className="w-4 h-4" />
-                  <span>Preview Contra Voucher (CV)</span>
+                  <ArrowLeftRight className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  <span>{loading ? 'Recording Voucher...' : `Save Contra Voucher (${contraVoucherNo || getVoucherNumber('CONTRA')})`}</span>
                 </button>
               </div>
             </div>
@@ -3189,6 +4070,7 @@ const PaymentReceivedModal = ({
 
         </div>
       </div>
+      )}
 
       {/* ── INTERACTIVE VOUCHER PREVIEW MODAL ── */}
       {previewVoucherData && (

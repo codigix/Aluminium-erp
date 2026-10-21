@@ -3127,6 +3127,67 @@ const bootstrapDatabase = async () => {
   await ensureReturnsTable();
   await ensureStockIdentityIndex();
   await ensureCustomerPaymentColumns();
+  await ensureAccountingTables();
+};
+
+const ensureAccountingTables = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS journal_vouchers (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        voucher_no VARCHAR(50) NOT NULL UNIQUE,
+        voucher_date DATE NOT NULL,
+        reference_no VARCHAR(100) NULL,
+        total_debit DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        total_credit DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        narration TEXT NULL,
+        created_by INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_jv_date (voucher_date),
+        INDEX idx_jv_no (voucher_no)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS journal_voucher_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        journal_voucher_id INT NOT NULL,
+        ledger_account VARCHAR(255) NOT NULL,
+        debit_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        credit_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        FOREIGN KEY (journal_voucher_id) REFERENCES journal_vouchers(id) ON DELETE CASCADE,
+        INDEX idx_jvi_voucher (journal_voucher_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS contra_vouchers (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        voucher_no VARCHAR(50) NOT NULL UNIQUE,
+        voucher_date DATE NOT NULL,
+        from_account VARCHAR(255) NOT NULL,
+        from_bank_account_id INT NULL,
+        to_account VARCHAR(255) NOT NULL,
+        to_bank_account_id INT NULL,
+        amount DECIMAL(15, 2) NOT NULL,
+        reference_no VARCHAR(100) NULL,
+        narration TEXT NULL,
+        created_by INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_contra_voucher_date (voucher_date),
+        INDEX idx_contra_voucher_no (voucher_no)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log('Accounting tables (journal_vouchers, contra_vouchers) synchronized');
+  } catch (error) {
+    console.error('Error synchronizing accounting tables:', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
 };
 
 const ensureCustomerPaymentColumns = async () => {
