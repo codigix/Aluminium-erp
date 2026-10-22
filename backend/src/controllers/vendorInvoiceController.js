@@ -63,9 +63,21 @@ const verifyInvoice = async (req, res, next) => {
   }
 };
 
+const deleteVendorInvoice = async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const result = await vendorInvoiceService.revertVendorInvoiceFromAccounts(id);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getVendorInvoices,
   getVendorInvoiceById,
   updateInvoiceDetails,
-  verifyInvoice
+  verifyInvoice,
+  deleteVendorInvoice
 };
+

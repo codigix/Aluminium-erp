@@ -411,6 +411,26 @@ const CustomerPaymentHistory = () => {
       const fromAcc = cv.from_account || 'Cash / Bank Account';
       const toAcc = cv.to_account || 'Bank / Cash Account';
 
+      const isFromCash = /cash/i.test(fromAcc);
+      const isToCash = /cash/i.test(toAcc);
+
+      let contraDebit = null;
+      let contraCredit = null;
+
+      if (isFromCash && !isToCash) {
+        // Cash in Hand -> Bank: Bank Inflow (Credit entry in Bank, Debit is empty)
+        contraCredit = amt;
+        contraDebit = null;
+      } else if (!isFromCash && isToCash) {
+        // Bank -> Cash in Hand: Bank Outflow (Debit entry in Bank, Credit is empty)
+        contraDebit = amt;
+        contraCredit = null;
+      } else {
+        // Bank -> Bank: Untouched original flow (shows both Debit and Credit)
+        contraDebit = amt;
+        contraCredit = amt;
+      }
+
       list.push({
         id: `cv_${cv.id}`,
         rawId: cv.id,
@@ -435,8 +455,8 @@ const CustomerPaymentHistory = () => {
         cheque_no: cv.reference_no,
         cheque_bank: null,
         ref_no: cv.reference_no,
-        debit: amt,
-        credit: amt,
+        debit: contraDebit,
+        credit: contraCredit,
         amount: amt,
         narration: cv.narration || 'Internal fund transfer between company accounts',
         status: 'CONFIRMED',

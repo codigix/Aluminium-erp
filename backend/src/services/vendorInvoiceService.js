@@ -159,9 +159,48 @@ const verifyInvoice = async (id) => {
   return getVendorInvoiceById(id);
 };
 
+const revertVendorInvoiceFromAccounts = async (invoiceId) => {
+  const [rows] = await pool.query('SELECT * FROM vendor_invoices WHERE id = ?', [invoiceId]);
+  if (rows.length === 0) {
+    throw new Error('Vendor Invoice not found');
+  }
+
+  const invoice = rows[0];
+  const poId = invoice.po_id;
+
+  // Decouple any payment allocations or direct payments linked to this vendor invoice
+  await pool.query(
+    'UPDATE payment_allocations SET invoice_id = NULL WHERE invoice_id = ?',
+    [invoiceId]
+  );
+  await pool.query(
+    'UPDATE payments SET invoice_id = NULL WHERE invoice_id = ?',
+    [invoiceId]
+  );
+
+  // Remove the record from vendor_invoices (Accounts list)
+  await pool.query('DELETE FROM vendor_invoices WHERE id = ?', [invoiceId]);
+
+  // Revert the Purchase Order in Procurement without deleting the PO itself
+  if (poId) {
+    await pool.query(
+      'UPDATE purchase_orders SET forwarded_to_accounts = 0 WHERE id = ?',
+      [poId]
+    );
+  }
+
+  return {
+    success: true,
+    message: `Vendor invoice ${invoice.vendor_invoice_no || invoice.po_number || invoiceId} removed from Accounts and reverted to Procurement`,
+    data: { id: invoiceId, po_id: poId, po_number: invoice.po_number }
+  };
+};
+
 module.exports = {
   getVendorInvoices,
   getVendorInvoiceById,
   updateInvoiceDetails,
-  verifyInvoice
+  verifyInvoice,
+  revertVendorInvoiceFromAccounts
 };
+

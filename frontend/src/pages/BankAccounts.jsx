@@ -425,9 +425,9 @@ const BankAccounts = () => {
           <div className="text-2xl font-bold font-mono text-emerald-700 tracking-tight">
             {formatCurrency(stats.totalBalance)}
           </div>
-          <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between font-mono">
-            <span className="text-emerald-700 font-semibold" title="Total Inflow across accounts">Cr: +{formatCurrency(stats.totalCredits)}</span>
-            <span className="text-rose-700 font-semibold" title="Total Outflow across accounts">Dr: -{formatCurrency(stats.totalDebits)}</span>
+          <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between font-mono gap-1 whitespace-nowrap overflow-hidden">
+            <span className="text-emerald-700 font-semibold whitespace-nowrap" title="Total Inflow across accounts">Cr: +{formatCurrency(stats.totalCredits)}</span>
+            <span className="text-rose-700 font-semibold whitespace-nowrap" title="Total Outflow across accounts">Dr: -{formatCurrency(stats.totalDebits)}</span>
           </div>
         </div>
 
@@ -615,9 +615,9 @@ const BankAccounts = () => {
                   <th className="py-3 px-4">Account Holder</th>
                   <th className="py-3 px-4">Account Number & IFSC</th>
                   <th className="py-3 px-4">Account Type</th>
-                  <th className="py-3 px-4 text-right">Inflow (Cr)</th>
-                  <th className="py-3 px-4 text-right">Outflow (Dr)</th>
-                  <th className="py-3 px-4 text-right">Total Balance</th>
+                  <th className="py-3 px-4 text-right whitespace-nowrap">Inflow (Cr)</th>
+                  <th className="py-3 px-4 text-right whitespace-nowrap">Outflow (Dr)</th>
+                  <th className="py-3 px-4 text-right whitespace-nowrap">Total Balance</th>
                   <th className="py-3 px-4 text-center">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -699,24 +699,24 @@ const BankAccounts = () => {
                       </td>
 
                       {/* Inflow (Cr) */}
-                      <td className="py-3 px-4 text-right font-mono">
-                        <span className="text-xs font-bold text-emerald-700 block">
+                      <td className="py-3 px-4 text-right font-mono whitespace-nowrap">
+                        <span className="text-xs font-bold text-emerald-700 whitespace-nowrap inline-flex items-center justify-end">
                           +{formatCurrency(account.total_credits || 0)}
                         </span>
-                        <span className="text-[10px] text-slate-400 block -mt-0.5">Total Inflow</span>
+                        <span className="text-[10px] text-slate-400 block -mt-0.5 whitespace-nowrap">Total Inflow</span>
                       </td>
 
                       {/* Outflow (Dr) */}
-                      <td className="py-3 px-4 text-right font-mono">
-                        <span className="text-xs font-bold text-rose-700 block">
+                      <td className="py-3 px-4 text-right font-mono whitespace-nowrap">
+                        <span className="text-xs font-bold text-rose-700 whitespace-nowrap inline-flex items-center justify-end">
                           -{formatCurrency(account.total_debits || 0)}
                         </span>
-                        <span className="text-[10px] text-slate-400 block -mt-0.5">Total Outflow</span>
+                        <span className="text-[10px] text-slate-400 block -mt-0.5 whitespace-nowrap">Total Outflow</span>
                       </td>
 
                       {/* Total Balance */}
-                      <td className="py-3 px-4 text-right font-mono">
-                        <span className="text-xs font-bold text-slate-900 block">
+                      <td className="py-3 px-4 text-right font-mono whitespace-nowrap">
+                        <span className="text-xs font-bold text-slate-900 block whitespace-nowrap">
                           {formatCurrency(account.current_balance ?? account.total_balance ?? account.opening_balance)}
                         </span>
                       </td>
@@ -852,9 +852,9 @@ const BankAccounts = () => {
                       </span>
                     </div>
 
-                    <div className="text-right font-mono text-[10px]">
-                      <span className="text-emerald-700 block font-bold">Cr: +{formatCurrency(account.total_credits || 0)}</span>
-                      <span className="text-rose-700 block font-bold">Dr: -{formatCurrency(account.total_debits || 0)}</span>
+                    <div className="text-right font-mono text-[10px] whitespace-nowrap">
+                      <span className="text-emerald-700 block font-bold whitespace-nowrap">Cr: +{formatCurrency(account.total_credits || 0)}</span>
+                      <span className="text-rose-700 block font-bold whitespace-nowrap">Dr: -{formatCurrency(account.total_debits || 0)}</span>
                     </div>
 
                     <button
@@ -1465,14 +1465,14 @@ const BankAccounts = () => {
 
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Inflow (Credits)</span>
-                  <span className="font-mono font-bold text-emerald-700 text-sm mt-0.5 block">
+                  <span className="font-mono font-bold text-emerald-700 text-sm mt-0.5 block whitespace-nowrap">
                     +{formatCurrency(selectedAccount.total_credits || selectedAccount.total_received || 0)}
                   </span>
                 </div>
 
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Outflow (Debits)</span>
-                  <span className="font-mono font-bold text-rose-700 text-sm mt-0.5 block">
+                  <span className="font-mono font-bold text-rose-700 text-sm mt-0.5 block whitespace-nowrap">
                     -{formatCurrency(selectedAccount.total_debits || 0)}
                   </span>
                 </div>

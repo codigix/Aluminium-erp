@@ -633,16 +633,19 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     }
   };
 
-  // 57 Ledger Groups Options for Step 2 SearchableSelect
+  // Temporarily restricted to 3 options: 1. Sundry Creditors, 2. Bank Accounts, 3. Sundry Debtors
   const ledgerGroupOptions = useMemo(() => {
-    return [
-      { value: 'ALL', label: 'All Ledger Groups', sublabel: 'View all 57 groups' },
-      ...LEDGER_GROUPS.map(g => ({
+    const allowed = ['Sundry Creditors', 'Bank Accounts', 'Sundry Debtors'];
+    const orderMap = { 'Sundry Creditors': 1, 'Bank Accounts': 2, 'Sundry Debtors': 3 };
+
+    return LEDGER_GROUPS
+      .filter(g => allowed.includes(g.name))
+      .sort((a, b) => (orderMap[a.name] || 99) - (orderMap[b.name] || 99))
+      .map(g => ({
         value: g.name,
         label: `${g.id}. ${g.name}`,
         sublabel: `Category: ${g.category}`
-      }))
-    ];
+      }));
   }, []);
 
   // Options for SearchableSelect

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   CreditCard, Calendar, Check, AlertCircle, RefreshCw, 
-  Building2, FileText, Layers, ArrowRight, ArrowLeft, DollarSign, Wallet,
+  Building2, FileText, Layers, ArrowRight, ArrowLeft, DollarSign, Wallet, Landmark,
   SlidersHorizontal, CheckCircle2, History, ArrowLeftRight, FileMinus, FilePlus, BookOpen, AlertTriangle, Printer, X,
   Plus, Trash2, Search
 } from 'lucide-react';
@@ -2496,15 +2496,81 @@ const PaymentReceivedModal = ({
             </div>
           )}
 
-          {/* Company / Customer Selection & Up To Balance Banner (Compact Layout) */}
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+          {/* Contextual Liquid Accounts Balance for Contra */}
+          {voucherType === 'CONTRA' && (
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                    <Landmark className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800">Liquid Accounts & Available Balances</h4>
+                    <p className="text-[10px] text-slate-500">Real-time funds available for internal transfer</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  {bankAccounts.length + 1} Liquid Accounts
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {/* Cash in Hand */}
+                <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/60 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 block">Cash in Hand</span>
+                      <span className="text-[10px] text-slate-500 block">Main Till Cash Account</span>
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-slate-900">
+                    {formatCurrency(bankAccounts.find(b => b.account_type === 'CASH')?.current_balance || 0)}
+                  </span>
+                </div>
+
+                {/* Bank Accounts */}
+                {bankAccounts.map((b) => (
+                  <div key={b.id} className="p-2.5 rounded-lg border border-slate-200 bg-white flex items-center justify-between hover:border-blue-200 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${b.is_active ? 'bg-blue-500' : 'bg-slate-300'}`} />
+                      <div>
+                        <span className="text-xs font-bold text-slate-800 block">{b.bank_name}</span>
+                        <span className="text-[10px] text-slate-500 block font-mono">
+                          A/c: {b.account_number} • {b.account_type || 'Current'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-emerald-700">
+                      {formatCurrency(b.current_balance ?? b.total_balance ?? b.opening_balance ?? 0)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-2.5 bg-blue-50/50 rounded-lg border border-blue-100 text-[10.5px] text-blue-900 flex items-start gap-2">
+                <AlertCircle className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                <p className="leading-tight">
+                  <strong>Contra Accounting Rule:</strong> Contra vouchers only record movement of liquid funds between Cash and Bank accounts or between two Banks. Bill-wise invoice allocation is not applicable.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Company / Customer Selection & Up To Balance Banner & Bill-Wise Details (Hidden for Contra) */}
+          {voucherType !== 'CONTRA' && (
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
             <div className="px-3.5 py-2 bg-gradient-to-r from-slate-50 via-white to-blue-50/20 border-b border-slate-200 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0">
                   {isVendorMode || voucherType === 'PAYMENT' || getLedgerGroupType(voucherForm.journalDebitLedger) === LEDGER_PARTY_TYPES.SUPPLIER || getLedgerGroupType(voucherForm.journalCreditLedger) === LEDGER_PARTY_TYPES.SUPPLIER ? 'Supplier:' : 'Party:'}
                 </span>
                 {(isVendorMode || voucherType === 'PAYMENT') ? (
-                  vendors.length > 0 ? (
+                  (vendorId || formData.vendorId || vendor || selectedInvoices[0]?.vendor_name) ? (
+                    <div className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 shadow-2xs flex items-center">
+                      <span className="truncate">{customerName}</span>
+                    </div>
+                  ) : vendors.length > 0 ? (
                     <select
                       value={vendorId || formData.vendorId || ''}
                       onChange={(e) => {
@@ -2514,7 +2580,7 @@ const PaymentReceivedModal = ({
                       }}
                       className="w-full max-w-sm px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                     >
-                      <option value="">Select Supplier → RK Laser Unit 2</option>
+                      <option value="">Select Supplier</option>
                       {vendors.map(v => (
                         <option key={v.id} value={v.id}>
                           {v.vendor_name}
@@ -2527,13 +2593,17 @@ const PaymentReceivedModal = ({
                     </span>
                   )
                 ) : (
-                  customers.length > 0 && voucherType !== 'PAYMENT' ? (
+                  (formData.customerId || customerId || companyId || selectedInvoices[0]?.company_name || selectedInvoices[0]?.customer_name || singleInvoice) ? (
+                    <div className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 shadow-2xs flex items-center">
+                      <span className="truncate">{customerName}</span>
+                    </div>
+                  ) : customers.length > 0 && voucherType !== 'PAYMENT' ? (
                     <select
                       value={formData.customerId || ''}
                       onChange={(e) => handleCustomerChange(e.target.value)}
                       className="w-full max-w-sm px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                     >
-                      <option value="">Select Customer → Sidel India Pvt Ltd</option>
+                      <option value="">Select Customer</option>
                       {customers.map(c => (
                         <option key={c.id} value={c.id}>
                           {c.company_name}
@@ -2995,7 +3065,8 @@ const PaymentReceivedModal = ({
               </div>
             )}
           </div>
-        </div>
+        )}
+      </div>
 
         {/* ── RIGHT PANEL: VOUCHER TYPE SELECTOR & TRANSACTION ENTRY FORM ── */}
         <div className="lg:col-span-5 p-5 space-y-4 bg-white">

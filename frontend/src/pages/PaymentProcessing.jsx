@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Package, RefreshCw, Eye, Download, Send, Calendar, Clock, CreditCard, CheckSquare, FileText, Upload, AlertCircle } from 'lucide-react';
+import { Package, RefreshCw, Eye, Download, Send, Calendar, Clock, CreditCard, CheckSquare, FileText, Upload, AlertCircle, Trash2 } from 'lucide-react';
 import { DataTable, Button, Modal, FormControl } from '../components/ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 import ProcessPaymentModal from '../components/ProcessPaymentModal.jsx';
@@ -207,6 +207,46 @@ const PaymentProcessing = () => {
     link.remove();
   };
 
+  const handleDeleteInvoice = async (row) => {
+    const docRef = row.vendor_invoice_no || row.po_number || `ID: ${row.id}`;
+    const result = await Swal.fire({
+      title: 'Remove from Vendor Invoices?',
+      text: `PO / Invoice ${docRef} will be removed from Vendor Invoices and reverted to Procurement as ready to send. The Purchase Order will NOT be deleted.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: 'Yes, Remove Entry',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/vendor-invoices/${row.id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          successToast('Vendor invoice removed from Accounts and reverted to Procurement');
+          fetchInvoices();
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || 'Failed to remove vendor invoice');
+        }
+      } catch (err) {
+        errorToast(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   const columns = [
     {
       label: 'PO / Invoice',
@@ -287,7 +327,7 @@ const PaymentProcessing = () => {
       key: 'id',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end items-center gap-2">
+        <div className="flex justify-end items-center gap-1.5">
           {/* Email Attachments */}
           <button
             onClick={() => handleSendEmailClick(row)}
@@ -295,6 +335,15 @@ const PaymentProcessing = () => {
             title="Send Email"
           >
             <Send className="w-4 h-4" />
+          </button>
+
+          {/* Delete / Revert Invoice */}
+          <button
+            onClick={() => handleDeleteInvoice(row)}
+            className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 cursor-pointer"
+            title="Remove from Vendor Invoices"
+          >
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       )
