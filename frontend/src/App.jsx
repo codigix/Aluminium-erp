@@ -1290,9 +1290,7 @@ function App() {
       isSubMenu: true,
       icon: 'credit-card',
       children: [
-        { label: 'Vendor Invoices', moduleId: 'payment-processing', icon: 'receipt', prefix: '/accounts' },
-        { label: 'Record Payment Made', moduleId: 'record-payment-made', icon: 'credit-card', prefix: '/accounts' },
-        { label: 'Payment History', moduleId: 'payment-history', icon: 'history', prefix: '/accounts' }
+        { label: 'Vendor Invoices', moduleId: 'payment-processing', icon: 'receipt', prefix: '/accounts' }
       ]
     },
     {
@@ -1300,11 +1298,11 @@ function App() {
       isSubMenu: true,
       icon: 'check-circle',
       children: [
-        { label: 'Customer Invoices', moduleId: 'payment-received', icon: 'receipt', prefix: '/accounts' },
-        { label: 'Record Payment Received', moduleId: 'record-payment-received', icon: 'credit-card', prefix: '/accounts' },
-        { label: 'Payment History', moduleId: 'customer-payment-history', icon: 'contact', prefix: '/accounts' }
+        { label: 'Customer Invoices', moduleId: 'payment-received', icon: 'receipt', prefix: '/accounts' }
       ]
     },
+    { label: 'Record Payment', moduleId: 'record-payment-received', icon: 'credit-card', indent: true, prefix: '/accounts' },
+    { label: 'Payment History', moduleId: 'customer-payment-history', icon: 'history', indent: true, prefix: '/accounts' },
     { label: 'Bank Accounts', moduleId: 'bank-accounts', icon: 'landmark', indent: true, deptCode: 'ACCOUNTS', prefix: '/accounts' },
     { label: 'Accounts Report', moduleId: 'accounts-report', icon: 'file-bar-chart', indent: true, deptCode: 'ACCOUNTS', prefix: '/accounts' },
 

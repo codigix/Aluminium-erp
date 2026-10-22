@@ -569,6 +569,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     } else if (typeId === 'CONTRA') {
       handleLedgerGroupChange('Bank Accounts');
       if (bankAccounts.length === 0) fetchBankAccounts();
+      fetchContraVouchers();
     }
   };
 
@@ -2170,7 +2171,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <span>{selectedVoucherType === 'CONTRA' ? 'Contra Voucher Entry' : selectedVoucherType === 'JOURNAL' ? 'Journal Voucher Entry' : (isPaymentMode ? 'Record Payment Made' : 'Record Payment Received')}</span>
+              <span>{selectedVoucherType === 'CONTRA' ? 'Contra Voucher Entry' : selectedVoucherType === 'JOURNAL' ? 'Journal Voucher Entry' : (isPaymentMode ? 'Record Payment Made' : 'Record Payment')}</span>
               <span className={`text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
                 selectedVoucherType === 'CONTRA'
                   ? 'bg-purple-50 text-purple-800 border-purple-200'

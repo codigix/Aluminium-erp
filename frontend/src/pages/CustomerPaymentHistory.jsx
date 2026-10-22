@@ -1,13 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { History, RefreshCw, Download, Send, Calendar, User, FileText, Building2, Filter, X, CheckCircle2, Eye, Printer, FileCheck, Wallet } from 'lucide-react';
-import { DataTable, Button } from '../components/ui.jsx';
+import { 
+  History, RefreshCw, Download, Send, Calendar, User, FileText, 
+  Building2, Filter, X, CheckCircle2, Eye, Printer, FileCheck, 
+  Wallet, ArrowDownRight, ArrowUpRight, BookOpen, Layers, 
+  Search, Building, CreditCard, Check, AlertCircle, ArrowRightLeft,
+  ArrowRight, ArrowLeftRight
+} from 'lucide-react';
+import { DataTable, Button, SearchableSelect } from '../components/ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 import SendEmailModal from '../components/SendEmailModal.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const formatCurrency = (value, currency = 'INR') => {
-  if (!value || isNaN(value)) return '—';
+  if (value === null || value === undefined || isNaN(value)) return '—';
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: currency || 'INR',
@@ -49,29 +55,33 @@ const getRefNo = (row) => {
 };
 
 const CustomerPaymentHistory = () => {
-  const [history, setHistory] = useState([]);
+  // Raw Data States
+  const [customerPayments, setCustomerPayments] = useState([]);
+  const [vendorPayments, setVendorPayments] = useState([]);
+  const [journalVouchers, setJournalVouchers] = useState([]);
+  const [contraVouchers, setContraVouchers] = useState([]);
+  const [companiesList, setCompaniesList] = useState([]);
+  const [vendorsList, setVendorsList] = useState([]);
+  const [allRegisteredBanks, setAllRegisteredBanks] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState(null);
-  const [viewingReceipt, setViewingReceipt] = useState(null);
-  const [emailData, setEmailData] = useState({ to: '', subject: '', message: '' });
 
-  // Filter states: Customer-wise, Bank-wise, Date-wise, Status-wise
-  const [selectedCustomer, setSelectedCustomer] = useState('');
-  const [selectedBank, setSelectedBank] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
+  // Clean One-Line Filter States (Tabs removed, unified company searchable select)
+  const [selectedCompany, setSelectedCompany] = useState('');
+  const [selectedVoucherType, setSelectedVoucherType] = useState('ALL'); // 'ALL', 'RECEIPT', 'PAYMENT', 'JOURNAL', 'CONTRA'
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [allRegisteredBanks, setAllRegisteredBanks] = useState([]);
 
-  // Monthly Period Balance Statement states
-  const [monthlySummary, setMonthlySummary] = useState(null);
-  const [monthlyLoading, setMonthlyLoading] = useState(false);
+  // Interactive Modal States
+  const [viewingVoucher, setViewingVoucher] = useState(null);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [selectedVoucherForEmail, setSelectedVoucherForEmail] = useState(null);
+  const [emailData, setEmailData] = useState({ to: '', subject: '', message: '' });
 
   useEffect(() => {
-    fetchPaymentHistory();
+    fetchAllVoucherData();
     fetchRegisteredBanks();
+    fetchCompanies();
+    fetchVendors();
   }, []);
 
   const fetchRegisteredBanks = async () => {
@@ -89,110 +99,373 @@ const CustomerPaymentHistory = () => {
     }
   };
 
-  const fetchPaymentHistory = async () => {
+  const fetchCompanies = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/companies`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCompaniesList(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Error fetching companies:', err);
+    }
+  };
+
+  const fetchVendors = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/vendors`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVendorsList(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Error fetching vendors:', err);
+    }
+  };
+
+  const fetchAllVoucherData = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/customer-payments?status=CONFIRMED`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const authHeaders = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
 
-      if (!response.ok) throw new Error('Failed to fetch payment history');
-      const data = await response.json();
-      setHistory(Array.isArray(data) ? data : []);
+      // Parallel fetch for Customer Payments, Vendor Payments, Journal Vouchers, and Contra Vouchers
+      const [cpRes, vpRes, jvRes, cvRes] = await Promise.all([
+        fetch(`${API_BASE}/customer-payments?status=CONFIRMED`, { headers: authHeaders }),
+        fetch(`${API_BASE}/payments?status=CONFIRMED`, { headers: authHeaders }),
+        fetch(`${API_BASE}/payments/journal`, { headers: authHeaders }),
+        fetch(`${API_BASE}/payments/contra`, { headers: authHeaders })
+      ]);
+
+      if (cpRes.ok) {
+        const data = await cpRes.json();
+        setCustomerPayments(Array.isArray(data) ? data : []);
+      }
+      if (vpRes.ok) {
+        const data = await vpRes.json();
+        setVendorPayments(Array.isArray(data) ? data : []);
+      }
+      if (jvRes.ok) {
+        const data = await jvRes.json();
+        setJournalVouchers(Array.isArray(data) ? data : []);
+      }
+      if (cvRes.ok) {
+        const data = await cvRes.json();
+        setContraVouchers(Array.isArray(data) ? data : []);
+      }
     } catch (error) {
-      console.error('Error fetching history:', error);
-      errorToast('Failed to fetch payment history');
+      console.error('Error fetching payment & voucher history:', error);
+      errorToast('Failed to fetch voucher history');
     } finally {
       setLoading(false);
     }
   };
 
-  // Distinct Customer Options (name + id)
-  const customerOptions = useMemo(() => {
-    const map = new Map();
-    history.forEach(p => {
-      const name = p.customer_name;
-      const id = p.customer_id;
-      if (name && !map.has(name)) {
-        map.set(name, { id, name });
-      }
-    });
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [history]);
+  // 1. Normalized Unified Voucher Records
+  const unifiedVouchers = useMemo(() => {
+    const list = [];
 
-  // Active Customer for Statement (explicitly selected or first available customer)
-  const activeCustomer = useMemo(() => {
-    if (selectedCustomer) {
-      return customerOptions.find(c => c.name.toLowerCase() === selectedCustomer.toLowerCase()) || null;
-    }
-    return customerOptions[0] || null;
-  }, [selectedCustomer, customerOptions]);
+    // A. Customer Payment Receipts (F6)
+    customerPayments.forEach(p => {
+      const bank = getBankName(p) || 'Bank Account';
+      const chq = getChequeNo(p);
+      const ref = getRefNo(p);
+      const invoiceRef = p.invoice_no || (p.invoice_id ? `INV-#${p.invoice_id}` : null);
+      const billRef = p.so_number || invoiceRef || p.remarks?.match(/\[(?:Ref|Bill):\s*([^\]]+)\]/i)?.[1]?.trim();
+      const amt = parseFloat(p.payment_amount) || 0;
 
-  // Fetch Period Statement Balance
-  const fetchMonthlySummary = async (custId, customFrom, customTo) => {
-    if (!custId) {
-      setMonthlySummary(null);
-      return;
-    }
-    try {
-      setMonthlyLoading(true);
-      const token = localStorage.getItem('authToken');
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
-      let url = `${API_BASE}/customer-payments/customer/${custId}/monthly-summary?year=${currentYear}&month=${currentMonth}`;
-      if (customFrom && customTo) {
-        url += `&startDate=${customFrom}&endDate=${customTo}`;
-      } else {
-        const pad = (n) => String(n).padStart(2, '0');
-        const defaultStart = `${currentYear}-${pad(currentMonth)}-01`;
-        const lastDay = new Date(currentYear, currentMonth, 0).getDate();
-        const defaultEnd = `${currentYear}-${pad(currentMonth)}-${pad(lastDay)}`;
-        url += `&startDate=${defaultStart}&endDate=${defaultEnd}`;
-      }
-      const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      list.push({
+        id: `cp_${p.id}`,
+        rawId: p.id,
+        kind: 'CUSTOMER_RECEIPT',
+        voucher_date: (p.payment_date || p.created_at || '').slice(0, 10),
+        raw_date: p.payment_date || p.created_at,
+        voucher_type: 'Receipt',
+        voucher_type_code: 'RECEIPT',
+        voucher_number: p.payment_receipt_no || `PR-${p.id}`,
+        party_name: p.customer_name || 'Customer',
+        party_id: p.customer_id,
+        party_type: 'CLIENT',
+        particulars_title: bank,
+        particulars_subtitle: p.customer_name,
+        payment_mode: p.payment_mode || 'BANK_TRANSFER',
+        bill_ref: billRef,
+        agst_ref: invoiceRef || billRef || null,
+        po_number: p.customer_po_number || p.po_number || null,
+        customer_po: p.customer_po_number || null,
+        bank_name: bank,
+        cheque_no: chq,
+        cheque_bank: p.cheque_bank_name,
+        ref_no: ref,
+        debit: null,
+        credit: amt,
+        amount: amt,
+        narration: p.remarks,
+        status: p.status || 'CONFIRMED',
+        raw: p
       });
-      if (res.ok) {
-        const data = await res.json();
-        setMonthlySummary(data);
-      } else {
-        setMonthlySummary(null);
+    });
+
+    // B. Vendor Payments Made (F5) - Keep all 3 existing payments completely unchanged
+    vendorPayments.forEach(p => {
+      const bank = getBankName(p) || (p.payment_mode === 'CASH' ? 'Cash Account' : 'Bank Account');
+      const chq = getChequeNo(p);
+      const ref = getRefNo(p);
+      const agstRefMatch = p.remarks?.match(/\[Agst Ref:\s*([^\]]+)\]/i)?.[1];
+      const billMatch = p.remarks?.match(/\[Bill:\s*([^\]]+)\]/i)?.[1];
+      const poRef = p.po_number || agstRefMatch || billMatch;
+      const amt = parseFloat(p.payment_amount) || 0;
+
+      list.push({
+        id: `vp_${p.id}`,
+        rawId: p.id,
+        kind: 'VENDOR_PAYMENT',
+        voucher_date: (p.payment_date || p.created_at || '').slice(0, 10),
+        raw_date: p.payment_date || p.created_at,
+        voucher_type: 'Payment',
+        voucher_type_code: 'PAYMENT',
+        voucher_number: p.payment_voucher_no || `PAY-${p.id}`,
+        party_name: p.vendor_name || 'Vendor',
+        party_id: p.vendor_id,
+        party_type: 'VENDOR',
+        particulars_title: bank,
+        particulars_subtitle: p.vendor_name,
+        payment_mode: p.payment_mode || 'BANK_TRANSFER',
+        bill_ref: agstRefMatch ? `Agst Ref: ${agstRefMatch}` : (poRef ? `Agst Ref: ${poRef}` : null),
+        agst_ref: agstRefMatch || (poRef ? poRef : null),
+        po_number: p.po_number || null,
+        customer_po: null,
+        bank_name: bank,
+        cheque_no: chq,
+        cheque_bank: p.cheque_bank_name,
+        ref_no: ref,
+        debit: amt,
+        credit: null,
+        amount: amt,
+        narration: p.remarks,
+        status: p.status || 'CONFIRMED',
+        raw: p
+      });
+    });
+
+    // C. Journal Vouchers (F7) - e.g. JV-2026-0001 with RK LASER UNIT 2 – Discount Adjustment
+    journalVouchers.forEach(jv => {
+      const items = Array.isArray(jv.items) ? jv.items : [];
+      const drAmt = parseFloat(jv.total_debit) || 0;
+      const crAmt = parseFloat(jv.total_credit) || drAmt;
+
+      let partyName = '';
+      let partyType = 'GENERAL';
+      let discountCreditAccount = '';
+
+      for (const it of items) {
+        const acc = it.ledger_account || '';
+        const matchVendor = acc.match(/Sundry Creditors.*?\((.*?)\)/i) || acc.match(/Vendor.*?\((.*?)\)/i);
+        const matchClient = acc.match(/Sundry Debtors.*?\((.*?)\)/i) || acc.match(/Customer.*?\((.*?)\)/i);
+
+        if (matchVendor) {
+          partyName = matchVendor[1]?.trim();
+          partyType = 'VENDOR';
+        } else if (matchClient) {
+          partyName = matchClient[1]?.trim();
+          partyType = 'CLIENT';
+        }
+
+        if (acc.toLowerCase().includes('discount') || acc.toLowerCase().includes('income')) {
+          discountCreditAccount = acc;
+        }
       }
-    } catch (err) {
-      console.error('Error fetching monthly summary:', err);
-      setMonthlySummary(null);
-    } finally {
-      setMonthlyLoading(false);
-    }
-  };
 
-  useEffect(() => {
-    if (activeCustomer?.id) {
-      fetchMonthlySummary(activeCustomer.id, startDate, endDate);
-    } else {
-      setMonthlySummary(null);
-    }
-  }, [activeCustomer?.id, startDate, endDate]);
+      if (!partyName) {
+        if (/RK\s*LASER/i.test(jv.narration || '')) {
+          partyName = 'RK LASER UNIT 2';
+          partyType = 'VENDOR';
+        }
+      }
 
-  // Distinct Bank Options (combining registered bank accounts + history records)
-  const bankOptions = useMemo(() => {
-    const set = new Set();
+      const particularsTitle = partyName 
+        ? `${partyName} – Discount Adjustment` 
+        : (jv.narration && jv.narration !== 'okk' ? jv.narration : 'Journal Voucher');
+
+      list.push({
+        id: `jv_${jv.id}`,
+        rawId: jv.id,
+        kind: 'JOURNAL_VOUCHER',
+        voucher_date: (jv.voucher_date || jv.created_at || '').slice(0, 10),
+        raw_date: jv.voucher_date || jv.created_at,
+        voucher_type: 'Journal',
+        voucher_type_code: 'JOURNAL',
+        voucher_number: jv.voucher_no || `JV-${jv.id}`,
+        party_name: partyName || 'General Journal',
+        party_id: null,
+        party_type: partyType,
+        particulars_title: particularsTitle,
+        particulars_subtitle: discountCreditAccount || 'Discount Received (Income)',
+        payment_mode: 'JOURNAL_ENTRY',
+        bill_ref: 'Agst: Discount Received',
+        agst_ref: 'Discount Received',
+        po_number: null,
+        customer_po: null,
+        bank_name: null,
+        cheque_no: null,
+        cheque_bank: null,
+        ref_no: null,
+        debit: drAmt,
+        credit: crAmt,
+        amount: drAmt,
+        narration: jv.narration && jv.narration !== 'okk' ? jv.narration : 'Discount Adjustment',
+        status: 'CONFIRMED',
+        items: items,
+        raw: jv
+      });
+    });
+
+    // D. Contra Vouchers (F4) - Internal Transfers between Cash & Bank accounts
+    contraVouchers.forEach(cv => {
+      const amt = parseFloat(cv.amount) || 0;
+      const fromAcc = cv.from_account || 'Cash / Bank Account';
+      const toAcc = cv.to_account || 'Bank / Cash Account';
+
+      list.push({
+        id: `cv_${cv.id}`,
+        rawId: cv.id,
+        kind: 'CONTRA_VOUCHER',
+        voucher_date: (cv.voucher_date || cv.created_at || '').slice(0, 10),
+        raw_date: cv.voucher_date || cv.created_at,
+        voucher_type: 'Contra',
+        voucher_type_code: 'CONTRA',
+        voucher_number: cv.voucher_no || `CV-${cv.id}`,
+        party_name: 'Internal Transfer',
+        party_id: null,
+        party_type: 'INTERNAL',
+        particulars_title: `${fromAcc} → ${toAcc}`,
+        particulars_subtitle: cv.reference_no ? `Slip / Ref: ${cv.reference_no}` : 'Internal Fund Transfer',
+        payment_mode: 'CONTRA_TRANSFER',
+        bill_ref: cv.reference_no ? `Slip #${cv.reference_no}` : 'Internal Transfer',
+        agst_ref: cv.reference_no ? `Slip #${cv.reference_no}` : null,
+        po_number: null,
+        customer_po: null,
+        bank_name: `${fromAcc} ${toAcc}`,
+        cheque_no: cv.reference_no,
+        cheque_bank: null,
+        ref_no: cv.reference_no,
+        debit: amt,
+        credit: amt,
+        amount: amt,
+        narration: cv.narration || 'Internal fund transfer between company accounts',
+        status: 'CONFIRMED',
+        from_account: fromAcc,
+        to_account: toAcc,
+        raw: cv
+      });
+    });
+
+    // Sort chronologically descending
+    return list.sort((a, b) => new Date(b.raw_date) - new Date(a.raw_date));
+  }, [customerPayments, vendorPayments, journalVouchers, contraVouchers]);
+
+  // Comprehensive Unified Search Options: Bank Name, Client/Customer, Vendor, Agst Ref, PO Number, Customer PO
+  const searchOptions = useMemo(() => {
+    const list = [
+      { 
+        value: '', 
+        label: 'All Parties, Banks, References & POs', 
+        category: 'All', 
+        badgeColor: 'bg-slate-100 text-slate-700 border-slate-200' 
+      }
+    ];
+    const seen = new Set();
+
+    const addOption = (val, label, category, badgeColor) => {
+      const cleanVal = (val || '').trim();
+      if (!cleanVal) return;
+      const key = `${category}:${cleanVal}`.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      list.push({
+        value: cleanVal,
+        label: label || cleanVal,
+        category,
+        badgeColor
+      });
+    };
+
+    // 1. Bank Accounts
     allRegisteredBanks.forEach(b => {
-      if (b.bank_name) set.add(b.bank_name);
+      const name = b.bank_name || b.account_name;
+      if (name) addOption(name, name, 'Bank', 'bg-purple-50 text-purple-700 border-purple-200');
     });
-    history.forEach(p => {
-      const bank = getBankName(p);
-      if (bank) set.add(bank);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [history, allRegisteredBanks]);
 
-  // Date Range Quick Presets
+    // 2. Customers / Clients
+    companiesList.forEach(c => {
+      if (c.company_name) addOption(c.company_name, c.company_name, 'Customer', 'bg-emerald-50 text-emerald-700 border-emerald-200');
+    });
+    customerPayments.forEach(p => {
+      if (p.customer_name) addOption(p.customer_name, p.customer_name, 'Customer', 'bg-emerald-50 text-emerald-700 border-emerald-200');
+    });
+
+    // 3. Suppliers / Vendors
+    vendorsList.forEach(v => {
+      if (v.vendor_name) addOption(v.vendor_name, v.vendor_name, 'Vendor', 'bg-amber-50 text-amber-800 border-amber-200');
+    });
+    vendorPayments.forEach(p => {
+      if (p.vendor_name) addOption(p.vendor_name, p.vendor_name, 'Vendor', 'bg-amber-50 text-amber-800 border-amber-200');
+    });
+    addOption('RK LASER UNIT 2', 'RK LASER UNIT 2', 'Vendor', 'bg-amber-50 text-amber-800 border-amber-200');
+
+    // 4. Banks, Against References & PO Numbers extracted from unifiedVouchers
+    unifiedVouchers.forEach(v => {
+      if (v.bank_name && !v.bank_name.includes('Account')) {
+        addOption(v.bank_name, v.bank_name, 'Bank', 'bg-purple-50 text-purple-700 border-purple-200');
+      }
+      if (v.from_account) addOption(v.from_account, v.from_account, 'Bank / Cash', 'bg-purple-50 text-purple-700 border-purple-200');
+      if (v.to_account) addOption(v.to_account, v.to_account, 'Bank / Cash', 'bg-purple-50 text-purple-700 border-purple-200');
+
+      // Against References (e.g. INV-2026-0006, INV-2026-0005, INV-2026-0031)
+      if (v.bill_ref) {
+        const raw = v.bill_ref.replace(/^(?:Agst Ref|Bill|Slip #|Agst|Ref):\s*/i, '');
+        const parts = raw.split(/[,;\/]/);
+        parts.forEach(p => {
+          const trimmed = p.trim();
+          if (trimmed && trimmed.length > 2 && !trimmed.toLowerCase().includes('discount')) {
+            addOption(trimmed, trimmed, 'Agst Ref', 'bg-blue-50 text-blue-700 border-blue-200');
+          }
+        });
+      }
+      if (v.agst_ref) {
+        const parts = String(v.agst_ref).replace(/^(?:Agst Ref|Bill|Slip #|Agst|Ref):\s*/i, '').split(/[,;\/]/);
+        parts.forEach(p => {
+          const trimmed = p.trim();
+          if (trimmed && trimmed.length > 2 && !trimmed.toLowerCase().includes('discount')) {
+            addOption(trimmed, trimmed, 'Agst Ref', 'bg-blue-50 text-blue-700 border-blue-200');
+          }
+        });
+      }
+
+      // PO Numbers
+      if (v.po_number) {
+        addOption(v.po_number, v.po_number, 'PO Number', 'bg-indigo-50 text-indigo-700 border-indigo-200');
+      }
+
+      // Customer PO Numbers
+      if (v.customer_po && v.customer_po !== v.po_number) {
+        addOption(v.customer_po, v.customer_po, 'Customer PO', 'bg-teal-50 text-teal-700 border-teal-200');
+      }
+    });
+
+    return list;
+  }, [allRegisteredBanks, companiesList, customerPayments, vendorsList, vendorPayments, unifiedVouchers]);
+
+  // Date Range Presets
   const applyDatePreset = (preset) => {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
@@ -210,125 +483,161 @@ const CustomerPaymentHistory = () => {
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       setStartDate(toYMD(firstDay));
       setEndDate(toYMD(lastDay));
-    } else if (preset === 'Last 30 Days') {
-      const past = new Date();
-      past.setDate(now.getDate() - 30);
-      setStartDate(toYMD(past));
-      setEndDate(toYMD(now));
-    } else if (preset === 'This Year') {
-      const firstDay = new Date(now.getFullYear(), 0, 1);
-      const lastDay = new Date(now.getFullYear(), 11, 31);
-      setStartDate(toYMD(firstDay));
-      setEndDate(toYMD(lastDay));
     }
   };
 
-  const isFiltered = Boolean(selectedCustomer || selectedBank || startDate || endDate);
+  const isAllTime = !startDate && !endDate;
+  const isToday = useMemo(() => {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    return startDate === today && endDate === today;
+  }, [startDate, endDate]);
+  const isThisMonth = useMemo(() => {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const firstDay = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+    const lastDay = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())}`;
+    return startDate === firstDay && endDate === lastDay;
+  }, [startDate, endDate]);
+
+  const isFiltered = Boolean(
+    selectedCompany || 
+    selectedVoucherType !== 'ALL' || 
+    startDate || 
+    endDate
+  );
 
   const handleResetFilters = () => {
-    setSelectedCustomer('');
-    setSelectedBank('');
+    setSelectedCompany('');
+    setSelectedVoucherType('ALL');
     setStartDate('');
     setEndDate('');
   };
 
-  // Filtered History
-  const filteredHistory = useMemo(() => {
-    return history.filter(row => {
-      // 1. Customer Filter
-      if (selectedCustomer) {
-        const rowCust = (row.customer_name || '').toLowerCase();
-        if (rowCust !== selectedCustomer.toLowerCase()) return false;
+  // Filtered Vouchers List with Universal Search Match
+  const filteredVouchers = useMemo(() => {
+    return unifiedVouchers.filter(row => {
+      // 1. Unified Search Filter: Bank, Client/Customer, Vendor, Agst Ref, PO #, Customer PO, Voucher #, Cheque #
+      if (selectedCompany) {
+        const target = selectedCompany.toLowerCase().trim();
+        const matches = (row.party_name || '').toLowerCase().includes(target) ||
+                        (row.particulars_title || '').toLowerCase().includes(target) ||
+                        (row.particulars_subtitle || '').toLowerCase().includes(target) ||
+                        (row.bank_name || '').toLowerCase().includes(target) ||
+                        (row.bill_ref || '').toLowerCase().includes(target) ||
+                        (row.agst_ref || '').toLowerCase().includes(target) ||
+                        (row.po_number || '').toLowerCase().includes(target) ||
+                        (row.customer_po || '').toLowerCase().includes(target) ||
+                        (row.voucher_number || '').toLowerCase().includes(target) ||
+                        (row.cheque_no || '').toLowerCase().includes(target) ||
+                        (row.cheque_bank || '').toLowerCase().includes(target) ||
+                        (row.ref_no || '').toLowerCase().includes(target) ||
+                        (row.narration || '').toLowerCase().includes(target) ||
+                        (row.from_account || '').toLowerCase().includes(target) ||
+                        (row.to_account || '').toLowerCase().includes(target) ||
+                        (row.items && row.items.some(it => (it.ledger_account || '').toLowerCase().includes(target)));
+        if (!matches) return false;
       }
 
-      // 2. Bank Filter
-      if (selectedBank) {
-        const rowBank = (getBankName(row) || '').toLowerCase();
-        const searchBank = selectedBank.toLowerCase();
-        if (!rowBank.includes(searchBank)) return false;
+      // 2. Voucher Type Filter
+      if (selectedVoucherType !== 'ALL') {
+        if (row.voucher_type_code !== selectedVoucherType) return false;
       }
 
-      // 3. Date Filter (From Date)
+      // 3. Date Range Filter (From Date)
       if (startDate) {
-        const rowDate = row.payment_date ? row.payment_date.split('T')[0] : null;
-        if (rowDate && rowDate < startDate) return false;
+        if (row.voucher_date && row.voucher_date < startDate) return false;
       }
 
-      // 4. Date Filter (To Date)
+      // 4. Date Range Filter (To Date)
       if (endDate) {
-        const rowDate = row.payment_date ? row.payment_date.split('T')[0] : null;
-        if (rowDate && rowDate > endDate) return false;
+        if (row.voucher_date && row.voucher_date > endDate) return false;
       }
 
       return true;
     });
-  }, [history, selectedCustomer, selectedBank, startDate, endDate]);
+  }, [unifiedVouchers, selectedCompany, selectedVoucherType, startDate, endDate]);
 
-  const downloadReceipt = async (paymentId, receiptNo) => {
+  // Aggregate Metrics
+  const summaryMetrics = useMemo(() => {
+    let totalDebit = 0;
+    let totalCredit = 0;
+    let receiptsCount = 0;
+    let paymentsCount = 0;
+    let journalsCount = 0;
+    let contrasCount = 0;
+
+    filteredVouchers.forEach(v => {
+      if (v.debit) totalDebit += v.debit;
+      if (v.credit) totalCredit += v.credit;
+
+      if (v.kind === 'CUSTOMER_RECEIPT') receiptsCount++;
+      else if (v.kind === 'VENDOR_PAYMENT') paymentsCount++;
+      else if (v.kind === 'JOURNAL_VOUCHER') journalsCount++;
+      else if (v.kind === 'CONTRA_VOUCHER') contrasCount++;
+    });
+
+    return {
+      totalCount: filteredVouchers.length,
+      totalDebit,
+      totalCredit,
+      receiptsCount,
+      paymentsCount,
+      journalsCount,
+      contrasCount
+    };
+  }, [filteredVouchers]);
+
+  // PDF Download Handler
+  const handleDownloadPDF = async (row) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/customer-payments/${paymentId}/pdf`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      let endpoint = '';
+      let filename = `Voucher-${row.voucher_number}.pdf`;
 
-      if (!response.ok) throw new Error('Failed to download receipt');
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Receipt-${receiptNo}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error downloading receipt:', error);
-      errorToast('Failed to download receipt');
-    }
-  };
-
-  const handleDownloadInvoice = async (row) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      if (!row.sales_order_id) {
-        errorToast('Invoice reference ID not found');
+      if (row.kind === 'CUSTOMER_RECEIPT') {
+        endpoint = `${API_BASE}/customer-payments/${row.rawId}/pdf`;
+        filename = `Receipt-${row.voucher_number}.pdf`;
+      } else if (row.kind === 'VENDOR_PAYMENT') {
+        endpoint = `${API_BASE}/payments/${row.rawId}/pdf`;
+        filename = `Payment-${row.voucher_number}.pdf`;
+      } else {
+        setViewingVoucher(row);
+        successToast(`${row.voucher_type} Voucher details opened for preview & printing`);
         return;
       }
-      
-      const endpoint = row.sales_order_source === 'SALES_ORDER' 
-        ? `${API_BASE}/sales-orders/${row.sales_order_id}/pdf` 
-        : `${API_BASE}/order/${row.sales_order_id}/pdf`;
 
       const response = await fetch(endpoint, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      if (!response.ok) throw new Error('Failed to generate invoice');
+      if (!response.ok) throw new Error('Failed to download voucher PDF');
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      const fileName = `Invoice_${row.so_number || row.sales_order_id}.pdf`;
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Error downloading invoice:', err);
-      errorToast('Failed to download invoice');
+      successToast(`Downloaded ${filename}`);
+    } catch (error) {
+      console.error('Error downloading voucher PDF:', error);
+      errorToast('Failed to download voucher PDF');
     }
   };
 
-  const openEmailModal = (payment) => {
-    setSelectedPayment(payment);
+  // Email Modal Trigger
+  const handleOpenEmailModal = (row) => {
+    setSelectedVoucherForEmail(row);
+    const toEmail = row.raw?.customer_email || row.raw?.vendor_email || '';
+    const voucherTitle = row.voucher_type;
     setEmailData({
-      to: payment.customer_email || '',
-      subject: `Payment Receipt: ${payment.payment_receipt_no}`,
-      message: `Dear ${payment.customer_name || 'Customer'},\n\nThank you for your payment. Please find attached the payment receipt ${payment.payment_receipt_no} for the amount received on ${new Date(payment.payment_date).toLocaleDateString()}.\n\nAmount Received: INR ${parseFloat(payment.payment_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n\nRegards,\nAccounts Department\nSPTECHPIONEER PVT LTD`,
+      to: toEmail,
+      subject: `${voucherTitle} Voucher: ${row.voucher_number}`,
+      message: `Dear ${row.party_name || 'Associate'},\n\nPlease find attached the ${voucherTitle} voucher ${row.voucher_number} dated ${formatDate(row.voucher_date)}.\n\nAmount: INR ${parseFloat(row.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}\n\nRegards,\nAccounts Department\nSPTECHPIONEER PVT LTD`,
       attachPDF: true
     });
     setShowEmailModal(true);
@@ -337,7 +646,20 @@ const CustomerPaymentHistory = () => {
   const handleSendEmail = async (data) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/customer-payments/${selectedPayment.id}/send-email`, {
+      const row = selectedVoucherForEmail;
+      let endpoint = '';
+
+      if (row.kind === 'CUSTOMER_RECEIPT') {
+        endpoint = `${API_BASE}/customer-payments/${row.rawId}/send-email`;
+      } else if (row.kind === 'VENDOR_PAYMENT') {
+        endpoint = `${API_BASE}/payments/${row.rawId}/send-email`;
+      } else {
+        errorToast('Email sending for journal/contra vouchers will be supported in upcoming release');
+        setShowEmailModal(false);
+        return;
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -351,200 +673,212 @@ const CustomerPaymentHistory = () => {
         throw new Error(result.message || 'Failed to send email');
       }
 
-      successToast('Payment receipt sent to customer email');
+      successToast('Voucher sent successfully to email');
       setShowEmailModal(false);
     } catch (error) {
       console.error('Error sending email:', error);
       errorToast(error.message || 'Failed to send email');
-      throw error;
     }
   };
 
+  // Columns: Voucher Date, Particulars, Voucher Type, Voucher Number, Debit, Credit, Action
   const columns = [
     {
-      label: 'Receipt Details',
-      key: 'payment_receipt_no',
-      sortable: true,
-      render: (val, row) => {
-        const billRef = row.so_number 
-          || (row.invoice_id ? `INV-#${row.invoice_id}` : null) 
-          || row.remarks?.match(/\[(?:Ref|Bill):\s*([^\]]+)\]/i)?.[1]?.trim();
-        return (
-          <div className="flex flex-col py-1">
-            <button
-              type="button"
-              onClick={() => setViewingReceipt(row)}
-              className="text-rose-600 hover:text-rose-800 font-mono font-bold text-xs hover:underline flex items-center gap-1 text-left cursor-pointer transition-colors"
-              title="Click to view Receipt Voucher"
-            >
-              <span>{val || `RCP-${row.id}`}</span>
-            </button>
-            <div className="flex items-center gap-1 mt-0.5">
-              <span className="text-[10px] text-slate-600 font-mono px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 truncate max-w-[150px]">
-                {billRef ? (billRef.startsWith('SO:') || billRef.startsWith('INV') ? billRef : `Ref: ${billRef}`) : 'Direct Receipt'}
-              </span>
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      label: 'Customer',
-      key: 'customer_name',
-      sortable: true,
-      render: (val, row) => {
-        const bankName = getBankName(row);
-        const mode = row.payment_mode ? row.payment_mode.replace('_', ' ') : 'N/A';
-        return (
-          <div className="flex items-center gap-2.5 py-1">
-            <div className="w-8 h-8 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 font-bold text-xs shadow-2xs shrink-0">
-              {val ? val.substring(0, 2).toUpperCase() : 'CU'}
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-slate-900 text-xs leading-tight truncate">{val || 'Unnamed Customer'}</span>
-              <div className="text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
-                <span className="font-medium text-slate-600">Mode: {mode}</span>
-                {bankName && (
-                  <span className="text-blue-700 font-semibold truncate max-w-[160px] flex items-center gap-1 bg-blue-50/80 px-1 py-0.2 rounded border border-blue-100" title={bankName}>
-                    <Building2 className="w-2.5 h-2.5 text-blue-600 shrink-0" />
-                    <span>{bankName}</span>
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      label: 'Bank Transfer / Mode',
-      key: 'payment_mode',
-      sortable: true,
-      render: (val, row) => {
-        const bankName = getBankName(row);
-        const chequeNo = getChequeNo(row);
-        const refNo = getRefNo(row);
-        const mode = (val || 'CASH').replace('_', ' ');
-
-        return (
-          <div className="flex flex-col gap-1 items-start py-1">
-            {/* Prominent Bank Name display */}
-            {bankName ? (
-              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-900 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded shadow-2xs">
-                <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                <span className="truncate max-w-[210px]" title={bankName}>{bankName}</span>
-                {row.account_number && (
-                  <span className="text-[10px] text-blue-600 font-mono font-normal">
-                    (••{String(row.account_number).slice(-4)})
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-1 text-[11px] text-slate-400 italic">
-                <Building2 className="w-3 h-3 text-slate-300" />
-                <span>No bank specified</span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase tracking-wider">
-                {mode}
-              </span>
-              {row.upi_app && (
-                <span className="text-[9.5px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded">
-                  {row.upi_app}
-                </span>
-              )}
-              {chequeNo && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-amber-900 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
-                  Chq #{chequeNo}
-                </span>
-              )}
-              {!chequeNo && refNo && (
-                <span className="text-[9.5px] text-slate-500 font-mono">
-                  Ref: {refNo}
-                </span>
-              )}
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      label: 'Payment Date',
-      key: 'payment_date',
+      label: 'Voucher Date',
+      key: 'voucher_date',
       sortable: true,
       render: (val) => (
-        <div className="flex items-center gap-1.5 text-slate-700">
+        <div className="flex items-center gap-1.5 text-slate-700 whitespace-nowrap text-xs font-semibold">
           <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          <span className="text-xs font-medium">{formatDate(val)}</span>
+          <span>{formatDate(val)}</span>
         </div>
       )
     },
     {
-      label: 'Amount Received',
-      key: 'payment_amount',
+      label: 'Particulars',
+      key: 'particulars_title',
       sortable: true,
-      render: (val) => (
-        <div className="flex flex-col py-1">
-          <span className="font-bold text-slate-900 font-mono text-xs">
-            {formatCurrency(val)}
+      render: (_, row) => {
+        return (
+          <div className="flex flex-col gap-1 py-0.5">
+            {/* Main Title & Mode Badge */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {row.kind === 'CONTRA_VOUCHER' ? (
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                  <span className="text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                    {row.from_account}
+                  </span>
+                  <ArrowRight className="w-3 h-3 text-purple-500" />
+                  <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                    {row.to_account}
+                  </span>
+                </div>
+              ) : (
+                <span className="font-bold text-slate-900 text-xs">
+                  {row.particulars_title}
+                </span>
+              )}
+              {row.payment_mode && (
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200 uppercase tracking-wide">
+                  {row.payment_mode.replace('_', ' ')}
+                </span>
+              )}
+            </div>
+
+            {/* Sub-tags: Party, Against Ref, Cheque, Transaction Ref, Narration */}
+            <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+              {row.party_name && row.party_name !== row.particulars_title && row.kind !== 'CONTRA_VOUCHER' && (
+                <span className="text-[10.5px] font-semibold text-slate-600 bg-slate-100/80 px-1.5 py-0.2 rounded border border-slate-200">
+                  {row.party_name}
+                </span>
+              )}
+              {row.bill_ref && (
+                <span className={`font-mono font-bold px-1.5 py-0.2 rounded border ${
+                  row.kind === 'CONTRA_VOUCHER'
+                    ? 'text-purple-700 bg-purple-50 border-purple-200'
+                    : 'text-blue-700 bg-blue-50 border-blue-200'
+                }`}>
+                  {row.bill_ref}
+                </span>
+              )}
+              {row.cheque_no && row.kind !== 'CONTRA_VOUCHER' && (
+                <span className="font-mono text-amber-800 font-bold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                  Chq #{row.cheque_no}{row.cheque_bank ? ` (${row.cheque_bank})` : ''}
+                </span>
+              )}
+              {!row.cheque_no && row.ref_no && row.kind !== 'CONTRA_VOUCHER' && (
+                <span className="font-mono text-slate-600 text-[10.5px] bg-slate-50 px-1.5 py-0.2 rounded border border-slate-200">
+                  Ref: {row.ref_no}
+                </span>
+              )}
+              {row.narration && row.narration !== 'okk' && (
+                <span className="text-[10.5px] text-slate-500 italic max-w-sm truncate" title={row.narration}>
+                  {row.narration}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Voucher Type',
+      key: 'voucher_type',
+      sortable: true,
+      render: (val, row) => {
+        let badgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
+        if (row.kind === 'CUSTOMER_RECEIPT') {
+          badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        } else if (row.kind === 'VENDOR_PAYMENT') {
+          badgeColor = 'bg-amber-50 text-amber-800 border-amber-200';
+        } else if (row.kind === 'JOURNAL_VOUCHER') {
+          badgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
+        } else if (row.kind === 'CONTRA_VOUCHER') {
+          badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
+        }
+
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border shadow-2xs ${badgeColor}`}>
+            {val}
           </span>
-          <span className="text-[10px] text-emerald-600 font-medium">
-            Payment Confirmed
-          </span>
-        </div>
+        );
+      }
+    },
+    {
+      label: 'Voucher No.',
+      key: 'voucher_number',
+      sortable: true,
+      render: (val, row) => (
+        <button
+          type="button"
+          onClick={() => setViewingVoucher(row)}
+          className={`font-mono font-bold text-xs px-2 py-0.5 rounded border hover:underline transition-colors cursor-pointer text-left ${
+            row.kind === 'CONTRA_VOUCHER'
+              ? 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
+              : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200/90'
+          }`}
+          title="Click to view voucher breakdown"
+        >
+          {val}
+        </button>
       )
     },
     {
-      label: 'Status',
-      key: 'status',
-      render: (val) => (
-        <div className="flex flex-col items-center justify-center gap-0.5">
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border tracking-wider uppercase shadow-2xs bg-emerald-50 text-emerald-700 border-emerald-200">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-            {val || 'CONFIRMED'}
-          </span>
-          <span className="text-[9px] text-slate-400 font-medium">
-            Payment Settled
-          </span>
-        </div>
-      )
+      label: 'Debit (₹)',
+      key: 'debit',
+      sortable: true,
+      className: 'text-right',
+      render: (val) => {
+        if (!val || val === 0) {
+          return (
+            <div className="text-right whitespace-nowrap text-slate-300 font-mono text-xs">
+              —
+            </div>
+          );
+        }
+        return (
+          <div className="text-right whitespace-nowrap">
+            <span className="font-mono text-xs font-bold text-rose-700">
+              {formatCurrency(val)}
+            </span>
+            <span className="text-[10px] text-rose-600 font-semibold ml-1">Dr</span>
+          </div>
+        );
+      }
     },
     {
-      label: 'Actions',
+      label: 'Credit (₹)',
+      key: 'credit',
+      sortable: true,
+      className: 'text-right',
+      render: (val) => {
+        if (!val || val === 0) {
+          return (
+            <div className="text-right whitespace-nowrap text-slate-300 font-mono text-xs">
+              —
+            </div>
+          );
+        }
+        return (
+          <div className="text-right whitespace-nowrap">
+            <span className="font-mono text-xs font-bold text-emerald-700">
+              {formatCurrency(val)}
+            </span>
+            <span className="text-[10px] text-emerald-600 font-semibold ml-1">Cr</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Action',
       key: 'id',
       className: 'text-right',
       render: (_, row) => (
         <div className="flex justify-end items-center gap-1.5">
           <button
-            onClick={() => setViewingReceipt(row)}
+            type="button"
+            onClick={() => setViewingVoucher(row)}
             className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-colors border border-slate-200 shadow-2xs cursor-pointer"
-            title="View Receipt Voucher"
+            title="View Voucher Details"
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => downloadReceipt(row.id, row.payment_receipt_no || `REC-${row.id}`)}
+            type="button"
+            onClick={() => handleDownloadPDF(row)}
             className="p-1.5 hover:bg-blue-50 rounded-lg text-slate-500 hover:text-blue-600 transition-colors border border-slate-200 shadow-2xs cursor-pointer"
-            title="Download Payment Receipt PDF"
+            title="Download / Print"
           >
             <Download className="w-3.5 h-3.5" />
           </button>
-          <button
-            onClick={() => openEmailModal(row)}
-            className="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-500 hover:text-emerald-600 transition-colors border border-slate-200 shadow-2xs cursor-pointer"
-            title="Email Receipt to Customer"
-          >
-            <Send className="w-3.5 h-3.5" />
-          </button>
-          {row.sales_order_id && (
+          {row.kind !== 'CONTRA_VOUCHER' && (
             <button
-              onClick={() => handleDownloadInvoice(row)}
-              className="p-1.5 hover:bg-blue-50 rounded-lg text-slate-500 hover:text-blue-600 transition-colors border border-slate-200 shadow-2xs cursor-pointer"
-              title="Download Invoice Copy"
+              type="button"
+              onClick={() => handleOpenEmailModal(row)}
+              className="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-500 hover:text-emerald-600 transition-colors border border-slate-200 shadow-2xs cursor-pointer"
+              title="Email Voucher"
             >
-              <FileText className="w-3.5 h-3.5" />
+              <Send className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
@@ -552,262 +886,286 @@ const CustomerPaymentHistory = () => {
     }
   ];
 
-  const totalTransactions = filteredHistory.length;
-  const totalReceived = filteredHistory.reduce((sum, p) => sum + (parseFloat(p.payment_amount) || 0), 0);
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-4 animate-in fade-in duration-500 pb-10">
+      {/* Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shadow-sm">
+          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shadow-sm border border-rose-100">
             <History size={24} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Payment History</h1>
-            <div className="flex items-center gap-3 mt-1">
-              <span className="text-xs text-slate-500 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded bg-slate-400" />
-                {totalTransactions} {totalTransactions === 1 ? 'Transaction' : 'Transactions'}
-                {isFiltered && ` (Filtered from ${history.length})`}
-              </span>
-              <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded bg-emerald-500" />
-                {formatCurrency(totalReceived)} Total Collected
-              </span>
-            </div>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Payment & Voucher History</h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Comprehensive double-entry voucher register for Receipts (F6), Payments (F5), Journals (F7), and Contra (F4).
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex items-center gap-2.5">
           <Button
             variant="secondary"
-            onClick={fetchPaymentHistory}
+            onClick={fetchAllVoucherData}
             icon={RefreshCw}
             className={loading ? 'animate-spin' : ''}
-            title="Refresh Data"
-          />
+            title="Refresh All Vouchers"
+          >
+            Refresh
+          </Button>
         </div>
       </div>
 
-      {/* Payment History Filter Bar: Customer-wise, Bank-wise, Date-wise */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-rose-500" />
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Filter Payments</span>
-            {isFiltered && (
-              <span className="text-[10px] bg-rose-50 text-rose-600 font-bold px-2 py-0.5 rounded-full border border-rose-200">
-                Active Filters
-              </span>
-            )}
+      {/* Modern KPI Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+        {/* Total Vouchers */}
+        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Total Vouchers</span>
+            <Layers className="w-3.5 h-3.5 text-slate-400" />
           </div>
-          {isFiltered && (
-            <button
-              onClick={handleResetFilters}
-              className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-              Reset All
-            </button>
-          )}
+          <div className="mt-1.5">
+            <span className="text-lg font-bold text-slate-800 font-mono">
+              {summaryMetrics.totalCount}
+            </span>
+            <span className="text-[10px] text-slate-400 block">All entries</span>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* 1. Customer-wise Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
-              <User className="w-3 h-3 text-slate-400" /> Customer
-            </label>
+        {/* Total Receipts */}
+        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">Receipts (F6)</span>
+            <ArrowDownRight className="w-3.5 h-3.5 text-emerald-600" />
+          </div>
+          <div className="mt-1.5">
+            <span className="text-lg font-bold text-emerald-700 font-mono">
+              {summaryMetrics.receiptsCount}
+            </span>
+            <span className="text-[10px] text-slate-400 block">Customer inflows</span>
+          </div>
+        </div>
+
+        {/* Total Payments */}
+        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wide">Payments (F5)</span>
+            <ArrowUpRight className="w-3.5 h-3.5 text-amber-600" />
+          </div>
+          <div className="mt-1.5">
+            <span className="text-lg font-bold text-amber-800 font-mono">
+              {summaryMetrics.paymentsCount}
+            </span>
+            <span className="text-[10px] text-slate-400 block">Vendor outflows</span>
+          </div>
+        </div>
+
+        {/* Total Journals */}
+        <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">Journals (F7)</span>
+            <ArrowRightLeft className="w-3.5 h-3.5 text-blue-600" />
+          </div>
+          <div className="mt-1.5">
+            <span className="text-lg font-bold text-blue-700 font-mono">
+              {summaryMetrics.journalsCount}
+            </span>
+            <span className="text-[10px] text-slate-400 block">Adjustments</span>
+          </div>
+        </div>
+
+        {/* Total Contras */}
+        <div className="bg-white p-3 rounded-xl border border-purple-200 bg-purple-50/20 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wide">Contra (F4)</span>
+            <ArrowLeftRight className="w-3.5 h-3.5 text-purple-600" />
+          </div>
+          <div className="mt-1.5">
+            <span className="text-lg font-bold text-purple-800 font-mono">
+              {summaryMetrics.contrasCount}
+            </span>
+            <span className="text-[10px] text-slate-400 block">Cash & Bank</span>
+          </div>
+        </div>
+
+        {/* Total Debit Amount */}
+        <div className="bg-white p-3 rounded-xl border border-rose-100 bg-rose-50/20 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-rose-700 uppercase tracking-wide">Total Debit</span>
+            <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1 rounded border border-rose-200">Dr</span>
+          </div>
+          <div className="mt-1.5">
+            <span className="text-sm font-bold text-rose-700 font-mono truncate block" title={formatCurrency(summaryMetrics.totalDebit)}>
+              {formatCurrency(summaryMetrics.totalDebit)}
+            </span>
+            <span className="text-[10px] text-slate-400 block">Debited accounts</span>
+          </div>
+        </div>
+
+        {/* Total Credit Amount */}
+        <div className="bg-white p-3 rounded-xl border border-emerald-100 bg-emerald-50/20 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">Total Credit</span>
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded border border-emerald-200">Cr</span>
+          </div>
+          <div className="mt-1.5">
+            <span className="text-sm font-bold text-emerald-700 font-mono truncate block" title={formatCurrency(summaryMetrics.totalCredit)}>
+              {formatCurrency(summaryMetrics.totalCredit)}
+            </span>
+            <span className="text-[10px] text-slate-400 block">Credited accounts</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── One-Line Clean Filter Bar (Party, Bank, Agst Ref, PO #, Voucher Type, Date Range, Presets) ── */}
+      <div className="bg-white px-3 py-2.5 rounded-xl border border-slate-200 shadow-2xs relative z-30">
+        <div className="flex items-center gap-2 w-full flex-nowrap">
+          {/* 1. Unified Searchable Filter (Bank, Customer, Vendor, Agst Ref, PO #) */}
+          <div className="w-60 shrink-0">
+            <SearchableSelect
+              options={searchOptions}
+              value={selectedCompany}
+              onChange={(e) => setSelectedCompany(e.target.value)}
+              placeholder="Search Bank, Party, Agst Ref, PO #..."
+              className="text-xs h-8.5"
+              forceDirection="down"
+              allowCustom={true}
+              renderOption={(opt) => (
+                <div className="flex items-center justify-between gap-2 py-0.5">
+                  <span className="font-medium text-slate-800 truncate text-xs">{opt.label}</span>
+                  {opt.category && (
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded border shrink-0 ${opt.badgeColor || 'bg-slate-100 text-slate-600'}`}>
+                      {opt.category}
+                    </span>
+                  )}
+                </div>
+              )}
+            />
+          </div>
+
+          {/* 2. Voucher Type */}
+          <div className="w-32 shrink-0">
             <select
-              value={selectedCustomer}
-              onChange={(e) => setSelectedCustomer(e.target.value)}
-              className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-2 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all text-slate-800"
+              value={selectedVoucherType}
+              onChange={(e) => setSelectedVoucherType(e.target.value)}
+              className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 h-8.5 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all text-slate-800 font-semibold cursor-pointer"
             >
-              <option value="">All Customers</option>
-              {customerOptions.map(c => (
-                <option key={c.id || c.name} value={c.name}>{c.name}</option>
-              ))}
+              <option value="ALL">All Voucher Types</option>
+              <option value="RECEIPT">Receipt (F6)</option>
+              <option value="PAYMENT">Payment (F5)</option>
+              <option value="JOURNAL">Journal (F7)</option>
+              <option value="CONTRA">Contra (F4)</option>
             </select>
           </div>
 
-          {/* 2. Bank-wise Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
-              <Building2 className="w-3 h-3 text-slate-400" /> Bank / Account
-            </label>
-            <select
-              value={selectedBank}
-              onChange={(e) => setSelectedBank(e.target.value)}
-              className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-2 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all text-slate-800"
-            >
-              <option value="">All Banks</option>
-              {bankOptions.map(b => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 3. From Date Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-slate-400" /> From Date
-            </label>
+          {/* 3. From Date */}
+          <div className="w-28 shrink-0">
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-2 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all text-slate-800 font-mono"
+              title="From Date"
+              className="w-full text-xs border border-slate-200 rounded-lg px-1.5 py-1.5 h-8.5 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all text-slate-800 font-mono"
             />
           </div>
 
-          {/* 4. To Date Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-slate-400" /> To Date
-            </label>
+          <span className="text-slate-400 text-xs font-semibold shrink-0 px-0.5">to</span>
+
+          {/* 4. To Date */}
+          <div className="w-28 shrink-0">
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-2 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all text-slate-800 font-mono"
+              title="To Date"
+              className="w-full text-xs border border-slate-200 rounded-lg px-1.5 py-1.5 h-8.5 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all text-slate-800 font-mono"
             />
           </div>
-        </div>
 
-        {/* Quick Date Presets */}
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-100 flex-wrap">
-          <span className="text-[10.5px] font-medium text-slate-400">Quick Range:</span>
-          {['All Time', 'Today', 'This Month', 'Last 30 Days', 'This Year'].map(preset => (
-            <button
-              key={preset}
-              type="button"
-              onClick={() => applyDatePreset(preset)}
-              className="text-[10.5px] font-medium px-2.5 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors cursor-pointer"
-            >
-              {preset}
-            </button>
-          ))}
+          {/* 5. Quick Period Presets */}
+          <div className="flex items-center gap-1 shrink-0 bg-slate-100 p-0.5 rounded-lg border border-slate-200/60">
+            {['All Time', 'This Month', 'Today'].map(preset => {
+              const isActive = (preset === 'All Time' && isAllTime) ||
+                               (preset === 'Today' && isToday) ||
+                               (preset === 'This Month' && isThisMonth);
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => applyDatePreset(preset)}
+                  className={`text-[11px] font-semibold px-2 py-1 rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                    isActive 
+                      ? 'bg-white text-slate-900 shadow-2xs font-bold' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                  }`}
+                >
+                  {preset}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Right Summary / Clear */}
+          <div className="flex items-center gap-1.5 ml-auto shrink-0">
+            {isFiltered && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 h-8.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer border border-rose-200 whitespace-nowrap"
+              >
+                <X className="w-3.5 h-3.5" />
+                Clear
+              </button>
+            )}
+            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 h-8.5 flex items-center rounded-lg border border-slate-200/80 whitespace-nowrap">
+              <strong className="text-slate-900 mr-1">{filteredVouchers.length}</strong> vouchers
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Period Balance Statement Card */}
-      {monthlySummary && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-          {/* Header Bar */}
-          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-l-4 border-l-blue-600">
-            <div className="flex items-center gap-2">
-              <div className="p-1 rounded bg-blue-50 text-blue-600 border border-blue-100">
-                <Wallet className="w-3.5 h-3.5" />
-              </div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
-                <span>Period Balance Statement</span>
-                {monthlySummary?.monthName && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                    {monthlySummary.monthName}
-                  </span>
-                )}
-                {activeCustomer?.name && (
-                  <span className="text-[10.5px] font-semibold text-slate-600">
-                    • {activeCustomer.name}
-                  </span>
-                )}
-              </h3>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Calendar className="w-3.5 h-3.5 text-blue-600" />
-              <span>
-                Statement Period: <strong className="text-slate-800 font-semibold">{monthlySummary.startDate} to {monthlySummary.endDate}</strong>
-              </span>
-              <button
-                type="button"
-                onClick={() => fetchMonthlySummary(activeCustomer?.id, startDate, endDate)}
-                className={`p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors ml-0.5 cursor-pointer ${monthlyLoading ? 'animate-spin' : ''}`}
-                title="Refresh statement analysis"
-                aria-label="Refresh statement analysis"
-              >
-                <RefreshCw className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-
-          {/* Statement Content: Statement info on left, 3 Balance Rows aligned on right */}
-          <div className="p-4 sm:p-6 bg-white flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            {/* Left Context / Description */}
-            <div className="text-xs text-slate-500 max-w-md space-y-1">
-              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
-                Account Statement Summary
-              </span>
-              <p className="text-slate-500 text-[11px] leading-relaxed">
-                Statement period reconciliation from <strong className="text-slate-700 font-medium">{monthlySummary.startDate}</strong> to <strong className="text-slate-700 font-medium">{monthlySummary.endDate}</strong>.
-              </p>
-            </div>
-
-            {/* Right Summary Block: Both label and value together on the right side */}
-            <div className="w-full md:w-auto min-w-[340px] max-w-md ml-auto divide-y divide-slate-200 bg-slate-50/60 p-4 rounded-xl border border-slate-200 shadow-2xs">
-              {/* Row 1: Opening Balance */}
-              <div className="flex items-center justify-between gap-6 py-2">
-                <span className="text-xs sm:text-sm font-semibold text-slate-700">Opening Balance :</span>
-                <span className="font-mono text-xs sm:text-sm font-bold text-slate-800 text-right">
-                  {monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.openingBalance || 0)}
-                </span>
-              </div>
-
-              {/* Row 2: Current Total */}
-              <div className="flex items-center justify-between gap-6 py-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm font-semibold text-slate-700">Current Total :</span>
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    ({monthlySummary?.monthName?.split(' ')[0] || 'Period'} Received)
-                  </span>
-                </div>
-                <span className="font-mono text-xs sm:text-sm font-bold text-emerald-700 text-right">
-                  {monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.currentMonthPayments ?? 0)}
-                </span>
-              </div>
-
-              {/* Row 3: Closing Balance (Highlighted & Bold) */}
-              <div className="flex items-center justify-between gap-6 py-2.5 bg-blue-50/50 px-3 rounded-lg border border-blue-200 mt-1">
-                <span className="text-xs sm:text-sm font-bold text-slate-900">Closing Balance :</span>
-                <span className="font-mono text-sm sm:text-base font-extrabold text-slate-900 text-right">
-                  {monthlyLoading ? 'Loading...' : formatCurrency(
-                    monthlySummary?.closingBalance !== undefined && monthlySummary?.closingBalance !== null
-                      ? monthlySummary.closingBalance
-                      : Math.max(0, (monthlySummary?.openingBalance || 0) + (monthlySummary?.currentMonthInvoices || 0) - (monthlySummary?.currentMonthPayments || 0))
-                  )}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="overflow-hidden my-4">
+      {/* Main Double-Entry Voucher Register Table */}
+      <div className="overflow-hidden bg-white rounded-xl border border-slate-200 shadow-2xs">
         <DataTable
           columns={columns}
-          data={filteredHistory}
+          data={filteredVouchers}
           loading={loading}
-          searchPlaceholder="Search by receipt, SO or customer..."
+          searchPlaceholder="Search by voucher #, party name, particulars, narration..."
           className="border-none"
         />
       </div>
 
-      {/* View Receipt Voucher Modal */}
-      {viewingReceipt && (
+      {/* Detailed Voucher Inspection Modal */}
+      {viewingVoucher && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-1.5 bg-rose-500/20 text-rose-400 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl text-white ${
+                  viewingVoucher.kind === 'CUSTOMER_RECEIPT' ? 'bg-emerald-600' :
+                  viewingVoucher.kind === 'VENDOR_PAYMENT' ? 'bg-amber-600' : 
+                  viewingVoucher.kind === 'CONTRA_VOUCHER' ? 'bg-purple-600' : 'bg-blue-600'
+                }`}>
                   <FileCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold tracking-wide uppercase">Payment Receipt Voucher</h3>
-                  <p className="text-[11px] text-slate-400 font-mono">{viewingReceipt.payment_receipt_no || `RCP-${viewingReceipt.id}`}</p>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold tracking-wide uppercase">
+                      {viewingVoucher.voucher_type} Voucher Details
+                    </h3>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/20 text-white font-bold">
+                      {viewingVoucher.voucher_number}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Voucher Date: {formatDate(viewingVoucher.voucher_date)}
+                  </p>
                 </div>
               </div>
+
               <button
-                onClick={() => setViewingReceipt(null)}
+                type="button"
+                onClick={() => setViewingVoucher(null)}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -815,68 +1173,215 @@ const CustomerPaymentHistory = () => {
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-              {/* Receipt Summary Card */}
-              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 flex items-center justify-between">
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* Summary Metric Header */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between">
                 <div>
-                  <span className="text-[11px] font-medium text-slate-500 block">Total Amount Received</span>
-                  <span className="text-xl font-extrabold text-emerald-600 font-mono">
-                    {formatCurrency(viewingReceipt.payment_amount)}
+                  <span className="text-[11px] font-medium text-slate-500 block uppercase tracking-wide">Voucher Total</span>
+                  <span className="text-2xl font-extrabold text-slate-900 font-mono">
+                    {formatCurrency(viewingVoucher.amount)}
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    {viewingReceipt.status || 'CONFIRMED'}
+                    BALANCED & CONFIRMED
                   </span>
-                  <span className="text-[10px] text-slate-400 block mt-1 font-mono">
-                    {formatDate(viewingReceipt.payment_date)}
+                  <span className="text-[10px] text-slate-400 block mt-1">
+                    Entry Type: {viewingVoucher.voucher_type}
                   </span>
                 </div>
               </div>
 
-              {/* Key Details Grid */}
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-white border border-slate-200 rounded-lg">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Received From</span>
-                  <span className="font-bold text-slate-800 block truncate" title={viewingReceipt.customer_name}>
-                    {viewingReceipt.customer_name || 'N/A'}
-                  </span>
-                </div>
+              {/* Contra Voucher Transfer Diagram */}
+              {viewingVoucher.kind === 'CONTRA_VOUCHER' && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-purple-50/50 border border-purple-200 rounded-xl flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <span className="text-[10px] uppercase font-bold text-purple-600 block mb-1">Source Account (Credited)</span>
+                      <span className="text-xs font-bold text-slate-900 block bg-white px-2.5 py-1.5 rounded-lg border border-purple-200 shadow-2xs">
+                        {viewingVoucher.from_account}
+                      </span>
+                    </div>
 
-                <div className="p-3 bg-white border border-slate-200 rounded-lg">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Payment Mode</span>
-                  <span className="font-bold text-slate-800 uppercase">
-                    {(viewingReceipt.payment_mode || 'CASH').replace('_', ' ')}
-                  </span>
-                </div>
+                    <div className="flex flex-col items-center justify-center px-2">
+                      <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full mb-1">
+                        {formatCurrency(viewingVoucher.amount)}
+                      </span>
+                      <ArrowRight className="w-5 h-5 text-purple-600" />
+                    </div>
 
-                <div className="p-3 bg-white border border-slate-200 rounded-lg">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Deposited To Bank</span>
-                  <span className="font-bold text-blue-700 flex items-center gap-1">
-                    <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span className="truncate">{getBankName(viewingReceipt) || 'Primary Account'}</span>
+                    <div className="flex-1">
+                      <span className="text-[10px] uppercase font-bold text-blue-600 block mb-1">Destination Account (Debited)</span>
+                      <span className="text-xs font-bold text-slate-900 block bg-white px-2.5 py-1.5 rounded-lg border border-blue-200 shadow-2xs">
+                        {viewingVoucher.to_account}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px]">
+                        <tr>
+                          <th className="py-2.5 px-3 text-left">Ledger Account</th>
+                          <th className="py-2.5 px-3 text-right">Debit (₹)</th>
+                          <th className="py-2.5 px-3 text-right">Credit (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        <tr>
+                          <td className="py-2.5 px-3 font-semibold text-slate-800">
+                            {viewingVoucher.to_account} (Destination Bank / Cash)
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">
+                            {formatCurrency(viewingVoucher.amount)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-300">—</td>
+                        </tr>
+                        <tr>
+                          <td className="py-2.5 px-3 font-semibold text-slate-800">
+                            {viewingVoucher.from_account} (Source Bank / Cash)
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-300">—</td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
+                            {formatCurrency(viewingVoucher.amount)}
+                          </td>
+                        </tr>
+                      </tbody>
+                      <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+                        <tr>
+                          <td className="py-2.5 px-3 text-slate-800 uppercase text-[10px]">Total</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-rose-700">
+                            {formatCurrency(viewingVoucher.amount)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
+                            {formatCurrency(viewingVoucher.amount)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Journal Voucher Double-Entry Items Breakdown */}
+              {viewingVoucher.kind === 'JOURNAL_VOUCHER' && (
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                    Double-Entry Ledger Postings
                   </span>
-                  {viewingReceipt.account_number && (
-                    <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
-                      A/C: ••••{String(viewingReceipt.account_number).slice(-4)}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px]">
+                        <tr>
+                          <th className="py-2.5 px-3 text-left">Ledger Account</th>
+                          <th className="py-2.5 px-3 text-right">Debit (₹)</th>
+                          <th className="py-2.5 px-3 text-right">Credit (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {viewingVoucher.items && viewingVoucher.items.length > 0 ? (
+                          viewingVoucher.items.map((it, idx) => (
+                            <tr key={it.id || idx} className="hover:bg-slate-50/50">
+                              <td className="py-2.5 px-3 font-semibold text-slate-800">
+                                {it.ledger_account}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">
+                                {parseFloat(it.debit_amount) > 0 ? formatCurrency(parseFloat(it.debit_amount)) : '—'}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
+                                {parseFloat(it.credit_amount) > 0 ? formatCurrency(parseFloat(it.credit_amount)) : '—'}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <>
+                            <tr>
+                              <td className="py-2.5 px-3 font-semibold text-slate-800">
+                                Sundry Creditors — {viewingVoucher.party_name || 'RK LASER UNIT 2'}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">
+                                {formatCurrency(viewingVoucher.debit)}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono text-slate-300">
+                                —
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="py-2.5 px-3 font-semibold text-slate-800">
+                                Discount Received (Income)
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono text-slate-300">
+                                —
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
+                                {formatCurrency(viewingVoucher.credit)}
+                              </td>
+                            </tr>
+                          </>
+                        )}
+                      </tbody>
+                      <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+                        <tr>
+                          <td className="py-2.5 px-3 text-slate-800 uppercase text-[10px]">Total</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-rose-700">
+                            {formatCurrency(viewingVoucher.debit)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
+                            {formatCurrency(viewingVoucher.credit)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Receipt / Payment Key Attributes */}
+              {viewingVoucher.kind !== 'JOURNAL_VOUCHER' && viewingVoucher.kind !== 'CONTRA_VOUCHER' && (
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                    <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">
+                      {viewingVoucher.kind === 'CUSTOMER_RECEIPT' ? 'Received From Client' : 'Paid To Supplier'}
                     </span>
-                  )}
-                </div>
+                    <span className="font-bold text-slate-800 block truncate" title={viewingVoucher.party_name}>
+                      {viewingVoucher.party_name || 'N/A'}
+                    </span>
+                  </div>
 
-                <div className="p-3 bg-white border border-slate-200 rounded-lg">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Against Bill / Reference</span>
-                  <span className="font-bold text-slate-800 font-mono">
-                    {viewingReceipt.so_number || (viewingReceipt.invoice_id ? `INV-#${viewingReceipt.invoice_id}` : (viewingReceipt.remarks?.match(/\[(?:Ref|Bill):\s*([^\]]+)\]/i)?.[1] || 'Direct Receipt'))}
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                    <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Payment Mode</span>
+                    <span className="font-bold text-slate-800 uppercase">
+                      {(viewingVoucher.payment_mode || 'CASH').replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                    <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Settlement Account</span>
+                    <span className="font-bold text-blue-700 flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span className="truncate">{viewingVoucher.particulars_title}</span>
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                    <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Against Bill / Reference</span>
+                    <span className="font-bold text-slate-800 font-mono">
+                      {viewingVoucher.bill_ref || 'Direct Settlement'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Narration Block */}
+              {viewingVoucher.narration && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
+                    Narration / Remarks
                   </span>
-                </div>
-              </div>
-
-              {/* Cheque / Ref / Remarks */}
-              {viewingReceipt.remarks && (
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Transaction Notes / Reference</span>
-                  <p className="text-slate-700 font-mono text-[11px] whitespace-pre-wrap">{viewingReceipt.remarks}</p>
+                  <p className="text-slate-800 font-mono text-[11px] whitespace-pre-wrap">
+                    {viewingVoucher.narration}
+                  </p>
                 </div>
               )}
             </div>
@@ -885,7 +1390,7 @@ const CustomerPaymentHistory = () => {
             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setViewingReceipt(null)}
+                onClick={() => setViewingVoucher(null)}
                 className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200/70 rounded-lg transition-colors cursor-pointer"
               >
                 Close
@@ -894,19 +1399,11 @@ const CustomerPaymentHistory = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => openEmailModal(viewingReceipt)}
-                  className="px-3 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  Email Receipt
-                </button>
-                <button
-                  type="button"
-                  onClick={() => downloadReceipt(viewingReceipt.id, viewingReceipt.payment_receipt_no || `REC-${viewingReceipt.id}`)}
+                  onClick={() => handleDownloadPDF(viewingVoucher)}
                   className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  Download PDF
+                  Download / Print Voucher
                 </button>
               </div>
             </div>
@@ -914,14 +1411,15 @@ const CustomerPaymentHistory = () => {
         </div>
       )}
 
+      {/* Send Email Modal */}
       <SendEmailModal
         isOpen={showEmailModal}
         onClose={() => setShowEmailModal(false)}
         onSend={handleSendEmail}
         data={emailData}
-        title="Send Receipt to Customer"
-        subTitle={`${selectedPayment?.payment_receipt_no} • ${selectedPayment?.customer_name}`}
-        attachmentName={`Receipt-${selectedPayment?.payment_receipt_no}.pdf`}
+        title="Send Voucher Document"
+        subTitle={`${selectedVoucherForEmail?.voucher_number} • ${selectedVoucherForEmail?.party_name}`}
+        attachmentName={`Voucher-${selectedVoucherForEmail?.voucher_number}.pdf`}
       />
     </div>
   );

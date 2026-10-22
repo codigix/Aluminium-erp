@@ -219,7 +219,9 @@ const getPaymentsReceived = async (filters = {}) => {
       con.email as customer_email,
       COALESCE(ba.bank_name, cp.manual_bank_account) as bank_name,
       ba.account_number,
-      cp.manual_bank_account
+      cp.manual_bank_account,
+      cp_pos.po_number as customer_po_number,
+      si.invoice_no
     FROM customer_payments cp
     LEFT JOIN sales_invoices si ON (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE'))
     LEFT JOIN sales_orders so ON cp.sales_order_id = so.id AND cp.sales_order_source = 'SALES_ORDER'

@@ -80,6 +80,7 @@ export const SearchableSelect = ({
   allowCustom = true,
   disabled = false,
   openUpwards = false,
+  forceDirection,
   className = '',
   onFocus,
   showSearchIcon = false,
@@ -93,6 +94,10 @@ export const SearchableSelect = ({
   const containerRef = useRef(null);
 
   useEffect(() => {
+    if (forceDirection) {
+      setDropdownDirection(forceDirection);
+      return;
+    }
     if (isOpen && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
@@ -102,7 +107,7 @@ export const SearchableSelect = ({
         setDropdownDirection('down');
       }
     }
-  }, [isOpen]);
+  }, [isOpen, forceDirection]);
 
   const getLabel = (opt) => {
     if (!opt) return '';
@@ -116,7 +121,9 @@ export const SearchableSelect = ({
     return opt[subLabelField] || '';
   };
 
-  const selectedOption = options.find(opt => String(opt[valueField]) === String(localValue));
+  const selectedOption = (localValue !== '' && localValue !== undefined && localValue !== null)
+    ? options.find(opt => String(opt[valueField]) === String(localValue))
+    : null;
 
   useEffect(() => {
     setLocalValue(value);
@@ -131,7 +138,7 @@ export const SearchableSelect = ({
 
   const displayValue = isSearching
     ? searchTerm
-    : (selectedOption ? getLabel(selectedOption) : (localValue !== undefined && localValue !== null ? String(localValue) : ''));
+    : (selectedOption ? getLabel(selectedOption) : (localValue !== undefined && localValue !== null && localValue !== '' ? String(localValue) : ''));
 
   const safeSearchTerm = String(searchTerm || '').toLowerCase();
   const filteredOptions = options.filter(opt => {
@@ -204,7 +211,7 @@ export const SearchableSelect = ({
       </div>
 
       {isOpen && !disabled && (
-        <div className={`absolute z-[100] w-full min-w-full md:min-w-[320px] lg:min-w-[400px] bg-white border border-slate-200 rounded shadow-xl max-h-60 flex flex-col overflow-hidden ${openUpwards || dropdownDirection === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+        <div className={`absolute z-[100] left-0 w-full min-w-[260px] max-w-sm sm:max-w-md bg-white border border-slate-200 rounded-lg shadow-2xl max-h-72 flex flex-col overflow-hidden ${openUpwards || dropdownDirection === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
           <div className="overflow-y-auto flex-1 p-2">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, idx) => (
