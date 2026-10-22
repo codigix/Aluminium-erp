@@ -868,6 +868,58 @@ const deleteSalesInvoice = async (id) => {
   }
 };
 
+// Fixed print order for invoice copies; 'Additional Copy' kept as a legacy alias of 'Extra Copy'
+const INVOICE_COPY_ORDER = ['Original for Recipient', 'Duplicate for Transporter', 'Triplicate for Supplier', 'Extra Copy'];
+
+// Accepts a single copy label, comma-separated list, or 'all copies'; returns known labels in fixed order
+const resolveCopyTypes = (copyType) => {
+  const raw = String(copyType || '').trim();
+  const lower = raw.toLowerCase();
+  if (
+    lower === 'all' ||
+    lower.includes('all copies') ||
+    lower.includes('all_copies') ||
+    lower.includes('download all copies')
+  ) {
+    return [...INVOICE_COPY_ORDER];
+  }
+  const requested = raw
+    .split(',')
+    .map(c => c.trim())
+    .map(c => (c === 'Additional Copy' ? 'Extra Copy' : c));
+  const copies = INVOICE_COPY_ORDER.filter(c => requested.includes(c));
+  return copies.length ? copies : [INVOICE_COPY_ORDER[0]];
+};
+
+// Runs inside Puppeteer: gives every item row the height it would have on a full page
+// (table area / items-per-page) so 3, 6 and 10 item invoices share the same row rhythm.
+// The spacer row takes the unused slots; rows taller than a slot keep their natural height.
+const fitItemRowsToSlots = (itemsPerPage) => {
+  document.querySelectorAll('.invoice-page').forEach((pageEl) => {
+    const wrapper = pageEl.querySelector('.table-wrapper');
+    const table = wrapper && wrapper.querySelector('.item-table');
+    const spacer = table && table.querySelector('tr.spacer-row');
+    const rows = table ? Array.from(table.querySelectorAll('tr.item-row')) : [];
+    if (!spacer || rows.length === 0) return;
+
+    // Measure natural (unstretched) heights
+    table.style.height = 'auto';
+    spacer.style.display = 'none';
+    const available = wrapper.clientHeight;
+    const naturalTable = table.offsetHeight;
+    const rowHeights = rows.map((r) => r.offsetHeight);
+    const naturalRows = rowHeights.reduce((sum, h) => sum + h, 0);
+    table.style.height = '';
+    spacer.style.display = '';
+
+    const slot = Math.floor((available - (naturalTable - naturalRows)) / itemsPerPage);
+    if (slot <= 0) return;
+    rows.forEach((r, i) => {
+      if (rowHeights[i] < slot) r.style.height = `${slot}px`;
+    });
+  });
+};
+
 const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recipient') => {
   const [invRows] = await pool.query(`
     SELECT 
@@ -1085,8 +1137,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
       show_page_number: totalPages > 1,
       items: chunk,
       page_total_qty: `${pageTotalQty.toFixed(3)} ${defaultUnit}`,
-      page_total_amt: formatCurrency(pageTotalAmt),
-      has_spacer_row: isLastPage && chunk.length < 8
+      page_total_amt: formatCurrency(pageTotalAmt)
     };
   });
 
@@ -1116,7 +1167,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
         .title-header { position: relative; text-align: center; padding: 3px 8px; border-bottom: 1px solid #000; min-height: 20px; }
         .title-main { font-size: 10pt; font-weight: bold; line-height: 18px; }
         .header-right-badges { position: absolute; right: 8px; top: 2.5px; display: flex; gap: 6px; align-items: center; }
-        .copy-type-title { font-size: 8pt; font-weight: bold; text-transform: uppercase; color: #000; background-color: #fffa65; padding: 1px 7px; border-radius: 2px; letter-spacing: 0.3px; }
+        .copy-type-title { font-size: 8pt; font-weight: bold; text-transform: uppercase; color: #000; background: transparent; padding: 1px 4px; letter-spacing: 0.3px; }
         .page-badge { font-size: 7.5pt; font-weight: bold; color: #333; background-color: #f0f0f0; border: 1px solid #bbb; padding: 1px 6px; border-radius: 2px; }
         
         .row-flex { display: flex; width: 100%; }
@@ -1360,11 +1411,10 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
                 </tr>
                 {{/round_off_val}}
 
-                {{#has_spacer_row}}
+                <!-- Spacer absorbs unused item slots (see fitItemRowsToSlots) -->
                 <tr class="spacer-row">
                   <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
                 </tr>
-                {{/has_spacer_row}}
 
                 <!-- Grand Total Row -->
                 <tr class="total-row">
@@ -1378,6 +1428,10 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
               {{/is_last_page}}
 
               {{^is_last_page}}
+                <tr class="spacer-row">
+                  <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+                </tr>
+
                 <!-- Intermediate Page Carried Over Row -->
                 <tr class="total-row">
                   <td></td>
@@ -1518,9 +1572,11 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
     </html>
   `;
 
+  // Repeat the full invoice once per selected copy, each page carrying its own copy label
+  const copyPages = resolveCopyTypes(copyType).flatMap(copy => pages.map(p => ({ ...p, copy_type: copy })));
+
   const viewData = {
-    pages,
-    copy_type: copyType || 'Original for Recipient',
+    pages: copyPages,
     invoice_no: invoice.invoice_no,
     invoice_date: formatDate(invoice.invoice_date || invoice.created_at),
     delivery_note: invoice.delivery_note || '',
@@ -1585,7 +1641,10 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
+    // Match A4 printable width (210mm - 2 x 6mm margin) so measured row heights equal printed ones
+    await page.setViewport({ width: 748, height: 1100 });
     await page.setContent(html, { waitUntil: 'networkidle0' });
+    await page.evaluate(fitItemRowsToSlots, ITEMS_PER_PAGE);
     const pdf = await page.pdf({ format: 'A4', printBackground: true });
     await browser.close();
     return pdf;

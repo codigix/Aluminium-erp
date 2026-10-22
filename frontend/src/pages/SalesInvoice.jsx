@@ -53,7 +53,8 @@ const INVOICE_COPY_TYPES = [
   { id: 'original', label: 'Original for Recipient', description: 'For recipient / customer receiving goods' },
   { id: 'duplicate', label: 'Duplicate for Transporter', description: 'To accompany the goods during transit' },
   { id: 'triplicate', label: 'Triplicate for Supplier', description: 'For supplier internal records & audit' },
-  { id: 'additional', label: 'Additional Copy', description: 'Extra copy for administrative or filing use' }
+  { id: 'extra', label: 'Extra Copy', description: 'Extra copy for administrative or filing use' },
+  { id: 'all', label: 'Download All Copies (Single PDF)', description: 'Complete set of 4 copies in 1 single PDF file' }
 ];
 
 export default function SalesInvoice() {
@@ -816,7 +817,8 @@ export default function SalesInvoice() {
       const link = document.createElement('a');
       link.href = url;
       const cleanNo = (invoiceNo || `Invoice-${invoiceId}`).replace(/[/\\?%*:|"<>]/g, '-');
-      const cleanCopy = (copyType || 'Original').replace(/\s+/g, '_');
+      const isAll = copyType.includes('All Copies') || copyType.includes('Download All');
+      const cleanCopy = isAll ? 'All_Copies' : (copyType || 'Original').replace(/\s+/g, '_');
       link.download = `${cleanNo}_${cleanCopy}.pdf`;
       document.body.appendChild(link);
       link.click();
@@ -844,9 +846,10 @@ export default function SalesInvoice() {
     if (!invoice?.id) return;
     try {
       setPrintingPdf(true);
+      const isAll = copyType.includes('All Copies') || copyType.includes('Download All');
       Swal.fire({
         title: 'Preparing Print...',
-        text: `Loading Tax Invoice PDF (${copyType})...`,
+        text: isAll ? 'Loading Tax Invoice PDF (All 4 Copies)...' : `Loading Tax Invoice PDF (${copyType})...`,
         allowOutsideClick: false,
         didOpen: () => {
           Swal.showLoading();
@@ -2243,7 +2246,16 @@ export default function SalesInvoice() {
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => handleOpenCopyModal(selectedInvoice)}
+                  onClick={() => handleOpenCopyModal(selectedInvoice, 'print')}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+                  title="Print Tax Invoice"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenCopyModal(selectedInvoice, 'download')}
                   className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
                   title="Download Tax Invoice PDF"
                 >

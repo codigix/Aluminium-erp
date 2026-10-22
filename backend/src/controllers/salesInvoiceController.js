@@ -82,7 +82,8 @@ const generateSalesInvoicePDF = async (req, res, next) => {
     const copyType = req.query.copyType || 'Original for Recipient';
     const pdf = await salesInvoiceService.generateSalesInvoicePDF(req.params.id, copyType);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="tax-invoice-${req.params.id}.pdf"`);
+    const suffix = copyType.includes(',') ? '-copies' : '';
+    res.setHeader('Content-Disposition', `inline; filename="tax-invoice-${req.params.id}${suffix}.pdf"`);
     res.send(pdf);
   } catch (error) {
     next(error);
