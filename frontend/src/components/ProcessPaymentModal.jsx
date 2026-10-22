@@ -195,6 +195,15 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
     if (formData.paymentMode === 'BANK_TRANSFER') {
       if (!formData.bankAccount) {
         newErrors.bankAccount = 'Bank account is required for bank transfers';
+      } else {
+        const bankObj = bankAccounts.find(b => String(b.id) === String(formData.bankAccount));
+        if (bankObj) {
+          const bal = parseFloat(bankObj.current_balance ?? bankObj.total_balance ?? bankObj.opening_balance) || 0;
+          const req = parseFloat(formData.paymentAmount) || 0;
+          if (req > bal) {
+            newErrors.paymentAmount = `Insufficient balance in ${bankObj.bank_name}! Available: ${formatCurrency(bal)}. Account balance cannot go negative (e.g. -₹200).`;
+          }
+        }
       }
     }
 
@@ -626,13 +635,49 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             {/* Bank Transfer Fields */}
             {formData.paymentMode === 'BANK_TRANSFER' && (
               <FormControl label="Bank Account *">
-                <input
-                  type="text"
-                  value={formData.bankAccount}
-                  onChange={(e) => handleInputChange('bankAccount', e.target.value)}
-                  className={`w-full p-2 border rounded text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.bankAccount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
-                  placeholder="Enter bank name or account details"
-                />
+                {bankAccounts.length > 0 ? (
+                  <select
+                    value={formData.bankAccount}
+                    onChange={(e) => handleInputChange('bankAccount', e.target.value)}
+                    className={`w-full p-2 border rounded text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.bankAccount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  >
+                    <option value="">Select Bank Account</option>
+                    {bankAccounts.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {b.bank_name} ({b.account_number}) • Bal: {formatCurrency(b.current_balance ?? b.total_balance ?? b.opening_balance)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.bankAccount}
+                    onChange={(e) => handleInputChange('bankAccount', e.target.value)}
+                    className={`w-full p-2 border rounded text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.bankAccount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                    placeholder="Enter bank name or account details"
+                  />
+                )}
+                {/* Live balance badge */}
+                {(() => {
+                  const sel = bankAccounts.find(b => String(b.id) === String(formData.bankAccount));
+                  if (!sel) return null;
+                  const bal = parseFloat(sel.current_balance ?? sel.total_balance ?? sel.opening_balance) || 0;
+                  const req = parseFloat(formData.paymentAmount) || 0;
+                  const isInsufficient = req > bal;
+                  return (
+                    <div className="mt-1.5 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+                      <div className="flex justify-between font-mono">
+                        <span>Available Balance: <strong className={bal < 0 ? 'text-rose-600' : 'text-emerald-700'}>{formatCurrency(bal)}</strong></span>
+                        <span className="text-slate-500">Cr: +{formatCurrency(sel.total_credits || 0)} | Dr: -{formatCurrency(sel.total_debits || 0)}</span>
+                      </div>
+                      {isInsufficient && (
+                        <div className="text-rose-600 font-bold mt-1 text-[11px]">
+                          ⚠️ Insufficient balance! Shortfall: {formatCurrency(req - bal)}. Account balance cannot go negative.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {errors.bankAccount && <span className="text-xs text-rose-600 mt-1 block">{errors.bankAccount}</span>}
               </FormControl>
             )}

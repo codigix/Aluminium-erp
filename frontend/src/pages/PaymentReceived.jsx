@@ -315,32 +315,9 @@ const PaymentReceived = () => {
           >
             <Download className="w-4 h-4 group-hover:scale-110" />
           </button>
-          {parseFloat(row.outstanding) > 0 && (
-            <button
-              onClick={() => {
-                setSelectedInvoice({
-                  ...row,
-                  customer_id: row.company_id,
-                  customer_name: row.company_name,
-                  sales_order_id: row.source === 'SALES_INVOICE' ? (row.sales_order_id || row.order_id) : row.id,
-                  invoice_id: row.invoice_id || (row.source === 'SALES_INVOICE' ? row.id : null),
-                  sales_order_source: row.source,
-                  po_number: row.invoice_no || row.so_number,
-                  outstanding: row.outstanding,
-                  already_paid: row.paid_amount,
-                  total_amount: row.total_amount
-                });
-                setIsPaymentModalOpen(true);
-              }}
-              className="p-2 hover:bg-emerald-50 rounded text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100 group shadow-sm"
-              title="Record Payment"
-            >
-              <CreditCard className="w-4 h-4 group-hover:scale-110" />
-            </button>
-          )}
           <button
             onClick={() => handleDeleteInvoice(row)}
-            className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
+            className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm cursor-pointer"
             title="Delete Invoice"
           >
             <Trash2 className="w-4 h-4 group-hover:scale-110" />
@@ -374,14 +351,17 @@ const PaymentReceived = () => {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="secondary"
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
             onClick={fetchOutstandingInvoices}
-            icon={RefreshCw}
-            className={loading ? 'animate-spin' : ''}
-            title="Refresh Data"
-          />
+            disabled={loading}
+            className="p-2 sm:px-3 sm:py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 border border-slate-200 hover:border-blue-200 shadow-2xs flex items-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+            title="Refresh Invoices"
+          >
+            <RefreshCw className={`w-4 h-4 text-blue-600 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
           <Button
             variant="primary"
             onClick={() => navigate('/accounts/payment-received/add')}

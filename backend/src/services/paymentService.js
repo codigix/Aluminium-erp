@@ -4,6 +4,7 @@ const mustache = require('mustache');
 const path = require('path');
 const fs = require('fs');
 const emailService = require('./emailService');
+const bankAccountService = require('./bankAccountService');
 
 const generatePaymentVoucherNo = async () => {
   const year = new Date().getFullYear();
@@ -99,6 +100,23 @@ const processPayment = async (payload) => {
         }
       } else {
         manualBankAccount = bankAccount;
+      }
+    }
+
+    // Validate sufficient bank balance to prevent negative balance
+    if (bankAccountId) {
+      const bankInfo = await bankAccountService.getBankAccountBalance(bankAccountId);
+      if (bankInfo) {
+        const available = parseFloat(bankInfo.current_balance) || 0;
+        const requested = parseFloat(paymentAmount) || 0;
+        if (requested > available) {
+          const formattedAvail = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(available);
+          const formattedReq = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(requested);
+          const shortfall = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(requested - available);
+          const error = new Error(`Insufficient balance in ${bankInfo.bank_name}! Available balance is ${formattedAvail}, but requested payment is ${formattedReq} (shortfall: ${shortfall}). Account balance cannot go negative.`);
+          error.statusCode = 400;
+          throw error;
+        }
       }
     }
 
@@ -536,7 +554,7 @@ const getPayments = async (filters = {}) => {
     params.push(filters.jobCardQualityLogId);
   }
 
-  query += ' ORDER BY p.created_at DESC';
+  query += ' ORDER BY p.created_at DESC, p.id DESC';
 
   const [payments] = await pool.query(query, params);
   if (payments.length > 0) {
@@ -1765,7 +1783,7 @@ const getJournalVouchers = async (vendorId = null) => {
               ), '[]'
             ) as items
      FROM journal_vouchers jv
-     ORDER BY jv.id DESC`
+     ORDER BY jv.created_at DESC, jv.id DESC`
   );
   return rows.map(r => ({
     ...r,
@@ -1851,6 +1869,21 @@ const recordContraVoucher = async (payload) => {
       }
     }
 
+    if (resolvedFromBankId) {
+      const bankInfo = await bankAccountService.getBankAccountBalance(resolvedFromBankId);
+      if (bankInfo) {
+        const available = parseFloat(bankInfo.current_balance) || 0;
+        if (numericAmount > available) {
+          const formattedAvail = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(available);
+          const formattedReq = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(numericAmount);
+          const shortfall = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(numericAmount - available);
+          const error = new Error(`Insufficient balance in ${bankInfo.bank_name}! Available balance is ${formattedAvail}, but requested transfer is ${formattedReq} (shortfall: ${shortfall}). Account balance cannot go negative.`);
+          error.statusCode = 400;
+          throw error;
+        }
+      }
+    }
+
     const [result] = await connection.query(
       `INSERT INTO contra_vouchers (
         voucher_no, voucher_date, from_account, from_bank_account_id,
@@ -1871,20 +1904,6 @@ const recordContraVoucher = async (payload) => {
     );
 
     const contraVoucherId = result.insertId;
-
-    if (resolvedFromBankId) {
-      await connection.query(
-        `UPDATE bank_accounts SET opening_balance = opening_balance - ?, updated_at = NOW() WHERE id = ?`,
-        [numericAmount, resolvedFromBankId]
-      );
-    }
-
-    if (resolvedToBankId) {
-      await connection.query(
-        `UPDATE bank_accounts SET opening_balance = opening_balance + ?, updated_at = NOW() WHERE id = ?`,
-        [numericAmount, resolvedToBankId]
-      );
-    }
 
     await connection.commit();
 
@@ -1914,7 +1933,7 @@ const getContraVouchers = async () => {
      FROM contra_vouchers cv
      LEFT JOIN bank_accounts b_from ON cv.from_bank_account_id = b_from.id
      LEFT JOIN bank_accounts b_to ON cv.to_bank_account_id = b_to.id
-     ORDER BY cv.id DESC`
+     ORDER BY cv.created_at DESC, cv.id DESC`
   );
   return rows;
 };

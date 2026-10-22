@@ -16,7 +16,7 @@ const recordPaymentReceived = async (payload) => {
   const {
     invoiceId,
     salesOrderId,
-    salesOrderSource, // Added field
+    salesOrderSource,
     customerId,
     paymentAmount,
     paymentDate,
@@ -33,9 +33,11 @@ const recordPaymentReceived = async (payload) => {
     cardType,
     last4Digits,
     authorizationCode,
+    allocations,
     createdBy
   } = payload;
 
+  const hasAllocations = Array.isArray(allocations) && allocations.length > 0;
   const receiptNo = await generatePaymentReceiptNo();
 
   // Logic to handle bank account: either a numeric ID from bank_accounts or a manual string
@@ -45,28 +47,52 @@ const recordPaymentReceived = async (payload) => {
   if (bankAccount) {
     const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
     if (isNumericId) {
-      // Check if this ID actually exists in bank_accounts table
       const [banks] = await pool.query('SELECT id FROM bank_accounts WHERE id = ?', [parseInt(bankAccount)]);
       if (banks.length > 0) {
         bankAccountId = parseInt(bankAccount);
         actualManualBankAccount = manualBankAccount || null;
       } else {
-        // If it's numeric but not in DB, treat it as manual bank account info
         bankAccountId = null;
         actualManualBankAccount = bankAccount;
       }
     } else {
-      // Non-numeric means it's manual bank info
       bankAccountId = null;
       actualManualBankAccount = bankAccount;
     }
   }
 
+  // Calculate final amount & primary references
+  let finalPaymentAmount = parseFloat(paymentAmount) || 0;
+  let primaryInvoiceId = invoiceId || null;
+  let primarySalesOrderId = salesOrderId || null;
+  let primarySource = salesOrderSource || (invoiceId ? 'SALES_INVOICE' : 'SALES_ORDER');
+  let voucherRemarks = remarks || null;
+
+  if (hasAllocations) {
+    const calculatedTotal = allocations.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
+    if (!finalPaymentAmount) finalPaymentAmount = calculatedTotal;
+
+    if (allocations.length === 1) {
+      primaryInvoiceId = allocations[0].invoiceId || primaryInvoiceId;
+      primarySalesOrderId = allocations[0].salesOrderId || primarySalesOrderId;
+      primarySource = allocations[0].salesOrderSource || primarySource;
+    } else {
+      primaryInvoiceId = null;
+      primarySalesOrderId = null;
+      primarySource = 'SALES_INVOICE';
+    }
+
+    const refsSummary = allocations.map(a => `${a.type || 'Agst Ref'}: ${a.referenceNo || a.invoiceNo || a.invoiceId || 'Bill'}`).join(', ');
+    if (!voucherRemarks) {
+      voucherRemarks = refsSummary;
+    } else if (!voucherRemarks.includes('[Agst Ref:') && refsSummary) {
+      voucherRemarks = `${voucherRemarks} [${refsSummary}]`;
+    }
+  }
+
   try {
     const validSources = ['SALES_ORDER', 'DIRECT_ORDER', 'SALES_INVOICE'];
-    const resolvedSource = validSources.includes(salesOrderSource) 
-      ? salesOrderSource 
-      : (invoiceId ? 'SALES_INVOICE' : 'SALES_ORDER');
+    const resolvedSource = validSources.includes(primarySource) ? primarySource : 'SALES_INVOICE';
 
     const [result] = await pool.execute(
       `INSERT INTO customer_payments (
@@ -95,17 +121,17 @@ const recordPaymentReceived = async (payload) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         receiptNo,
-        invoiceId || null,
-        salesOrderId || null,
+        primaryInvoiceId,
+        primarySalesOrderId,
         resolvedSource,
         customerId,
-        parseFloat(paymentAmount),
+        finalPaymentAmount,
         paymentDate,
         paymentMode,
         transactionRefNo || null,
         bankAccountId,
         actualManualBankAccount,
-        remarks || null,
+        voucherRemarks,
         upiApp || null,
         upiTransactionId || null,
         chequeNumber || null,
@@ -121,35 +147,101 @@ const recordPaymentReceived = async (payload) => {
 
     const paymentId = result.insertId;
 
-    // Check if fully paid and update status
-    if (invoiceId || salesOrderSource === 'SALES_INVOICE') {
-      const invTargetId = invoiceId || salesOrderId;
-      const [inv] = await pool.query('SELECT total_amount FROM sales_invoices WHERE id = ?', [invTargetId]);
-      const [payments] = await pool.query(
-        'SELECT COALESCE(SUM(payment_amount), 0) as total_paid FROM customer_payments WHERE (invoice_id = ? OR (sales_order_id = ? AND sales_order_source = ?)) AND status = ?',
-        [invTargetId, invTargetId, 'SALES_INVOICE', 'CONFIRMED']
-      );
-      if (inv.length > 0 && payments[0].total_paid >= parseFloat(inv[0].total_amount)) {
-        await pool.execute('UPDATE sales_invoices SET status = ?, updated_at = NOW() WHERE id = ?', ['Paid', invTargetId]);
-      }
-    }
+    // Insert bill-wise allocations into customer_payment_allocations and update invoice statuses
+    if (hasAllocations) {
+      for (const alloc of allocations) {
+        const allocAmt = parseFloat(alloc.amount) || 0;
+        if (allocAmt <= 0) continue;
+        const allocInvId = alloc.invoiceId ? parseInt(alloc.invoiceId, 10) : null;
+        const allocSoId = alloc.salesOrderId ? parseInt(alloc.salesOrderId, 10) : null;
+        const allocSource = alloc.salesOrderSource || 'SALES_INVOICE';
+        const allocRef = alloc.referenceNo || alloc.invoiceNo || (allocInvId ? `INV-${allocInvId}` : null);
+        const allocCustId = alloc.customerId ? parseInt(alloc.customerId, 10) : customerId;
 
-    if (salesOrderId) {
-      if (salesOrderSource === 'DIRECT_ORDER') {
-        const [orders] = await pool.query('SELECT grand_total FROM orders WHERE id = ?', [salesOrderId]);
-        const [payments] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM customer_payments WHERE sales_order_id = ? AND sales_order_source = ? AND status = ?', [salesOrderId, 'DIRECT_ORDER', 'CONFIRMED']);
-        if (orders.length > 0 && payments[0].total_paid >= orders[0].grand_total) {
-          await pool.execute('UPDATE orders SET status = ? WHERE id = ?', ['Paid', salesOrderId]);
+        await pool.execute(
+          `INSERT INTO customer_payment_allocations (
+            customer_payment_id,
+            receipt_no,
+            customer_id,
+            invoice_id,
+            sales_order_id,
+            sales_order_source,
+            allocation_type,
+            reference_no,
+            amount
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            paymentId,
+            receiptNo,
+            allocCustId,
+            allocInvId,
+            allocSoId,
+            allocSource,
+            alloc.type || 'Agst Ref',
+            allocRef,
+            allocAmt
+          ]
+        );
+
+        // Update sales invoice paid status
+        if (allocInvId) {
+          const [invRows] = await pool.query('SELECT total_amount FROM sales_invoices WHERE id = ?', [allocInvId]);
+          if (invRows.length > 0) {
+            const [payRows] = await pool.query(
+              `SELECT 
+                COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = ? AND cp.status = 'CONFIRMED'), 0) +
+                COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = ? OR (cp.sales_order_id = ? AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0) as total_paid`,
+              [allocInvId, allocInvId, allocInvId]
+            );
+            const totalPaid = parseFloat(payRows[0]?.total_paid) || 0;
+            const invoiceTotal = parseFloat(invRows[0].total_amount) || 0;
+            if (totalPaid >= invoiceTotal) {
+              await pool.execute('UPDATE sales_invoices SET status = ?, updated_at = NOW() WHERE id = ?', ['Paid', allocInvId]);
+            } else if (totalPaid > 0) {
+              await pool.execute('UPDATE sales_invoices SET status = ?, updated_at = NOW() WHERE id = ?', ['Partially Paid', allocInvId]);
+            }
+          }
         }
-      } else if (salesOrderSource === 'SALES_ORDER') {
-        const [so] = await pool.query(`
-          SELECT COALESCE(NULLIF(so.net_total, 0), NULLIF(cp.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as net_total 
-          FROM sales_orders so 
-          LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id 
-          WHERE so.id = ?`, [salesOrderId]);
-        const [payments] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM customer_payments WHERE sales_order_id = ? AND sales_order_source = ? AND status = ?', [salesOrderId, 'SALES_ORDER', 'CONFIRMED']);
-        if (so.length > 0 && so[0].net_total > 0 && payments[0].total_paid >= so[0].net_total) {
-          await pool.execute('UPDATE sales_orders SET status = ? WHERE id = ?', ['PAID', salesOrderId]);
+      }
+    } else {
+      // Legacy single invoice/order update
+      if (invoiceId || salesOrderSource === 'SALES_INVOICE') {
+        const invTargetId = invoiceId || salesOrderId;
+        const [inv] = await pool.query('SELECT total_amount FROM sales_invoices WHERE id = ?', [invTargetId]);
+        if (inv.length > 0) {
+          const [payments] = await pool.query(
+            `SELECT 
+              COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = ? AND cp.status = 'CONFIRMED'), 0) +
+              COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = ? OR (cp.sales_order_id = ? AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0) as total_paid`,
+            [invTargetId, invTargetId, invTargetId]
+          );
+          const totalPaid = parseFloat(payments[0]?.total_paid) || 0;
+          const invoiceTotal = parseFloat(inv[0].total_amount) || 0;
+          if (totalPaid >= invoiceTotal) {
+            await pool.execute('UPDATE sales_invoices SET status = ?, updated_at = NOW() WHERE id = ?', ['Paid', invTargetId]);
+          } else if (totalPaid > 0) {
+            await pool.execute('UPDATE sales_invoices SET status = ?, updated_at = NOW() WHERE id = ?', ['Partially Paid', invTargetId]);
+          }
+        }
+      }
+
+      if (salesOrderId) {
+        if (salesOrderSource === 'DIRECT_ORDER') {
+          const [orders] = await pool.query('SELECT grand_total FROM orders WHERE id = ?', [salesOrderId]);
+          const [payments] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM customer_payments WHERE sales_order_id = ? AND sales_order_source = ? AND status = ?', [salesOrderId, 'DIRECT_ORDER', 'CONFIRMED']);
+          if (orders.length > 0 && payments[0].total_paid >= orders[0].grand_total) {
+            await pool.execute('UPDATE orders SET status = ? WHERE id = ?', ['Paid', salesOrderId]);
+          }
+        } else if (salesOrderSource === 'SALES_ORDER') {
+          const [so] = await pool.query(`
+            SELECT COALESCE(NULLIF(so.net_total, 0), NULLIF(cp.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as net_total 
+            FROM sales_orders so 
+            LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id 
+            WHERE so.id = ?`, [salesOrderId]);
+          const [payments] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM customer_payments WHERE sales_order_id = ? AND sales_order_source = ? AND status = ?', [salesOrderId, 'SALES_ORDER', 'CONFIRMED']);
+          if (so.length > 0 && so[0].net_total > 0 && payments[0].total_paid >= so[0].net_total) {
+            await pool.execute('UPDATE sales_orders SET status = ? WHERE id = ?', ['PAID', salesOrderId]);
+          }
         }
       }
     }
@@ -168,8 +260,8 @@ const recordPaymentReceived = async (payload) => {
         paymentDate,
         paymentId,
         customerId,
-        parseFloat(paymentAmount),
-        invoiceId ? `Payment received against invoice ${invoiceId}: ${remarks || ''}` : `Advance payment received: ${remarks || ''}`
+        finalPaymentAmount,
+        voucherRemarks || (primaryInvoiceId ? `Payment received against invoice ${primaryInvoiceId}` : 'Payment receipt recorded')
       ]
     );
 
@@ -188,8 +280,8 @@ const recordPaymentReceived = async (payload) => {
         paymentId,
         'PAYMENT',
         'DEBIT',
-        parseFloat(paymentAmount),
-        invoiceId ? `Payment received against invoice ${invoiceId}` : `Advance payment received`,
+        finalPaymentAmount,
+        voucherRemarks || (primaryInvoiceId ? `Payment received against invoice ${primaryInvoiceId}` : 'Payment receipt recorded'),
         paymentDate
       ]
     );
@@ -219,9 +311,13 @@ const getPaymentsReceived = async (filters = {}) => {
       con.email as customer_email,
       COALESCE(ba.bank_name, cp.manual_bank_account) as bank_name,
       ba.account_number,
-      cp.manual_bank_account,
       cp_pos.po_number as customer_po_number,
-      si.invoice_no
+      COALESCE(
+        (SELECT GROUP_CONCAT(DISTINCT cpa.reference_no ORDER BY cpa.id SEPARATOR ', ') 
+         FROM customer_payment_allocations cpa 
+         WHERE cpa.customer_payment_id = cp.id),
+        si.invoice_no
+      ) as invoice_no
     FROM customer_payments cp
     LEFT JOIN sales_invoices si ON (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE'))
     LEFT JOIN sales_orders so ON cp.sales_order_id = so.id AND cp.sales_order_source = 'SALES_ORDER'
@@ -267,7 +363,7 @@ const getPaymentsReceived = async (filters = {}) => {
     params.push(filters.salesOrderSource);
   }
 
-  query += ' ORDER BY cp.created_at DESC';
+  query += ' ORDER BY cp.created_at DESC, cp.id DESC';
 
   const [payments] = await pool.query(query, params);
   return payments;
@@ -478,8 +574,10 @@ const getOutstandingInvoices = async (customerId) => {
       c.company_name as company_name,
       COALESCE(NULLIF(si.project_name, ''), NULLIF(o.project_name, ''), 'General Project') as project_name,
       si.total_amount as total_amount,
-      COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE (invoice_id = si.id OR (sales_order_id = si.id AND sales_order_source = 'SALES_INVOICE')) AND status = 'CONFIRMED'), 0) as paid_amount,
-      (si.total_amount - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE (invoice_id = si.id OR (sales_order_id = si.id AND sales_order_source = 'SALES_INVOICE')) AND status = 'CONFIRMED'), 0)) as outstanding,
+      (COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = si.id AND cp.status = 'CONFIRMED'), 0) +
+       COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0)) as paid_amount,
+      (si.total_amount - (COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = si.id AND cp.status = 'CONFIRMED'), 0) +
+       COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0))) as outstanding,
       CONVERT('SALES_INVOICE' USING utf8mb4) as source,
       si.created_at,
       si.invoice_date
@@ -511,8 +609,10 @@ const getAllOutstandingInvoices = async () => {
       con.email as customer_email,
       COALESCE(NULLIF(si.project_name, ''), NULLIF(o.project_name, ''), 'General Project') as project_name,
       si.total_amount as total_amount,
-      COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE (invoice_id = si.id OR (sales_order_id = si.id AND sales_order_source = 'SALES_INVOICE')) AND status = 'CONFIRMED'), 0) as paid_amount,
-      (si.total_amount - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE (invoice_id = si.id OR (sales_order_id = si.id AND sales_order_source = 'SALES_INVOICE')) AND status = 'CONFIRMED'), 0)) as outstanding,
+      (COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = si.id AND cp.status = 'CONFIRMED'), 0) +
+       COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0)) as paid_amount,
+      (si.total_amount - (COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = si.id AND cp.status = 'CONFIRMED'), 0) +
+       COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0))) as outstanding,
       CONVERT('SALES_INVOICE' USING utf8mb4) as source,
       si.created_at,
       si.invoice_date

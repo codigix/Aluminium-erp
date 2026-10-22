@@ -675,7 +675,12 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     return bankAccounts.map(b => ({
       value: String(b.id),
       label: b.bank_name ? `${b.bank_name} - ${b.account_type || 'Current'}` : (b.account_name || 'Bank Account'),
-      sublabel: [b.account_number ? `A/c: ${b.account_number}` : '', b.branch_name, b.ifsc_code ? `IFSC: ${b.ifsc_code}` : ''].filter(Boolean).join(' • ')
+      sublabel: [
+        b.account_number ? `A/c: ${b.account_number}` : '',
+        `Bal: ${formatCurrency(b.current_balance ?? b.total_balance ?? b.opening_balance)}`,
+        b.total_credits ? `Cr: +${formatCurrency(b.total_credits)}` : '',
+        b.total_debits ? `Dr: -${formatCurrency(b.total_debits)}` : ''
+      ].filter(Boolean).join(' • ')
     }));
   }, [bankAccounts]);
 
@@ -1549,6 +1554,17 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       errorToast('Please select a Payment Ledger (Bank or Cash)');
       return;
     }
+    if (selectedBankAccountId && selectedBankAccountId !== 'cash') {
+      const bankObj = bankAccounts.find(b => String(b.id) === String(selectedBankAccountId));
+      if (bankObj) {
+        const avail = parseFloat(bankObj.current_balance ?? bankObj.total_balance ?? bankObj.opening_balance) || 0;
+        if (totalVoucherAmount > avail) {
+          const shortfall = totalVoucherAmount - avail;
+          errorToast(`Insufficient balance in ${bankObj.bank_name}! Available is ${formatCurrency(avail)}, requested is ${formatCurrency(totalVoucherAmount)} (shortfall: ${formatCurrency(shortfall)}). Account balance cannot go negative.`);
+          return;
+        }
+      }
+    }
     if (totalVoucherAmount <= 0) {
       errorToast('Total voucher settlement amount must be greater than zero');
       return;
@@ -2181,7 +2197,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                       ? 'bg-amber-50 text-amber-800 border-amber-200' 
                       : 'bg-blue-50 text-blue-700 border-blue-200')
               }`}>
-                {selectedVoucherType === 'CONTRA' ? 'Contra (F4)' : selectedVoucherType === 'JOURNAL' ? 'Journal (F7)' : (isPaymentMode ? 'Vendor Payables (F5)' : 'Customer Receivables (F6)')}
+                {selectedVoucherType === 'CONTRA' ? 'Contra' : selectedVoucherType === 'JOURNAL' ? 'Journal' : (isPaymentMode ? 'Vendor Payables' : 'Customer Receivables')}
               </span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -2205,24 +2221,21 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                 ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
                 : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
             }`}
-            title="Toggle Voucher Types Panel (F5/F6)"
+            title="Toggle Voucher Types Panel"
           >
             <Layers className={`w-3.5 h-3.5 ${isVoucherPanelOpen ? 'text-white' : 'text-blue-600'}`} />
             <span>{isVoucherPanelOpen ? 'Hide Voucher Types' : 'Voucher Types'}</span>
-            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
-              isVoucherPanelOpen ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
-            }`}>
-              {VOUCHER_OPTIONS.find(v => v.id === selectedVoucherType)?.shortcut || 'F5'}
-            </span>
           </button>
 
           <button
+            type="button"
             onClick={handleRefreshAll}
-            className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-300 hover:border-blue-300 shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+            disabled={invoicesLoading || historyLoading || vendorInvoicesLoading || vendorHistoryLoading || contraLoading || journalLoading}
+            className="p-2 sm:px-3 sm:py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 border border-slate-200 hover:border-blue-200 shadow-2xs flex items-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
             title="Refresh Data"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${invoicesLoading || historyLoading || vendorInvoicesLoading || vendorHistoryLoading || contraLoading || journalLoading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
+            <RefreshCw className={`w-4 h-4 text-blue-600 ${invoicesLoading || historyLoading || vendorInvoicesLoading || vendorHistoryLoading || contraLoading || journalLoading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
       </div>
@@ -3331,11 +3344,6 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                             <div className="flex items-center justify-between gap-1">
                               <span className={`text-xs font-bold ${isSelected ? 'text-blue-700' : 'text-slate-800'}`}>
                                 {v.name}
-                              </span>
-                              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${
-                                isSelected ? 'bg-blue-100 text-blue-700 font-extrabold' : 'bg-slate-100 text-slate-500'
-                              }`}>
-                                {v.shortcut}
                               </span>
                             </div>
                             <p className="text-[11px] text-slate-400 mt-1 leading-snug">

@@ -256,12 +256,6 @@ const PaymentProcessing = () => {
       render: (val) => <span className="text-emerald-600 font-medium">{formatCurrency(val)}</span>
     },
     {
-      label: 'Outstanding',
-      key: 'outstanding',
-      sortable: true,
-      render: (val) => <span className="text-rose-600 font-semibold">{formatCurrency(val)}</span>
-    },
-    {
       label: 'Status',
       key: 'status',
       sortable: true,
@@ -294,49 +288,10 @@ const PaymentProcessing = () => {
       className: 'text-right',
       render: (_, row) => (
         <div className="flex justify-end items-center gap-2">
-          {/* Verify Invoice Info */}
-          {['FORWARDED', 'RECEIVED'].includes(row.status) && (
-            <button
-              onClick={() => handleOpenVerifyModal(row.id)}
-              className="p-1.5 hover:bg-amber-50 rounded text-amber-600 hover:text-amber-700 border border-transparent hover:border-amber-100 active:scale-95 transition-all flex items-center gap-1"
-              title="Verify PO & GRN"
-            >
-              <CheckSquare className="w-4 h-4" />
-              <span className="text-[10px] font-bold">Verify</span>
-            </button>
-          )}
-
-          {/* Process Payment */}
-          {parseFloat(row.outstanding) > 0 && (
-            <button
-              onClick={() => {
-                // ProcessPaymentModal expects invoice.id = PO ID (not vendor_invoice id)
-                setSelectedInvoice({
-                  id: row.po_id,
-                  vendor_invoice_id: row.id,
-                  po_number: row.po_number,
-                  vendor_name: row.vendor_name,
-                  vendor_id: row.vendor_id,
-                  total_amount: row.po_amount,
-                  outstanding: row.outstanding,
-                  already_paid: row.already_paid,
-                  created_at: row.created_at,
-                  type: 'PURCHASE_ORDER'
-                });
-                setIsPaymentModalOpen(true);
-              }}
-              className="p-1.5 hover:bg-emerald-50 rounded text-emerald-600 hover:text-emerald-700 border border-transparent hover:border-emerald-100 active:scale-95 transition-all flex items-center gap-1"
-              title="Process Payment"
-            >
-              <CreditCard className="w-4 h-4" />
-              <span className="text-[10px] font-bold">Payment</span>
-            </button>
-          )}
-
           {/* Email Attachments */}
           <button
             onClick={() => handleSendEmailClick(row)}
-            className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100"
+            className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 cursor-pointer"
             title="Send Email"
           >
             <Send className="w-4 h-4" />
@@ -358,14 +313,17 @@ const PaymentProcessing = () => {
             <p className="text-xs text-slate-500 mt-0.5">Manage handover, verification, and payment voucher generation</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="secondary"
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
             onClick={fetchInvoices}
-            icon={RefreshCw}
-            className={loading ? 'animate-spin' : ''}
-            title="Refresh Data"
-          />
+            disabled={loading}
+            className="p-2 sm:px-3 sm:py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 border border-slate-200 hover:border-blue-200 shadow-2xs flex items-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+            title="Refresh Invoices"
+          >
+            <RefreshCw className={`w-4 h-4 text-blue-600 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
         </div>
       </div>
 

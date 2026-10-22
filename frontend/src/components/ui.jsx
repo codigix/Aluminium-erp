@@ -469,11 +469,14 @@ export const Button = ({
     lg: 'px-6 py-3 text-base'
   };
 
+  const hasSpin = className.includes('animate-spin');
+  const cleanClassName = className.replace(/\banimate-spin\b/g, '').trim();
+
   return (
     <button
       type={type}
       onClick={onClick}
-      disabled={disabled || loading}
+      disabled={disabled || loading || hasSpin}
       className={`
         inline-flex items-center justify-center gap-2 
         rounded border    
@@ -481,14 +484,14 @@ export const Button = ({
         disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
         ${variants[variant] || variants.default} 
         ${sizes[size] || sizes.md} 
-        ${className}
+        ${cleanClassName}
       `}
       {...props}
     >
       {loading ? (
         <Loader2 className="w-4 h-4 animate-spin" />
       ) : Icon ? (
-        <Icon className={size === 'xs' ? 'w-3 h-3' : 'w-4 h-4'} />
+        <Icon className={`${size === 'xs' ? 'w-3 h-3' : 'w-4 h-4'} ${hasSpin ? 'animate-spin' : ''}`} />
       ) : null}
       {children}
     </button>

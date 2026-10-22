@@ -76,6 +76,123 @@ const createBankAccount = async (payload) => {
 };
 
 /**
+ * Calculate live credits, debits and balance for specific bank accounts
+ */
+const calculateBankBalances = async (accountIds = []) => {
+  if (!accountIds || !accountIds.length) return {};
+
+  const placeholders = accountIds.map(() => '?').join(',');
+
+  // 1. Customer Receipts (Inflow / Credit)
+  const [custRows] = await pool.query(
+    `SELECT bank_account_id, COALESCE(SUM(payment_amount), 0) as total_customer_receipts, COUNT(*) as cust_count
+     FROM customer_payments
+     WHERE bank_account_id IN (${placeholders}) AND status = 'CONFIRMED'
+     GROUP BY bank_account_id`,
+    accountIds
+  );
+
+  // 2. Vendor Payments (Outflow / Debit)
+  const [vendRows] = await pool.query(
+    `SELECT bank_account_id, COALESCE(SUM(payment_amount), 0) as total_vendor_payments, COUNT(*) as vend_count
+     FROM payments
+     WHERE bank_account_id IN (${placeholders}) AND status = 'CONFIRMED'
+     GROUP BY bank_account_id`,
+    accountIds
+  );
+
+  // 3. Contra Inflows (Transfer In to this bank)
+  const [contraInRows] = await pool.query(
+    `SELECT to_bank_account_id as bank_account_id, COALESCE(SUM(amount), 0) as total_contra_in, COUNT(*) as contra_in_count
+     FROM contra_vouchers
+     WHERE to_bank_account_id IN (${placeholders})
+     GROUP BY to_bank_account_id`,
+    accountIds
+  );
+
+  // 4. Contra Outflows (Transfer Out from this bank)
+  const [contraOutRows] = await pool.query(
+    `SELECT from_bank_account_id as bank_account_id, COALESCE(SUM(amount), 0) as total_contra_out, COUNT(*) as contra_out_count
+     FROM contra_vouchers
+     WHERE from_bank_account_id IN (${placeholders})
+     GROUP BY from_bank_account_id`,
+    accountIds
+  );
+
+  const statsMap = {};
+  for (const id of accountIds) {
+    statsMap[id] = {
+      customer_receipts: 0,
+      vendor_payments: 0,
+      contra_in: 0,
+      contra_out: 0,
+      total_credits: 0,
+      total_debits: 0,
+      transaction_count: 0
+    };
+  }
+
+  for (const r of custRows) {
+    if (statsMap[r.bank_account_id]) {
+      statsMap[r.bank_account_id].customer_receipts = parseFloat(r.total_customer_receipts) || 0;
+      statsMap[r.bank_account_id].transaction_count += parseInt(r.cust_count) || 0;
+    }
+  }
+
+  for (const r of vendRows) {
+    if (statsMap[r.bank_account_id]) {
+      statsMap[r.bank_account_id].vendor_payments = parseFloat(r.total_vendor_payments) || 0;
+      statsMap[r.bank_account_id].transaction_count += parseInt(r.vend_count) || 0;
+    }
+  }
+
+  for (const r of contraInRows) {
+    if (statsMap[r.bank_account_id]) {
+      statsMap[r.bank_account_id].contra_in = parseFloat(r.total_contra_in) || 0;
+      statsMap[r.bank_account_id].transaction_count += parseInt(r.contra_in_count) || 0;
+    }
+  }
+
+  for (const r of contraOutRows) {
+    if (statsMap[r.bank_account_id]) {
+      statsMap[r.bank_account_id].contra_out = parseFloat(r.total_contra_out) || 0;
+      statsMap[r.bank_account_id].transaction_count += parseInt(r.contra_out_count) || 0;
+    }
+  }
+
+  for (const id of accountIds) {
+    const s = statsMap[id];
+    s.total_credits = +(s.customer_receipts + s.contra_in).toFixed(2);
+    s.total_debits = +(s.vendor_payments + s.contra_out).toFixed(2);
+  }
+
+  return statsMap;
+};
+
+/**
+ * Get available live balance for a single bank account
+ */
+const getBankAccountBalance = async (accountId) => {
+  const [rows] = await pool.query('SELECT id, bank_name, account_number, opening_balance FROM bank_accounts WHERE id = ?', [accountId]);
+  if (!rows.length) return null;
+  const acc = rows[0];
+  const statsMap = await calculateBankBalances([acc.id]);
+  const s = statsMap[acc.id] || { total_credits: 0, total_debits: 0 };
+  const opening = parseFloat(acc.opening_balance) || 0;
+  const currentBalance = +(opening + s.total_credits - s.total_debits).toFixed(2);
+  return {
+    id: acc.id,
+    bank_name: acc.bank_name,
+    account_number: acc.account_number,
+    opening_balance: opening,
+    total_credits: s.total_credits,
+    total_debits: s.total_debits,
+    current_balance: currentBalance,
+    available_balance: currentBalance
+  };
+};
+
+/**
  * Get all bank accounts with optional filtering and search
  */
 const getBankAccounts = async (filters = {}) => {
@@ -117,7 +234,27 @@ const getBankAccounts = async (filters = {}) => {
     params
   );
 
-  return accounts;
+  const ids = accounts.map(a => a.id);
+  const statsMap = await calculateBankBalances(ids);
+
+  return accounts.map(a => {
+    const s = statsMap[a.id] || { total_credits: 0, total_debits: 0, customer_receipts: 0, vendor_payments: 0, contra_in: 0, contra_out: 0, transaction_count: 0 };
+    const opening = parseFloat(a.opening_balance) || 0;
+    const currentBalance = +(opening + s.total_credits - s.total_debits).toFixed(2);
+    return {
+      ...a,
+      total_credits: s.total_credits,
+      total_debits: s.total_debits,
+      customer_receipts: s.customer_receipts,
+      vendor_payments: s.vendor_payments,
+      contra_in: s.contra_in,
+      contra_out: s.contra_out,
+      current_balance: currentBalance,
+      total_balance: currentBalance,
+      available_balance: currentBalance,
+      linked_transactions_count: s.transaction_count
+    };
+  });
 };
 
 /**
@@ -136,17 +273,24 @@ const getBankAccountById = async (accountId) => {
   }
 
   const account = rows[0];
-
-  // Also query count of linked payments if any
-  const [custPayments] = await pool.query(
-    'SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total_received FROM customer_payments WHERE bank_account_id = ?',
-    [accountId]
-  );
+  const statsMap = await calculateBankBalances([account.id]);
+  const s = statsMap[account.id] || { total_credits: 0, total_debits: 0, customer_receipts: 0, vendor_payments: 0, contra_in: 0, contra_out: 0, transaction_count: 0 };
+  const opening = parseFloat(account.opening_balance) || 0;
+  const currentBalance = +(opening + s.total_credits - s.total_debits).toFixed(2);
 
   return {
     ...account,
-    total_received: custPayments[0]?.total_received || 0,
-    linked_transactions_count: custPayments[0]?.count || 0
+    total_credits: s.total_credits,
+    total_debits: s.total_debits,
+    customer_receipts: s.customer_receipts,
+    vendor_payments: s.vendor_payments,
+    contra_in: s.contra_in,
+    contra_out: s.contra_out,
+    current_balance: currentBalance,
+    total_balance: currentBalance,
+    available_balance: currentBalance,
+    total_received: s.total_credits,
+    linked_transactions_count: s.transaction_count
   };
 };
 
@@ -308,6 +452,8 @@ module.exports = {
   createBankAccount,
   getBankAccounts,
   getBankAccountById,
+  getBankAccountBalance,
+  calculateBankBalances,
   updateBankAccount,
   toggleBankAccountStatus,
   deactivateBankAccount,

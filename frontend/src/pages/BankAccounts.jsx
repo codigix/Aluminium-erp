@@ -328,13 +328,16 @@ const BankAccounts = () => {
     const total = accounts.length;
     const active = accounts.filter(a => a.is_active).length;
     const inactive = total - active;
-    const totalBalance = accounts.reduce((sum, a) => sum + (parseFloat(a.opening_balance) || 0), 0);
+    const totalOpeningBalance = accounts.reduce((sum, a) => sum + (parseFloat(a.opening_balance) || 0), 0);
+    const totalCredits = accounts.reduce((sum, a) => sum + (parseFloat(a.total_credits) || 0), 0);
+    const totalDebits = accounts.reduce((sum, a) => sum + (parseFloat(a.total_debits) || 0), 0);
+    const totalBalance = accounts.reduce((sum, a) => sum + (parseFloat(a.current_balance ?? a.total_balance ?? a.opening_balance) || 0), 0);
     const currentCount = accounts.filter(a => a.account_type === 'CURRENT').length;
     const savingsCount = accounts.filter(a => a.account_type === 'SAVINGS').length;
     const ccCount = accounts.filter(a => a.account_type === 'CASH_CREDIT').length;
     const odCount = accounts.filter(a => a.account_type === 'OD').length;
 
-    return { total, active, inactive, totalBalance, currentCount, savingsCount, ccCount, odCount };
+    return { total, active, inactive, totalOpeningBalance, totalCredits, totalDebits, totalBalance, currentCount, savingsCount, ccCount, odCount };
   }, [accounts]);
 
   const getAccountTypeBadge = (type) => {
@@ -369,11 +372,12 @@ const BankAccounts = () => {
           <button
             type="button"
             onClick={fetchBankAccounts}
-            className="px-3 py-2 text-xs font-semibold text-slate-600 hover:text-blue-700 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            disabled={loading}
+            className="p-2 sm:px-3 sm:py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 border border-slate-200 hover:border-blue-200 shadow-2xs flex items-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
             title="Refresh bank accounts"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
+            <RefreshCw className={`w-4 h-4 text-blue-600 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
           </button>
 
           <button
@@ -408,11 +412,11 @@ const BankAccounts = () => {
           </div>
         </div>
 
-        {/* Card 2: Total Opening Balance */}
+        {/* Card 2: Total Balance */}
         <div className="bg-white rounded-xl p-4 border border-slate-200/90 shadow-xs flex flex-col justify-between hover:border-blue-300 transition-all">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Total Opening Balance
+              Total Balance
             </span>
             <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100">
               <Wallet className="w-4 h-4" />
@@ -421,8 +425,9 @@ const BankAccounts = () => {
           <div className="text-2xl font-bold font-mono text-emerald-700 tracking-tight">
             {formatCurrency(stats.totalBalance)}
           </div>
-          <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
-            Initial ledger carry-forward across accounts
+          <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between font-mono">
+            <span className="text-emerald-700 font-semibold" title="Total Inflow across accounts">Cr: +{formatCurrency(stats.totalCredits)}</span>
+            <span className="text-rose-700 font-semibold" title="Total Outflow across accounts">Dr: -{formatCurrency(stats.totalDebits)}</span>
           </div>
         </div>
 
@@ -610,7 +615,9 @@ const BankAccounts = () => {
                   <th className="py-3 px-4">Account Holder</th>
                   <th className="py-3 px-4">Account Number & IFSC</th>
                   <th className="py-3 px-4">Account Type</th>
-                  <th className="py-3 px-4 text-right">Opening Balance</th>
+                  <th className="py-3 px-4 text-right">Inflow (Cr)</th>
+                  <th className="py-3 px-4 text-right">Outflow (Dr)</th>
+                  <th className="py-3 px-4 text-right">Total Balance</th>
                   <th className="py-3 px-4 text-center">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -691,12 +698,27 @@ const BankAccounts = () => {
                         </span>
                       </td>
 
-                      {/* Opening Balance */}
+                      {/* Inflow (Cr) */}
+                      <td className="py-3 px-4 text-right font-mono">
+                        <span className="text-xs font-bold text-emerald-700 block">
+                          +{formatCurrency(account.total_credits || 0)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block -mt-0.5">Total Inflow</span>
+                      </td>
+
+                      {/* Outflow (Dr) */}
+                      <td className="py-3 px-4 text-right font-mono">
+                        <span className="text-xs font-bold text-rose-700 block">
+                          -{formatCurrency(account.total_debits || 0)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block -mt-0.5">Total Outflow</span>
+                      </td>
+
+                      {/* Total Balance */}
                       <td className="py-3 px-4 text-right font-mono">
                         <span className="text-xs font-bold text-slate-900 block">
-                          {formatCurrency(account.opening_balance)}
+                          {formatCurrency(account.current_balance ?? account.total_balance ?? account.opening_balance)}
                         </span>
-                        <span className="text-[10px] text-slate-400 block -mt-0.5">Opening</span>
                       </td>
 
                       {/* Status */}
@@ -824,10 +846,15 @@ const BankAccounts = () => {
                   {/* Balance & Status */}
                   <div className="flex items-center justify-between text-xs px-1 mb-2">
                     <div>
-                      <span className="text-[10px] text-slate-400 block font-semibold uppercase">Opening Balance</span>
-                      <span className="font-mono font-bold text-slate-900 text-sm">
-                        {formatCurrency(account.opening_balance)}
+                      <span className="text-[10px] text-slate-400 block font-semibold uppercase">Total Balance</span>
+                      <span className="font-mono font-bold text-emerald-700 text-sm">
+                        {formatCurrency(account.current_balance ?? account.total_balance ?? account.opening_balance)}
                       </span>
+                    </div>
+
+                    <div className="text-right font-mono text-[10px]">
+                      <span className="text-emerald-700 block font-bold">Cr: +{formatCurrency(account.total_credits || 0)}</span>
+                      <span className="text-rose-700 block font-bold">Dr: -{formatCurrency(account.total_debits || 0)}</span>
                     </div>
 
                     <button
@@ -1422,9 +1449,9 @@ const BankAccounts = () => {
               {/* Complete Specifications Grid */}
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Opening Balance</span>
-                  <span className="font-mono font-bold text-slate-900 text-sm mt-0.5 block">
-                    {formatCurrency(selectedAccount.opening_balance)}
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Balance</span>
+                  <span className="font-mono font-bold text-emerald-700 text-sm mt-0.5 block">
+                    {formatCurrency(selectedAccount.current_balance ?? selectedAccount.total_balance ?? selectedAccount.opening_balance)}
                   </span>
                 </div>
 
@@ -1437,16 +1464,16 @@ const BankAccounts = () => {
                 </div>
 
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Received</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Inflow (Credits)</span>
                   <span className="font-mono font-bold text-emerald-700 text-sm mt-0.5 block">
-                    {formatCurrency(selectedAccount.total_received || 0)}
+                    +{formatCurrency(selectedAccount.total_credits || selectedAccount.total_received || 0)}
                   </span>
                 </div>
 
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200/80">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Linked Receipts</span>
-                  <span className="font-mono font-bold text-slate-800 text-sm mt-0.5 block">
-                    {selectedAccount.linked_transactions_count || 0} Transactions
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Outflow (Debits)</span>
+                  <span className="font-mono font-bold text-rose-700 text-sm mt-0.5 block">
+                    -{formatCurrency(selectedAccount.total_debits || 0)}
                   </span>
                 </div>
               </div>

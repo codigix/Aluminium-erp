@@ -71,6 +71,10 @@ const CustomerPaymentHistory = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  // Period Balance Statement States for Client / Customer Reconciliation
+  const [monthlySummary, setMonthlySummary] = useState(null);
+  const [monthlyLoading, setMonthlyLoading] = useState(false);
+
   // Interactive Modal States
   const [viewingVoucher, setViewingVoucher] = useState(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -170,6 +174,74 @@ const CustomerPaymentHistory = () => {
     }
   };
 
+  const fetchCustomerMonthlySummary = async (customerId, customStart, customEnd) => {
+    if (!customerId) {
+      setMonthlySummary(null);
+      return;
+    }
+    try {
+      setMonthlyLoading(true);
+      const token = localStorage.getItem('authToken');
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+
+      let url = `${API_BASE}/customer-payments/customer/${customerId}/monthly-summary?year=${year}&month=${month}`;
+      if (customStart && customEnd) {
+        url += `&startDate=${customStart}&endDate=${customEnd}`;
+      } else {
+        const pad = (n) => String(n).padStart(2, '0');
+        const start = `${year}-${pad(month)}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const end = `${year}-${pad(month)}-${pad(lastDay)}`;
+        url += `&startDate=${start}&endDate=${end}`;
+      }
+
+      const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMonthlySummary(data);
+      } else {
+        setMonthlySummary(null);
+      }
+    } catch (err) {
+      console.error('Error fetching monthly summary:', err);
+      setMonthlySummary(null);
+    } finally {
+      setMonthlyLoading(false);
+    }
+  };
+
+  // Detect if the user filtered a Client / Customer from the main page filter
+  const activeCustomer = useMemo(() => {
+    if (!selectedCompany) return null;
+    const target = selectedCompany.toLowerCase().trim();
+    return companiesList.find(c => c.company_name?.toLowerCase().trim() === target) ||
+           companiesList.find(c => c.company_name?.toLowerCase().includes(target)) ||
+           customerPayments.find(p => (p.customer_name || '').toLowerCase().trim() === target);
+  }, [selectedCompany, companiesList, customerPayments]);
+
+  useEffect(() => {
+    if (activeCustomer) {
+      const cId = activeCustomer.id || activeCustomer.customer_id;
+      fetchCustomerMonthlySummary(cId, startDate, endDate);
+    } else {
+      setMonthlySummary(null);
+    }
+  }, [activeCustomer, startDate, endDate]);
+
+  const statementPeriod = useMemo(() => {
+    if (startDate && endDate) {
+      return { from: startDate, to: endDate };
+    }
+    return {
+      from: monthlySummary?.startDate || '2026-10-01',
+      to: monthlySummary?.endDate || '2026-10-31'
+    };
+  }, [startDate, endDate, monthlySummary]);
+
   // 1. Normalized Unified Voucher Records
   const unifiedVouchers = useMemo(() => {
     const list = [];
@@ -179,8 +251,9 @@ const CustomerPaymentHistory = () => {
       const bank = getBankName(p) || 'Bank Account';
       const chq = getChequeNo(p);
       const ref = getRefNo(p);
-      const invoiceRef = p.invoice_no || (p.invoice_id ? `INV-#${p.invoice_id}` : null);
-      const billRef = p.so_number || invoiceRef || p.remarks?.match(/\[(?:Ref|Bill):\s*([^\]]+)\]/i)?.[1]?.trim();
+      const agstRefMatch = p.remarks?.match(/\[Agst Ref:\s*([^\]]+)\]/i)?.[1];
+      const invoiceRef = p.invoice_no || agstRefMatch || (p.invoice_id ? `INV-#${p.invoice_id}` : null);
+      const billRef = invoiceRef || p.so_number || p.remarks?.match(/\[(?:Ref|Bill):\s*([^\]]+)\]/i)?.[1]?.trim();
       const amt = parseFloat(p.payment_amount) || 0;
 
       list.push({
@@ -189,6 +262,7 @@ const CustomerPaymentHistory = () => {
         kind: 'CUSTOMER_RECEIPT',
         voucher_date: (p.payment_date || p.created_at || '').slice(0, 10),
         raw_date: p.payment_date || p.created_at,
+        created_at: p.created_at,
         voucher_type: 'Receipt',
         voucher_type_code: 'RECEIPT',
         voucher_number: p.payment_receipt_no || `PR-${p.id}`,
@@ -231,6 +305,7 @@ const CustomerPaymentHistory = () => {
         kind: 'VENDOR_PAYMENT',
         voucher_date: (p.payment_date || p.created_at || '').slice(0, 10),
         raw_date: p.payment_date || p.created_at,
+        created_at: p.created_at,
         voucher_type: 'Payment',
         voucher_type_code: 'PAYMENT',
         voucher_number: p.payment_voucher_no || `PAY-${p.id}`,
@@ -302,6 +377,7 @@ const CustomerPaymentHistory = () => {
         kind: 'JOURNAL_VOUCHER',
         voucher_date: (jv.voucher_date || jv.created_at || '').slice(0, 10),
         raw_date: jv.voucher_date || jv.created_at,
+        created_at: jv.created_at,
         voucher_type: 'Journal',
         voucher_type_code: 'JOURNAL',
         voucher_number: jv.voucher_no || `JV-${jv.id}`,
@@ -341,6 +417,7 @@ const CustomerPaymentHistory = () => {
         kind: 'CONTRA_VOUCHER',
         voucher_date: (cv.voucher_date || cv.created_at || '').slice(0, 10),
         raw_date: cv.voucher_date || cv.created_at,
+        created_at: cv.created_at,
         voucher_type: 'Contra',
         voucher_type_code: 'CONTRA',
         voucher_number: cv.voucher_no || `CV-${cv.id}`,
@@ -369,8 +446,40 @@ const CustomerPaymentHistory = () => {
       });
     });
 
-    // Sort chronologically descending
-    return list.sort((a, b) => new Date(b.raw_date) - new Date(a.raw_date));
+    // Precise multi-tier descending sort so newly created entries strictly show at the very top:
+    return list.sort((a, b) => {
+      // 1. Primary: Exact created_at timestamp descending (newest voucher strictly first)
+      const parseTime = (item) => {
+        const rawTime = item.created_at || item.raw_date || item.voucher_date;
+        if (!rawTime) return 0;
+        const ts = new Date(String(rawTime).replace(' ', 'T')).getTime();
+        return isNaN(ts) ? 0 : ts;
+      };
+
+      const timeA = parseTime(a);
+      const timeB = parseTime(b);
+
+      if (timeB !== timeA) {
+        return timeB - timeA;
+      }
+
+      // 2. Secondary: If timestamps are identical, extract numeric sequence from voucher_number
+      // (e.g. 'PR-2026-00010' -> 10 vs 'PR-2026-00009' -> 9)
+      const parseSeq = (str) => {
+        const match = String(str || '').match(/(\d+)$/);
+        return match ? parseInt(match[1], 10) : 0;
+      };
+
+      const seqA = parseSeq(a.voucher_number);
+      const seqB = parseSeq(b.voucher_number);
+
+      if (seqB !== seqA) {
+        return seqB - seqA;
+      }
+
+      // 3. Tertiary: Tiebreaker by database raw ID
+      return (Number(b.rawId) || 0) - (Number(a.rawId) || 0);
+    });
   }, [customerPayments, vendorPayments, journalVouchers, contraVouchers]);
 
   // Comprehensive Unified Search Options: Bank Name, Client/Customer, Vendor, Agst Ref, PO Number, Customer PO
@@ -897,21 +1006,22 @@ const CustomerPaymentHistory = () => {
           <div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">Payment & Voucher History</h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Comprehensive double-entry voucher register for Receipts (F6), Payments (F5), Journals (F7), and Contra (F4).
+              Comprehensive double-entry voucher register for Receipts, Payments, Journals, and Contra.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Button
-            variant="secondary"
+          <button
+            type="button"
             onClick={fetchAllVoucherData}
-            icon={RefreshCw}
-            className={loading ? 'animate-spin' : ''}
+            disabled={loading}
+            className="p-2 sm:px-3 sm:py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 border border-slate-200 hover:border-blue-200 shadow-2xs flex items-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
             title="Refresh All Vouchers"
           >
-            Refresh
-          </Button>
+            <RefreshCw className={`w-4 h-4 text-blue-600 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
         </div>
       </div>
 
@@ -934,7 +1044,7 @@ const CustomerPaymentHistory = () => {
         {/* Total Receipts */}
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">Receipts (F6)</span>
+            <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">Receipts</span>
             <ArrowDownRight className="w-3.5 h-3.5 text-emerald-600" />
           </div>
           <div className="mt-1.5">
@@ -948,7 +1058,7 @@ const CustomerPaymentHistory = () => {
         {/* Total Payments */}
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wide">Payments (F5)</span>
+            <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wide">Payments</span>
             <ArrowUpRight className="w-3.5 h-3.5 text-amber-600" />
           </div>
           <div className="mt-1.5">
@@ -962,7 +1072,7 @@ const CustomerPaymentHistory = () => {
         {/* Total Journals */}
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">Journals (F7)</span>
+            <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">Journals</span>
             <ArrowRightLeft className="w-3.5 h-3.5 text-blue-600" />
           </div>
           <div className="mt-1.5">
@@ -976,7 +1086,7 @@ const CustomerPaymentHistory = () => {
         {/* Total Contras */}
         <div className="bg-white p-3 rounded-xl border border-purple-200 bg-purple-50/20 shadow-2xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wide">Contra (F4)</span>
+            <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wide">Contra</span>
             <ArrowLeftRight className="w-3.5 h-3.5 text-purple-600" />
           </div>
           <div className="mt-1.5">
@@ -1050,10 +1160,10 @@ const CustomerPaymentHistory = () => {
               className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 h-8.5 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all text-slate-800 font-semibold cursor-pointer"
             >
               <option value="ALL">All Voucher Types</option>
-              <option value="RECEIPT">Receipt (F6)</option>
-              <option value="PAYMENT">Payment (F5)</option>
-              <option value="JOURNAL">Journal (F7)</option>
-              <option value="CONTRA">Contra (F4)</option>
+              <option value="RECEIPT">Receipt</option>
+              <option value="PAYMENT">Payment</option>
+              <option value="JOURNAL">Journal</option>
+              <option value="CONTRA">Contra</option>
             </select>
           </div>
 
@@ -1133,6 +1243,91 @@ const CustomerPaymentHistory = () => {
           className="border-none"
         />
       </div>
+
+      {/* ── Period Balance Statement (Client / Customer Reconciliation Analysis - Shown ONLY when client/customer filtered) ── */}
+      {Boolean(activeCustomer && monthlySummary) && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden mt-3 animate-in fade-in duration-300">
+          {/* Header Bar */}
+          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-l-4 border-l-blue-600">
+            <div className="flex items-center gap-2">
+              <div className="p-1 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                <Wallet className="w-3.5 h-3.5" />
+              </div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                <span>Period Balance Statement</span>
+                {monthlySummary?.monthName && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    {monthlySummary.monthName}
+                  </span>
+                )}
+              </h3>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Calendar className="w-3.5 h-3.5 text-blue-600" />
+              <span>Statement Period: <strong className="text-slate-800 font-semibold">{statementPeriod.from} to {statementPeriod.to}</strong></span>
+              <button
+                type="button"
+                onClick={() => fetchCustomerMonthlySummary(activeCustomer.id || activeCustomer.customer_id, startDate, endDate)}
+                className={`p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors ml-0.5 cursor-pointer ${monthlyLoading ? 'animate-spin' : ''}`}
+                title="Refresh statement analysis"
+                aria-label="Refresh statement analysis"
+              >
+                <RefreshCw className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* Statement Content */}
+          <div className="p-4 sm:p-6 bg-white flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="text-xs text-slate-500 max-w-md space-y-1">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                Account Statement Summary
+              </span>
+              <p className="text-slate-500 text-[11px] leading-relaxed">
+                Statement period reconciliation from <strong className="text-slate-700 font-medium">{statementPeriod.from}</strong> to <strong className="text-slate-700 font-medium">{statementPeriod.to}</strong>.
+              </p>
+              <div className="pt-1 flex items-center gap-1.5">
+                <span className="text-[11px] text-slate-400">Client / Customer:</span>
+                <span className="text-xs font-bold text-slate-800 bg-blue-50 text-blue-800 px-2 py-0.5 rounded border border-blue-200">
+                  {activeCustomer.company_name || activeCustomer.customer_name}
+                </span>
+              </div>
+            </div>
+
+            <div className="w-full md:w-auto min-w-[340px] max-w-md ml-auto divide-y divide-slate-200 bg-slate-50/60 p-4 rounded-xl border border-slate-200 shadow-2xs">
+              {/* Row 1: Opening Balance */}
+              <div className="flex items-center justify-between gap-6 py-2">
+                <span className="text-xs sm:text-sm font-semibold text-slate-700">Opening Balance :</span>
+                <span className="font-mono text-xs sm:text-sm font-bold text-slate-800 text-right">
+                  {monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.openingBalance || 0)}
+                </span>
+              </div>
+
+              {/* Row 2: Current Total */}
+              <div className="flex items-center justify-between gap-6 py-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs sm:text-sm font-semibold text-slate-700">Current Total :</span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    (Received in Period)
+                  </span>
+                </div>
+                <span className="font-mono text-xs sm:text-sm font-bold text-emerald-700 text-right">
+                  {monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.currentMonthPayments ?? 0)}
+                </span>
+              </div>
+
+              {/* Row 3: Closing Balance */}
+              <div className="flex items-center justify-between gap-6 py-2.5 bg-blue-50/50 px-3 rounded-lg border border-blue-200 mt-1">
+                <span className="text-xs sm:text-sm font-bold text-slate-900">Closing Balance :</span>
+                <span className="font-mono text-sm sm:text-base font-extrabold text-slate-900 text-right">
+                  {monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.closingBalance ?? 0)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Detailed Voucher Inspection Modal */}
       {viewingVoucher && (

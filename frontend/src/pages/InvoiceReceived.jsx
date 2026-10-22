@@ -270,14 +270,17 @@ const VendorInvoices = () => {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="secondary"
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
             onClick={fetchPOs}
-            icon={RefreshCw}
-            className={loading ? 'animate-spin' : ''}
+            disabled={loading}
+            className="p-2 sm:px-3 sm:py-2 text-xs font-semibold rounded-xl bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 border border-slate-200 hover:border-blue-200 shadow-2xs flex items-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
             title="Refresh Data"
-          />
+          >
+            <RefreshCw className={`w-4 h-4 text-blue-600 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
         </div>
       </div>
 

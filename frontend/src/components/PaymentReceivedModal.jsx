@@ -563,6 +563,19 @@ const PaymentReceivedModal = ({
     const amt = parseFloat(voucherForm.contraAmount);
     if (isNaN(amt) || amt <= 0) {
       newErrors.contraAmount = 'Valid transfer amount greater than 0 is required';
+    } else {
+      // Validate source bank balance to prevent negative balance
+      const sourceBank = bankAccounts.find(b => 
+        voucherForm.contraFromAccount.includes(b.bank_name) || 
+        (b.account_number && voucherForm.contraFromAccount.includes(b.account_number))
+      );
+      if (sourceBank) {
+        const avail = parseFloat(sourceBank.current_balance ?? sourceBank.total_balance ?? sourceBank.opening_balance) || 0;
+        if (amt > avail) {
+          const shortfall = amt - avail;
+          newErrors.contraAmount = `Insufficient balance in ${sourceBank.bank_name}! Available is ${formatCurrency(avail)}. Shortfall: ${formatCurrency(shortfall)}. Account balance cannot go negative (e.g. -₹200).`;
+        }
+      }
     }
     if (!voucherForm.date) newErrors.date = 'Date is required';
 
@@ -1441,13 +1454,20 @@ const PaymentReceivedModal = ({
     }
   };
 
-  // Receipt Validation
+  // Receipt / Payment Validation
   const validateReceiptForm = () => {
     const newErrors = {};
 
-    const activeCustId = formData.customerId || customerId || companyId || singleInvoice?.customer_id;
-    if (!activeCustId) {
-      newErrors.customerId = 'Customer is required';
+    if (voucherType === 'PAYMENT' || isVendorMode) {
+      const activeVendorId = vendorId || formData.vendorId || formData.customerId || singleInvoice?.vendor_id || (companyBillReferences.length > 0 && companyBillReferences[0].vendor_id);
+      if (!activeVendorId) {
+        newErrors.vendorId = 'Vendor is required';
+      }
+    } else {
+      const activeCustId = formData.customerId || customerId || companyId || singleInvoice?.customer_id;
+      if (!activeCustId) {
+        newErrors.customerId = 'Customer is required';
+      }
     }
 
     if (billAllocationOption === 'AGST_REF') {
@@ -1553,7 +1573,7 @@ const PaymentReceivedModal = ({
 
       // === VENDOR PAYMENT LIVE EXECUTION (POST /api/payments) ===
       if (voucherType === 'PAYMENT' || isVendorMode) {
-        const finalVendorId = vendorId || activeCustId || selectedInvoices[0]?.vendor_id;
+        const finalVendorId = vendorId || formData.vendorId || formData.customerId || activeCustId || selectedInvoices[0]?.vendor_id || companyBillReferences[0]?.vendor_id;
         if (!finalVendorId) {
           errorToast('Vendor is required for payment voucher');
           setLoading(false);
@@ -1624,6 +1644,20 @@ const PaymentReceivedModal = ({
           }];
         }
 
+        // Validate bank account balance before dispatching payment
+        if (numBankId) {
+          const bankObj = bankAccounts.find(b => b.id === numBankId);
+          if (bankObj) {
+            const avail = parseFloat(bankObj.current_balance ?? bankObj.total_balance ?? bankObj.opening_balance) || 0;
+            if (totalAmt > avail) {
+              const shortfall = totalAmt - avail;
+              errorToast(`Insufficient balance in ${bankObj.bank_name}! Available is ${formatCurrency(avail)}, requested is ${formatCurrency(totalAmt)} (shortfall: ${formatCurrency(shortfall)}). Account balance cannot go negative.`);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+
         const vNo = dynamicPaymentVoucherNo || getVoucherNumber('PAYMENT');
         const paymentPayload = {
           vendorId: parseInt(finalVendorId, 10),
@@ -1673,8 +1707,8 @@ const PaymentReceivedModal = ({
         });
 
         if (activeInvoices.length > 0) {
-          let recordedCount = 0;
           let totalRecordedAmt = 0;
+          const customerAllocations = [];
 
           for (const inv of activeInvoices) {
             const allocAmt = parseFloat(allocations[inv.id]);
@@ -1686,50 +1720,63 @@ const PaymentReceivedModal = ({
             const soId = isCustom ? null : (inv.sales_order_id ? parseInt(inv.sales_order_id, 10) : validNumId);
             const invId = isCustom ? null : (inv.invoice_id ? parseInt(inv.invoice_id, 10) : validNumId);
             const rowCustId = custId ? (parseInt(custId, 10) || custId) : null;
+            const refNo = inv.invoice_no || inv.display_invoice_no || (invId ? `INV-${invId}` : 'Manual');
 
-            const paymentPayload = {
+            totalRecordedAmt += allocAmt;
+            customerAllocations.push({
               invoiceId: invId,
               salesOrderId: soId,
               salesOrderSource: isCustom ? 'DIRECT_ORDER' : (inv.sales_order_source || inv.source || 'SALES_INVOICE'),
               customerId: rowCustId,
-              paymentAmount: allocAmt,
-              paymentDate: formData.paymentDate,
-              paymentMode: formData.paymentMode,
-              transactionRefNo: formData.transactionRefNo || formData.chequeNumber,
-              remarks: formData.remarks 
-                ? `${formData.remarks} [Agst Ref: ${inv.invoice_no || invId || 'Manual'}]` 
-                : `Payment against ${inv.invoice_no || ('Ref #' + (invId || 'Manual'))}`,
-              bankAccount: actualBank,
-              upiApp: formData.upiApp,
-              upiTransactionId: formData.upiTransactionId,
-              chequeNumber: formData.chequeNumber || formData.transactionRefNo,
-              bankName: formData.bankName,
-              chequeDate: formData.chequeDate,
-              cardType: formData.cardType,
-              last4Digits: formData.last4Digits,
-              authorizationCode: formData.authorizationCode,
-            };
-
-            const response = await fetch(`${API_BASE}/customer-payments`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(paymentPayload)
+              referenceNo: refNo,
+              type: 'Agst Ref',
+              amount: allocAmt
             });
-
-            if (!response.ok) {
-              const errorData = await response.json();
-              throw new Error(errorData.message || `Failed to record payment for bill ${inv.invoice_no || invId}`);
-            }
-
-            recordedCount += 1;
-            totalRecordedAmt += allocAmt;
           }
 
-          successToast(`Successfully recorded ${formatCurrency(totalRecordedAmt)} against ${recordedCount} invoice reference(s)`);
-          onSuccess?.();
+          const primaryCustId = customerAllocations[0]?.customerId || finalCustId;
+          const refsList = customerAllocations.map(a => a.referenceNo).join(', ');
+          const combinedRemarks = formData.remarks 
+            ? `${formData.remarks} [Agst Ref: ${refsList}]` 
+            : `Payment against [Agst Ref: ${refsList}]`;
+
+          const paymentPayload = {
+            customerId: primaryCustId,
+            paymentAmount: totalRecordedAmt,
+            paymentDate: formData.paymentDate,
+            paymentMode: formData.paymentMode,
+            transactionRefNo: formData.transactionRefNo || formData.chequeNumber,
+            remarks: combinedRemarks,
+            bankAccount: actualBank,
+            upiApp: formData.upiApp,
+            upiTransactionId: formData.upiTransactionId,
+            chequeNumber: formData.chequeNumber || formData.transactionRefNo,
+            bankName: formData.bankName,
+            chequeDate: formData.chequeDate,
+            cardType: formData.cardType,
+            last4Digits: formData.last4Digits,
+            authorizationCode: formData.authorizationCode,
+            allocations: customerAllocations
+          };
+
+          const response = await fetch(`${API_BASE}/customer-payments`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(paymentPayload)
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Failed to record customer receipt voucher');
+          }
+
+          const result = await response.json();
+          const receiptNo = result.data?.paymentReceiptNo || result.paymentReceiptNo || 'Receipt';
+          successToast(`Successfully recorded voucher ${receiptNo} for ${formatCurrency(totalRecordedAmt)} against ${customerAllocations.length} invoice reference(s)`);
+          onSuccess?.(result);
           onClose();
           return;
         }
@@ -3055,7 +3102,7 @@ const PaymentReceivedModal = ({
                       <option value="">Select Company Bank Account</option>
                       {bankAccounts.map(b => (
                         <option key={b.id} value={b.id}>
-                          {b.bank_name} {b.account_number ? `(${b.account_number})` : ''} {b.branch_name || b.branch ? `• ${b.branch_name || b.branch}` : ''}
+                          {b.bank_name} {b.account_number ? `(${b.account_number})` : ''} • Bal: {formatCurrency(b.current_balance ?? b.total_balance ?? b.opening_balance)}
                         </option>
                       ))}
                       <option value="__custom__">Manual / Other Bank Details...</option>
@@ -3080,6 +3127,51 @@ const PaymentReceivedModal = ({
                       placeholder="Type bank account name / details"
                     />
                   )}
+
+                  {/* Selected Bank Live Balances, Credits, Debits & Overdraft Guard */}
+                  {(() => {
+                    const selBank = bankAccounts.find(b => String(b.id) === String(formData.bankAccount));
+                    if (!selBank) return null;
+                    const liveBal = parseFloat(selBank.current_balance ?? selBank.total_balance ?? selBank.opening_balance) || 0;
+                    const effectiveAmount = parseFloat(totalAllocated || formData.paymentAmount) || 0;
+                    const isOverdraft = (voucherType === 'PAYMENT' || isVendorMode) && (effectiveAmount > liveBal);
+                    const shortfall = effectiveAmount - liveBal;
+
+                    return (
+                      <div className={`mt-2 p-2.5 rounded-xl border text-xs transition-all shadow-2xs ${
+                        isOverdraft ? 'bg-rose-50/90 border-rose-300' : 'bg-slate-50 border-slate-200'
+                      }`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                            Live Available Balance
+                          </span>
+                          <span className={`font-mono font-bold text-sm ${liveBal < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                            {formatCurrency(liveBal)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] font-mono border-t border-slate-200/60 pt-1 text-slate-600">
+                          <span className="text-emerald-700 font-bold" title="Total Inflow / Receipts">
+                            Cr (Inflow): +{formatCurrency(selBank.total_credits || 0)}
+                          </span>
+                          <span className="text-rose-700 font-bold" title="Total Outflow / Payments">
+                            Dr (Outflow): -{formatCurrency(selBank.total_debits || 0)}
+                          </span>
+                        </div>
+
+                        {/* Insufficient Balance Alert */}
+                        {isOverdraft && (
+                          <div className="mt-2 p-2 rounded-lg bg-rose-100 border border-rose-300 text-rose-800 text-[11px] flex items-start gap-1.5 leading-tight">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                            <div>
+                              <strong className="font-bold">Insufficient Balance:</strong> Shortfall of <span className="font-mono font-bold">{formatCurrency(shortfall)}</span>. Bank account cannot go negative (e.g. -₹200). Please select another bank account or reduce the payment amount.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {errors.bankAccount && <span className="text-xs text-rose-600 mt-1 block">{errors.bankAccount}</span>}
                 </div>
               )}
@@ -3271,26 +3363,44 @@ const PaymentReceivedModal = ({
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  onClick={handleReceiptSubmit}
-                  disabled={loading}
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 active:scale-[0.98]"
-                >
-                  {loading ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>{voucherType === 'PAYMENT' ? 'Recording Payment...' : 'Recording Receipt...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4" />
-                      <span>
-                        Save & Record Payment ({formatCurrency(totalAllocated || parseFloat(formData.paymentAmount) || 0)})
-                      </span>
-                    </>
-                  )}
-                </button>
+                {(() => {
+                  const selBank = bankAccounts.find(b => String(b.id) === String(formData.bankAccount));
+                  const liveBal = selBank ? (parseFloat(selBank.current_balance ?? selBank.total_balance ?? selBank.opening_balance) || 0) : null;
+                  const effectiveAmount = parseFloat(totalAllocated || formData.paymentAmount) || 0;
+                  const isInsufficient = (voucherType === 'PAYMENT' || isVendorMode) && selBank && (effectiveAmount > liveBal);
+
+                  return (
+                    <button
+                      type="button"
+                      onClick={handleReceiptSubmit}
+                      disabled={loading || isInsufficient}
+                      className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
+                        isInsufficient
+                          ? 'bg-rose-500 text-white cursor-not-allowed opacity-85'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/25 active:scale-[0.98] cursor-pointer'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {loading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>{voucherType === 'PAYMENT' ? 'Recording Payment...' : 'Recording Receipt...'}</span>
+                        </>
+                      ) : isInsufficient ? (
+                        <>
+                          <AlertCircle className="w-4 h-4" />
+                          <span>Insufficient Balance ({formatCurrency(effectiveAmount)})</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>
+                            Save & Record Payment ({formatCurrency(totalAllocated || parseFloat(formData.paymentAmount) || 0)})
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -3727,10 +3837,24 @@ const PaymentReceivedModal = ({
                     <option value="Petty Cash Account">Petty Cash Account</option>
                     {bankAccounts.map(b => (
                       <option key={`from_${b.id}`} value={`${b.bank_name} (${b.account_number})`}>
-                        {b.bank_name} ({b.account_number}) — Bal: ₹{parseFloat(b.opening_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {b.bank_name} ({b.account_number}) — Bal: ₹{parseFloat(b.current_balance ?? b.total_balance ?? b.opening_balance ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </option>
                     ))}
                   </select>
+                  {(() => {
+                    const srcBank = bankAccounts.find(b => 
+                      voucherForm.contraFromAccount.includes(b.bank_name) || 
+                      (b.account_number && voucherForm.contraFromAccount.includes(b.account_number))
+                    );
+                    if (!srcBank) return null;
+                    const bal = parseFloat(srcBank.current_balance ?? srcBank.total_balance ?? srcBank.opening_balance) || 0;
+                    return (
+                      <div className="mt-1 text-[10px] font-mono text-slate-500 flex justify-between">
+                        <span className="text-emerald-700 font-bold">Avail: {formatCurrency(bal)}</span>
+                        <span>Cr: +{formatCurrency(srcBank.total_credits || 0)} | Dr: -{formatCurrency(srcBank.total_debits || 0)}</span>
+                      </div>
+                    );
+                  })()}
                   {voucherErrors.contraFromAccount && <span className="text-[10px] text-rose-600 font-semibold">{voucherErrors.contraFromAccount}</span>}
                 </div>
                 <div>
@@ -3745,7 +3869,7 @@ const PaymentReceivedModal = ({
                     <option value="Petty Cash Account">Petty Cash Account</option>
                     {bankAccounts.map(b => (
                       <option key={`to_${b.id}`} value={`${b.bank_name} (${b.account_number})`}>
-                        {b.bank_name} ({b.account_number}) — Bal: ₹{parseFloat(b.opening_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {b.bank_name} ({b.account_number}) — Bal: ₹{parseFloat(b.current_balance ?? b.total_balance ?? b.opening_balance ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </option>
                     ))}
                   </select>

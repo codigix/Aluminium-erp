@@ -213,7 +213,8 @@ model customer_payments {
   companies           companies                             @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "customer_payments_ibfk_1")
   bank_accounts       bank_accounts?                        @relation(fields: [bank_account_id], references: [id], onUpdate: NoAction, map: "customer_payments_ibfk_2")
   users               users?                                @relation(fields: [created_by], references: [id], onUpdate: NoAction, map: "customer_payments_ibfk_3")
-  payment_receipts    payment_receipts[]
+  payment_receipts              payment_receipts[]
+  customer_payment_allocations  customer_payment_allocations[]
 
   @@index([bank_account_id], map: "bank_account_id")
   @@index([created_by], map: "created_by")
@@ -2895,4 +2896,44 @@ model contra_vouchers {
   @@index([voucher_date], map: "idx_contra_voucher_date")
   @@index([voucher_no], map: "idx_contra_voucher_no")
 }
+
+model customer_payment_allocations {
+  id                  Int               @id @default(autoincrement())
+  customer_payment_id Int
+  receipt_no          String            @db.VarChar(100)
+  customer_id         Int
+  invoice_id          Int?
+  sales_order_id      Int?
+  sales_order_source  String?           @default("SALES_INVOICE") @db.VarChar(50)
+  allocation_type     String?           @default("Agst Ref") @db.VarChar(50)
+  reference_no        String?           @db.VarChar(100)
+  amount              Decimal           @db.Decimal(14, 2)
+  created_at          DateTime?         @default(now()) @db.Timestamp(0)
+  customer_payments   customer_payments @relation(fields: [customer_payment_id], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "customer_payment_allocations_payment_fk")
+
+  @@index([customer_payment_id], map: "idx_cpa_pmt_id")
+  @@index([receipt_no], map: "idx_cpa_receipt_no")
+  @@index([invoice_id], map: "idx_cpa_invoice_id")
+  @@index([sales_order_id], map: "idx_cpa_so_id")
+  @@index([customer_id], map: "idx_cpa_cust_id")
+}
+
+model payment_allocations {
+  id              Int       @id @default(autoincrement())
+  payment_id      Int
+  voucher_no      String    @db.VarChar(100)
+  vendor_id       Int
+  po_id           Int?
+  invoice_id      Int?
+  allocation_type String?   @default("Agst Ref") @db.VarChar(50)
+  reference_no    String?   @db.VarChar(100)
+  amount          Decimal   @db.Decimal(14, 2)
+  created_at      DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([payment_id], map: "idx_payment_id")
+  @@index([voucher_no], map: "idx_voucher_no")
+  @@index([po_id], map: "idx_po_id")
+  @@index([vendor_id], map: "idx_vendor_id")
+}
+
 
