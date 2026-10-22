@@ -185,36 +185,48 @@ const PaymentReceived = () => {
   const handleDeleteInvoice = async (row) => {
     const docRef = row.invoice_no || row.so_number || `ID: ${row.id}`;
     const result = await Swal.fire({
-      title: 'Are you sure?',
-      text: `Do you want to delete this invoice (${docRef})?`,
+      title: 'Remove from Customer Invoices?',
+      text: `Invoice ${docRef} will be removed from Customer Invoices and reverted to Sales as 'Created'. It will NOT be deleted from the Sales Invoice page.`,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Yes, delete it!'
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: 'Yes, Remove Entry',
+      cancelButtonText: 'Cancel'
     });
 
     if (result.isConfirmed) {
       try {
         setLoading(true);
         const token = localStorage.getItem('authToken');
-        const endpoint = row.source === 'SALES_INVOICE'
-          ? `${API_BASE}/sales-invoices/${row.id}`
-          : row.source === 'SALES_ORDER'
-          ? `${API_BASE}/sales-orders/${row.id}`
-          : `${API_BASE}/order/${row.id}`;
+        let endpoint = '';
+        let method = 'POST';
+
+        if (row.source === 'SALES_INVOICE' || !row.source) {
+          endpoint = `${API_BASE}/sales-invoices/${row.id}/revert-from-accounts`;
+          method = 'POST';
+        } else if (row.source === 'SALES_ORDER') {
+          endpoint = `${API_BASE}/sales-orders/${row.id}`;
+          method = 'DELETE';
+        } else {
+          endpoint = `${API_BASE}/order/${row.id}`;
+          method = 'DELETE';
+        }
 
         const response = await fetch(endpoint, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
+          method,
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
 
         if (response.ok) {
-          successToast('Invoice has been deleted');
+          successToast('Invoice entry removed from Customer Invoices and reverted to Sales');
           fetchOutstandingInvoices();
         } else {
           const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.message || errData.error || 'Failed to delete invoice');
+          throw new Error(errData.message || errData.error || 'Failed to remove invoice');
         }
       } catch (err) {
         errorToast(err.message);
@@ -318,7 +330,7 @@ const PaymentReceived = () => {
           <button
             onClick={() => handleDeleteInvoice(row)}
             className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm cursor-pointer"
-            title="Delete Invoice"
+            title="Remove from Accounts & Revert to Sales"
           >
             <Trash2 className="w-4 h-4 group-hover:scale-110" />
           </button>

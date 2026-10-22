@@ -113,6 +113,15 @@ const sendInvoiceToAccounts = async (req, res, next) => {
   }
 };
 
+const revertInvoiceFromAccounts = async (req, res, next) => {
+  try {
+    const result = await salesInvoiceService.revertInvoiceFromAccounts(req.params.id);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAvailableSalesOrders,
   getOrderDetailsForInvoice,
@@ -123,5 +132,6 @@ module.exports = {
   getSalesInvoiceById,
   deleteSalesInvoice,
   generateSalesInvoicePDF,
-  sendInvoiceToAccounts
+  sendInvoiceToAccounts,
+  revertInvoiceFromAccounts
 };

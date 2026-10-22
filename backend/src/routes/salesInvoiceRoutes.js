@@ -11,6 +11,7 @@ router.post('/', authorize(['ORDER_CREATE', 'ORDER_EDIT', 'PAYMENT_PROCESS']), s
 router.put('/:id', authorize(['ORDER_CREATE', 'ORDER_EDIT', 'PAYMENT_PROCESS']), salesInvoiceController.updateSalesInvoice);
 router.get('/:id/pdf', authorize(['ORDER_VIEW', 'PAYMENT_VIEW']), salesInvoiceController.generateSalesInvoicePDF);
 router.post('/:id/send-to-accounts', authorize(['ORDER_CREATE', 'ORDER_EDIT', 'PAYMENT_PROCESS', 'ORDER_VIEW']), salesInvoiceController.sendInvoiceToAccounts);
+router.post('/:id/revert-from-accounts', authorize(['ORDER_CREATE', 'ORDER_EDIT', 'PAYMENT_PROCESS', 'PAYMENT_EDIT', 'ORDER_VIEW']), salesInvoiceController.revertInvoiceFromAccounts);
 router.get('/:id', authorize(['ORDER_VIEW', 'PAYMENT_VIEW']), salesInvoiceController.getSalesInvoiceById);
 router.delete('/:id', authorize(['ORDER_EDIT', 'PAYMENT_EDIT']), salesInvoiceController.deleteSalesInvoice);
 

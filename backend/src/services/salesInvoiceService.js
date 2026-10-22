@@ -1636,6 +1636,63 @@ const sendInvoiceToAccounts = async (invoiceId, userId = null) => {
   };
 };
 
+const revertInvoiceFromAccounts = async (invoiceId) => {
+  const [rows] = await pool.query('SELECT * FROM sales_invoices WHERE id = ?', [invoiceId]);
+  if (rows.length === 0) {
+    throw new Error('Sales Invoice not found');
+  }
+
+  const invoice = rows[0];
+
+  // Decouple any existing allocations or direct payments from this invoice so it can be cleanly reverted
+  await pool.query(
+    'UPDATE customer_payment_allocations SET invoice_id = NULL WHERE invoice_id = ?',
+    [invoiceId]
+  );
+  await pool.query(
+    `UPDATE customer_payment_allocations 
+     SET sales_order_id = NULL 
+     WHERE sales_order_id = ? AND sales_order_source = 'SALES_INVOICE'`,
+    [invoiceId]
+  );
+  await pool.query(
+    'UPDATE customer_payments SET invoice_id = NULL WHERE invoice_id = ?',
+    [invoiceId]
+  );
+  await pool.query(
+    `UPDATE customer_payments 
+     SET sales_order_id = NULL 
+     WHERE sales_order_id = ? AND sales_order_source = 'SALES_INVOICE'`,
+    [invoiceId]
+  );
+
+  // Revert back to Created status and clear sent_to_accounts:
+  // This removes the entry from Customer Invoices page, while keeping the sales invoice intact in Sales Invoices page!
+  await pool.query(
+    `UPDATE sales_invoices 
+     SET sent_to_accounts = 0,
+         sent_to_accounts_at = NULL,
+         status = 'Created',
+         updated_at = NOW()
+     WHERE id = ?`,
+    [invoiceId]
+  );
+
+  const [updatedRows] = await pool.query(`
+    SELECT si.*, o.order_no, c.company_name AS client_name
+    FROM sales_invoices si
+    JOIN orders o ON o.id = si.order_id
+    JOIN companies c ON c.id = si.client_id
+    WHERE si.id = ?
+  `, [invoiceId]);
+
+  return {
+    success: true,
+    message: `Invoice ${invoice.invoice_no} has been reverted to Sales department in 'Created' status`,
+    data: updatedRows[0]
+  };
+};
+
 module.exports = {
   getNextInvoiceNo,
   getAvailableSalesOrders,
@@ -1646,5 +1703,6 @@ module.exports = {
   getSalesInvoiceById,
   deleteSalesInvoice,
   generateSalesInvoicePDF,
-  sendInvoiceToAccounts
+  sendInvoiceToAccounts,
+  revertInvoiceFromAccounts
 };
