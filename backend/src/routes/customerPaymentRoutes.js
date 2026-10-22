@@ -1,7 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const customerPaymentController = require('../controllers/customerPaymentController');
+const creditNoteController = require('../controllers/creditNoteController');
 const { authorize } = require('../middleware/authMiddleware');
+
+// Credit Notes (registered before '/:paymentId' routes)
+router.get('/credit-notes/sources', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS']), creditNoteController.getCreditNoteSources);
+router.get('/credit-notes/next-voucher-no', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS']), creditNoteController.getNextCreditNoteNo);
+router.post('/credit-notes', authorize(['PAYMENT_PROCESS']), creditNoteController.recordCreditNote);
+router.get('/credit-notes', authorize(['PAYMENT_VIEW']), creditNoteController.getCreditNotes);
+router.post('/credit-notes/:id/cancel', authorize(['PAYMENT_EDIT']), creditNoteController.cancelCreditNote);
 
 router.post('/', authorize(['PAYMENT_PROCESS']), customerPaymentController.recordPaymentReceived);
 router.get('/', authorize(['PAYMENT_VIEW']), customerPaymentController.getPaymentsReceived);

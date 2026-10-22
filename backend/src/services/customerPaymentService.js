@@ -576,7 +576,7 @@ const getOutstandingInvoices = async (customerId) => {
       si.total_amount as total_amount,
       (COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = si.id AND cp.status = 'CONFIRMED'), 0) +
        COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0)) as paid_amount,
-      (si.total_amount - (COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = si.id AND cp.status = 'CONFIRMED'), 0) +
+      (si.total_amount - COALESCE((SELECT SUM(cn.total_amount) FROM credit_notes cn WHERE cn.sales_invoice_id = si.id AND cn.status = 'POSTED'), 0) - (COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = si.id AND cp.status = 'CONFIRMED'), 0) +
        COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0))) as outstanding,
       CONVERT('SALES_INVOICE' USING utf8mb4) as source,
       si.created_at,
@@ -611,7 +611,7 @@ const getAllOutstandingInvoices = async () => {
       si.total_amount as total_amount,
       (COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = si.id AND cp.status = 'CONFIRMED'), 0) +
        COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0)) as paid_amount,
-      (si.total_amount - (COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = si.id AND cp.status = 'CONFIRMED'), 0) +
+      (si.total_amount - COALESCE((SELECT SUM(cn.total_amount) FROM credit_notes cn WHERE cn.sales_invoice_id = si.id AND cn.status = 'POSTED'), 0) - (COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = si.id AND cp.status = 'CONFIRMED'), 0) +
        COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0))) as outstanding,
       CONVERT('SALES_INVOICE' USING utf8mb4) as source,
       si.created_at,

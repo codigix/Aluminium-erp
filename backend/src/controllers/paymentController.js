@@ -215,7 +215,67 @@ const getContraVouchers = async (req, res, next) => {
   }
 };
 
+const getDebitNoteSources = async (req, res, next) => {
+  try {
+    const sources = await paymentService.getDebitNoteSources(req.query.vendorId);
+    res.json(sources);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getNextDebitNoteNo = async (req, res, next) => {
+  try {
+    const voucherNo = await paymentService.generateNextDebitNoteNo();
+    res.json({ voucherNo });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const recordDebitNote = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    const result = await paymentService.recordDebitNote({
+      ...req.body,
+      createdBy: userId
+    });
+    res.status(201).json({
+      message: 'Debit note posted successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getDebitNotes = async (req, res, next) => {
+  try {
+    const debitNotes = await paymentService.getDebitNotes(req.query.vendorId || null);
+    res.json(debitNotes);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const cancelDebitNote = async (req, res, next) => {
+  try {
+    const result = await paymentService.cancelDebitNote(req.params.id);
+    res.json({
+      message: 'Debit note cancelled successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
+  getDebitNoteSources,
+  getNextDebitNoteNo,
+  recordDebitNote,
+  getDebitNotes,
+  cancelDebitNote,
   getNextVoucherNo,
   getNextJournalVoucherNo,
   recordJournalVoucher,

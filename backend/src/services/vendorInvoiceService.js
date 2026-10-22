@@ -1,7 +1,15 @@
 const pool = require('../config/db');
 
-const getVendorInvoices = async (vendorId = null) => {
-  let query = `SELECT 
+// Shared SQL fragments: bill amount, confirmed payments and posted debit notes against a vendor bill
+const BILL_AMOUNT_SQL = `(CASE WHEN CAST(vi.invoice_amount AS DECIMAL(14,2)) > 0 THEN vi.invoice_amount ELSE vi.po_amount END)`;
+const PAID_SQL = `(
+        COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = vi.po_id AND p.status = 'CONFIRMED'), 0) +
+        COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = vi.po_id AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0)
+      )`;
+// Includes DNs raised against the PO before it was forwarded to Accounts as a bill
+const DEBIT_NOTE_SQL = `COALESCE((SELECT SUM(dn.total_amount) FROM debit_notes dn WHERE dn.status = 'POSTED' AND (dn.vendor_invoice_id = vi.id OR (dn.vendor_invoice_id IS NULL AND dn.po_id = vi.po_id))), 0)`;
+
+const VENDOR_INVOICE_SELECT = `SELECT
       vi.id,
       vi.po_id,
       vi.po_number,
@@ -18,30 +26,26 @@ const getVendorInvoices = async (vendorId = null) => {
       COALESCE(vi.invoice_date, vi.po_date, vi.created_at) as bill_date,
       vi.invoice_date,
       vi.invoice_amount,
-      CASE WHEN CAST(vi.invoice_amount AS DECIMAL(14,2)) > 0 THEN vi.invoice_amount ELSE vi.po_amount END as bill_amount,
+      ${BILL_AMOUNT_SQL} as bill_amount,
       vi.gst_amount,
       vi.invoice_pdf_path,
       vi.created_at,
       vi.updated_at,
       v.vendor_name,
       v.email as vendor_email,
-      (
-        COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = vi.po_id AND p.status = 'CONFIRMED'), 0) +
-        COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = vi.po_id AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0)
-      ) as already_paid,
-      ((CASE WHEN CAST(vi.invoice_amount AS DECIMAL(14,2)) > 0 THEN vi.invoice_amount ELSE vi.po_amount END) - (
-        COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = vi.po_id AND p.status = 'CONFIRMED'), 0) +
-        COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = vi.po_id AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0)
-      )) as outstanding,
-      CASE 
-        WHEN ((CASE WHEN CAST(vi.invoice_amount AS DECIMAL(14,2)) > 0 THEN vi.invoice_amount ELSE vi.po_amount END) - (
-          COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = vi.po_id AND p.status = 'CONFIRMED'), 0) +
-          COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = vi.po_id AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0)
-        )) <= 0 THEN 'COMPLETED'
-        ELSE vi.status 
+      v.gstin as vendor_gstin,
+      ${PAID_SQL} as already_paid,
+      ${DEBIT_NOTE_SQL} as debit_note_amount,
+      (${BILL_AMOUNT_SQL} - ${PAID_SQL} - ${DEBIT_NOTE_SQL}) as outstanding,
+      CASE
+        WHEN (${BILL_AMOUNT_SQL} - ${PAID_SQL} - ${DEBIT_NOTE_SQL}) <= 0 THEN 'COMPLETED'
+        ELSE vi.status
       END as status
      FROM vendor_invoices vi
      JOIN vendors v ON vi.vendor_id = v.id`;
+
+const getVendorInvoices = async (vendorId = null) => {
+  let query = VENDOR_INVOICE_SELECT;
 
   const params = [];
   if (vendorId) {
@@ -56,47 +60,7 @@ const getVendorInvoices = async (vendorId = null) => {
 
 const getVendorInvoiceById = async (id) => {
   const [invoices] = await pool.query(
-    `SELECT 
-      vi.id,
-      vi.po_id,
-      vi.po_number,
-      vi.po_date,
-      vi.vendor_id,
-      vi.project_name,
-      vi.mr_number,
-      vi.drawing_no,
-      vi.payment_terms,
-      vi.po_pdf_path,
-      vi.po_amount,
-      COALESCE(NULLIF(vi.vendor_invoice_no, ''), vi.po_number, CONCAT('BILL-', vi.id)) as display_invoice_no,
-      vi.vendor_invoice_no,
-      COALESCE(vi.invoice_date, vi.po_date, vi.created_at) as bill_date,
-      vi.invoice_date,
-      vi.invoice_amount,
-      CASE WHEN CAST(vi.invoice_amount AS DECIMAL(14,2)) > 0 THEN vi.invoice_amount ELSE vi.po_amount END as bill_amount,
-      vi.gst_amount,
-      vi.invoice_pdf_path,
-      vi.created_at,
-      vi.updated_at,
-      v.vendor_name,
-      v.email as vendor_email,
-      (
-        COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = vi.po_id AND p.status = 'CONFIRMED'), 0) +
-        COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = vi.po_id AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0)
-      ) as already_paid,
-      ((CASE WHEN CAST(vi.invoice_amount AS DECIMAL(14,2)) > 0 THEN vi.invoice_amount ELSE vi.po_amount END) - (
-        COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = vi.po_id AND p.status = 'CONFIRMED'), 0) +
-        COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = vi.po_id AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0)
-      )) as outstanding,
-      CASE 
-        WHEN ((CASE WHEN CAST(vi.invoice_amount AS DECIMAL(14,2)) > 0 THEN vi.invoice_amount ELSE vi.po_amount END) - (
-          COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = vi.po_id AND p.status = 'CONFIRMED'), 0) +
-          COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = vi.po_id AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0)
-        )) <= 0 THEN 'COMPLETED'
-        ELSE vi.status 
-      END as status
-     FROM vendor_invoices vi
-     JOIN vendors v ON vi.vendor_id = v.id
+    `${VENDOR_INVOICE_SELECT}
      WHERE vi.id = ?`,
     [id]
   );
@@ -119,10 +83,29 @@ const getVendorInvoiceById = async (id) => {
     [invoice.po_id, invoice.po_id, invoice.po_id]
   );
 
+  // Posted debit notes on this bill and quantity already returned per PO item
+  const [debitNotes] = await pool.query(
+    `SELECT id, voucher_no, voucher_date, reason, total_amount, status
+     FROM debit_notes WHERE vendor_invoice_id = ? OR (vendor_invoice_id IS NULL AND po_id = ?)
+     ORDER BY voucher_date DESC, id DESC`,
+    [id, invoice.po_id]
+  );
+  const [returnedRows] = await pool.query(
+    `SELECT dni.po_item_id, SUM(dni.quantity) as returned_qty
+     FROM debit_note_items dni
+     JOIN debit_notes dn ON dni.debit_note_id = dn.id
+     JOIN purchase_order_items poi ON poi.id = dni.po_item_id
+     WHERE poi.purchase_order_id = ? AND dn.status = 'POSTED'
+     GROUP BY dni.po_item_id`,
+    [invoice.po_id]
+  );
+  const returnedMap = new Map(returnedRows.map(r => [r.po_item_id, parseFloat(r.returned_qty) || 0]));
+
   return {
     ...invoice,
-    items,
-    payments
+    items: items.map(it => ({ ...it, returned_qty: returnedMap.get(it.id) || 0 })),
+    payments,
+    debit_notes: debitNotes
   };
 };
 

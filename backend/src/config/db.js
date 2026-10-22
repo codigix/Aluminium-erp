@@ -3182,7 +3182,110 @@ const ensureAccountingTables = async () => {
         INDEX idx_contra_voucher_no (voucher_no)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('Accounting tables (journal_vouchers, contra_vouchers) synchronized');
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS debit_notes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        voucher_no VARCHAR(50) NOT NULL,
+        voucher_date DATE NOT NULL,
+        vendor_id INT NOT NULL,
+        vendor_invoice_id INT NULL,
+        po_id INT NULL,
+        reference_invoice_no VARCHAR(100) NULL,
+        reason VARCHAR(50) NOT NULL DEFAULT 'PURCHASE_RETURN',
+        entry_mode VARCHAR(20) NOT NULL DEFAULT 'ITEM',
+        affected_ledger VARCHAR(255) NOT NULL DEFAULT 'Purchase Returns',
+        gst_type VARCHAR(20) NOT NULL DEFAULT 'INTRA',
+        taxable_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        cgst_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        sgst_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        igst_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        total_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        narration TEXT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'POSTED',
+        cancelled_at TIMESTAMP NULL,
+        created_by INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE INDEX uq_debit_note_voucher_no (voucher_no),
+        INDEX idx_dn_vendor (vendor_id),
+        INDEX idx_dn_invoice (vendor_invoice_id),
+        INDEX idx_dn_po (po_id),
+        INDEX idx_dn_date (voucher_date)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS debit_note_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        debit_note_id INT NOT NULL,
+        po_item_id INT NULL,
+        item_code VARCHAR(120) NULL,
+        description VARCHAR(500) NULL,
+        quantity DECIMAL(14, 3) NOT NULL DEFAULT 0.000,
+        unit VARCHAR(20) NULL,
+        rate DECIMAL(14, 2) NOT NULL DEFAULT 0.00,
+        gst_percent DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
+        taxable_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        gst_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        total_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_dni_note (debit_note_id),
+        INDEX idx_dni_po_item (po_item_id),
+        CONSTRAINT debit_note_items_dn_fk FOREIGN KEY (debit_note_id) REFERENCES debit_notes(id) ON DELETE CASCADE ON UPDATE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS credit_notes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        voucher_no VARCHAR(50) NOT NULL,
+        voucher_date DATE NOT NULL,
+        customer_id INT NOT NULL,
+        sales_invoice_id INT NULL,
+        reference_invoice_no VARCHAR(100) NULL,
+        reason VARCHAR(50) NOT NULL DEFAULT 'SALES_RETURN',
+        entry_mode VARCHAR(20) NOT NULL DEFAULT 'ITEM',
+        affected_ledger VARCHAR(255) NOT NULL DEFAULT 'Sales Returns',
+        gst_type VARCHAR(20) NOT NULL DEFAULT 'INTRA',
+        taxable_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        cgst_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        sgst_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        igst_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        total_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        narration TEXT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'POSTED',
+        cancelled_at TIMESTAMP NULL,
+        created_by INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE INDEX uq_credit_note_voucher_no (voucher_no),
+        INDEX idx_cn_customer (customer_id),
+        INDEX idx_cn_invoice (sales_invoice_id),
+        INDEX idx_cn_date (voucher_date)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS credit_note_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        credit_note_id INT NOT NULL,
+        sales_invoice_item_id INT NULL,
+        drawing_no VARCHAR(120) NULL,
+        item_code VARCHAR(120) NULL,
+        description VARCHAR(500) NULL,
+        quantity DECIMAL(14, 3) NOT NULL DEFAULT 0.000,
+        unit VARCHAR(20) NULL,
+        rate DECIMAL(14, 2) NOT NULL DEFAULT 0.00,
+        gst_percent DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
+        taxable_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        gst_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        total_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_cni_note (credit_note_id),
+        INDEX idx_cni_invoice_item (sales_invoice_item_id),
+        CONSTRAINT credit_note_items_cn_fk FOREIGN KEY (credit_note_id) REFERENCES credit_notes(id) ON DELETE CASCADE ON UPDATE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log('Accounting tables (journal_vouchers, contra_vouchers, debit_notes, credit_notes) synchronized');
   } catch (error) {
     console.error('Error synchronizing accounting tables:', error.message);
   } finally {

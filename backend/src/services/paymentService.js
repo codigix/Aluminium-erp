@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const emailService = require('./emailService');
 const bankAccountService = require('./bankAccountService');
+const vendorInvoiceService = require('./vendorInvoiceService');
 
 const generatePaymentVoucherNo = async () => {
   const year = new Date().getFullYear();
@@ -1938,7 +1939,402 @@ const getContraVouchers = async () => {
   return rows;
 };
 
+const DEBIT_NOTE_REASONS = {
+  PURCHASE_RETURN: 'Purchase Return',
+  SHORTAGE: 'Short Supply / Shortage',
+  RATE_DIFFERENCE: 'Rate Difference',
+  QUALITY_REJECTION: 'Quality Rejection',
+  DAMAGE: 'Damaged in Transit',
+  OTHER: 'Other Adjustment'
+};
+
+const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+// errorHandler reads err.status
+const badRequest = (message) => {
+  const error = new Error(message);
+  error.status = 400;
+  return error;
+};
+
+const generateNextDebitNoteNo = async () => {
+  const year = new Date().getFullYear();
+  const [rows] = await pool.query(
+    `SELECT voucher_no FROM debit_notes WHERE voucher_no LIKE ?`,
+    [`DN-${year}-%`]
+  );
+  let maxSeq = 0;
+  for (const r of rows) {
+    const match = r.voucher_no && r.voucher_no.match(/DN-\d+-(\d+)/i);
+    if (match) {
+      const seq = parseInt(match[1], 10);
+      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return `DN-${year}-${String(maxSeq + 1).padStart(4, '0')}`;
+};
+
+// PO items with received (GRN), rejected and already-returned (posted DN) quantities
+const getPoItemsWithReturns = async (poIds) => {
+  if (!poIds.length) return [];
+  const [rows] = await pool.query(
+    `SELECT poi.*, COALESCE(poi.unit, poi.uom) as unit,
+            COALESCE(g.received_qty, 0) as received_qty,
+            COALESCE(g.accepted_qty, 0) as accepted_qty,
+            COALESCE(g.rejected_qty, 0) as rejected_qty,
+            COALESCE(r.returned_qty, 0) as returned_qty
+     FROM purchase_order_items poi
+     LEFT JOIN (
+       -- For weight-billed items GRN stores pieces in received_qty and the PO-unit quantity (Kg) in received_weight
+       SELECT gi.po_item_id,
+              CASE WHEN SUM(gi.received_weight) > 0 THEN SUM(gi.received_weight) ELSE SUM(gi.received_qty) END as received_qty,
+              SUM(gi.accepted_qty) as accepted_qty, SUM(gi.rejected_qty) as rejected_qty
+       FROM grn_items gi
+       JOIN purchase_order_items p2 ON p2.id = gi.po_item_id
+       WHERE p2.purchase_order_id IN (?)
+       GROUP BY gi.po_item_id
+     ) g ON g.po_item_id = poi.id
+     LEFT JOIN (
+       SELECT dni.po_item_id, SUM(dni.quantity) as returned_qty
+       FROM debit_note_items dni
+       JOIN debit_notes dn ON dn.id = dni.debit_note_id
+       WHERE dn.status = 'POSTED' AND dni.po_item_id IS NOT NULL
+       GROUP BY dni.po_item_id
+     ) r ON r.po_item_id = poi.id
+     WHERE poi.purchase_order_id IN (?)
+     ORDER BY poi.purchase_order_id, poi.id`,
+    [poIds, poIds]
+  );
+  const round3 = (n) => Math.round(n * 1000) / 1000;
+  return rows.map(it => {
+    const poQty = parseFloat(it.quantity) || 0;
+    const received = parseFloat(it.received_qty) || 0;
+    const returned = parseFloat(it.returned_qty) || 0;
+    return {
+      ...it,
+      // Goods received (GRN) when available, otherwise the billed/ordered qty
+      returnable_qty: Math.max(0, round3((received > 0 ? received : poQty) - returned)),
+      // Shortage is claimed against ordered/billed qty that never arrived
+      shortage_claimable_qty: Math.max(0, round3(poQty - received - returned))
+    };
+  });
+};
+
+const getItemLimit = (item, reason) =>
+  reason === 'SHORTAGE' ? item.shortage_claimable_qty : item.returnable_qty;
+
+// Purchases of a supplier that a debit note can be raised against (received goods and/or billed POs)
+const getDebitNoteSources = async (vendorId) => {
+  if (!vendorId) throw badRequest('vendorId is required.');
+  const [pos] = await pool.query(
+    `SELECT id, po_number, status, total_amount, created_at
+     FROM purchase_orders
+     WHERE vendor_id = ? AND status NOT IN ('MERGED', 'DRAFT')
+     ORDER BY created_at DESC, id DESC`,
+    [vendorId]
+  );
+  if (pos.length === 0) return [];
+
+  const items = await getPoItemsWithReturns(pos.map(p => p.id));
+  const bills = await vendorInvoiceService.getVendorInvoices(vendorId);
+  const billByPo = new Map(bills.filter(b => b.po_id).map(b => [b.po_id, b]));
+
+  return pos
+    .map(po => {
+      const poItems = items.filter(it => it.purchase_order_id === po.id);
+      const bill = billByPo.get(po.id);
+      const receivedValue = poItems.reduce((s, it) => s + (parseFloat(it.received_qty) || 0) * (parseFloat(it.unit_rate) || 0), 0);
+      return {
+        po_id: po.id,
+        po_number: po.po_number,
+        po_status: po.status,
+        po_date: po.created_at,
+        po_amount: po.total_amount,
+        received_value: round2(receivedValue),
+        has_receipt: poItems.some(it => parseFloat(it.received_qty) > 0),
+        bill: bill ? {
+          id: bill.id,
+          display_invoice_no: bill.display_invoice_no,
+          bill_amount: bill.bill_amount,
+          already_paid: bill.already_paid,
+          debit_note_amount: bill.debit_note_amount,
+          outstanding: bill.outstanding
+        } : null,
+        items: poItems
+      };
+    })
+    .filter(src => src.has_receipt || src.bill);
+};
+
+const recordDebitNote = async (payload) => {
+  const {
+    date,
+    vendorId,
+    poId,
+    vendorInvoiceId,
+    reason = 'PURCHASE_RETURN',
+    entryMode = 'ITEM',
+    affectedLedger,
+    gstType = 'INTRA',
+    items = [],
+    ledgerAmount,
+    ledgerGstPercent,
+    narration,
+    createdBy
+  } = payload;
+
+  if (!vendorId) throw badRequest('Supplier is required for a Debit Note.');
+  if (!DEBIT_NOTE_REASONS[reason]) throw badRequest('Invalid debit note reason.');
+  if (!['INTRA', 'INTER', 'NONE'].includes(gstType)) throw badRequest('Invalid GST type.');
+  if (!['ITEM', 'LEDGER'].includes(entryMode)) throw badRequest('Invalid entry mode.');
+
+  const [vendorRows] = await pool.query('SELECT id, vendor_name FROM vendors WHERE id = ?', [vendorId]);
+  if (vendorRows.length === 0) throw badRequest('Supplier not found.');
+  const vendor = vendorRows[0];
+
+  // Reference purchase is optional – an on-account debit note reduces only the supplier balance.
+  // A PO may or may not have a bill in Accounts yet; when it does, the DN is linked to that bill.
+  let invoice = null;
+  let po = null;
+  if (vendorInvoiceId) {
+    invoice = await vendorInvoiceService.getVendorInvoiceById(vendorInvoiceId);
+    if (!invoice) throw badRequest('Reference bill not found.');
+    if (String(invoice.vendor_id) !== String(vendorId)) {
+      throw badRequest('Reference bill does not belong to the selected supplier.');
+    }
+  }
+  const effectivePoId = poId || invoice?.po_id || null;
+  if (effectivePoId) {
+    const [poRows] = await pool.query('SELECT id, po_number, vendor_id FROM purchase_orders WHERE id = ?', [effectivePoId]);
+    if (poRows.length === 0) throw badRequest('Reference purchase order not found.');
+    po = poRows[0];
+    if (String(po.vendor_id) !== String(vendorId)) {
+      throw badRequest('Reference purchase order does not belong to the selected supplier.');
+    }
+    if (!invoice) {
+      const [billRows] = await pool.query('SELECT id FROM vendor_invoices WHERE po_id = ? ORDER BY id DESC LIMIT 1', [po.id]);
+      if (billRows.length > 0) invoice = await vendorInvoiceService.getVendorInvoiceById(billRows[0].id);
+    }
+  }
+  if (entryMode === 'ITEM' && !po) {
+    throw badRequest('Item-wise debit note requires a reference purchase order.');
+  }
+
+  // Amounts are always recomputed on the server
+  const gstEnabled = gstType !== 'NONE';
+  let lines;
+  if (entryMode === 'ITEM') {
+    const poItems = new Map((await getPoItemsWithReturns([po.id])).map(it => [String(it.id), it]));
+    lines = items
+      .filter(it => parseFloat(it.quantity) > 0)
+      .map(it => {
+        const poItem = poItems.get(String(it.poItemId));
+        if (!poItem) throw badRequest('One of the items is not part of the reference purchase order.');
+        const qty = parseFloat(it.quantity);
+        const limit = getItemLimit(poItem, reason);
+        if (qty > limit + 0.0005) {
+          const label = reason === 'SHORTAGE' ? 'claimable shortage qty' : 'returnable qty (received − already returned)';
+          throw badRequest(`Qty for ${poItem.material_name || poItem.item_code || 'item'} exceeds ${label}: ${limit}.`);
+        }
+        const rate = parseFloat(it.rate) || 0;
+        const gstPercent = gstEnabled ? (parseFloat(it.gstPercent) || 0) : 0;
+        const taxable = round2(qty * rate);
+        const gstAmt = round2(taxable * gstPercent / 100);
+        return {
+          poItemId: poItem.id,
+          itemCode: poItem.item_code || null,
+          description: (poItem.material_name || poItem.description || '').trim() || null,
+          quantity: qty,
+          unit: poItem.unit || null,
+          rate,
+          gstPercent,
+          taxable,
+          gstAmt,
+          total: round2(taxable + gstAmt)
+        };
+      });
+    if (lines.length === 0) throw badRequest('Enter a return quantity for at least one item.');
+  } else {
+    const taxable = round2(ledgerAmount);
+    if (taxable <= 0) throw badRequest('Debit amount must be greater than 0.');
+    const gstPercent = gstEnabled ? (parseFloat(ledgerGstPercent) || 0) : 0;
+    const gstAmt = round2(taxable * gstPercent / 100);
+    lines = [{
+      poItemId: null,
+      itemCode: null,
+      description: affectedLedger || DEBIT_NOTE_REASONS[reason],
+      quantity: 1,
+      unit: null,
+      rate: taxable,
+      gstPercent,
+      taxable,
+      gstAmt,
+      total: round2(taxable + gstAmt)
+    }];
+  }
+
+  const taxableAmount = round2(lines.reduce((s, l) => s + l.taxable, 0));
+  const gstTotal = round2(lines.reduce((s, l) => s + l.gstAmt, 0));
+  const cgst = gstType === 'INTRA' ? round2(gstTotal / 2) : 0;
+  const sgst = gstType === 'INTRA' ? round2(gstTotal - cgst) : 0;
+  const igst = gstType === 'INTER' ? gstTotal : 0;
+  const totalAmount = round2(taxableAmount + gstTotal);
+
+  if (totalAmount <= 0) throw badRequest('Debit note total must be greater than 0.');
+  // A bill can be debited up to its value (less earlier DNs). If it is already paid, the
+  // outstanding goes negative = amount recoverable from the supplier.
+  if (invoice) {
+    const debitable = (parseFloat(invoice.bill_amount) || 0) - (parseFloat(invoice.debit_note_amount) || 0);
+    if (totalAmount > debitable + 0.01) {
+      throw badRequest(`Debit note total (₹${totalAmount.toFixed(2)}) exceeds the bill value available for debit (₹${debitable.toFixed(2)}).`);
+    }
+  }
+
+  const ledgerName = affectedLedger || (reason === 'PURCHASE_RETURN' ? 'Purchase Returns' : 'Purchase Accounts');
+  const voucherDate = date || new Date().toISOString().split('T')[0];
+  const billRef = invoice ? (invoice.display_invoice_no || invoice.po_number) : (po ? po.po_number : null);
+  const finalNarration = narration || `${DEBIT_NOTE_REASONS[reason]} – Debit note to ${vendor.vendor_name}${billRef ? ` against ${billRef}` : ''}`;
+  const voucherNo = await generateNextDebitNoteNo();
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [result] = await connection.query(
+      `INSERT INTO debit_notes (
+        voucher_no, voucher_date, vendor_id, vendor_invoice_id, po_id, reference_invoice_no,
+        reason, entry_mode, affected_ledger, gst_type, taxable_amount, cgst_amount, sgst_amount,
+        igst_amount, total_amount, narration, status, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?)`,
+      [
+        voucherNo, voucherDate, vendorId, invoice ? invoice.id : null, po ? po.id : null, billRef,
+        reason, entryMode, ledgerName, gstType, taxableAmount, cgst, sgst,
+        igst, totalAmount, finalNarration, createdBy || null
+      ]
+    );
+    const debitNoteId = result.insertId;
+
+    for (const l of lines) {
+      await connection.query(
+        `INSERT INTO debit_note_items (
+          debit_note_id, po_item_id, item_code, description, quantity, unit, rate,
+          gst_percent, taxable_amount, gst_amount, total_amount
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [debitNoteId, l.poItemId, l.itemCode, l.description, l.quantity, l.unit, l.rate, l.gstPercent, l.taxable, l.gstAmt, l.total]
+      );
+    }
+
+    // Supplier A/c is debited → payable reduces (CREDIT in vendor_ledger, same convention as payments)
+    await connection.query(
+      `INSERT INTO vendor_ledger (
+        vendor_id, reference_doc_id, reference_doc_type, transaction_type, amount, description, ledger_date
+      ) VALUES (?, ?, 'DEBIT_NOTE', 'CREDIT', ?, ?, ?)`,
+      [vendorId, debitNoteId, totalAmount, `Debit Note ${voucherNo}: ${finalNarration}`, voucherDate]
+    );
+
+    await connection.commit();
+    return {
+      id: debitNoteId,
+      voucherNo,
+      voucherDate,
+      vendorName: vendor.vendor_name,
+      referenceInvoiceNo: billRef,
+      affectedLedger: ledgerName,
+      gstType,
+      taxableAmount,
+      cgst,
+      sgst,
+      igst,
+      totalAmount,
+      narration: finalNarration
+    };
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+};
+
+const getDebitNotes = async (vendorId = null) => {
+  const params = [];
+  let where = '';
+  if (vendorId) {
+    where = 'WHERE dn.vendor_id = ?';
+    params.push(vendorId);
+  }
+  const [rows] = await pool.query(
+    `SELECT dn.*, v.vendor_name, v.gstin as vendor_gstin,
+            COALESCE(
+              (
+                SELECT JSON_ARRAYAGG(
+                  JSON_OBJECT(
+                    'id', dni.id,
+                    'po_item_id', dni.po_item_id,
+                    'item_code', dni.item_code,
+                    'description', dni.description,
+                    'quantity', dni.quantity,
+                    'unit', dni.unit,
+                    'rate', dni.rate,
+                    'gst_percent', dni.gst_percent,
+                    'taxable_amount', dni.taxable_amount,
+                    'gst_amount', dni.gst_amount,
+                    'total_amount', dni.total_amount
+                  )
+                )
+                FROM debit_note_items dni
+                WHERE dni.debit_note_id = dn.id
+              ), '[]'
+            ) as items
+     FROM debit_notes dn
+     JOIN vendors v ON dn.vendor_id = v.id
+     ${where}
+     ORDER BY dn.voucher_date DESC, dn.id DESC`,
+    params
+  );
+  return rows.map(r => ({
+    ...r,
+    reason_label: DEBIT_NOTE_REASONS[r.reason] || r.reason,
+    items: typeof r.items === 'string' ? JSON.parse(r.items) : (r.items || [])
+  }));
+};
+
+const cancelDebitNote = async (debitNoteId) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query('SELECT * FROM debit_notes WHERE id = ? FOR UPDATE', [debitNoteId]);
+    if (rows.length === 0) throw badRequest('Debit note not found.');
+    const dn = rows[0];
+    if (dn.status === 'CANCELLED') throw badRequest('Debit note is already cancelled.');
+
+    await connection.query(
+      `UPDATE debit_notes SET status = 'CANCELLED', cancelled_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [debitNoteId]
+    );
+    // Reverse the supplier ledger effect
+    await connection.query(
+      `INSERT INTO vendor_ledger (
+        vendor_id, reference_doc_id, reference_doc_type, transaction_type, amount, description, ledger_date
+      ) VALUES (?, ?, 'DEBIT_NOTE', 'DEBIT', ?, ?, CURDATE())`,
+      [dn.vendor_id, dn.id, dn.total_amount, `Cancellation of Debit Note ${dn.voucher_no}`]
+    );
+    await connection.commit();
+    return { id: dn.id, voucherNo: dn.voucher_no, status: 'CANCELLED' };
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
+  getDebitNoteSources,
+  generateNextDebitNoteNo,
+  recordDebitNote,
+  getDebitNotes,
+  cancelDebitNote,
   generatePaymentVoucherNo,
   generateNextJournalVoucherNo,
   recordJournalVoucher,

@@ -10,6 +10,8 @@ import { Button, DataTable, Card, SearchableSelect, Modal } from '../components/
 import { errorToast, successToast } from '../utils/toast';
 import PaymentReceivedModal from '../components/PaymentReceivedModal.jsx';
 import ProcessPaymentModal from '../components/ProcessPaymentModal.jsx';
+import DebitNoteEntry from '../components/DebitNoteEntry.jsx';
+import CreditNoteEntry from '../components/CreditNoteEntry.jsx';
 import { 
   LEDGER_GROUPS, 
   DEFAULT_CUSTOMER_LEDGER_GROUP, 
@@ -2186,13 +2188,17 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-200 shadow-xs">
-            {selectedVoucherType === 'CONTRA' ? <ArrowLeftRight size={22} /> : selectedVoucherType === 'JOURNAL' ? <BookOpen size={22} /> : (isPaymentMode ? <Send size={22} /> : <CreditCard size={22} />)}
+            {selectedVoucherType === 'CREDIT_NOTE' ? <FilePlus size={22} /> : selectedVoucherType === 'DEBIT_NOTE' ? <FileMinus size={22} /> : selectedVoucherType === 'CONTRA' ? <ArrowLeftRight size={22} /> : selectedVoucherType === 'JOURNAL' ? <BookOpen size={22} /> : (isPaymentMode ? <Send size={22} /> : <CreditCard size={22} />)}
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <span>{selectedVoucherType === 'CONTRA' ? 'Contra Voucher Entry' : selectedVoucherType === 'JOURNAL' ? 'Journal Voucher Entry' : (isPaymentMode ? 'Record Payment Made' : 'Record Payment')}</span>
+              <span>{selectedVoucherType === 'CREDIT_NOTE' ? 'Credit Note Entry' : selectedVoucherType === 'DEBIT_NOTE' ? 'Debit Note Entry' : selectedVoucherType === 'CONTRA' ? 'Contra Voucher Entry' : selectedVoucherType === 'JOURNAL' ? 'Journal Voucher Entry' : (isPaymentMode ? 'Record Payment Made' : 'Record Payment')}</span>
               <span className={`text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
-                selectedVoucherType === 'CONTRA'
+                selectedVoucherType === 'CREDIT_NOTE'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : selectedVoucherType === 'DEBIT_NOTE'
+                  ? 'bg-rose-50 text-rose-800 border-rose-200'
+                  : selectedVoucherType === 'CONTRA'
                   ? 'bg-purple-50 text-purple-800 border-purple-200'
                   : selectedVoucherType === 'JOURNAL'
                   ? 'bg-blue-50 text-blue-800 border-blue-200'
@@ -2200,11 +2206,15 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                       ? 'bg-amber-50 text-amber-800 border-amber-200' 
                       : 'bg-blue-50 text-blue-700 border-blue-200')
               }`}>
-                {selectedVoucherType === 'CONTRA' ? 'Contra' : selectedVoucherType === 'JOURNAL' ? 'Journal' : (isPaymentMode ? 'Vendor Payables' : 'Customer Receivables')}
+                {selectedVoucherType === 'CREDIT_NOTE' ? 'Customer Credit' : selectedVoucherType === 'DEBIT_NOTE' ? 'Supplier Debit' : selectedVoucherType === 'CONTRA' ? 'Contra' : selectedVoucherType === 'JOURNAL' ? 'Journal' : (isPaymentMode ? 'Vendor Payables' : 'Customer Receivables')}
               </span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              {selectedVoucherType === 'CONTRA'
+              {selectedVoucherType === 'CREDIT_NOTE'
+                ? 'Sales returns, rejections & rebates · reduces customer outstanding and reverses output GST'
+                : selectedVoucherType === 'DEBIT_NOTE'
+                ? 'Purchase returns, shortages & rate differences · reduces supplier outstanding and reverses input GST'
+                : selectedVoucherType === 'CONTRA'
                 ? 'Accounts · SP TECHPIONEER ERP · Internal fund transfers between Cash & Bank accounts'
                 : selectedVoucherType === 'JOURNAL'
                 ? 'Accounts · SP TECHPIONEER ERP · Double-entry, multiple ledger lines'
@@ -2245,7 +2255,27 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
 
       {/* Main Content Area: 100% Full Width */}
       <div className="w-full space-y-4">
-        {selectedVoucherType === 'CONTRA' ? (
+        {selectedVoucherType === 'CREDIT_NOTE' ? (
+          <CreditNoteEntry
+            initialCustomerId={selectedCompanyId}
+            onPosted={() => {
+              if (selectedCompanyId) {
+                fetchCustomerInvoices(selectedCompanyId);
+                fetchCustomerBalance(selectedCompanyId);
+              }
+            }}
+          />
+        ) : selectedVoucherType === 'DEBIT_NOTE' ? (
+          <DebitNoteEntry
+            initialVendorId={selectedVendorId}
+            onPosted={() => {
+              if (selectedVendorId) {
+                fetchVendorInvoices(selectedVendorId);
+                fetchVendorPayments(selectedVendorId);
+              }
+            }}
+          />
+        ) : selectedVoucherType === 'CONTRA' ? (
           <div className="space-y-4">
             <PaymentReceivedModal
               isOpen={true}

@@ -2897,6 +2897,107 @@ model contra_vouchers {
   @@index([voucher_no], map: "idx_contra_voucher_no")
 }
 
+model debit_notes {
+  id                   Int                @id @default(autoincrement())
+  voucher_no           String             @unique(map: "uq_debit_note_voucher_no") @db.VarChar(50)
+  voucher_date         DateTime           @db.Date
+  vendor_id            Int
+  vendor_invoice_id    Int?
+  po_id                Int?
+  reference_invoice_no String?            @db.VarChar(100)
+  reason               String             @default("PURCHASE_RETURN") @db.VarChar(50)
+  entry_mode           String             @default("ITEM") @db.VarChar(20)
+  affected_ledger      String             @default("Purchase Returns") @db.VarChar(255)
+  gst_type             String             @default("INTRA") @db.VarChar(20)
+  taxable_amount       Decimal            @default(0.00) @db.Decimal(15, 2)
+  cgst_amount          Decimal            @default(0.00) @db.Decimal(15, 2)
+  sgst_amount          Decimal            @default(0.00) @db.Decimal(15, 2)
+  igst_amount          Decimal            @default(0.00) @db.Decimal(15, 2)
+  total_amount         Decimal            @default(0.00) @db.Decimal(15, 2)
+  narration            String?            @db.Text
+  status               String             @default("POSTED") @db.VarChar(20)
+  cancelled_at         DateTime?          @db.Timestamp(0)
+  created_by           Int?
+  created_at           DateTime?          @default(now()) @db.Timestamp(0)
+  updated_at           DateTime?          @default(now()) @db.Timestamp(0)
+  debit_note_items     debit_note_items[]
+
+  @@index([vendor_id], map: "idx_dn_vendor")
+  @@index([vendor_invoice_id], map: "idx_dn_invoice")
+  @@index([po_id], map: "idx_dn_po")
+  @@index([voucher_date], map: "idx_dn_date")
+}
+
+model debit_note_items {
+  id             Int         @id @default(autoincrement())
+  debit_note_id  Int
+  po_item_id     Int?
+  item_code      String?     @db.VarChar(120)
+  description    String?     @db.VarChar(500)
+  quantity       Decimal     @default(0.000) @db.Decimal(14, 3)
+  unit           String?     @db.VarChar(20)
+  rate           Decimal     @default(0.00) @db.Decimal(14, 2)
+  gst_percent    Decimal     @default(0.00) @db.Decimal(5, 2)
+  taxable_amount Decimal     @default(0.00) @db.Decimal(15, 2)
+  gst_amount     Decimal     @default(0.00) @db.Decimal(15, 2)
+  total_amount   Decimal     @default(0.00) @db.Decimal(15, 2)
+  created_at     DateTime?   @default(now()) @db.Timestamp(0)
+  debit_notes    debit_notes @relation(fields: [debit_note_id], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "debit_note_items_dn_fk")
+
+  @@index([debit_note_id], map: "idx_dni_note")
+  @@index([po_item_id], map: "idx_dni_po_item")
+}
+
+model credit_notes {
+  id                   Int                 @id @default(autoincrement())
+  voucher_no           String              @unique(map: "uq_credit_note_voucher_no") @db.VarChar(50)
+  voucher_date         DateTime            @db.Date
+  customer_id          Int
+  sales_invoice_id     Int?
+  reference_invoice_no String?             @db.VarChar(100)
+  reason               String              @default("SALES_RETURN") @db.VarChar(50)
+  entry_mode           String              @default("ITEM") @db.VarChar(20)
+  affected_ledger      String              @default("Sales Returns") @db.VarChar(255)
+  gst_type             String              @default("INTRA") @db.VarChar(20)
+  taxable_amount       Decimal             @default(0.00) @db.Decimal(15, 2)
+  cgst_amount          Decimal             @default(0.00) @db.Decimal(15, 2)
+  sgst_amount          Decimal             @default(0.00) @db.Decimal(15, 2)
+  igst_amount          Decimal             @default(0.00) @db.Decimal(15, 2)
+  total_amount         Decimal             @default(0.00) @db.Decimal(15, 2)
+  narration            String?             @db.Text
+  status               String              @default("POSTED") @db.VarChar(20)
+  cancelled_at         DateTime?           @db.Timestamp(0)
+  created_by           Int?
+  created_at           DateTime?           @default(now()) @db.Timestamp(0)
+  updated_at           DateTime?           @default(now()) @db.Timestamp(0)
+  credit_note_items    credit_note_items[]
+
+  @@index([customer_id], map: "idx_cn_customer")
+  @@index([sales_invoice_id], map: "idx_cn_invoice")
+  @@index([voucher_date], map: "idx_cn_date")
+}
+
+model credit_note_items {
+  id                    Int          @id @default(autoincrement())
+  credit_note_id        Int
+  sales_invoice_item_id Int?
+  drawing_no            String?      @db.VarChar(120)
+  item_code             String?      @db.VarChar(120)
+  description           String?      @db.VarChar(500)
+  quantity              Decimal      @default(0.000) @db.Decimal(14, 3)
+  unit                  String?      @db.VarChar(20)
+  rate                  Decimal      @default(0.00) @db.Decimal(14, 2)
+  gst_percent           Decimal      @default(0.00) @db.Decimal(5, 2)
+  taxable_amount        Decimal      @default(0.00) @db.Decimal(15, 2)
+  gst_amount            Decimal      @default(0.00) @db.Decimal(15, 2)
+  total_amount          Decimal      @default(0.00) @db.Decimal(15, 2)
+  created_at            DateTime?    @default(now()) @db.Timestamp(0)
+  credit_notes          credit_notes @relation(fields: [credit_note_id], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "credit_note_items_cn_fk")
+
+  @@index([credit_note_id], map: "idx_cni_note")
+  @@index([sales_invoice_item_id], map: "idx_cni_invoice_item")
+}
+
 model customer_payment_allocations {
   id                  Int               @id @default(autoincrement())
   customer_payment_id Int

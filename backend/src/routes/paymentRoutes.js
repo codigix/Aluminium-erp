@@ -11,6 +11,11 @@ router.get('/journal', authorize(['PAYMENT_VIEW']), paymentController.getJournal
 router.get('/contra/next-voucher-no', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS']), paymentController.getNextContraVoucherNo);
 router.post('/contra', authorize(['PAYMENT_PROCESS']), paymentController.recordContraVoucher);
 router.get('/contra', authorize(['PAYMENT_VIEW']), paymentController.getContraVouchers);
+router.get('/debit-notes/sources', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS']), paymentController.getDebitNoteSources);
+router.get('/debit-notes/next-voucher-no', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS']), paymentController.getNextDebitNoteNo);
+router.post('/debit-notes', authorize(['PAYMENT_PROCESS']), paymentController.recordDebitNote);
+router.get('/debit-notes', authorize(['PAYMENT_VIEW']), paymentController.getDebitNotes);
+router.post('/debit-notes/:id/cancel', authorize(['PAYMENT_EDIT']), paymentController.cancelDebitNote);
 router.get('/', authorize(['PAYMENT_VIEW']), paymentController.getPayments);
 router.get('/pending', authorize(['PAYMENT_VIEW']), paymentController.getPendingPayments);
 router.get('/:paymentId', authorize(['PAYMENT_VIEW']), paymentController.getPaymentById);

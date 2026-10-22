@@ -60,6 +60,8 @@ const CustomerPaymentHistory = () => {
   const [vendorPayments, setVendorPayments] = useState([]);
   const [journalVouchers, setJournalVouchers] = useState([]);
   const [contraVouchers, setContraVouchers] = useState([]);
+  const [debitNotes, setDebitNotes] = useState([]);
+  const [creditNotes, setCreditNotes] = useState([]);
   const [companiesList, setCompaniesList] = useState([]);
   const [vendorsList, setVendorsList] = useState([]);
   const [allRegisteredBanks, setAllRegisteredBanks] = useState([]);
@@ -143,11 +145,13 @@ const CustomerPaymentHistory = () => {
       };
 
       // Parallel fetch for Customer Payments, Vendor Payments, Journal Vouchers, and Contra Vouchers
-      const [cpRes, vpRes, jvRes, cvRes] = await Promise.all([
+      const [cpRes, vpRes, jvRes, cvRes, dnRes, cnRes] = await Promise.all([
         fetch(`${API_BASE}/customer-payments?status=CONFIRMED`, { headers: authHeaders }),
         fetch(`${API_BASE}/payments?status=CONFIRMED`, { headers: authHeaders }),
         fetch(`${API_BASE}/payments/journal`, { headers: authHeaders }),
-        fetch(`${API_BASE}/payments/contra`, { headers: authHeaders })
+        fetch(`${API_BASE}/payments/contra`, { headers: authHeaders }),
+        fetch(`${API_BASE}/payments/debit-notes`, { headers: authHeaders }).catch(() => null),
+        fetch(`${API_BASE}/customer-payments/credit-notes`, { headers: authHeaders }).catch(() => null)
       ]);
 
       if (cpRes.ok) {
@@ -165,6 +169,14 @@ const CustomerPaymentHistory = () => {
       if (cvRes.ok) {
         const data = await cvRes.json();
         setContraVouchers(Array.isArray(data) ? data : []);
+      }
+      if (dnRes && dnRes.ok) {
+        const data = await dnRes.json();
+        setDebitNotes(Array.isArray(data) ? data : []);
+      }
+      if (cnRes && cnRes.ok) {
+        const data = await cnRes.json();
+        setCreditNotes(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.error('Error fetching payment & voucher history:', error);
@@ -466,6 +478,80 @@ const CustomerPaymentHistory = () => {
       });
     });
 
+    // E. Debit Notes (Alt+F9) - supplier debited for purchase returns / adjustments (posted only)
+    debitNotes.filter(dn => dn.status === 'POSTED').forEach(dn => {
+      const total = parseFloat(dn.total_amount) || 0;
+      list.push({
+        id: `dn_${dn.id}`,
+        rawId: dn.id,
+        kind: 'DEBIT_NOTE',
+        voucher_date: String(dn.voucher_date || dn.created_at || '').slice(0, 10),
+        raw_date: dn.voucher_date || dn.created_at,
+        created_at: dn.created_at,
+        voucher_type: 'Debit Note',
+        voucher_type_code: 'DEBIT_NOTE',
+        voucher_number: dn.voucher_no,
+        party_name: dn.vendor_name || 'Vendor',
+        party_id: dn.vendor_id,
+        party_type: 'VENDOR',
+        particulars_title: `${dn.vendor_name} – ${dn.reason_label || 'Debit Note'}`,
+        particulars_subtitle: dn.affected_ledger,
+        payment_mode: 'DEBIT_NOTE',
+        bill_ref: dn.reference_invoice_no ? `Agst Ref: ${dn.reference_invoice_no}` : 'On Account',
+        agst_ref: dn.reference_invoice_no || null,
+        po_number: dn.reference_invoice_no || null,
+        customer_po: null,
+        bank_name: null,
+        cheque_no: null,
+        cheque_bank: null,
+        ref_no: null,
+        debit: total,
+        credit: null,
+        amount: total,
+        narration: dn.narration,
+        status: 'CONFIRMED',
+        dn_items: Array.isArray(dn.items) ? dn.items : [],
+        raw: dn
+      });
+    });
+
+    // F. Credit Notes (Alt+F8) - customer credited for sales returns / rebates (posted only)
+    creditNotes.filter(cn => cn.status === 'POSTED').forEach(cn => {
+      const total = parseFloat(cn.total_amount) || 0;
+      list.push({
+        id: `cn_${cn.id}`,
+        rawId: cn.id,
+        kind: 'CREDIT_NOTE',
+        voucher_date: String(cn.voucher_date || cn.created_at || '').slice(0, 10),
+        raw_date: cn.voucher_date || cn.created_at,
+        created_at: cn.created_at,
+        voucher_type: 'Credit Note',
+        voucher_type_code: 'CREDIT_NOTE',
+        voucher_number: cn.voucher_no,
+        party_name: cn.customer_name || 'Customer',
+        party_id: cn.customer_id,
+        party_type: 'CLIENT',
+        particulars_title: `${cn.customer_name} – ${cn.reason_label || 'Credit Note'}`,
+        particulars_subtitle: cn.affected_ledger,
+        payment_mode: 'CREDIT_NOTE',
+        bill_ref: cn.reference_invoice_no ? `Agst Ref: ${cn.reference_invoice_no}` : 'On Account',
+        agst_ref: cn.reference_invoice_no || null,
+        po_number: null,
+        customer_po: null,
+        bank_name: null,
+        cheque_no: null,
+        cheque_bank: null,
+        ref_no: null,
+        debit: null,
+        credit: total,
+        amount: total,
+        narration: cn.narration,
+        status: 'CONFIRMED',
+        cn_items: Array.isArray(cn.items) ? cn.items : [],
+        raw: cn
+      });
+    });
+
     // Precise multi-tier descending sort so newly created entries strictly show at the very top:
     return list.sort((a, b) => {
       // 1. Primary: Exact created_at timestamp descending (newest voucher strictly first)
@@ -500,7 +586,7 @@ const CustomerPaymentHistory = () => {
       // 3. Tertiary: Tiebreaker by database raw ID
       return (Number(b.rawId) || 0) - (Number(a.rawId) || 0);
     });
-  }, [customerPayments, vendorPayments, journalVouchers, contraVouchers]);
+  }, [customerPayments, vendorPayments, journalVouchers, contraVouchers, debitNotes, creditNotes]);
 
   // Comprehensive Unified Search Options: Bank Name, Client/Customer, Vendor, Agst Ref, PO Number, Customer PO
   const searchOptions = useMemo(() => {
@@ -904,6 +990,10 @@ const CustomerPaymentHistory = () => {
           badgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
         } else if (row.kind === 'CONTRA_VOUCHER') {
           badgeColor = 'bg-purple-50 text-purple-800 border-purple-200';
+        } else if (row.kind === 'DEBIT_NOTE') {
+          badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+        } else if (row.kind === 'CREDIT_NOTE') {
+          badgeColor = 'bg-teal-50 text-teal-700 border-teal-200';
         }
 
         return (
@@ -1000,7 +1090,7 @@ const CustomerPaymentHistory = () => {
           >
             <Download className="w-3.5 h-3.5" />
           </button>
-          {row.kind !== 'CONTRA_VOUCHER' && (
+          {row.kind !== 'CONTRA_VOUCHER' && row.kind !== 'DEBIT_NOTE' && row.kind !== 'CREDIT_NOTE' && (
             <button
               type="button"
               onClick={() => handleOpenEmailModal(row)}
@@ -1184,6 +1274,8 @@ const CustomerPaymentHistory = () => {
               <option value="PAYMENT">Payment</option>
               <option value="JOURNAL">Journal</option>
               <option value="CONTRA">Contra</option>
+              <option value="DEBIT_NOTE">Debit Note</option>
+              <option value="CREDIT_NOTE">Credit Note</option>
             </select>
           </div>
 
@@ -1359,7 +1451,9 @@ const CustomerPaymentHistory = () => {
                 <div className={`p-2 rounded-xl text-white ${
                   viewingVoucher.kind === 'CUSTOMER_RECEIPT' ? 'bg-emerald-600' :
                   viewingVoucher.kind === 'VENDOR_PAYMENT' ? 'bg-amber-600' : 
-                  viewingVoucher.kind === 'CONTRA_VOUCHER' ? 'bg-purple-600' : 'bg-blue-600'
+                  viewingVoucher.kind === 'CONTRA_VOUCHER' ? 'bg-purple-600' :
+                  viewingVoucher.kind === 'DEBIT_NOTE' ? 'bg-rose-600' :
+                  viewingVoucher.kind === 'CREDIT_NOTE' ? 'bg-teal-600' : 'bg-blue-600'
                 }`}>
                   <FileCheck className="w-5 h-5" />
                 </div>
@@ -1552,8 +1646,211 @@ const CustomerPaymentHistory = () => {
                 </div>
               )}
 
+              {/* Debit Note: returned items + ledger postings */}
+              {viewingVoucher.kind === 'DEBIT_NOTE' && (() => {
+                const dn = viewingVoucher.raw || {};
+                const taxable = parseFloat(dn.taxable_amount) || 0;
+                const gstLines = [
+                  ['Input CGST', parseFloat(dn.cgst_amount) || 0],
+                  ['Input SGST', parseFloat(dn.sgst_amount) || 0],
+                  ['Input IGST', parseFloat(dn.igst_amount) || 0]
+                ].filter(([, v]) => v > 0);
+                const itemLines = (viewingVoucher.dn_items || []).filter(it => it.po_item_id);
+                return (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                        <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Debited To Supplier</span>
+                        <span className="font-bold text-slate-800 block truncate">{viewingVoucher.party_name}</span>
+                      </div>
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                        <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Against Bill / PO</span>
+                        <span className="font-bold text-slate-800 font-mono">{dn.reference_invoice_no || 'On Account'}</span>
+                      </div>
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                        <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Reason</span>
+                        <span className="font-bold text-slate-800">{dn.reason_label || dn.reason}</span>
+                      </div>
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                        <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Ledger Account</span>
+                        <span className="font-bold text-slate-800">{dn.affected_ledger}</span>
+                      </div>
+                    </div>
+
+                    {itemLines.length > 0 && (
+                      <div className="border border-slate-200 rounded-xl overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px]">
+                            <tr>
+                              <th className="py-2.5 px-3 text-left">Returned Item</th>
+                              <th className="py-2.5 px-3 text-right">Qty</th>
+                              <th className="py-2.5 px-3 text-right">Rate</th>
+                              <th className="py-2.5 px-3 text-right">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {itemLines.map((it, idx) => (
+                              <tr key={it.id || idx}>
+                                <td className="py-2.5 px-3 font-semibold text-slate-800">
+                                  {it.description}
+                                  {it.item_code && <span className="block text-[10px] font-mono text-slate-400">{it.item_code}</span>}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono">{parseFloat(it.quantity) || 0} {it.unit || ''}</td>
+                                <td className="py-2.5 px-3 text-right font-mono">{formatCurrency(parseFloat(it.rate) || 0)}</td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold">{formatCurrency(parseFloat(it.taxable_amount) || 0)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">Double-Entry Ledger Postings</span>
+                      <div className="border border-slate-200 rounded-xl overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px]">
+                            <tr>
+                              <th className="py-2.5 px-3 text-left">Ledger Account</th>
+                              <th className="py-2.5 px-3 text-right">Debit (₹)</th>
+                              <th className="py-2.5 px-3 text-right">Credit (₹)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            <tr>
+                              <td className="py-2.5 px-3 font-semibold text-slate-800">Sundry Creditors — {viewingVoucher.party_name}</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">{formatCurrency(viewingVoucher.amount)}</td>
+                              <td className="py-2.5 px-3 text-right font-mono text-slate-300">—</td>
+                            </tr>
+                            <tr>
+                              <td className="py-2.5 px-3 font-semibold text-slate-800">{dn.affected_ledger}</td>
+                              <td className="py-2.5 px-3 text-right font-mono text-slate-300">—</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">{formatCurrency(taxable)}</td>
+                            </tr>
+                            {gstLines.map(([label, val]) => (
+                              <tr key={label}>
+                                <td className="py-2.5 px-3 font-semibold text-slate-800">{label}</td>
+                                <td className="py-2.5 px-3 text-right font-mono text-slate-300">—</td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">{formatCurrency(val)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+                            <tr>
+                              <td className="py-2.5 px-3 text-slate-800 uppercase text-[10px]">Total</td>
+                              <td className="py-2.5 px-3 text-right font-mono text-rose-700">{formatCurrency(viewingVoucher.amount)}</td>
+                              <td className="py-2.5 px-3 text-right font-mono text-emerald-700">{formatCurrency(viewingVoucher.amount)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Credit Note: returned drawings + ledger postings */}
+              {viewingVoucher.kind === 'CREDIT_NOTE' && (() => {
+                const cn = viewingVoucher.raw || {};
+                const taxable = parseFloat(cn.taxable_amount) || 0;
+                const gstLines = [
+                  ['Output CGST', parseFloat(cn.cgst_amount) || 0],
+                  ['Output SGST', parseFloat(cn.sgst_amount) || 0],
+                  ['Output IGST', parseFloat(cn.igst_amount) || 0]
+                ].filter(([, v]) => v > 0);
+                const itemLines = (viewingVoucher.cn_items || []).filter(it => it.sales_invoice_item_id);
+                return (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                        <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Credited To Customer</span>
+                        <span className="font-bold text-slate-800 block truncate">{viewingVoucher.party_name}</span>
+                      </div>
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                        <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Against Invoice</span>
+                        <span className="font-bold text-slate-800 font-mono">{cn.reference_invoice_no || 'On Account'}</span>
+                      </div>
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                        <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Reason</span>
+                        <span className="font-bold text-slate-800">{cn.reason_label || cn.reason}</span>
+                      </div>
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                        <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Ledger Account</span>
+                        <span className="font-bold text-slate-800">{cn.affected_ledger}</span>
+                      </div>
+                    </div>
+
+                    {itemLines.length > 0 && (
+                      <div className="border border-slate-200 rounded-xl overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px]">
+                            <tr>
+                              <th className="py-2.5 px-3 text-left">Drawing No</th>
+                              <th className="py-2.5 px-3 text-left">Drawing Name</th>
+                              <th className="py-2.5 px-3 text-right">Qty</th>
+                              <th className="py-2.5 px-3 text-right">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {itemLines.map((it, idx) => (
+                              <tr key={it.id || idx}>
+                                <td className="py-2.5 px-3 font-mono font-bold text-slate-800">{it.drawing_no || '—'}</td>
+                                <td className="py-2.5 px-3 text-slate-700">{it.description}</td>
+                                <td className="py-2.5 px-3 text-right font-mono">{parseFloat(it.quantity) || 0} {it.unit || ''}</td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold">{formatCurrency(parseFloat(it.taxable_amount) || 0)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">Double-Entry Ledger Postings</span>
+                      <div className="border border-slate-200 rounded-xl overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px]">
+                            <tr>
+                              <th className="py-2.5 px-3 text-left">Ledger Account</th>
+                              <th className="py-2.5 px-3 text-right">Debit (₹)</th>
+                              <th className="py-2.5 px-3 text-right">Credit (₹)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            <tr>
+                              <td className="py-2.5 px-3 font-semibold text-slate-800">{cn.affected_ledger}</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">{formatCurrency(taxable)}</td>
+                              <td className="py-2.5 px-3 text-right font-mono text-slate-300">—</td>
+                            </tr>
+                            {gstLines.map(([label, val]) => (
+                              <tr key={label}>
+                                <td className="py-2.5 px-3 font-semibold text-slate-800">{label}</td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">{formatCurrency(val)}</td>
+                                <td className="py-2.5 px-3 text-right font-mono text-slate-300">—</td>
+                              </tr>
+                            ))}
+                            <tr>
+                              <td className="py-2.5 px-3 font-semibold text-slate-800">Sundry Debtors — {viewingVoucher.party_name}</td>
+                              <td className="py-2.5 px-3 text-right font-mono text-slate-300">—</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">{formatCurrency(viewingVoucher.amount)}</td>
+                            </tr>
+                          </tbody>
+                          <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+                            <tr>
+                              <td className="py-2.5 px-3 text-slate-800 uppercase text-[10px]">Total</td>
+                              <td className="py-2.5 px-3 text-right font-mono text-rose-700">{formatCurrency(viewingVoucher.amount)}</td>
+                              <td className="py-2.5 px-3 text-right font-mono text-emerald-700">{formatCurrency(viewingVoucher.amount)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Receipt / Payment Key Attributes */}
-              {viewingVoucher.kind !== 'JOURNAL_VOUCHER' && viewingVoucher.kind !== 'CONTRA_VOUCHER' && (
+              {viewingVoucher.kind !== 'JOURNAL_VOUCHER' && viewingVoucher.kind !== 'CONTRA_VOUCHER' && viewingVoucher.kind !== 'DEBIT_NOTE' && viewingVoucher.kind !== 'CREDIT_NOTE' && (
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="p-3 bg-white border border-slate-200 rounded-lg">
                     <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">
