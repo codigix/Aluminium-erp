@@ -155,9 +155,11 @@ const syncReworkJobCard = async (connection, sourceJobCardId, userId = null) => 
   const delta = targetQty - covered;
   if (Math.abs(delta) < 0.001) return null;
 
-  // Determine target operation for rework (Same Op, First Op, or Custom Target Op)
+  // Determine target operation for rework (First Op by default, Same Op, or Custom Target Op).
+  // Business rule: a rejected piece is reworked at the first operation of the routing only;
+  // later operations are not repeated automatically (they only get capacity for it).
   let target = source;
-  const routingType = approved.rework_routing_type || 'SAME_OPERATION';
+  const routingType = approved.rework_routing_type || 'FIRST_OPERATION';
   const targetJcId = approved.rework_target_job_card_id ? parseInt(approved.rework_target_job_card_id, 10) : null;
 
   if (targetJcId) {
@@ -223,7 +225,7 @@ const syncReworkJobCard = async (connection, sourceJobCardId, userId = null) => 
       `INSERT INTO job_cards
        (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, time_uom, hourly_rate,
         operation_name, execution_type, execution_mode, sequence_no, cycle_time, setup_time, is_rework, rework_of_job_card_id, remarks)
-       VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       [
         jobCardNo, source.work_order_id, target.operation_id, target.workstation_id, delta,
         target.std_time, target.time_uom, target.hourly_rate, reworkOpName,

@@ -277,7 +277,8 @@ const JobCardList = ({
       {/* Re-route Rework Modal */}
       {reroutingRework && (() => {
         const woOps = jobCards
-          .filter(j => String(j.work_order_id) === String(reroutingRework.work_order_id) && !j.is_rework && j.status !== 'CANCELLED')
+          .filter(j => String(j.work_order_id) === String(reroutingRework.work_order_id) && !j.is_rework && j.status !== 'CANCELLED'
+            && !['shipment', 'dispatch'].includes(String(j.operation_name || '').trim().toLowerCase()))
           .sort((a, b) => (num(a.sequence_no) - num(b.sequence_no)));
         const firstOp = woOps[0];
 

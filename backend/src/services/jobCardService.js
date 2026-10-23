@@ -2214,8 +2214,9 @@ const refreshJobCardQuality = async (connection, jobCardId) => {
   );
   const [jcRow] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [jobCardId]);
   if (jcRow.length > 0) {
-    await syncReworkQuantities(jcRow[0].work_order_id, connection);
+    // Create / resize the rework card first so the capacity sync sees where it was routed
     await productionFlowService.syncReworkJobCard(connection, jobCardId);
+    await syncReworkQuantities(jcRow[0].work_order_id, connection);
   }
 };
 
@@ -2291,7 +2292,7 @@ const addQualityLog = async (data) => {
       [
         jobCardId, finalDay, checkDate, shift, inspected, accepted, rejected, scrap, rejectionReason || null, notes || null, finalStatus,
         vendorInvoice || null, subTotal || 0, gstAmount || 0, grandTotal || 0,
-        reworkRoutingType || 'SAME_OPERATION', reworkTargetJobCardId || null,
+        reworkRoutingType || 'FIRST_OPERATION', reworkTargetJobCardId || null,
         userId, reviewedNow ? userId : null
       ]
     );
@@ -2426,10 +2427,18 @@ const reRouteReworkJobCard = async (jobCardId, { targetJobCardId, reworkRoutingT
       throw productionError('Cannot re-route a rework job card that has already produced pieces or is closed.');
     }
 
-    // Original job card from which rejection occurred
-    const [[source]] = jc.rework_of_job_card_id
-      ? await connection.query('SELECT * FROM job_cards WHERE id = ?', [jc.rework_of_job_card_id])
-      : [[jc]];
+    // Original job card from which rejection occurred. Rework cards created before the
+    // syncReworkJobCard INSERT fix hold that id in remarks instead of rework_of_job_card_id.
+    const findSource = async (id) => {
+      if (!id) return null;
+      const [[row]] = await connection.query('SELECT * FROM job_cards WHERE id = ? AND work_order_id = ?', [id, jc.work_order_id]);
+      return row || null;
+    };
+    const legacySourceId = /^\d+$/.test(String(jc.remarks || '').trim()) ? parseInt(jc.remarks, 10) : null;
+    const source = (await findSource(jc.rework_of_job_card_id)) || (await findSource(legacySourceId));
+    if (!source) {
+      throw productionError('The rejected operation for this rework card could not be found.', 404);
+    }
 
     let target = null;
     const routing = reworkRoutingType || (targetJobCardId ? 'SELECT_OPERATION' : 'FIRST_OPERATION');
@@ -2451,7 +2460,14 @@ const reRouteReworkJobCard = async (jobCardId, { targetJobCardId, reworkRoutingT
       if (!firstOp) throw productionError('First operation not found for this work order', 404);
       target = firstOp;
     } else {
-      target = source || jc;
+      target = source;
+    }
+
+    if (num(target.sequence_no) > num(source.sequence_no)) {
+      throw productionError(`Rework cannot be sent to ${target.operation_name}: it comes after the rejected operation ${source.operation_name}.`, 400);
+    }
+    if (isShipmentOperation(target.operation_name)) {
+      throw productionError('Rework cannot be sent to the Shipment operation.', 400);
     }
 
     const isSameOp = target.id === source.id;
@@ -2474,7 +2490,8 @@ const reRouteReworkJobCard = async (jobCardId, { targetJobCardId, reworkRoutingT
          hourly_rate = ?,
          execution_type = ?,
          execution_mode = ?,
-         remarks = ?
+         remarks = ?,
+         rework_of_job_card_id = ?
        WHERE id = ?`,
       [
         target.operation_id,
@@ -2488,19 +2505,21 @@ const reRouteReworkJobCard = async (jobCardId, { targetJobCardId, reworkRoutingT
         target.execution_type,
         target.execution_mode,
         reworkRemarks,
+        source.id,
         jobCardId
       ]
     );
 
     // Sync quality log records
-    if (jc.rework_of_job_card_id) {
-      await connection.execute(
-        `UPDATE job_card_quality_logs
-         SET rework_routing_type = ?, rework_target_job_card_id = ?
-         WHERE job_card_id = ?`,
-        [routing, target.id, jc.rework_of_job_card_id]
-      );
-    }
+    await connection.execute(
+      `UPDATE job_card_quality_logs
+       SET rework_routing_type = ?, rework_target_job_card_id = ?
+       WHERE job_card_id = ?`,
+      [routing, target.id, source.id]
+    );
+
+    // Operations between the rework step and the rejected operation get room for the reworked pieces
+    await syncReworkQuantities(jc.work_order_id, connection);
 
     await logProductionEvent(connection, {
       entityType: 'JOB_CARD',
@@ -3276,13 +3295,37 @@ const getJobCardDetailAnalysis = async (idOrNo) => {
 
 const syncReworkQuantities = async (workOrderId, connection) => {
   const [jobCards] = await connection.query(
-    'SELECT id, sequence_no, accepted_qty, rejected_qty, scrap_qty FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no ASC, id ASC',
+    `SELECT id, sequence_no, accepted_qty, rejected_qty, scrap_qty, is_rework, operation_name, execution_mode, execution_type,
+            planned_qty, status, rework_of_job_card_id, remarks
+     FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no ASC, id ASC`,
     [workOrderId]
   );
 
   if (jobCards.length === 0) return;
 
+  // A rework card sent back to an earlier operation (e.g. First Operation) produces pieces that must
+  // pass again through every later step up to the rejected one, so those steps need room for them.
+  const byId = new Map(jobCards.map(jc => [jc.id, jc]));
+  const routedExtra = new Map();
+  for (const rw of jobCards) {
+    if (!rw.is_rework || rw.status === 'CANCELLED') continue;
+    const legacyId = /^\d+$/.test(String(rw.remarks || '').trim()) ? parseInt(rw.remarks, 10) : null;
+    const source = byId.get(rw.rework_of_job_card_id) || byId.get(legacyId);
+    if (!source || num(rw.sequence_no) >= num(source.sequence_no)) continue;
+    for (const op of jobCards) {
+      if (op.is_rework || op.status === 'CANCELLED') continue;
+      if (num(op.sequence_no) > num(rw.sequence_no) && num(op.sequence_no) <= num(source.sequence_no)) {
+        routedExtra.set(op.id, (routedExtra.get(op.id) || 0) + num(rw.planned_qty));
+      }
+    }
+  }
+
+  // In-house operations get a dedicated rework job card (productionFlowService.syncReworkJobCard).
+  // Counting their rejections here as well would let upstream operations produce the same piece twice.
+  const getsReworkCard = jc => !jc.is_rework && !isShipmentOperation(jc.operation_name) && !isSubcontractJobCard(jc);
+
   const reworkGenerated = jobCards.map(jc => {
+    if (getsReworkCard(jc)) return 0;
     const rejected = parseFloat(jc.rejected_qty || 0);
     const scrap = parseFloat(jc.scrap_qty || 0);
     return Math.max(0, rejected - scrap);
@@ -3301,6 +3344,8 @@ const syncReworkQuantities = async (workOrderId, connection) => {
     if (i === 0) {
       newReworkQty += reworkGenerated[0];
     }
+
+    newReworkQty += routedExtra.get(jc.id) || 0;
 
     await connection.execute(
       'UPDATE job_cards SET rework_qty = ? WHERE id = ?',

@@ -46,7 +46,7 @@ const QualityRejectionEntry = () => {
   const [editReason, setEditReason] = useState('');
   const [editScrap, setEditScrap] = useState('');
   const [editNotes, setEditNotes] = useState('');
-  const [editReworkRoutingType, setEditReworkRoutingType] = useState('SAME_OPERATION');
+  const [editReworkRoutingType, setEditReworkRoutingType] = useState('FIRST_OPERATION');
 
   const openViewModal = (record) => {
     setSelectedRecord(record);
@@ -61,7 +61,7 @@ const QualityRejectionEntry = () => {
     setEditReason(record.reason);
     setEditScrap(record.scrapQty);
     setEditNotes(record.notes);
-    setEditReworkRoutingType(record.reworkRoutingType || 'SAME_OPERATION');
+    setEditReworkRoutingType(record.reworkRoutingType || 'FIRST_OPERATION');
   };
 
   const handleEditAcceptedChange = (val) => {
