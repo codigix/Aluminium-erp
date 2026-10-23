@@ -2080,6 +2080,7 @@ const recordDebitNote = async (payload) => {
     ledgerAmount,
     ledgerGstPercent,
     narration,
+    bankAccountId,
     createdBy
   } = payload;
 
@@ -2091,6 +2092,13 @@ const recordDebitNote = async (payload) => {
   const [vendorRows] = await pool.query('SELECT id, vendor_name FROM vendors WHERE id = ?', [vendorId]);
   if (vendorRows.length === 0) throw badRequest('Supplier not found.');
   const vendor = vendorRows[0];
+
+  let bankAccount = null;
+  if (bankAccountId) {
+    const [bankRows] = await pool.query('SELECT id, bank_name, account_number FROM bank_accounts WHERE id = ?', [bankAccountId]);
+    if (bankRows.length === 0) throw badRequest('Selected bank account not found.');
+    bankAccount = bankRows[0];
+  }
 
   // Reference purchase is optional – an on-account debit note reduces only the supplier balance.
   // A PO may or may not have a bill in Accounts yet; when it does, the DN is linked to that bill.
@@ -2202,12 +2210,12 @@ const recordDebitNote = async (payload) => {
 
     const [result] = await connection.query(
       `INSERT INTO debit_notes (
-        voucher_no, voucher_date, vendor_id, vendor_invoice_id, po_id, reference_invoice_no,
+        voucher_no, voucher_date, vendor_id, vendor_invoice_id, po_id, bank_account_id, reference_invoice_no,
         reason, entry_mode, affected_ledger, gst_type, taxable_amount, cgst_amount, sgst_amount,
         igst_amount, total_amount, narration, status, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?)`,
       [
-        voucherNo, voucherDate, vendorId, invoice ? invoice.id : null, po ? po.id : null, billRef,
+        voucherNo, voucherDate, vendorId, invoice ? invoice.id : null, po ? po.id : null, bankAccount ? bankAccount.id : null, billRef,
         reason, entryMode, ledgerName, gstType, taxableAmount, cgst, sgst,
         igst, totalAmount, finalNarration, createdBy || null
       ]
@@ -2239,6 +2247,7 @@ const recordDebitNote = async (payload) => {
       voucherDate,
       vendorName: vendor.vendor_name,
       referenceInvoiceNo: billRef,
+      bankName: bankAccount ? bankAccount.bank_name : null,
       affectedLedger: ledgerName,
       gstType,
       taxableAmount,
@@ -2265,6 +2274,7 @@ const getDebitNotes = async (vendorId = null) => {
   }
   const [rows] = await pool.query(
     `SELECT dn.*, v.vendor_name, v.gstin as vendor_gstin,
+            ba.bank_name, ba.account_number as bank_account_number,
             COALESCE(
               (
                 SELECT JSON_ARRAYAGG(
@@ -2288,6 +2298,7 @@ const getDebitNotes = async (vendorId = null) => {
             ) as items
      FROM debit_notes dn
      JOIN vendors v ON dn.vendor_id = v.id
+     LEFT JOIN bank_accounts ba ON dn.bank_account_id = ba.id
      ${where}
      ORDER BY dn.voucher_date DESC, dn.id DESC`,
     params

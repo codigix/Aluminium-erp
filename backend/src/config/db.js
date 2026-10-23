@@ -3285,6 +3285,17 @@ const ensureAccountingTables = async () => {
         CONSTRAINT credit_note_items_cn_fk FOREIGN KEY (credit_note_id) REFERENCES credit_notes(id) ON DELETE CASCADE ON UPDATE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    // Company bank account selected on debit / credit notes
+    for (const [table, afterCol, indexName] of [
+      ['debit_notes', 'po_id', 'idx_dn_bank_account'],
+      ['credit_notes', 'sales_invoice_id', 'idx_cn_bank_account']
+    ]) {
+      const [cols] = await connection.query(`SHOW COLUMNS FROM ${table} LIKE 'bank_account_id'`);
+      if (cols.length === 0) {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN bank_account_id INT NULL AFTER ${afterCol}`);
+        await connection.query(`CREATE INDEX ${indexName} ON ${table} (bank_account_id)`);
+      }
+    }
     console.log('Accounting tables (journal_vouchers, contra_vouchers, debit_notes, credit_notes) synchronized');
   } catch (error) {
     console.error('Error synchronizing accounting tables:', error.message);

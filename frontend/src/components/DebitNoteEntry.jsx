@@ -90,8 +90,11 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
   const [posting, setPosting] = useState(false);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [bankAccountId, setBankAccountId] = useState('');
 
   useEffect(() => {
+    fetchBankAccounts();
     fetchVendors();
     fetchNextNo();
     fetchHistory();
@@ -146,6 +149,19 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
       }
     } catch (err) {
       console.error('Error fetching vendors:', err);
+    }
+  };
+
+  const fetchBankAccounts = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/bank-accounts`, { headers: authHeaders() });
+      if (res.ok) {
+        const json = await res.json();
+        const list = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+        setBankAccounts(list.filter(b => b.is_active !== false && b.is_active !== 0));
+      }
+    } catch (err) {
+      console.error('Error fetching bank accounts:', err);
     }
   };
 
@@ -219,6 +235,15 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
   }));
 
   const clearItems = () => setItemRows(rows => rows.map(row => ({ ...row, selected: false, qty: '' })));
+
+  const bankOptions = useMemo(() => [
+    { value: '', label: 'Not linked to a bank', sublabel: 'No bank account for this debit note' },
+    ...bankAccounts.map(b => ({
+      value: String(b.id),
+      label: b.bank_name || b.account_name || 'Bank Account',
+      sublabel: [b.account_number ? `A/c ${b.account_number}` : '', b.branch_name, b.ifsc_code ? `IFSC ${b.ifsc_code}` : ''].filter(Boolean).join(' • ')
+    }))
+  ], [bankAccounts]);
 
   const vendorOptions = useMemo(() => vendors.map(v => ({
     value: String(v.id),
@@ -306,7 +331,8 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
             : [],
           ledgerAmount: itemMode ? null : calc.taxable,
           ledgerGstPercent: itemMode ? null : calc.rate,
-          narration: form.narration.trim() || defaultNarration
+          narration: form.narration.trim() || defaultNarration,
+          bankAccountId: bankAccountId || null
         })
       });
       const data = await res.json().catch(() => ({}));
@@ -355,7 +381,7 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
       <h1>DEBIT NOTE</h1><p class="muted">${dn.reason_label}${dn.status === 'CANCELLED' ? ' — CANCELLED' : ''}</p>
       <p><b>No:</b> ${dn.voucher_no} &nbsp; <b>Date:</b> ${formatDate(dn.voucher_date)}<br/>
       <b>To:</b> ${dn.vendor_name}${dn.vendor_gstin ? ` (GSTIN ${dn.vendor_gstin})` : ''}<br/>
-      <b>Against:</b> ${dn.reference_invoice_no || 'On Account'} &nbsp; <b>Ledger:</b> ${dn.affected_ledger}</p>
+      <b>Against:</b> ${dn.reference_invoice_no || 'On Account'} &nbsp; <b>Ledger:</b> ${dn.affected_ledger}${dn.bank_name ? `<br/><b>Bank:</b> ${dn.bank_name}${dn.bank_account_number ? ` (A/c ${dn.bank_account_number})` : ''}` : ''}</p>
       <table><thead><tr><th>Particulars</th><th class="r">Qty</th><th class="r">Amount</th></tr></thead><tbody>
       ${itemRowsHtml}${gstRows}
       <tr class="b"><td colspan="2">Total Debit</td><td class="r">${formatCurrency(dn.total_amount)}</td></tr></tbody></table>
@@ -443,6 +469,23 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
                 {LEDGERS.map(l => <option key={l} value={l}>{l}</option>)}
               </select>
             </Field>
+
+            <div className="md:col-span-2">
+              <Field label="Company Bank Account" hint="Bank account this debit amount relates to (e.g. supplier refund received)">
+                <SearchableSelect
+                  options={bankOptions}
+                  value={bankAccountId}
+                  onChange={(e) => setBankAccountId(e.target.value)}
+                  placeholder="Search bank name or account number"
+                  labelField="label"
+                  valueField="value"
+                  subLabelField="sublabel"
+                  allowCustom={false}
+                  showSearchIcon={true}
+                  className="w-full text-sm py-2 px-3 border-slate-300 rounded-lg"
+                />
+              </Field>
+            </div>
 
             <div className="md:col-span-2">
               <Field label="Narration">
@@ -687,6 +730,7 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
                 <th className="px-3 py-2">Date</th>
                 <th className="px-3 py-2">Supplier</th>
                 <th className="px-3 py-2">Reference Bill</th>
+                <th className="px-3 py-2">Bank</th>
                 <th className="px-3 py-2 text-right">Amount</th>
                 <th className="px-3 py-2 text-center">Status</th>
                 <th className="px-3 py-2 w-16" />
@@ -701,6 +745,7 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
                     <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{formatDate(dn.voucher_date)}</td>
                     <td className="px-3 py-2 text-slate-800">{dn.vendor_name}</td>
                     <td className="px-3 py-2 font-mono text-slate-600">{dn.reference_invoice_no || 'On Account'}</td>
+                    <td className="px-3 py-2 text-slate-600">{dn.bank_name || '—'}</td>
                     <td className={`px-3 py-2 text-right font-mono font-semibold ${cancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>{formatCurrency(dn.total_amount)}</td>
                     <td className="px-3 py-2 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${cancelled ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
@@ -724,7 +769,7 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
               })}
               {displayedHistory.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-slate-400 italic">
+                  <td colSpan={8} className="px-4 py-6 text-center text-slate-400 italic">
                     {historyLoading ? 'Loading…' : 'No debit notes recorded yet.'}
                   </td>
                 </tr>

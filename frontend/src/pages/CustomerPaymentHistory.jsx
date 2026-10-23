@@ -501,7 +501,7 @@ const CustomerPaymentHistory = () => {
         agst_ref: dn.reference_invoice_no || null,
         po_number: dn.reference_invoice_no || null,
         customer_po: null,
-        bank_name: null,
+        bank_name: dn.bank_name || null,
         cheque_no: null,
         cheque_bank: null,
         ref_no: null,
@@ -538,7 +538,7 @@ const CustomerPaymentHistory = () => {
         agst_ref: cn.reference_invoice_no || null,
         po_number: null,
         customer_po: null,
-        bank_name: null,
+        bank_name: cn.bank_name || null,
         cheque_no: null,
         cheque_bank: null,
         ref_no: null,
@@ -954,6 +954,12 @@ const CustomerPaymentHistory = () => {
                     : 'text-blue-700 bg-blue-50 border-blue-200'
                 }`}>
                   {row.bill_ref}
+                </span>
+              )}
+              {(row.kind === 'DEBIT_NOTE' || row.kind === 'CREDIT_NOTE') && row.bank_name && (
+                <span className="inline-flex items-center gap-1 font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200">
+                  <Building2 className="w-3 h-3" />
+                  {row.bank_name}{row.raw?.bank_account_number ? ` (A/c ${row.raw.bank_account_number})` : ''}
                 </span>
               )}
               {row.cheque_no && row.kind !== 'CONTRA_VOUCHER' && (
@@ -1675,6 +1681,12 @@ const CustomerPaymentHistory = () => {
                         <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Ledger Account</span>
                         <span className="font-bold text-slate-800">{dn.affected_ledger}</span>
                       </div>
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg col-span-2">
+                        <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Company Bank Account</span>
+                        <span className="font-bold text-slate-800">
+                          {dn.bank_name ? `${dn.bank_name}${dn.bank_account_number ? ` – A/c ${dn.bank_account_number}` : ''}` : 'Not linked to a bank'}
+                        </span>
+                      </div>
                     </div>
 
                     {itemLines.length > 0 && (
@@ -1777,6 +1789,12 @@ const CustomerPaymentHistory = () => {
                       <div className="p-3 bg-white border border-slate-200 rounded-lg">
                         <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Ledger Account</span>
                         <span className="font-bold text-slate-800">{cn.affected_ledger}</span>
+                      </div>
+                      <div className="p-3 bg-white border border-slate-200 rounded-lg col-span-2">
+                        <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5">Company Bank Account</span>
+                        <span className="font-bold text-slate-800">
+                          {cn.bank_name ? `${cn.bank_name}${cn.bank_account_number ? ` – A/c ${cn.bank_account_number}` : ''}` : 'Not linked to a bank'}
+                        </span>
                       </div>
                     </div>
 

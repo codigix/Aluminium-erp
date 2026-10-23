@@ -2904,6 +2904,7 @@ model debit_notes {
   vendor_id            Int
   vendor_invoice_id    Int?
   po_id                Int?
+  bank_account_id      Int?
   reference_invoice_no String?            @db.VarChar(100)
   reason               String             @default("PURCHASE_RETURN") @db.VarChar(50)
   entry_mode           String             @default("ITEM") @db.VarChar(20)
@@ -2925,6 +2926,7 @@ model debit_notes {
   @@index([vendor_id], map: "idx_dn_vendor")
   @@index([vendor_invoice_id], map: "idx_dn_invoice")
   @@index([po_id], map: "idx_dn_po")
+  @@index([bank_account_id], map: "idx_dn_bank_account")
   @@index([voucher_date], map: "idx_dn_date")
 }
 
@@ -2954,6 +2956,7 @@ model credit_notes {
   voucher_date         DateTime            @db.Date
   customer_id          Int
   sales_invoice_id     Int?
+  bank_account_id      Int?
   reference_invoice_no String?             @db.VarChar(100)
   reason               String              @default("SALES_RETURN") @db.VarChar(50)
   entry_mode           String              @default("ITEM") @db.VarChar(20)
@@ -2974,6 +2977,7 @@ model credit_notes {
 
   @@index([customer_id], map: "idx_cn_customer")
   @@index([sales_invoice_id], map: "idx_cn_invoice")
+  @@index([bank_account_id], map: "idx_cn_bank_account")
   @@index([voucher_date], map: "idx_cn_date")
 }
 

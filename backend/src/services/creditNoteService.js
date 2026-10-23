@@ -100,6 +100,7 @@ const recordCreditNote = async (payload) => {
     ledgerAmount,
     ledgerGstPercent,
     narration,
+    bankAccountId,
     createdBy
   } = payload;
 
@@ -111,6 +112,13 @@ const recordCreditNote = async (payload) => {
   const [customerRows] = await pool.query('SELECT id, company_name FROM companies WHERE id = ?', [customerId]);
   if (customerRows.length === 0) throw badRequest('Customer not found.');
   const customer = customerRows[0];
+
+  let bankAccount = null;
+  if (bankAccountId) {
+    const [bankRows] = await pool.query('SELECT id, bank_name, account_number FROM bank_accounts WHERE id = ?', [bankAccountId]);
+    if (bankRows.length === 0) throw badRequest('Selected bank account not found.');
+    bankAccount = bankRows[0];
+  }
 
   // Reference invoice is optional – an on-account credit note reduces only the customer balance
   let invoice = null;
@@ -207,12 +215,12 @@ const recordCreditNote = async (payload) => {
 
     const [result] = await connection.query(
       `INSERT INTO credit_notes (
-        voucher_no, voucher_date, customer_id, sales_invoice_id, reference_invoice_no,
+        voucher_no, voucher_date, customer_id, sales_invoice_id, bank_account_id, reference_invoice_no,
         reason, entry_mode, affected_ledger, gst_type, taxable_amount, cgst_amount, sgst_amount,
         igst_amount, total_amount, narration, status, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?)`,
       [
-        voucherNo, voucherDate, customerId, invoice ? invoice.id : null, invoiceRef,
+        voucherNo, voucherDate, customerId, invoice ? invoice.id : null, bankAccount ? bankAccount.id : null, invoiceRef,
         reason, entryMode, ledgerName, gstType, taxableAmount, cgst, sgst,
         igst, totalAmount, finalNarration, createdBy || null
       ]
@@ -244,6 +252,7 @@ const recordCreditNote = async (payload) => {
       voucherDate,
       customerName: customer.company_name,
       referenceInvoiceNo: invoiceRef,
+      bankName: bankAccount ? bankAccount.bank_name : null,
       taxableAmount,
       cgst,
       sgst,
@@ -268,6 +277,7 @@ const getCreditNotes = async (customerId = null) => {
   }
   const [rows] = await pool.query(
     `SELECT cn.*, c.company_name as customer_name, c.gstin as customer_gstin,
+            ba.bank_name, ba.account_number as bank_account_number,
             COALESCE(
               (
                 SELECT JSON_ARRAYAGG(
@@ -292,6 +302,7 @@ const getCreditNotes = async (customerId = null) => {
             ) as items
      FROM credit_notes cn
      JOIN companies c ON cn.customer_id = c.id
+     LEFT JOIN bank_accounts ba ON cn.bank_account_id = ba.id
      ${where}
      ORDER BY cn.voucher_date DESC, cn.id DESC`,
     params
