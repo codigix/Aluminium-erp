@@ -55,6 +55,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   const [balanceData, setBalanceData] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [customerCreditNotes, setCustomerCreditNotes] = useState([]);
 
   // Vendor State (for Payment Voucher / Sundry Creditors)
   const [vendors, setVendors] = useState([]);
@@ -64,6 +65,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   const [vendorInvoicesLoading, setVendorInvoicesLoading] = useState(false);
   const [vendorPaymentHistory, setVendorPaymentHistory] = useState([]);
   const [vendorHistoryLoading, setVendorHistoryLoading] = useState(false);
+  const [vendorDebitNotes, setVendorDebitNotes] = useState([]);
   const [isProcessPaymentModalOpen, setIsProcessPaymentModalOpen] = useState(false);
   const [selectedVendorInvoice, setSelectedVendorInvoice] = useState(null);
 
@@ -316,12 +318,14 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         fetchCustomerInvoices(selectedCompanyId);
         fetchCustomerBalance(selectedCompanyId);
         fetchCustomerPaymentHistory(selectedCompanyId);
+        fetchCustomerCreditNotes(selectedCompanyId);
         fetchMonthlySummary(selectedCompanyId, selectedMonth, fromDate, toDate);
       } else {
         setSelectedCompany(null);
         setInvoices([]);
         setBalanceData(null);
         setPaymentHistory([]);
+        setCustomerCreditNotes([]);
         setMonthlySummary(null);
       }
     }
@@ -336,10 +340,12 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         setSelectedVendor(found || null);
         fetchVendorInvoices(selectedVendorId);
         fetchVendorPayments(selectedVendorId);
+        fetchVendorDebitNotes(selectedVendorId);
       } else {
         setSelectedVendor(null);
         setVendorInvoices([]);
         setVendorPaymentHistory([]);
+        setVendorDebitNotes([]);
       }
     }
   }, [selectedVendorId, vendors, isPaymentMode]);
@@ -436,6 +442,22 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     }
   };
 
+  const fetchCustomerCreditNotes = async (customerId) => {
+    if (!customerId) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/customer-payments/credit-notes?customerId=${customerId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomerCreditNotes(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Error fetching customer credit notes:', err);
+    }
+  };
+
   const fetchMonthlySummary = async (customerId, monthStr, customFrom, customTo) => {
     if (!customerId) {
       setMonthlySummary(null);
@@ -511,6 +533,22 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       setVendorPaymentHistory([]);
     } finally {
       setVendorHistoryLoading(false);
+    }
+  };
+
+  const fetchVendorDebitNotes = async (vendorId) => {
+    if (!vendorId) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/payments/debit-notes?vendorId=${vendorId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVendorDebitNotes(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Error fetching vendor debit notes:', err);
     }
   };
 
@@ -623,6 +661,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       if (selectedVendorId) {
         fetchVendorInvoices(selectedVendorId);
         fetchVendorPayments(selectedVendorId);
+        fetchVendorDebitNotes(selectedVendorId);
       }
     } else {
       fetchCompanies();
@@ -630,6 +669,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         fetchCustomerInvoices(selectedCompanyId);
         fetchCustomerBalance(selectedCompanyId);
         fetchCustomerPaymentHistory(selectedCompanyId);
+        fetchCustomerCreditNotes(selectedCompanyId);
         fetchMonthlySummary(selectedCompanyId, selectedMonth, fromDate, toDate);
       }
     }
@@ -789,8 +829,27 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       voucher_type: 'PAYMENT'
     }));
 
-    return [...payments, ...vendorJournalRows];
-  }, [vendorPaymentHistory, vendorJournalRows]);
+    // Posted debit notes reduce the supplier payable (supplier account debited)
+    const debitNoteRows = vendorDebitNotes
+      .filter(dn => dn.status === 'POSTED')
+      .map(dn => ({
+        id: `dn_${dn.id}`,
+        is_debit_note: true,
+        voucher_type: 'DEBIT_NOTE',
+        payment_date: String(dn.voucher_date || dn.created_at || '').slice(0, 10),
+        voucher_date: String(dn.voucher_date || dn.created_at || '').slice(0, 10),
+        created_at: dn.created_at,
+        voucher_no: dn.voucher_no,
+        payment_voucher_no: dn.voucher_no,
+        particulars_title: `${dn.vendor_name} – ${dn.reason_label || 'Debit Note'}`,
+        reference_invoice_no: dn.reference_invoice_no,
+        narration: dn.narration,
+        payment_amount: parseFloat(dn.total_amount) || 0,
+        debit_amount: parseFloat(dn.total_amount) || 0
+      }));
+
+    return [...payments, ...vendorJournalRows, ...debitNoteRows];
+  }, [vendorPaymentHistory, vendorJournalRows, vendorDebitNotes]);
 
   // Displayed Vendor Payment History
   const displayedVendorPaymentHistory = useMemo(() => {
@@ -834,7 +893,9 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       return sum + bAmt;
     }, 0);
     const totalReceived = vendorInvoices.reduce((sum, inv) => sum + (parseFloat(inv.already_paid) || 0), 0);
-    const totalOutstanding = Math.max(0, totalInvoiced - totalReceived - vendorJournalDebit);
+    // Posted debit notes against these bills also reduce the payable
+    const totalDebitNotes = vendorInvoices.reduce((sum, inv) => sum + (parseFloat(inv.debit_note_amount) || 0), 0);
+    const totalOutstanding = Math.max(0, totalInvoiced - totalReceived - vendorJournalDebit - totalDebitNotes);
     const pendingCount = vendorInvoices.filter(inv => {
       const out = (parseFloat(inv.outstanding) || 0) - vendorJournalDebit;
       return out > 0;
@@ -917,30 +978,60 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     });
   }, [allOutstandingInvoices, applyDateFilterToTable, fromDate, toDate]);
 
+  // Customer receipts + posted credit notes (credit notes also reduce the customer receivable)
+  const combinedPaymentHistory = useMemo(() => {
+    const creditNoteRows = customerCreditNotes
+      .filter(cn => cn.status === 'POSTED')
+      .map(cn => ({
+        id: `cn_${cn.id}`,
+        is_credit_note: true,
+        payment_date: String(cn.voucher_date || cn.created_at || '').slice(0, 10),
+        created_at: cn.created_at,
+        receipt_number: cn.voucher_no,
+        bank_name: `Credit Note – ${cn.reason_label || 'Sales Return'}`,
+        payment_mode: 'CREDIT_NOTE',
+        invoice_no: cn.reference_invoice_no || 'On Account',
+        payment_amount: cn.total_amount,
+        remarks: cn.narration,
+        raw: cn
+      }));
+    return [...paymentHistory, ...creditNoteRows].sort((a, b) => {
+      const da = String(a.payment_date || a.created_at || '');
+      const db = String(b.payment_date || b.created_at || '');
+      if (db !== da) return db.localeCompare(da);
+      return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+    });
+  }, [paymentHistory, customerCreditNotes]);
+
   // Displayed Payment History (by default applies active month/period filter, e.g. Oct 2026)
   const displayedPaymentHistory = useMemo(() => {
     if (historyFilterMode === 'all' || !fromDate || !toDate) {
-      return paymentHistory;
+      return combinedPaymentHistory;
     }
-    return paymentHistory.filter(p => {
+    return combinedPaymentHistory.filter(p => {
       const d = (p.payment_date || p.created_at || '').slice(0, 10);
       return (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
     });
-  }, [paymentHistory, historyFilterMode, fromDate, toDate]);
+  }, [combinedPaymentHistory, historyFilterMode, fromDate, toDate]);
 
   const historyPeriodCount = useMemo(() => {
-    if (!fromDate || !toDate) return paymentHistory.length;
-    return paymentHistory.filter(p => {
+    if (!fromDate || !toDate) return combinedPaymentHistory.length;
+    return combinedPaymentHistory.filter(p => {
       const d = (p.payment_date || p.created_at || '').slice(0, 10);
       return (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
     }).length;
-  }, [paymentHistory, fromDate, toDate]);
+  }, [combinedPaymentHistory, fromDate, toDate]);
 
   // Aggregate stats for selected customer
   const stats = useMemo(() => {
     const totalInvoiced = invoices.reduce((sum, inv) => sum + (parseFloat(inv.total_amount) || 0), 0);
     const totalReceived = invoices.reduce((sum, inv) => sum + (parseFloat(inv.paid_amount) || 0), 0);
-    const totalOutstanding = Math.max(0, totalInvoiced - totalReceived);
+    // Invoice outstanding already deducts posted credit notes; credited = total − received − outstanding
+    const totalCreditNotes = invoices.reduce((sum, inv) => {
+      const credited = (parseFloat(inv.total_amount) || 0) - (parseFloat(inv.paid_amount) || 0) - (parseFloat(inv.outstanding) || 0);
+      return sum + Math.max(0, credited);
+    }, 0);
+    const totalOutstanding = Math.max(0, totalInvoiced - totalReceived - totalCreditNotes);
     const pendingCount = invoices.filter(inv => parseFloat(inv.outstanding || 0) > 0).length;
     const progress = totalInvoiced > 0 ? Math.round((totalReceived / totalInvoiced) * 100) : 0;
 
@@ -1280,10 +1371,16 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       label: 'Voucher Type',
       key: 'voucher_type',
       sortable: true,
-      render: () => (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
-          Receipt
-        </span>
+      render: (_, row) => (
+        row.is_credit_note ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-teal-50 text-teal-700 border border-teal-200 shadow-2xs">
+            Credit Note
+          </span>
+        ) : (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
+            Receipt
+          </span>
+        )
       )
     },
     {
@@ -1304,10 +1401,19 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       key: 'debit',
       sortable: true,
       className: 'text-right',
-      render: () => (
-        <div className="text-right whitespace-nowrap text-slate-400 font-mono text-xs font-medium">
-          —
-        </div>
+      render: (_, row) => (
+        row.is_credit_note ? (
+          <div className="text-right whitespace-nowrap">
+            <span className="font-mono text-xs font-bold text-rose-700">
+              {formatCurrency(parseFloat(row.payment_amount) || 0)}
+            </span>
+            <span className="text-[10px] text-rose-600 font-semibold ml-1">Dr</span>
+          </div>
+        ) : (
+          <div className="text-right whitespace-nowrap text-slate-400 font-mono text-xs font-medium">
+            —
+          </div>
+        )
       )
     },
     {
@@ -1316,6 +1422,13 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       sortable: true,
       className: 'text-right',
       render: (_, row) => {
+        if (row.is_credit_note) {
+          return (
+            <div className="text-right whitespace-nowrap text-slate-400 font-mono text-xs font-medium">
+              —
+            </div>
+          );
+        }
         const amt = parseFloat(row.payment_amount) || 0;
         return (
           <div className="text-right whitespace-nowrap">
@@ -1332,14 +1445,18 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       key: 'id',
       className: 'text-right',
       render: (_, row) => (
-        <button
-          type="button"
-          onClick={() => handleDownloadReceipt(row.id, row.receipt_number)}
-          className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
-          title="Download Receipt PDF"
-        >
-          <Download className="w-4 h-4" />
-        </button>
+        row.is_credit_note ? (
+          <span className="text-[10px] text-slate-400 font-semibold pr-1.5">Print in Credit Note</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => handleDownloadReceipt(row.id, row.receipt_number)}
+            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+            title="Download Receipt PDF"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+        )
       )
     }
   ];
@@ -1931,6 +2048,28 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       key: 'particulars',
       sortable: true,
       render: (_, row) => {
+        if (row.is_debit_note) {
+          return (
+            <div className="flex flex-col gap-1 py-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-slate-900 text-xs">{row.particulars_title}</span>
+                <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 uppercase tracking-wide">
+                  DEBIT NOTE
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+                <span className="font-mono text-blue-700 font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                  {row.reference_invoice_no ? `Agst Ref: ${row.reference_invoice_no}` : 'On Account'}
+                </span>
+                {row.narration && (
+                  <span className="text-[10.5px] text-slate-500 italic max-w-md truncate" title={row.narration}>
+                    {row.narration}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        }
         if (row.is_journal || row.voucher_type === 'JOURNAL') {
           return (
             <div className="flex flex-col gap-1 py-0.5">
@@ -2030,6 +2169,13 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       key: 'voucher_type',
       sortable: true,
       render: (val, row) => {
+        if (row.is_debit_note) {
+          return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
+              Debit Note
+            </span>
+          );
+        }
         const isJv = row.is_journal || row.voucher_type === 'JOURNAL' || val === 'JOURNAL';
         if (isJv) {
           return (
@@ -2069,6 +2215,13 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       sortable: true,
       className: 'text-right',
       render: (_, row) => {
+        if (row.is_debit_note) {
+          return (
+            <div className="text-right whitespace-nowrap text-slate-400 font-mono text-xs font-medium">
+              —
+            </div>
+          );
+        }
         const amt = parseFloat(row.debit_amount ?? row.total_debit ?? row.payment_amount) || 0;
         return (
           <div className="text-right whitespace-nowrap">
@@ -2086,6 +2239,16 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       sortable: true,
       className: 'text-right',
       render: (_, row) => {
+        if (row.is_debit_note) {
+          return (
+            <div className="text-right whitespace-nowrap">
+              <span className="font-mono text-xs font-semibold text-slate-700">
+                {formatCurrency(row.payment_amount)}
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium ml-1">Cr</span>
+            </div>
+          );
+        }
         if (row.is_journal || row.voucher_type === 'JOURNAL') {
           const crAmt = parseFloat(row.credit_amount ?? row.total_credit) || 0;
           if (crAmt > 0) {
@@ -2111,6 +2274,9 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       key: 'id',
       className: 'text-right',
       render: (_, row) => {
+        if (row.is_debit_note) {
+          return <span className="text-[10px] text-slate-400 font-semibold pr-1.5">Print in Debit Note</span>;
+        }
         if (row.is_journal || row.voucher_type === 'JOURNAL') {
           return (
             <button
@@ -2262,6 +2428,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
               if (selectedCompanyId) {
                 fetchCustomerInvoices(selectedCompanyId);
                 fetchCustomerBalance(selectedCompanyId);
+                fetchCustomerCreditNotes(selectedCompanyId);
               }
             }}
           />
@@ -2272,6 +2439,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
               if (selectedVendorId) {
                 fetchVendorInvoices(selectedVendorId);
                 fetchVendorPayments(selectedVendorId);
+                fetchVendorDebitNotes(selectedVendorId);
               }
             }}
           />

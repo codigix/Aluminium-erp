@@ -519,7 +519,16 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
   );
   const priorPaid = parseFloat(priorPayRows[0]?.total || 0);
 
-  const openingBalance = Math.max(0, priorInvoiced - priorPaid);
+  // Posted credit notes reduce the customer balance like receipts
+  const [priorCnRows] = await pool.query(
+    `SELECT COALESCE(SUM(total_amount), 0) as total
+     FROM credit_notes
+     WHERE customer_id = ? AND status = 'POSTED' AND voucher_date < ?`,
+    [customerId, startDate]
+  );
+  const priorCredited = parseFloat(priorCnRows[0]?.total || 0);
+
+  const openingBalance = Math.max(0, priorInvoiced - priorPaid - priorCredited);
 
   // 3. Current Month Invoices
   const [curInvRows] = await pool.query(
@@ -543,8 +552,18 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
   );
   const currentMonthPayments = parseFloat(curPayRows[0]?.total || 0);
 
-  // 5. Closing Balance: Opening + Invoiced - Paid
-  const closingBalance = Math.max(0, openingBalance + currentMonthInvoices - currentMonthPayments);
+  const [curCnRows] = await pool.query(
+    `SELECT COALESCE(SUM(total_amount), 0) as total
+     FROM credit_notes
+     WHERE customer_id = ? AND status = 'POSTED'
+       AND voucher_date >= ?
+       AND voucher_date <= ?`,
+    [customerId, startDate.split(' ')[0], endDate.split(' ')[0]]
+  );
+  const currentMonthCreditNotes = parseFloat(curCnRows[0]?.total || 0);
+
+  // 5. Closing Balance: Opening + Invoiced - Paid - Credit Notes
+  const closingBalance = Math.max(0, openingBalance + currentMonthInvoices - currentMonthPayments - currentMonthCreditNotes);
 
   return {
     customerId: Number(customerId),
@@ -556,6 +575,7 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
     openingBalance,
     currentMonthInvoices,
     currentMonthPayments,
+    currentMonthCreditNotes,
     currentBalance: closingBalance,
     closingBalance
   };
