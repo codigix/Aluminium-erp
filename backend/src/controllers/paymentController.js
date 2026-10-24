@@ -67,6 +67,18 @@ const updatePaymentStatus = async (req, res, next) => {
   }
 };
 
+const allocateOnAccountPayment = async (req, res, next) => {
+  try {
+    const result = await paymentService.allocateOnAccountPayment(req.params.paymentId, req.body.allocations);
+    res.json({
+      message: 'Payment allocated successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const deletePayment = async (req, res, next) => {
   try {
     const result = await paymentService.deletePayment(req.params.paymentId);
@@ -284,6 +296,7 @@ module.exports = {
   recordContraVoucher,
   getContraVouchers,
   processPayment,
+  allocateOnAccountPayment,
   getPayments,
   getPendingPayments,
   getPaymentById,

@@ -38,6 +38,26 @@ const isJournalAllowedGroup = (groupName) => {
   return !JOURNAL_BLOCKED_KEYWORDS.some(k => lower.includes(k));
 };
 
+// Searchable ledger list for Journal Voucher rows: standard ledgers + master chart (cash/bank blocked)
+const STANDARD_JOURNAL_LEDGERS = [
+  'Office Equipment (Assets)', 'Plant & Machinery (Assets)', 'Furniture & Fixtures (Assets)',
+  'Depreciation Account (Expenses)', 'Accumulated Depreciation (Provision)', 'Bad Debts Written Off (Expenses)',
+  'Provision for Doubtful Debts', 'Sundry Debtors (Customers)', 'Sundry Creditors (Vendors)',
+  'Discount Allowed (Expenses)', 'Discount Received (Income)', 'TDS Receivable (Assets)',
+  'TDS Payable (Liabilities)', 'GST Input Tax Credit (ITC)', 'GST Output Tax Payable',
+  'Rent Expense (Expenses)', 'Electricity Charges (Expenses)', 'Audit Fees Provision',
+  'Salary & Wages Payable', 'Telephone & Internet Charges', 'Interest on Loan (Expenses)',
+  'Insurance Premium (Expenses)'
+];
+const JOURNAL_LEDGER_OPTIONS = [
+  ...STANDARD_JOURNAL_LEDGERS.map(l => ({ value: l, label: l, sublabel: 'Standard Accounting Ledger' })),
+  ...LEDGER_GROUPS.filter(g => isJournalAllowedGroup(g.name)).map(g => ({
+    value: g.name,
+    label: `${g.id}. ${g.name} (${g.category})`,
+    sublabel: 'Master Chart of Accounts'
+  }))
+];
+
 const isVendorLedger = (ledgerName) => {
   if (!ledgerName) return false;
   const lower = ledgerName.toLowerCase();
@@ -1019,7 +1039,8 @@ const PaymentReceivedModal = ({
 
     baseList.forEach(inv => {
       const out = parseFloat(inv?.outstanding) || 0;
-      if (inv && inv.id && !removedBillIds.has(String(inv.id)) && out > 0) {
+      // Vendor payments also list fully paid bills (0 outstanding) for reference
+      if (inv && inv.id && !removedBillIds.has(String(inv.id)) && (out > 0 || isVendorMode)) {
         if (!map.has(String(inv.id))) {
           map.set(String(inv.id), inv);
         } else {
@@ -1040,7 +1061,7 @@ const PaymentReceivedModal = ({
       const dateB = new Date(b.invoice_date || b.created_at || 0).getTime();
       return dateA - dateB;
     });
-  }, [selectedInvoices, customerInvoices, manuallyAddedInvoices, removedBillIds]);
+  }, [selectedInvoices, customerInvoices, manuallyAddedInvoices, removedBillIds, isVendorMode]);
 
   // List of available unadded invoices of this customer that user can add via + Add Agst Ref
   const unaddedCustomerInvoices = useMemo(() => {
@@ -1310,8 +1331,19 @@ const PaymentReceivedModal = ({
     setAllocations(updated);
   };
 
+  // "Full" toggles: first click allocates the full outstanding, clicking again clears the row
   const handleSetFullAllocation = (inv) => {
     const out = parseFloat(inv.outstanding) || 0;
+    const current = parseFloat(allocations[inv.id]) || 0;
+    if (out > 0 && current >= out - 0.005) {
+      handleAllocationChange(inv.id, '');
+      if (voucherType === 'CREDIT_NOTE') {
+        setVoucherForm(prev => (prev.creditRefDoc === (inv.invoice_no || `INV-${inv.id}`)
+          ? { ...prev, creditRefDoc: '', creditAmount: '' }
+          : prev));
+      }
+      return;
+    }
     handleAllocationChange(inv.id, out.toFixed(2));
     if (voucherType === 'CREDIT_NOTE') {
       setVoucherForm(prev => ({ ...prev, creditRefDoc: inv.invoice_no || `INV-${inv.id}`, creditAmount: out.toFixed(2) }));
@@ -2211,7 +2243,8 @@ const PaymentReceivedModal = ({
               {journalRows.map((row) => (
                 <div key={row.id} className="grid grid-cols-12 gap-2 items-start p-2 rounded-lg bg-slate-50/50 border border-slate-100">
                   <div className="col-span-12 sm:col-span-6 md:col-span-7 space-y-1.5">
-                    <select
+                    <SearchableSelect
+                      options={JOURNAL_LEDGER_OPTIONS}
                       value={row.ledger}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -2219,39 +2252,14 @@ const PaymentReceivedModal = ({
                         handleJournalRowChange(row.id, 'partyId', '');
                         handleJournalRowChange(row.id, 'partyName', '');
                       }}
-                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-medium bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="">Select ledger...</option>
-                      <optgroup label="Standard Accounting Ledgers">
-                        <option value="Office Equipment (Assets)">Office Equipment (Assets)</option>
-                        <option value="Plant & Machinery (Assets)">Plant & Machinery (Assets)</option>
-                        <option value="Furniture & Fixtures (Assets)">Furniture & Fixtures (Assets)</option>
-                        <option value="Depreciation Account (Expenses)">Depreciation Account (Expenses)</option>
-                        <option value="Accumulated Depreciation (Provision)">Accumulated Depreciation (Provision)</option>
-                        <option value="Bad Debts Written Off (Expenses)">Bad Debts Written Off (Expenses)</option>
-                        <option value="Provision for Doubtful Debts">Provision for Doubtful Debts</option>
-                        <option value="Sundry Debtors (Customers)">Sundry Debtors (Customers)</option>
-                        <option value="Sundry Creditors (Vendors)">Sundry Creditors (Vendors)</option>
-                        <option value="Discount Allowed (Expenses)">Discount Allowed (Expenses)</option>
-                        <option value="Discount Received (Income)">Discount Received (Income)</option>
-                        <option value="TDS Receivable (Assets)">TDS Receivable (Assets)</option>
-                        <option value="TDS Payable (Liabilities)">TDS Payable (Liabilities)</option>
-                        <option value="GST Input Tax Credit (ITC)">GST Input Tax Credit (ITC)</option>
-                        <option value="GST Output Tax Payable">GST Output Tax Payable</option>
-                        <option value="Rent Expense (Expenses)">Rent Expense (Expenses)</option>
-                        <option value="Electricity Charges (Expenses)">Electricity Charges (Expenses)</option>
-                        <option value="Audit Fees Provision">Audit Fees Provision</option>
-                        <option value="Salary & Wages Payable">Salary & Wages Payable</option>
-                        <option value="Telephone & Internet Charges">Telephone & Internet Charges</option>
-                        <option value="Interest on Loan (Expenses)">Interest on Loan (Expenses)</option>
-                        <option value="Insurance Premium (Expenses)">Insurance Premium (Expenses)</option>
-                      </optgroup>
-                      <optgroup label="Master Chart of Accounts (Cash & Bank Blocked)">
-                        {LEDGER_GROUPS.filter(g => isJournalAllowedGroup(g.name)).map(g => (
-                          <option key={g.id} value={g.name}>{g.id}. {g.name} ({g.category})</option>
-                        ))}
-                      </optgroup>
-                    </select>
+                      placeholder="Search ledger..."
+                      labelField="label"
+                      valueField="value"
+                      subLabelField="sublabel"
+                      allowCustom={false}
+                      showSearchIcon={true}
+                      className="w-full text-xs py-1.5 px-2.5 border-slate-300 rounded-lg"
+                    />
 
                     {/* Dynamic Supplier Selection when Sundry Creditors is chosen */}
                     {isVendorLedger(row.ledger) && (
@@ -2260,23 +2268,22 @@ const PaymentReceivedModal = ({
                           <span>Select Supplier / Vendor *</span>
                           {row.partyName && <span className="text-emerald-700 font-medium font-mono text-[9.5px]">Selected: {row.partyName}</span>}
                         </label>
-                        <select
-                          value={row.partyId || ''}
+                        <SearchableSelect
+                          options={vendors.map(v => ({ value: String(v.id), label: v.vendor_name || v.name }))}
+                          value={row.partyId ? String(row.partyId) : ''}
                           onChange={(e) => {
                             const val = e.target.value;
                             const found = vendors.find(v => String(v.id) === String(val));
                             handleJournalRowChange(row.id, 'partyId', val);
                             handleJournalRowChange(row.id, 'partyName', found ? (found.vendor_name || found.name) : '');
                           }}
-                          className={`w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium ${
-                            !row.partyId ? 'border-amber-400 bg-amber-50/20' : 'border-slate-300'
-                          }`}
-                        >
-                          <option value="">Select Supplier → RK Laser Unit 2</option>
-                          {vendors.map(v => (
-                            <option key={v.id} value={v.id}>{v.vendor_name || v.name}</option>
-                          ))}
-                        </select>
+                          placeholder="Search supplier / vendor..."
+                          labelField="label"
+                          valueField="value"
+                          allowCustom={false}
+                          showSearchIcon={true}
+                          className={`w-full text-xs py-1.5 px-2.5 rounded-lg ${!row.partyId ? 'border-amber-400' : 'border-slate-300'}`}
+                        />
                       </div>
                     )}
 
@@ -2287,23 +2294,22 @@ const PaymentReceivedModal = ({
                           <span>Select Customer / Client *</span>
                           {row.partyName && <span className="text-emerald-700 font-medium font-mono text-[9.5px]">Selected: {row.partyName}</span>}
                         </label>
-                        <select
-                          value={row.partyId || ''}
+                        <SearchableSelect
+                          options={customers.map(c => ({ value: String(c.id), label: c.company_name || c.name }))}
+                          value={row.partyId ? String(row.partyId) : ''}
                           onChange={(e) => {
                             const val = e.target.value;
                             const found = customers.find(c => String(c.id) === String(val));
                             handleJournalRowChange(row.id, 'partyId', val);
                             handleJournalRowChange(row.id, 'partyName', found ? (found.company_name || found.name) : '');
                           }}
-                          className={`w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium ${
-                            !row.partyId ? 'border-amber-400 bg-amber-50/20' : 'border-slate-300'
-                          }`}
-                        >
-                          <option value="">Select Customer → Sidel India Pvt Ltd</option>
-                          {customers.map(c => (
-                            <option key={c.id} value={c.id}>{c.company_name || c.name}</option>
-                          ))}
-                        </select>
+                          placeholder="Search customer / client..."
+                          labelField="label"
+                          valueField="value"
+                          allowCustom={false}
+                          showSearchIcon={true}
+                          className={`w-full text-xs py-1.5 px-2.5 rounded-lg ${!row.partyId ? 'border-amber-400' : 'border-slate-300'}`}
+                        />
                       </div>
                     )}
                   </div>
@@ -2814,7 +2820,7 @@ const PaymentReceivedModal = ({
                                         ? 'bg-blue-600 text-white border-blue-600'
                                         : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
                                     }`}
-                                    title={`Allocate full ${formatCurrency(out)}`}
+                                    title={isFull ? 'Click again to clear this allocation' : `Allocate full ${formatCurrency(out)}`}
                                   >
                                     Full
                                   </button>
@@ -3904,8 +3910,7 @@ const PaymentReceivedModal = ({
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
                   >
                     <option value="">Select Account</option>
-                    <option value="Cash in Hand">Cash in Hand</option>
-                    <option value="Petty Cash Account">Petty Cash Account</option>
+                    <option value="Cash in Hand">Cash</option>
                     {bankAccounts.map(b => (
                       <option key={`from_${b.id}`} value={`${b.bank_name} (${b.account_number})`}>
                         {b.bank_name} ({b.account_number}) — Bal: ₹{parseFloat(b.current_balance ?? b.total_balance ?? b.opening_balance ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -3936,8 +3941,7 @@ const PaymentReceivedModal = ({
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
                   >
                     <option value="">Select Account</option>
-                    <option value="Cash in Hand">Cash in Hand</option>
-                    <option value="Petty Cash Account">Petty Cash Account</option>
+                    <option value="Cash in Hand">Cash</option>
                     {bankAccounts.map(b => (
                       <option key={`to_${b.id}`} value={`${b.bank_name} (${b.account_number})`}>
                         {b.bank_name} ({b.account_number}) — Bal: ₹{parseFloat(b.current_balance ?? b.total_balance ?? b.opening_balance ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}

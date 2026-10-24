@@ -528,7 +528,26 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
   );
   const priorCredited = parseFloat(priorCnRows[0]?.total || 0);
 
-  const openingBalance = Math.max(0, priorInvoiced - priorPaid - priorCredited);
+  // Journal entries on the customer ledger (e.g. Discount Allowed credits the customer).
+  // Ledger lines are stored as 'Sundry Debtors (Customers) (<customer name>)'.
+  const [custRows] = await pool.query('SELECT company_name FROM companies WHERE id = ?', [customerId]);
+  const customerName = (custRows[0]?.company_name || '').trim();
+  const journalNetCredit = async (dateCondition, params) => {
+    if (!customerName) return 0;
+    const [rows] = await pool.query(
+      `SELECT COALESCE(SUM(jvi.credit_amount - jvi.debit_amount), 0) as total
+       FROM journal_voucher_items jvi
+       JOIN journal_vouchers jv ON jv.id = jvi.journal_voucher_id
+       WHERE (jvi.ledger_account LIKE '%Sundry Debtors%' OR jvi.ledger_account LIKE '%Customer%')
+         AND LOWER(jvi.ledger_account) LIKE CONCAT('%', LOWER(?), '%')
+         AND ${dateCondition}`,
+      [customerName, ...params]
+    );
+    return parseFloat(rows[0]?.total || 0);
+  };
+  const priorJournalCredits = await journalNetCredit('jv.voucher_date < ?', [startDate.split(' ')[0]]);
+
+  const openingBalance = Math.max(0, priorInvoiced - priorPaid - priorCredited - priorJournalCredits);
 
   // 3. Current Month Invoices
   const [curInvRows] = await pool.query(
@@ -562,8 +581,13 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
   );
   const currentMonthCreditNotes = parseFloat(curCnRows[0]?.total || 0);
 
-  // 5. Closing Balance: Opening + Invoiced - Paid - Credit Notes
-  const closingBalance = Math.max(0, openingBalance + currentMonthInvoices - currentMonthPayments - currentMonthCreditNotes);
+  const currentMonthJournalCredits = await journalNetCredit(
+    'jv.voucher_date >= ? AND jv.voucher_date <= ?',
+    [startDate.split(' ')[0], endDate.split(' ')[0]]
+  );
+
+  // 5. Closing Balance: Opening + Invoiced - Paid - Credit Notes - Journal credits (discount allowed)
+  const closingBalance = Math.max(0, Math.round((openingBalance + currentMonthInvoices - currentMonthPayments - currentMonthCreditNotes - currentMonthJournalCredits) * 100) / 100);
 
   return {
     customerId: Number(customerId),
@@ -576,6 +600,7 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
     currentMonthInvoices,
     currentMonthPayments,
     currentMonthCreditNotes,
+    currentMonthJournalCredits,
     currentBalance: closingBalance,
     closingBalance
   };

@@ -37,6 +37,15 @@ const getBankAccountById = async (req, res, next) => {
   }
 };
 
+const getBankPeriodSummary = async (req, res, next) => {
+  try {
+    const summary = await bankAccountService.getBankPeriodSummary(req.params.accountId, req.query.startDate, req.query.endDate);
+    res.json({ success: true, data: summary });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const updateBankAccount = async (req, res, next) => {
   try {
     const result = await bankAccountService.updateBankAccount(
@@ -96,6 +105,7 @@ module.exports = {
   createBankAccount,
   getBankAccounts,
   getBankAccountById,
+  getBankPeriodSummary,
   updateBankAccount,
   toggleBankAccountStatus,
   deactivateBankAccount,

@@ -98,7 +98,7 @@ const CustomerPaymentHistory = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setAllRegisteredBanks(Array.isArray(data) ? data : []);
+        setAllRegisteredBanks(Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []));
       }
     } catch (err) {
       console.error('Error fetching registered banks:', err);
@@ -244,6 +244,85 @@ const CustomerPaymentHistory = () => {
     }
   }, [activeCustomer, startDate, endDate]);
 
+  // Bank selected in the main search (e.g. 'State Bank of India') – may cover more than one account
+  const activeBanks = useMemo(() => {
+    if (!selectedCompany) return [];
+    const target = selectedCompany.replace(/\s*\(\s*\d[\d\s]*\)\s*$/, '').toLowerCase().trim();
+    if (!target) return [];
+    return allRegisteredBanks.filter(b => (b.bank_name || b.account_name || '').toLowerCase().trim() === target);
+  }, [selectedCompany, allRegisteredBanks]);
+
+  const [loadedBankSummary, setBankSummary] = useState(null);
+  const [bankSummaryLoading, setBankSummaryLoading] = useState(false);
+
+  // The summary is only shown while it belongs to the currently selected bank(s) and dates
+  const bankSummaryKey = `${activeBanks.map(b => b.id).join(',')}|${startDate}|${endDate}`;
+  const bankSummary = activeBanks.length > 0 && loadedBankSummary?.key === bankSummaryKey ? loadedBankSummary : null;
+
+  useEffect(() => {
+    if (activeBanks.length === 0) return undefined;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setBankSummaryLoading(true);
+        const token = localStorage.getItem('authToken');
+        const qs = startDate && endDate ? `?startDate=${startDate}&endDate=${endDate}` : '';
+        const results = await Promise.all(activeBanks.map(async (b) => {
+          const res = await fetch(`${API_BASE}/bank-accounts/${b.id}/period-summary${qs}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error('Failed to load bank statement');
+          return (await res.json()).data;
+        }));
+        if (cancelled) return;
+        const sum = (key) => Math.round(results.reduce((s, r) => s + (parseFloat(r[key]) || 0), 0) * 100) / 100;
+        setBankSummary({
+          key: bankSummaryKey,
+          bankName: activeBanks[0].bank_name || activeBanks[0].account_name,
+          accountNumbers: results.map(r => r.accountNumber).filter(Boolean),
+          startDate: results[0].startDate,
+          endDate: results[0].endDate,
+          accountOpened: results.some(r => r.accountOpened),
+          accountStartDate: results.map(r => r.accountStartDate).filter(Boolean).sort()[0] || '',
+          openingBalance: sum('openingBalance'),
+          accountOpeningBalance: sum('accountOpeningBalance'),
+          moneyIn: sum('moneyIn'),
+          moneyOut: sum('moneyOut'),
+          currentTotal: sum('currentTotal'),
+          closingBalance: sum('closingBalance')
+        });
+      } catch (err) {
+        console.error('Error fetching bank period summary:', err);
+        if (!cancelled) setBankSummary(null);
+      } finally {
+        if (!cancelled) setBankSummaryLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [activeBanks, startDate, endDate, bankSummaryKey]);
+
+  // Discount Allowed journals that credit the selected customer inside the statement period.
+  // Ledger lines are stored as 'Sundry Debtors (Customers) (<customer name>)'.
+  const periodDiscountJournals = useMemo(() => {
+    const cName = (activeCustomer?.company_name || activeCustomer?.customer_name || '').trim().toLowerCase();
+    if (!cName) return [];
+    const from = startDate || monthlySummary?.startDate || '';
+    const to = endDate || monthlySummary?.endDate || '';
+    return journalVouchers.flatMap(jv => {
+      const date = String(jv.voucher_date || jv.created_at || '').slice(0, 10);
+      if ((from && date < from) || (to && date > to)) return [];
+      const items = Array.isArray(jv.items) ? jv.items : [];
+      const partyLine = items.find(it => {
+        const acc = (it.ledger_account || '').toLowerCase();
+        return (acc.includes('sundry debtors') || acc.includes('customer')) && acc.includes(cName);
+      });
+      if (!partyLine) return [];
+      const amount = (parseFloat(partyLine.credit_amount) || 0) - (parseFloat(partyLine.debit_amount) || 0);
+      return amount > 0 ? [{ id: jv.id, voucherNo: jv.voucher_no || `JV-${jv.id}`, amount }] : [];
+    });
+  }, [activeCustomer, journalVouchers, startDate, endDate, monthlySummary]);
+
   const statementPeriod = useMemo(() => {
     if (startDate && endDate) {
       return { from: startDate, to: endDate };
@@ -356,15 +435,14 @@ const CustomerPaymentHistory = () => {
 
       for (const it of items) {
         const acc = it.ledger_account || '';
-        const matchVendor = acc.match(/Sundry Creditors.*?\((.*?)\)/i) || acc.match(/Vendor.*?\((.*?)\)/i);
-        const matchClient = acc.match(/Sundry Debtors.*?\((.*?)\)/i) || acc.match(/Customer.*?\((.*?)\)/i);
+        // e.g. 'Sundry Creditors (Vendors) (S.R. ENTERPRISES)' – the party is the last (...) group
+        const lastGroup = acc.match(/\(([^()]*)\)\s*$/);
+        const isVendorLedger = /Sundry Creditors|Vendor/i.test(acc);
+        const isClientLedger = /Sundry Debtors|Customer/i.test(acc);
 
-        if (matchVendor) {
-          partyName = matchVendor[1]?.trim();
-          partyType = 'VENDOR';
-        } else if (matchClient) {
-          partyName = matchClient[1]?.trim();
-          partyType = 'CLIENT';
+        if ((isVendorLedger || isClientLedger) && lastGroup) {
+          partyName = lastGroup[1].trim();
+          partyType = isVendorLedger ? 'VENDOR' : 'CLIENT';
         }
 
         if (acc.toLowerCase().includes('discount') || acc.toLowerCase().includes('income')) {
@@ -379,9 +457,13 @@ const CustomerPaymentHistory = () => {
         }
       }
 
-      const particularsTitle = partyName 
-        ? `${partyName} – Discount Adjustment` 
+      const particularsTitle = partyName
+        ? `${partyName} – Discount Adjustment`
         : (jv.narration && jv.narration !== 'okk' ? jv.narration : 'Journal Voucher');
+
+      // Discount Allowed (customer) is shown on the Debit side, Discount Received (vendor) on the Credit side
+      const isDiscountAllowed = partyType === 'CLIENT' || /discount allowed/i.test(discountCreditAccount);
+      const discountLabel = isDiscountAllowed ? 'Discount Allowed' : 'Discount Received';
 
       list.push({
         id: `jv_${jv.id}`,
@@ -397,19 +479,22 @@ const CustomerPaymentHistory = () => {
         party_id: null,
         party_type: partyType,
         particulars_title: particularsTitle,
-        particulars_subtitle: discountCreditAccount || 'Discount Received (Income)',
+        particulars_subtitle: discountCreditAccount || (isDiscountAllowed ? 'Discount Allowed (Expenses)' : 'Discount Received (Income)'),
         payment_mode: 'JOURNAL_ENTRY',
-        bill_ref: 'Agst: Discount Received',
-        agst_ref: 'Discount Received',
+        bill_ref: `Agst: ${discountLabel}`,
+        agst_ref: discountLabel,
         po_number: null,
         customer_po: null,
         bank_name: null,
         cheque_no: null,
         cheque_bank: null,
         ref_no: null,
-        debit: drAmt,
-        credit: crAmt,
+        debit: isDiscountAllowed ? drAmt : null,
+        credit: isDiscountAllowed ? null : crAmt,
         amount: drAmt,
+        // Full voucher totals for the double-entry breakdown in the view modal
+        journal_debit: drAmt,
+        journal_credit: crAmt,
         narration: jv.narration && jv.narration !== 'okk' ? jv.narration : 'Discount Adjustment',
         status: 'CONFIRMED',
         items: items,
@@ -417,36 +502,37 @@ const CustomerPaymentHistory = () => {
       });
     });
 
-    // D. Contra Vouchers (F4) - Internal Transfers between Cash & Bank accounts
+    // D. Contra Vouchers (F4) - Internal Transfers between Cash & Bank accounts.
+    // Each voucher posts two ledger legs under the same voucher no.: the source account
+    // (money out, Debit column) and the destination account (money in, Credit column).
     contraVouchers.forEach(cv => {
       const amt = parseFloat(cv.amount) || 0;
       const fromAcc = cv.from_account || 'Cash / Bank Account';
       const toAcc = cv.to_account || 'Bank / Cash Account';
 
-      const isFromCash = /cash/i.test(fromAcc);
-      const isToCash = /cash/i.test(toAcc);
+      // "Bank Name (Account No.)" from the bank master; cash accounts keep the stored name
+      const bankLabel = (bankId, storedName) => {
+        const bank = bankId ? allRegisteredBanks.find(b => String(b.id) === String(bankId)) : null;
+        if (!bank) return storedName;
+        const name = bank.bank_name || bank.account_name || storedName;
+        return bank.account_number ? `${name} (${bank.account_number})` : name;
+      };
+      const fromLabel = bankLabel(cv.from_bank_account_id, fromAcc);
+      const toLabel = bankLabel(cv.to_bank_account_id, toAcc);
 
-      let contraDebit = null;
-      let contraCredit = null;
+      // Each leg's description names the counterpart: the money-out leg says where it was
+      // credited, the money-in leg says which bank it was debited from
+      const legs = [
+        { leg: 'OUT', account: fromLabel, description: `Credit to ${toLabel}`, debit: amt, credit: null },
+        { leg: 'IN', account: toLabel, description: `Debit from ${fromLabel}`, debit: null, credit: amt }
+      ];
 
-      if (isFromCash && !isToCash) {
-        // Cash in Hand -> Bank: Bank Inflow (Credit entry in Bank, Debit is empty)
-        contraCredit = amt;
-        contraDebit = null;
-      } else if (!isFromCash && isToCash) {
-        // Bank -> Cash in Hand: Bank Outflow (Debit entry in Bank, Credit is empty)
-        contraDebit = amt;
-        contraCredit = null;
-      } else {
-        // Bank -> Bank: Untouched original flow (shows both Debit and Credit)
-        contraDebit = amt;
-        contraCredit = amt;
-      }
-
-      list.push({
-        id: `cv_${cv.id}`,
+      legs.forEach(l => list.push({
+        id: `cv_${cv.id}_${l.leg}`,
         rawId: cv.id,
         kind: 'CONTRA_VOUCHER',
+        contra_leg: l.leg,
+        ledger_account: l.account,
         voucher_date: (cv.voucher_date || cv.created_at || '').slice(0, 10),
         raw_date: cv.voucher_date || cv.created_at,
         created_at: cv.created_at,
@@ -456,26 +542,27 @@ const CustomerPaymentHistory = () => {
         party_name: 'Internal Transfer',
         party_id: null,
         party_type: 'INTERNAL',
-        particulars_title: `${fromAcc} → ${toAcc}`,
-        particulars_subtitle: cv.reference_no ? `Slip / Ref: ${cv.reference_no}` : 'Internal Fund Transfer',
+        particulars_title: `${l.account} — Contra Transfer (Money ${l.leg === 'OUT' ? 'Out' : 'In'})`,
+        particulars_subtitle: l.description,
         payment_mode: 'CONTRA_TRANSFER',
         bill_ref: cv.reference_no ? `Slip #${cv.reference_no}` : 'Internal Transfer',
         agst_ref: cv.reference_no ? `Slip #${cv.reference_no}` : null,
         po_number: null,
         customer_po: null,
-        bank_name: `${fromAcc} ${toAcc}`,
+        bank_name: l.account,
         cheque_no: cv.reference_no,
         cheque_bank: null,
         ref_no: cv.reference_no,
-        debit: contraDebit,
-        credit: contraCredit,
+        debit: l.debit,
+        credit: l.credit,
         amount: amt,
         narration: cv.narration || 'Internal fund transfer between company accounts',
         status: 'CONFIRMED',
+        // Both accounts kept for the voucher breakdown modal and PDF
         from_account: fromAcc,
         to_account: toAcc,
         raw: cv
-      });
+      }));
     });
 
     // E. Debit Notes (Alt+F9) - supplier debited for purchase returns / adjustments (posted only)
@@ -586,7 +673,7 @@ const CustomerPaymentHistory = () => {
       // 3. Tertiary: Tiebreaker by database raw ID
       return (Number(b.rawId) || 0) - (Number(a.rawId) || 0);
     });
-  }, [customerPayments, vendorPayments, journalVouchers, contraVouchers, debitNotes, creditNotes]);
+  }, [customerPayments, vendorPayments, journalVouchers, contraVouchers, debitNotes, creditNotes, allRegisteredBanks]);
 
   // Comprehensive Unified Search Options: Bank Name, Client/Customer, Vendor, Agst Ref, PO Number, Customer PO
   const searchOptions = useMemo(() => {
@@ -614,11 +701,14 @@ const CustomerPaymentHistory = () => {
       });
     };
 
+    // One option per bank: 'State Bank of India (123467898765432)' and 'State Bank of India' collapse into one
+    const addBank = (val) => {
+      const base = String(val || '').replace(/\s*\(\s*\d[\d\s]*\)\s*$/, '').trim();
+      if (base) addOption(base, base, /cash/i.test(base) ? 'Cash' : 'Bank', 'bg-purple-50 text-purple-700 border-purple-200');
+    };
+
     // 1. Bank Accounts
-    allRegisteredBanks.forEach(b => {
-      const name = b.bank_name || b.account_name;
-      if (name) addOption(name, name, 'Bank', 'bg-purple-50 text-purple-700 border-purple-200');
-    });
+    allRegisteredBanks.forEach(b => addBank(b.bank_name || b.account_name));
 
     // 2. Customers / Clients
     companiesList.forEach(c => {
@@ -639,11 +729,9 @@ const CustomerPaymentHistory = () => {
 
     // 4. Banks, Against References & PO Numbers extracted from unifiedVouchers
     unifiedVouchers.forEach(v => {
-      if (v.bank_name && !v.bank_name.includes('Account')) {
-        addOption(v.bank_name, v.bank_name, 'Bank', 'bg-purple-50 text-purple-700 border-purple-200');
-      }
-      if (v.from_account) addOption(v.from_account, v.from_account, 'Bank / Cash', 'bg-purple-50 text-purple-700 border-purple-200');
-      if (v.to_account) addOption(v.to_account, v.to_account, 'Bank / Cash', 'bg-purple-50 text-purple-700 border-purple-200');
+      if (v.bank_name && !v.bank_name.includes('Account')) addBank(v.bank_name);
+      if (v.from_account) addBank(v.from_account);
+      if (v.to_account) addBank(v.to_account);
 
       // Against References (e.g. INV-2026-0006, INV-2026-0005, INV-2026-0031)
       if (v.bill_ref) {
@@ -736,7 +824,11 @@ const CustomerPaymentHistory = () => {
       // 1. Unified Search Filter: Bank, Client/Customer, Vendor, Agst Ref, PO #, Customer PO, Voucher #, Cheque #
       if (selectedCompany) {
         const target = selectedCompany.toLowerCase().trim();
-        const matches = (row.party_name || '').toLowerCase().includes(target) ||
+        const has = (v) => String(v || '').toLowerCase().includes(target);
+        // A contra leg belongs to one bank only – match its own account, not the counterpart in its description
+        const matches = row.kind === 'CONTRA_VOUCHER'
+          ? has(row.ledger_account) || has(row.voucher_number) || has(row.ref_no) || has(row.bill_ref)
+          : (row.party_name || '').toLowerCase().includes(target) ||
                         (row.particulars_title || '').toLowerCase().includes(target) ||
                         (row.particulars_subtitle || '').toLowerCase().includes(target) ||
                         (row.bank_name || '').toLowerCase().includes(target) ||
@@ -783,6 +875,9 @@ const CustomerPaymentHistory = () => {
     let journalsCount = 0;
     let contrasCount = 0;
 
+    // Contra vouchers appear as two legs – count each voucher once
+    const contraIds = new Set();
+
     filteredVouchers.forEach(v => {
       if (v.debit) totalDebit += v.debit;
       if (v.credit) totalCredit += v.credit;
@@ -790,11 +885,13 @@ const CustomerPaymentHistory = () => {
       if (v.kind === 'CUSTOMER_RECEIPT') receiptsCount++;
       else if (v.kind === 'VENDOR_PAYMENT') paymentsCount++;
       else if (v.kind === 'JOURNAL_VOUCHER') journalsCount++;
-      else if (v.kind === 'CONTRA_VOUCHER') contrasCount++;
+      else if (v.kind === 'CONTRA_VOUCHER') contraIds.add(v.rawId);
     });
+    contrasCount = contraIds.size;
+    const contraLegCount = filteredVouchers.filter(v => v.kind === 'CONTRA_VOUCHER').length;
 
     return {
-      totalCount: filteredVouchers.length,
+      totalCount: filteredVouchers.length - contraLegCount + contrasCount,
       totalDebit,
       totalCredit,
       receiptsCount,
@@ -920,12 +1017,15 @@ const CustomerPaymentHistory = () => {
             <div className="flex items-center gap-2 flex-wrap">
               {row.kind === 'CONTRA_VOUCHER' ? (
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                  <span className="text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
-                    {row.from_account}
+                  <span className={`px-1.5 py-0.5 rounded border ${
+                    row.contra_leg === 'OUT'
+                      ? 'text-rose-700 bg-rose-50 border-rose-200'
+                      : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                  }`}>
+                    {row.ledger_account}
                   </span>
-                  <ArrowRight className="w-3 h-3 text-purple-500" />
-                  <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                    {row.to_account}
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    — Contra Transfer (Money {row.contra_leg === 'OUT' ? 'Out' : 'In'})
                   </span>
                 </div>
               ) : (
@@ -942,6 +1042,13 @@ const CustomerPaymentHistory = () => {
 
             {/* Sub-tags: Party, Against Ref, Cheque, Transaction Ref, Narration */}
             <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+              {row.kind === 'CONTRA_VOUCHER' && (
+                <span className={`text-[10px] font-medium ${
+                  row.contra_leg === 'OUT' ? 'text-rose-600' : 'text-emerald-600'
+                }`}>
+                  {row.particulars_subtitle}
+                </span>
+              )}
               {row.party_name && row.party_name !== row.particulars_title && row.kind !== 'CONTRA_VOUCHER' && (
                 <span className="text-[10.5px] font-semibold text-slate-600 bg-slate-100/80 px-1.5 py-0.2 rounded border border-slate-200">
                   {row.party_name}
@@ -1345,7 +1452,7 @@ const CustomerPaymentHistory = () => {
               </button>
             )}
             <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 h-8.5 flex items-center rounded-lg border border-slate-200/80 whitespace-nowrap">
-              <strong className="text-slate-900 mr-1">{filteredVouchers.length}</strong> vouchers
+              <strong className="text-slate-900 mr-1">{summaryMetrics.totalCount}</strong> vouchers
             </span>
           </div>
         </div>
@@ -1422,24 +1529,148 @@ const CustomerPaymentHistory = () => {
                 </span>
               </div>
 
-              {/* Row 2: Current Total */}
-              <div className="flex items-center justify-between gap-6 py-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm font-semibold text-slate-700">Current Total :</span>
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    (Received in Period)
+              {/* Row 2: Current Total, with period adjustments listed beneath as descriptions */}
+              <div className="py-2">
+                <div className="flex items-center justify-between gap-6">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs sm:text-sm font-semibold text-slate-700">Current Total :</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      (Received in Period)
+                    </span>
+                  </div>
+                  <span className="font-mono text-xs sm:text-sm font-bold text-emerald-700 text-right">
+                    {monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.currentMonthPayments ?? 0)}
                   </span>
                 </div>
-                <span className="font-mono text-xs sm:text-sm font-bold text-emerald-700 text-right">
-                  {monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.currentMonthPayments ?? 0)}
+
+                {periodDiscountJournals.map(jv => (
+                  <div key={jv.id} className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-indigo-200">
+                    <div className="text-[11px] leading-tight">
+                      <div className="text-slate-600">
+                        <span className="text-slate-400">Description:</span> <span className="font-semibold text-indigo-800">Discount Allowed</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        Journal Voucher ({jv.voucherNo}) · {formatCurrency(jv.amount)}
+                      </div>
+                    </div>
+                    <span className="font-mono text-[11px] font-semibold text-indigo-700 whitespace-nowrap">
+                      − {formatCurrency(jv.amount)}
+                    </span>
+                  </div>
+                ))}
+
+                {monthlySummary?.currentMonthCreditNotes > 0 && (
+                  <div className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-teal-200">
+                    <div className="text-[11px] leading-tight text-slate-600">
+                      <span className="text-slate-400">Description:</span> <span className="font-semibold text-teal-800">Credit Notes</span>
+                    </div>
+                    <span className="font-mono text-[11px] font-semibold text-teal-700 whitespace-nowrap">
+                      − {formatCurrency(monthlySummary.currentMonthCreditNotes)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Row 3: Outstanding Balance */}
+              <div className="flex items-center justify-between gap-6 py-2.5 bg-blue-50/50 px-3 rounded-lg border border-blue-200 mt-1">
+                <span className="text-xs sm:text-sm font-bold text-slate-900">Outstanding Balance :</span>
+                <span className="font-mono text-sm sm:text-base font-extrabold text-slate-900 text-right">
+                  {monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.closingBalance ?? 0)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Period Balance Statement for a selected bank ── */}
+      {Boolean(bankSummary) && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden mt-3 animate-in fade-in duration-300">
+          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-l-4 border-l-blue-600">
+            <div className="flex items-center gap-2">
+              <div className="p-1 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                <Wallet className="w-3.5 h-3.5" />
+              </div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">Period Balance Statement</h3>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Calendar className="w-3.5 h-3.5 text-blue-600" />
+              <span>Statement Period: <strong className="text-slate-800 font-semibold">{bankSummary.startDate} to {bankSummary.endDate}</strong></span>
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-6 bg-white flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="text-xs text-slate-500 max-w-md space-y-1">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">Bank Statement Summary</span>
+              <p className="text-slate-500 text-[11px] leading-relaxed">
+                Statement period reconciliation from <strong className="text-slate-700 font-medium">{bankSummary.startDate}</strong> to <strong className="text-slate-700 font-medium">{bankSummary.endDate}</strong>.
+              </p>
+              <div className="pt-1 flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-slate-400">Bank:</span>
+                <span className="text-xs font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                  {bankSummary.bankName}{bankSummary.accountNumbers.length === 1 ? ` (${bankSummary.accountNumbers[0]})` : ''}
+                </span>
+              </div>
+              {!bankSummary.accountOpened && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1">
+                  This bank account was opened on <strong>{bankSummary.accountStartDate}</strong>, after this period, so there is no balance yet.
+                </p>
+              )}
+            </div>
+
+            <div className="w-full md:w-auto min-w-[340px] max-w-md ml-auto divide-y divide-slate-200 bg-slate-50/60 p-4 rounded-xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between gap-6 py-2">
+                <span className="text-xs sm:text-sm font-semibold text-slate-700">Opening Balance :</span>
+                <span className="font-mono text-xs sm:text-sm font-bold text-slate-800 text-right">
+                  {bankSummaryLoading ? 'Loading...' : formatCurrency(bankSummary.openingBalance)}
                 </span>
               </div>
 
-              {/* Row 3: Closing Balance */}
+              <div className="py-2">
+                <div className="flex items-center justify-between gap-6">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs sm:text-sm font-semibold text-slate-700">Current Total :</span>
+                    <span className="text-[10px] text-slate-400 font-normal">(Net in Period)</span>
+                  </div>
+                  <span className={`font-mono text-xs sm:text-sm font-bold text-right ${bankSummary.currentTotal < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                    {bankSummaryLoading ? 'Loading...' : formatCurrency(bankSummary.currentTotal)}
+                  </span>
+                </div>
+                {bankSummary.accountOpeningBalance > 0 && (
+                  <div className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-indigo-200">
+                    <div className="text-[11px] leading-tight text-slate-600">
+                      <span className="text-slate-400">Description:</span> <span className="font-semibold text-indigo-800">Account Opening Balance</span>
+                      <div className="text-[10px] text-slate-400 mt-0.5">Bank account opened on {bankSummary.accountStartDate}</div>
+                    </div>
+                    <span className="font-mono text-[11px] font-semibold text-indigo-700 whitespace-nowrap">
+                      + {formatCurrency(bankSummary.accountOpeningBalance)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-emerald-200">
+                  <div className="text-[11px] leading-tight text-slate-600">
+                    <span className="text-slate-400">Description:</span> <span className="font-semibold text-emerald-800">Money In</span>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Receipts &amp; Contra (Cr)</div>
+                  </div>
+                  <span className="font-mono text-[11px] font-semibold text-emerald-700 whitespace-nowrap">
+                    + {formatCurrency(bankSummary.moneyIn)}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-rose-200">
+                  <div className="text-[11px] leading-tight text-slate-600">
+                    <span className="text-slate-400">Description:</span> <span className="font-semibold text-rose-800">Money Out</span>
+                    <div className="text-[10px] text-slate-400 mt-0.5">Payments &amp; Contra (Dr)</div>
+                  </div>
+                  <span className="font-mono text-[11px] font-semibold text-rose-700 whitespace-nowrap">
+                    − {formatCurrency(bankSummary.moneyOut)}
+                  </span>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between gap-6 py-2.5 bg-blue-50/50 px-3 rounded-lg border border-blue-200 mt-1">
-                <span className="text-xs sm:text-sm font-bold text-slate-900">Closing Balance :</span>
+                <span className="text-xs sm:text-sm font-bold text-slate-900">Outstanding Balance :</span>
                 <span className="font-mono text-sm sm:text-base font-extrabold text-slate-900 text-right">
-                  {monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.closingBalance ?? 0)}
+                  {bankSummaryLoading ? 'Loading...' : formatCurrency(bankSummary.closingBalance)}
                 </span>
               </div>
             </div>
@@ -1616,7 +1847,7 @@ const CustomerPaymentHistory = () => {
                                 Sundry Creditors — {viewingVoucher.party_name || 'RK LASER UNIT 2'}
                               </td>
                               <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">
-                                {formatCurrency(viewingVoucher.debit)}
+                                {formatCurrency(viewingVoucher.journal_debit)}
                               </td>
                               <td className="py-2.5 px-3 text-right font-mono text-slate-300">
                                 —
@@ -1630,7 +1861,7 @@ const CustomerPaymentHistory = () => {
                                 —
                               </td>
                               <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
-                                {formatCurrency(viewingVoucher.credit)}
+                                {formatCurrency(viewingVoucher.journal_credit)}
                               </td>
                             </tr>
                           </>
@@ -1640,10 +1871,10 @@ const CustomerPaymentHistory = () => {
                         <tr>
                           <td className="py-2.5 px-3 text-slate-800 uppercase text-[10px]">Total</td>
                           <td className="py-2.5 px-3 text-right font-mono text-rose-700">
-                            {formatCurrency(viewingVoucher.debit)}
+                            {formatCurrency(viewingVoucher.journal_debit)}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
-                            {formatCurrency(viewingVoucher.credit)}
+                            {formatCurrency(viewingVoucher.journal_credit)}
                           </td>
                         </tr>
                       </tfoot>

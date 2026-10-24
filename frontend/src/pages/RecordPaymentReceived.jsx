@@ -45,6 +45,15 @@ const formatDate = (dateStr) => {
   }
 };
 
+const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+// Part of a vendor payment recorded 'On Account' that is not yet tied to any bill
+const getOnAccountAmount = (payment) => round2(
+  (Array.isArray(payment?.allocations) ? payment.allocations : [])
+    .filter(a => !a.po_id && !a.invoice_id && (a.allocation_type === 'On Account' || a.allocation_type === 'Advance'))
+    .reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0)
+);
+
 const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   const [companies, setCompanies] = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
@@ -64,6 +73,10 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   const [vendorInvoices, setVendorInvoices] = useState([]);
   const [vendorInvoicesLoading, setVendorInvoicesLoading] = useState(false);
   const [vendorPaymentHistory, setVendorPaymentHistory] = useState([]);
+  // On Account payment currently being allocated against bills (Edit Allocation dialog)
+  const [allocateTarget, setAllocateTarget] = useState(null);
+  const [allocateAmounts, setAllocateAmounts] = useState({});
+  const [allocateSaving, setAllocateSaving] = useState(false);
   const [vendorHistoryLoading, setVendorHistoryLoading] = useState(false);
   const [vendorDebitNotes, setVendorDebitNotes] = useState([]);
   const [isProcessPaymentModalOpen, setIsProcessPaymentModalOpen] = useState(false);
@@ -552,6 +565,61 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     }
   };
 
+  const openAllocateModal = (row) => {
+    setAllocateAmounts({});
+    setAllocateTarget(row);
+  };
+
+  const closeAllocateModal = () => {
+    if (allocateSaving) return;
+    setAllocateTarget(null);
+    setAllocateAmounts({});
+  };
+
+  // "Full" toggles: fills as much of the bill as the unallocated amount allows; click again to clear
+  const toggleFullAllocation = (bill) => {
+    const others = round2(Object.entries(allocateAmounts)
+      .filter(([id]) => String(id) !== String(bill.id))
+      .reduce((sum, [, v]) => sum + (parseFloat(v) || 0), 0));
+    const cap = round2(Math.min(round2(bill.outstanding), getOnAccountAmount(allocateTarget) - others));
+    if (cap <= 0) return;
+    setAllocateAmounts(prev => (
+      Math.abs((parseFloat(prev[bill.id]) || 0) - cap) < 0.005
+        ? { ...prev, [bill.id]: '' }
+        : { ...prev, [bill.id]: cap.toFixed(2) }
+    ));
+  };
+
+  const handleSaveAllocation = async () => {
+    if (!allocateTarget) return;
+    const allocations = Object.entries(allocateAmounts)
+      .map(([invoiceId, amount]) => ({ invoiceId: Number(invoiceId), amount: parseFloat(amount) || 0 }))
+      .filter(a => a.amount > 0);
+    if (allocations.length === 0) {
+      errorToast('Enter an amount against at least one bill');
+      return;
+    }
+    try {
+      setAllocateSaving(true);
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/payments/${allocateTarget.id}/allocate`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allocations })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Failed to allocate payment');
+      successToast(`${allocateTarget.payment_voucher_no} allocated: ${formatCurrency(data.data?.allocated)}`);
+      setAllocateTarget(null);
+      setAllocateAmounts({});
+      await Promise.all([fetchVendorPayments(selectedVendorId), fetchVendorInvoices(selectedVendorId)]);
+    } catch (err) {
+      errorToast(err.message || 'Failed to allocate payment');
+    } finally {
+      setAllocateSaving(false);
+    }
+  };
+
   const handleLedgerGroupChange = (newGroupName) => {
     const oldType = activePartyType;
     const newType = (newGroupName === 'ALL')
@@ -979,6 +1047,41 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   }, [allOutstandingInvoices, applyDateFilterToTable, fromDate, toDate]);
 
   // Customer receipts + posted credit notes (credit notes also reduce the customer receivable)
+  // Journal vouchers that credit the selected customer (e.g. Discount Allowed). Ledger lines are
+  // stored as 'Sundry Debtors (Customers) (<customer name>)'.
+  const customerJournalRows = useMemo(() => {
+    const cName = (selectedCompany?.company_name || '').trim().toLowerCase();
+    if (!cName) return [];
+    return journalVouchersList.flatMap(jv => {
+      const items = Array.isArray(jv.items) ? jv.items : [];
+      const partyLine = items.find(it => {
+        const acc = (it.ledger_account || '').toLowerCase();
+        return (acc.includes('sundry debtors') || acc.includes('customer')) && acc.includes(cName);
+      });
+      if (!partyLine) return [];
+      const amount = (parseFloat(partyLine.credit_amount) || 0) - (parseFloat(partyLine.debit_amount) || 0);
+      if (amount <= 0) return [];
+      const discountLine = items.find(it => it !== partyLine && /discount/i.test(it.ledger_account || ''));
+      return [{
+        id: `jv_${jv.id}`,
+        is_journal: true,
+        payment_date: String(jv.voucher_date || jv.created_at || '').slice(0, 10),
+        created_at: jv.created_at,
+        receipt_number: jv.voucher_no,
+        bank_name: discountLine?.ledger_account || 'Discount Allowed (Expenses)',
+        payment_mode: 'JOURNAL_ENTRY',
+        payment_amount: amount,
+        remarks: jv.narration && jv.narration !== 'okk' ? jv.narration : 'Discount Adjustment',
+        raw: jv
+      }];
+    });
+  }, [journalVouchersList, selectedCompany]);
+
+  // Discount journals dated inside the statement period (listed under Current Total)
+  const periodJournalRows = useMemo(() => customerJournalRows.filter(r =>
+    (!fromDate || r.payment_date >= fromDate) && (!toDate || r.payment_date <= toDate)
+  ), [customerJournalRows, fromDate, toDate]);
+
   const combinedPaymentHistory = useMemo(() => {
     const creditNoteRows = customerCreditNotes
       .filter(cn => cn.status === 'POSTED')
@@ -995,13 +1098,13 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         remarks: cn.narration,
         raw: cn
       }));
-    return [...paymentHistory, ...creditNoteRows].sort((a, b) => {
+    return [...paymentHistory, ...creditNoteRows, ...customerJournalRows].sort((a, b) => {
       const da = String(a.payment_date || a.created_at || '');
       const db = String(b.payment_date || b.created_at || '');
       if (db !== da) return db.localeCompare(da);
       return String(b.created_at || '').localeCompare(String(a.created_at || ''));
     });
-  }, [paymentHistory, customerCreditNotes]);
+  }, [paymentHistory, customerCreditNotes, customerJournalRows]);
 
   // Displayed Payment History (by default applies active month/period filter, e.g. Oct 2026)
   const displayedPaymentHistory = useMemo(() => {
@@ -1144,10 +1247,8 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     if (singleRow) {
       listToLoad = [formatVendorBillForModal(singleRow)];
     } else {
-      const pendingBills = displayedVendorInvoices
-        .filter(inv => parseFloat(inv.outstanding || 0) > 0)
-        .map(formatVendorBillForModal);
-      listToLoad = pendingBills.length > 0 ? pendingBills : displayedVendorInvoices.map(formatVendorBillForModal);
+      // All bills, including fully paid ones (shown with 0 outstanding)
+      listToLoad = displayedVendorInvoices.map(formatVendorBillForModal);
     }
     setSelectedInvoicesForModal(listToLoad);
     setSelectedInvoice(listToLoad.length === 1 ? listToLoad[0] : null);
@@ -1376,6 +1477,10 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-teal-50 text-teal-700 border border-teal-200 shadow-2xs">
             Credit Note
           </span>
+        ) : row.is_journal ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs">
+            Journal
+          </span>
         ) : (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
             Receipt
@@ -1402,7 +1507,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       sortable: true,
       className: 'text-right',
       render: (_, row) => (
-        row.is_credit_note ? (
+        (row.is_credit_note || row.is_journal) ? (
           <div className="text-right whitespace-nowrap">
             <span className="font-mono text-xs font-bold text-rose-700">
               {formatCurrency(parseFloat(row.payment_amount) || 0)}
@@ -1422,7 +1527,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       sortable: true,
       className: 'text-right',
       render: (_, row) => {
-        if (row.is_credit_note) {
+        if (row.is_credit_note || row.is_journal) {
           return (
             <div className="text-right whitespace-nowrap text-slate-400 font-mono text-xs font-medium">
               —
@@ -1447,6 +1552,8 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       render: (_, row) => (
         row.is_credit_note ? (
           <span className="text-[10px] text-slate-400 font-semibold pr-1.5">Print in Credit Note</span>
+        ) : row.is_journal ? (
+          <span className="text-[10px] text-slate-400 font-semibold pr-1.5">Journal Voucher</span>
         ) : (
           <button
             type="button"
@@ -2215,7 +2322,8 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       sortable: true,
       className: 'text-right',
       render: (_, row) => {
-        if (row.is_debit_note) {
+        // Vendor journal (Discount Received) sits on the Credit side only, same as Payment History
+        if (row.is_debit_note || row.is_journal || row.voucher_type === 'JOURNAL') {
           return (
             <div className="text-right whitespace-nowrap text-slate-400 font-mono text-xs font-medium">
               —
@@ -2291,15 +2399,28 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
             </button>
           );
         }
+        const onAccountLeft = getOnAccountAmount(row);
         return (
-          <button
-            type="button"
-            onClick={() => handleDownloadVendorVoucher(row.id, row.payment_voucher_no)}
-            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
-            title="Download Payment Voucher PDF"
-          >
-            <Download className="w-4 h-4" />
-          </button>
+          <div className="flex justify-end items-center gap-1">
+            {onAccountLeft > 0 && (
+              <button
+                type="button"
+                onClick={() => openAllocateModal(row)}
+                className="px-2 py-1 text-[10.5px] font-bold rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer whitespace-nowrap"
+                title={`${formatCurrency(onAccountLeft)} is On Account – allocate it against a bill`}
+              >
+                Edit Allocation
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => handleDownloadVendorVoucher(row.id, row.payment_voucher_no)}
+              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+              title="Download Payment Voucher PDF"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
         );
       }
     }
@@ -2471,66 +2592,70 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead className="bg-slate-100 text-slate-600 text-[10.5px] uppercase sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2">Voucher No.</th>
-                      <th className="px-3 py-2">Date</th>
-                      <th className="px-3 py-2">Transfer Flow (From → To)</th>
-                      <th className="px-3 py-2">Reference / Cheque</th>
-                      <th className="px-3 py-2">Narration</th>
-                      <th className="px-3 py-2 text-right">Amount (₹)</th>
-                      <th className="px-3 py-2 text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {contraVouchersList.length > 0 ? (
-                      contraVouchersList.map((cv) => (
-                        <tr key={cv.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="px-3 py-2.5 font-mono font-bold text-blue-700 whitespace-nowrap">
-                            {cv.voucher_no}
+              {/* Fixed layout so the register fits its card without a horizontal scrollbar */}
+              <table className="w-full table-fixed text-left border-collapse text-xs">
+                <colgroup>
+                  <col className="w-[18%]" />
+                  <col className="w-[34%]" />
+                  <col className="w-[22%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[12%]" />
+                </colgroup>
+                <thead className="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wide border-b border-slate-100">
+                  <tr>
+                    <th className="px-4 py-2 font-semibold">Voucher</th>
+                    <th className="px-3 py-2 font-semibold">Transfer</th>
+                    <th className="px-3 py-2 font-semibold">Reference / Narration</th>
+                    <th className="px-3 py-2 font-semibold text-right">Amount</th>
+                    <th className="px-3 py-2 font-semibold text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {contraVouchersList.length > 0 ? (
+                    contraVouchersList.map((cv) => {
+                      const accountName = (acc) => (acc === 'Cash in Hand' ? 'Cash' : acc || '—');
+                      return (
+                        <tr key={cv.id} className="hover:bg-slate-50/70 transition-colors align-top">
+                          <td className="px-4 py-3">
+                            <div className="font-mono font-bold text-blue-700 truncate">{cv.voucher_no}</div>
+                            <div className="text-[11px] text-slate-400 mt-0.5">{formatDate(cv.voucher_date || cv.created_at)}</div>
                           </td>
-                          <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">
-                            {formatDate(cv.voucher_date || cv.created_at)}
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-200">
-                                {cv.from_account}
-                              </span>
-                              <ArrowRight className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                              <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-semibold border border-blue-200">
-                                {cv.to_account}
-                              </span>
+                          <td className="px-3 py-3">
+                            <div className="flex items-baseline gap-1.5 min-w-0">
+                              <span className="text-[10px] font-semibold text-rose-500 w-8 shrink-0">From</span>
+                              <span className="font-semibold text-slate-800 truncate" title={cv.from_account}>{accountName(cv.from_account)}</span>
+                            </div>
+                            <div className="flex items-baseline gap-1.5 min-w-0 mt-0.5">
+                              <span className="text-[10px] font-semibold text-emerald-600 w-8 shrink-0">To</span>
+                              <span className="font-semibold text-slate-800 truncate" title={cv.to_account}>{accountName(cv.to_account)}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 text-slate-600 font-mono text-[11px]">
-                            {cv.reference_no || '—'}
+                          <td className="px-3 py-3 min-w-0">
+                            <div className="font-mono text-[11px] text-slate-600 truncate">{cv.reference_no || '—'}</div>
+                            {cv.narration && (
+                              <div className="text-[11px] text-slate-400 italic truncate mt-0.5" title={cv.narration}>{cv.narration}</div>
+                            )}
                           </td>
-                          <td className="px-3 py-2.5 text-slate-600 italic text-[11px] max-w-xs truncate">
-                            {cv.narration || '—'}
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                          <td className="px-3 py-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
                             {formatCurrency(parseFloat(cv.amount) || 0)}
                           </td>
-                          <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                            <span className="px-2 py-0.5 rounded-full text-[9.5px] bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                          <td className="px-3 py-3 text-center">
+                            <span className="px-2 py-0.5 rounded-full text-[9.5px] bg-emerald-50 text-emerald-700 font-bold">
                               Transferred
                             </span>
                           </td>
                         </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-slate-400 italic">
-                          No contra vouchers recorded yet.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400 italic">
+                        No contra vouchers recorded yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         ) : selectedVoucherType === 'JOURNAL' ? (
@@ -3433,37 +3558,68 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                 </span>
               </div>
 
-              {/* Row 2: Current Total */}
-              <div className="flex items-center justify-between gap-6 py-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm font-semibold text-slate-700">Current Total :</span>
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    ({isPaymentMode ? 'Paid in Period' : 'Received in Period'})
-                  </span>
-                </div>
-                <span className="font-mono text-xs sm:text-sm font-bold text-emerald-700 text-right">
-                  {monthlyLoading ? 'Loading...' : formatCurrency((isPaymentMode ? vendorMonthlySummary : monthlySummary)?.currentMonthPayments ?? 0)}
-                </span>
-              </div>
-
-              {/* Row 2.5: Journal Discount / Debit Adjustment */}
-              {isPaymentMode && (vendorMonthlySummary?.vendorJournalDebit > 0) && (
-                <div className="flex items-center justify-between gap-6 py-2 bg-emerald-50/50 px-2.5 rounded-lg border border-emerald-200">
+              {/* Row 2: Current Total, with period adjustments listed beneath as descriptions */}
+              <div className="py-2">
+                <div className="flex items-center justify-between gap-6">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs sm:text-sm font-semibold text-emerald-900">Discount Adjustment (JV) :</span>
-                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-200">
-                      F7 Journal Debit
+                    <span className="text-xs sm:text-sm font-semibold text-slate-700">Current Total :</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      ({isPaymentMode ? 'Paid in Period' : 'Received in Period'})
                     </span>
                   </div>
-                  <span className="font-mono text-xs sm:text-sm font-bold text-emerald-800 text-right">
-                    - {formatCurrency(vendorMonthlySummary.vendorJournalDebit)}
+                  <span className="font-mono text-xs sm:text-sm font-bold text-emerald-700 text-right">
+                    {monthlyLoading ? 'Loading...' : formatCurrency((isPaymentMode ? vendorMonthlySummary : monthlySummary)?.currentMonthPayments ?? 0)}
                   </span>
                 </div>
-              )}
+
+                {!isPaymentMode && periodJournalRows.map(jv => (
+                  <div key={jv.id} className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-indigo-200">
+                    <div className="text-[11px] leading-tight">
+                      <div className="text-slate-600">
+                        <span className="text-slate-400">Description:</span> <span className="font-semibold text-indigo-800">Discount Allowed</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        Journal Voucher ({jv.receipt_number}) · {formatCurrency(jv.payment_amount)}
+                      </div>
+                    </div>
+                    <span className="font-mono text-[11px] font-semibold text-indigo-700 whitespace-nowrap">
+                      − {formatCurrency(jv.payment_amount)}
+                    </span>
+                  </div>
+                ))}
+
+                {isPaymentMode && (vendorMonthlySummary?.vendorJournalDebit > 0) && (
+                  <div className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-emerald-200">
+                    <div className="text-[11px] leading-tight">
+                      <div className="text-slate-600">
+                        <span className="text-slate-400">Description:</span> <span className="font-semibold text-emerald-800">Discount Received</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        Journal Voucher (JV) · {formatCurrency(vendorMonthlySummary.vendorJournalDebit)}
+                      </div>
+                    </div>
+                    <span className="font-mono text-[11px] font-semibold text-emerald-700 whitespace-nowrap">
+                      − {formatCurrency(vendorMonthlySummary.vendorJournalDebit)}
+                    </span>
+                  </div>
+                )}
+
+                {!isPaymentMode && (monthlySummary?.currentMonthCreditNotes > 0) && (
+                  <div className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-teal-200">
+                    <div className="text-[11px] leading-tight text-slate-600">
+                      <span className="text-slate-400">Description:</span> <span className="font-semibold text-teal-800">Credit Notes</span>
+                    </div>
+                    <span className="font-mono text-[11px] font-semibold text-teal-700 whitespace-nowrap">
+                      − {formatCurrency(monthlySummary.currentMonthCreditNotes)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
 
               {/* Row 3: Closing Balance */}
               <div className="flex items-center justify-between gap-6 py-2.5 bg-blue-50/50 px-3 rounded-lg border border-blue-200 mt-1">
-                <span className="text-xs sm:text-sm font-bold text-slate-900">Closing Balance :</span>
+                <span className="text-xs sm:text-sm font-bold text-slate-900">Outstanding Balance :</span>
                 <span className="font-mono text-sm sm:text-base font-extrabold text-slate-900 text-right">
                   {monthlyLoading ? 'Loading...' : formatCurrency((isPaymentMode ? vendorMonthlySummary : monthlySummary)?.closingBalance ?? 0)}
                 </span>
@@ -3476,6 +3632,128 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         )}
 
       </div>
+
+      {/* ── Edit Allocation: allocate an On Account vendor payment against bills ── */}
+      {allocateTarget && (() => {
+        const onAccountLeft = getOnAccountAmount(allocateTarget);
+        const bills = vendorInvoices.filter(b => (parseFloat(b.outstanding) || 0) > 0.005);
+        const allocatedTotal = round2(Object.values(allocateAmounts).reduce((sum, v) => sum + (parseFloat(v) || 0), 0));
+        const remaining = round2(onAccountLeft - allocatedTotal);
+        const overBill = bills.find(b => (parseFloat(allocateAmounts[b.id]) || 0) > round2(b.outstanding) + 0.005);
+        const problem = remaining < -0.005
+          ? `Allocated ${formatCurrency(allocatedTotal)} is more than the On Account amount ${formatCurrency(onAccountLeft)}`
+          : overBill
+            ? `${overBill.display_invoice_no}: amount is more than its outstanding ${formatCurrency(overBill.outstanding)}`
+            : '';
+        return (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={closeAllocateModal}>
+            <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl border border-slate-200 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Edit Allocation</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Voucher <span className="font-mono font-semibold text-slate-700">{allocateTarget.payment_voucher_no}</span>
+                    {selectedVendor?.vendor_name ? ` · ${selectedVendor.vendor_name}` : ''}
+                  </p>
+                </div>
+                <button type="button" onClick={closeAllocateModal} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="px-5 py-3 grid grid-cols-3 gap-3 border-b border-slate-100 text-xs">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Payment Amount</div>
+                  <div className="font-mono font-bold text-slate-800">{formatCurrency(allocateTarget.payment_amount)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">
+                    {(allocateTarget.allocations || []).some(a => !a.po_id && !a.invoice_id && a.allocation_type === 'Advance') ? 'Advance' : 'On Account'} (Unallocated)
+                  </div>
+                  <div className="font-mono font-bold text-amber-700">{formatCurrency(onAccountLeft)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Left After Allocation</div>
+                  <div className={`font-mono font-bold ${remaining < -0.005 ? 'text-rose-700' : 'text-emerald-700'}`}>{formatCurrency(remaining)}</div>
+                </div>
+              </div>
+
+              <div className="max-h-[320px] overflow-y-auto">
+                {bills.length === 0 ? (
+                  <div className="px-6 py-10 text-center text-sm text-slate-400">
+                    No unpaid bills for this vendor. The payment stays On Account until a bill is available.
+                  </div>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 text-[10.5px] uppercase text-slate-500 sticky top-0">
+                      <tr>
+                        <th className="px-4 py-2 text-left">Bill / PO</th>
+                        <th className="px-3 py-2 text-left">Date</th>
+                        <th className="px-3 py-2 text-right">Outstanding</th>
+                        <th className="px-4 py-2 text-right w-44">Allocate</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {bills.map(b => {
+                        const value = allocateAmounts[b.id] ?? '';
+                        const isFull = (parseFloat(value) || 0) > 0 && (parseFloat(value) || 0) >= Math.min(round2(b.outstanding), onAccountLeft) - 0.005;
+                        const overThis = (parseFloat(value) || 0) > round2(b.outstanding) + 0.005;
+                        return (
+                          <tr key={b.id} className="hover:bg-slate-50/70">
+                            <td className="px-4 py-2.5 font-mono font-bold text-blue-700">{b.display_invoice_no}</td>
+                            <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(b.bill_date)}</td>
+                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-slate-800">{formatCurrency(b.outstanding)}</td>
+                            <td className="px-4 py-2 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={value}
+                                  onChange={(e) => setAllocateAmounts(prev => ({ ...prev, [b.id]: e.target.value }))}
+                                  placeholder="0.00"
+                                  className={`w-24 text-right font-mono font-semibold border rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 ${overThis ? 'border-rose-400 bg-rose-50 text-rose-700' : 'border-slate-300'}`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => toggleFullAllocation(b)}
+                                  className={`px-1.5 py-1 text-[9.5px] font-bold rounded border transition-colors cursor-pointer ${isFull ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'}`}
+                                  title={isFull ? 'Click again to clear' : 'Allocate the most this bill can take'}
+                                >
+                                  Full
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+                <div className="text-[11px]">
+                  {problem
+                    ? <span className="text-rose-600 font-semibold">{problem}</span>
+                    : <span className="text-slate-500">Allocating <strong className="font-mono text-slate-800">{formatCurrency(allocatedTotal)}</strong>; the rest stays unallocated.</span>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button type="button" onClick={closeAllocateModal} disabled={allocateSaving}
+                    className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/70 rounded-lg cursor-pointer disabled:opacity-50">
+                    Cancel
+                  </button>
+                  <button type="button" onClick={handleSaveAllocation}
+                    disabled={allocateSaving || allocatedTotal <= 0 || Boolean(problem)}
+                    className="px-4 py-1.5 text-xs font-bold rounded-lg text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
+                    {allocateSaving ? 'Saving…' : 'Save Allocation'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Slide-Over Drawer: Voucher Types (F5/F6/F7...) ── */}
       {isVoucherPanelOpen && (

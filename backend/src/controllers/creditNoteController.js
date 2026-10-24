@@ -1,4 +1,5 @@
 const creditNoteService = require('../services/creditNoteService');
+const creditNotePdfService = require('../services/creditNotePdfService');
 
 const getCreditNoteSources = async (req, res, next) => {
   try {
@@ -55,10 +56,24 @@ const cancelCreditNote = async (req, res, next) => {
   }
 };
 
+const generateCreditNotePDF = async (req, res, next) => {
+  try {
+    const copyType = req.query.copyType || 'Original for Recipient';
+    const { pdf, voucherNo } = await creditNotePdfService.generateCreditNotePDF(req.params.id, copyType);
+    const safeNo = String(voucherNo || req.params.id).replace(/[^\w-]/g, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="credit-note-${safeNo}.pdf"`);
+    res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getCreditNoteSources,
   getNextCreditNoteNo,
   recordCreditNote,
   getCreditNotes,
-  cancelCreditNote
+  cancelCreditNote,
+  generateCreditNotePDF
 };

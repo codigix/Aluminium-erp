@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { FilePlus, RefreshCw, Printer, XCircle, History, Package, CheckSquare, Square } from 'lucide-react';
+import { FilePlus, RefreshCw, Printer, XCircle, History, Package, CheckSquare, Square, Download, X } from 'lucide-react';
 import { SearchableSelect } from './ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 
@@ -38,6 +38,15 @@ const GST_RATES = ['0', '5', '12', '18', '28'];
 
 const ON_ACCOUNT = 'ON_ACCOUNT';
 
+// Same copy set as the Sales Invoice PDF
+const COPY_TYPES = [
+  { value: 'Original for Recipient', description: 'For recipient / customer' },
+  { value: 'Duplicate for Transporter', description: 'To accompany the goods during transit' },
+  { value: 'Triplicate for Supplier', description: 'For supplier internal records & audit' },
+  { value: 'Extra Copy', description: 'Extra copy for administrative or filing use' },
+  { value: 'all', label: 'Download All Copies (Single PDF)', description: 'Complete set of 4 copies in 1 single PDF file' }
+];
+
 const inputClass = 'w-full text-sm border border-slate-300 rounded-lg px-3 py-2 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 focus:outline-none';
 const labelClass = 'block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1';
 
@@ -73,6 +82,9 @@ const CreditNoteEntry = ({ initialCustomerId = '', onPosted }) => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankAccountId, setBankAccountId] = useState('');
+  const [copyModalNote, setCopyModalNote] = useState(null);
+  const [selectedCopy, setSelectedCopy] = useState(COPY_TYPES[0].value);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
     fetchBankAccounts();
@@ -324,30 +336,69 @@ const CreditNoteEntry = ({ initialCustomerId = '', onPosted }) => {
     }
   };
 
-  const handlePrint = (cn) => {
-    const w = window.open('', '_blank', 'width=800,height=600');
-    if (!w) return;
-    const itemRowsHtml = (cn.items || []).map(it => `<tr><td>${it.drawing_no || ''}</td><td>${it.description || ''}</td>
-      <td class="r">${it.sales_invoice_item_id ? `${formatNum(it.quantity)} ${it.unit || ''}` : ''}</td><td class="r">${formatCurrency(it.taxable_amount)}</td></tr>`).join('');
-    const gstRows = [
-      parseFloat(cn.cgst_amount) > 0 ? `<tr><td colspan="3">CGST</td><td class="r">${formatCurrency(cn.cgst_amount)}</td></tr>` : '',
-      parseFloat(cn.sgst_amount) > 0 ? `<tr><td colspan="3">SGST</td><td class="r">${formatCurrency(cn.sgst_amount)}</td></tr>` : '',
-      parseFloat(cn.igst_amount) > 0 ? `<tr><td colspan="3">IGST</td><td class="r">${formatCurrency(cn.igst_amount)}</td></tr>` : ''
-    ].join('');
-    w.document.write(`<!doctype html><html><head><title>${cn.voucher_no}</title><style>
-      body{font-family:Arial,sans-serif;font-size:13px;color:#0f172a;padding:28px}h1{font-size:20px;margin:0}
-      table{width:100%;border-collapse:collapse;margin-top:14px}td,th{border:1px solid #cbd5e1;padding:7px;text-align:left}
-      th{background:#f1f5f9}.r{text-align:right}.muted{color:#64748b}.b td{font-weight:bold}</style></head><body>
-      <h1>CREDIT NOTE</h1><p class="muted">${cn.reason_label}${cn.status === 'CANCELLED' ? ' — CANCELLED' : ''}</p>
-      <p><b>No:</b> ${cn.voucher_no} &nbsp; <b>Date:</b> ${formatDate(cn.voucher_date)}<br/>
-      <b>To:</b> ${cn.customer_name}${cn.customer_gstin ? ` (GSTIN ${cn.customer_gstin})` : ''}<br/>
-      <b>Against Invoice:</b> ${cn.reference_invoice_no || 'On Account'} &nbsp; <b>Ledger:</b> ${cn.affected_ledger}${cn.bank_name ? `<br/><b>Bank:</b> ${cn.bank_name}${cn.bank_account_number ? ` (A/c ${cn.bank_account_number})` : ''}` : ''}</p>
-      <table><thead><tr><th>Drawing No</th><th>Drawing Name</th><th class="r">Qty</th><th class="r">Amount</th></tr></thead><tbody>
-      ${itemRowsHtml}${gstRows}
-      <tr class="b"><td colspan="3">Total Credit</td><td class="r">${formatCurrency(cn.total_amount)}</td></tr></tbody></table>
-      <p><b>Narration:</b> ${cn.narration || ''}</p>
-      <script>window.onload=function(){window.print()}</script></body></html>`);
-    w.document.close();
+  // Fetch the credit note PDF (same layout as the tax invoice) for the chosen copy
+  const fetchCreditNotePdf = async (cn, copyType) => {
+    const res = await fetch(`${API_BASE}/customer-payments/credit-notes/${cn.id}/pdf?copyType=${encodeURIComponent(copyType)}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('Failed to generate Credit Note PDF');
+    return window.URL.createObjectURL(new Blob([await res.blob()], { type: 'application/pdf' }));
+  };
+
+  const handlePrint = async (cn, copyType) => {
+    setCopyModalNote(null);
+    try {
+      setPdfBusy(true);
+      const blobUrl = await fetchCreditNotePdf(cn, copyType);
+      // Print from a hidden iframe once the PDF has loaded. Printing a new tab fires before
+      // the PDF viewer (or a PDF extension such as Acrobat) renders it and gives a blank page.
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+      iframe.src = blobUrl;
+      document.body.appendChild(iframe);
+      iframe.onload = () => setTimeout(() => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch (e) {
+          // Viewer blocked printing from the frame – open the PDF so it can be printed from there
+          console.error(e);
+          window.open(blobUrl, '_blank');
+        }
+      }, 500);
+      setTimeout(() => {
+        iframe.remove();
+        window.URL.revokeObjectURL(blobUrl);
+      }, 120000);
+    } catch (err) {
+      errorToast(err.message || 'Unable to print Credit Note PDF');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  const handleDownload = async (cn, copyType) => {
+    setCopyModalNote(null);
+    try {
+      setPdfBusy(true);
+      const blobUrl = await fetchCreditNotePdf(cn, copyType);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      const cleanNo = (cn.voucher_no || `CreditNote-${cn.id}`).replace(/[/\\?%*:|"<>]/g, '-');
+      const cleanCopy = copyType === 'all' ? 'All_Copies' : copyType.replace(/\s+/g, '_');
+      link.download = `${cleanNo}_${cleanCopy}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 15000);
+    } catch (err) {
+      errorToast(err.message || 'Unable to download Credit Note PDF');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  const openCopyModal = (cn) => {
+    setSelectedCopy(COPY_TYPES[0].value);
+    setCopyModalNote(cn);
   };
 
   const displayedHistory = useMemo(
@@ -369,7 +420,7 @@ const CreditNoteEntry = ({ initialCustomerId = '', onPosted }) => {
           </div>
 
           <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
-            <Field label="Voucher No.">
+            <Field label="Credit Note No.">
               <input type="text" value={nextNo} readOnly className={`${inputClass} bg-slate-50 font-mono text-slate-600`} />
             </Field>
             <Field label="Date" required>
@@ -676,7 +727,7 @@ const CreditNoteEntry = ({ initialCustomerId = '', onPosted }) => {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end gap-0.5">
-                        <button type="button" onClick={() => handlePrint(cn)} className="p-1 rounded hover:bg-slate-100 text-slate-500 cursor-pointer" title="Print">
+                        <button type="button" onClick={() => openCopyModal(cn)} disabled={pdfBusy} className="p-1 rounded hover:bg-slate-100 text-slate-500 cursor-pointer disabled:opacity-50" title="Print / Download PDF">
                           <Printer className="w-3.5 h-3.5" />
                         </button>
                         {!cancelled && (
@@ -700,6 +751,62 @@ const CreditNoteEntry = ({ initialCustomerId = '', onPosted }) => {
           </table>
         </div>
       </div>
+
+      {/* ── Copy type picker (Print / Download PDF) ── */}
+      {copyModalNote && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setCopyModalNote(null)}>
+          <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl border border-slate-200 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700"><FilePlus className="w-4 h-4" /></div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-800">Select Credit Note Copy Type</h3>
+                  <p className="text-[10.5px] text-slate-500 font-medium">
+                    Credit Note: <span className="font-semibold text-slate-700 font-mono">{copyModalNote.voucher_no}</span>
+                  </p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setCopyModalNote(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-2">
+              <p className="text-[11px] font-semibold text-slate-500 mb-1">Choose the copy type to print or download:</p>
+              {COPY_TYPES.map(type => {
+                const isSelected = selectedCopy === type.value;
+                return (
+                  <label key={type.value}
+                    className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition select-none ${isSelected ? 'border-emerald-500 bg-emerald-50/60' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'}`}>
+                    <input type="radio" name="creditNoteCopyType" value={type.value} checked={isSelected}
+                      onChange={() => setSelectedCopy(type.value)}
+                      className="mt-0.5 h-4 w-4 text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer" />
+                    <div className="flex-1">
+                      <div className={`text-xs font-bold leading-tight ${isSelected ? 'text-emerald-900' : 'text-slate-800'}`}>{type.label || type.value}</div>
+                      <div className="text-[10.5px] text-slate-500 mt-0.5 leading-tight">{type.description}</div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-4 py-3 bg-slate-50 border-t border-slate-200">
+              <button type="button" onClick={() => setCopyModalNote(null)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/70 rounded-lg cursor-pointer">
+                Cancel
+              </button>
+              <button type="button" onClick={() => handlePrint(copyModalNote, selectedCopy)} disabled={pdfBusy}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-white text-xs font-bold bg-slate-700 hover:bg-slate-800 disabled:opacity-50 cursor-pointer">
+                <Printer className="w-3.5 h-3.5" /> Print
+              </button>
+              <button type="button" onClick={() => handleDownload(copyModalNote, selectedCopy)} disabled={pdfBusy}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-white text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 cursor-pointer">
+                <Download className="w-3.5 h-3.5" /> Download PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

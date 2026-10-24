@@ -7,6 +7,7 @@ const VIEW_PERMISSIONS = ['PAYMENT_VIEW', 'PAYMENT_SETUP', 'PAYMENT_PROCESS', 'A
 const MANAGE_PERMISSIONS = ['PAYMENT_SETUP', 'PAYMENT_PROCESS', 'PAYMENT_EDIT', 'ACCOUNTS_DASHBOARD_VIEW'];
 
 router.get('/', authorize(VIEW_PERMISSIONS), bankAccountController.getBankAccounts);
+router.get('/:accountId/period-summary', authorize(VIEW_PERMISSIONS), bankAccountController.getBankPeriodSummary);
 router.get('/:accountId', authorize(VIEW_PERMISSIONS), bankAccountController.getBankAccountById);
 router.post('/', authorize(MANAGE_PERMISSIONS), bankAccountController.createBankAccount);
 router.put('/:accountId', authorize(MANAGE_PERMISSIONS), bankAccountController.updateBankAccount);

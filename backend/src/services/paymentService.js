@@ -629,6 +629,130 @@ const getPaymentById = async (paymentId) => {
   return rows[0];
 };
 
+// Allocation types that mean "paid, but not yet tied to a bill"
+const UNALLOCATED_TYPES = ['On Account', 'Advance'];
+
+const paymentError = (message, status = 400) => {
+  const error = new Error(message);
+  error.status = status;
+  error.statusCode = status;
+  return error;
+};
+
+/**
+ * Allocate (part of) an On Account payment against vendor bills after the fact.
+ * The voucher, payment amount, bank entry and vendor ledger stay exactly as recorded; only the
+ * payment's allocation lines change: the On Account line shrinks (or disappears) and new
+ * 'Agst Ref' lines are added for the chosen bills, which lowers those bills' outstanding.
+ */
+const allocateOnAccountPayment = async (paymentId, allocations = []) => {
+  const requested = new Map();
+  for (const a of Array.isArray(allocations) ? allocations : []) {
+    const invoiceId = parseInt(a.invoiceId ?? a.invoice_id ?? a.bill_id, 10);
+    const amount = Math.round((parseFloat(a.amount) || 0) * 100) / 100;
+    if (!invoiceId || amount <= 0) continue;
+    requested.set(invoiceId, Math.round(((requested.get(invoiceId) || 0) + amount) * 100) / 100);
+  }
+  if (requested.size === 0) throw paymentError('Select at least one bill and enter an amount to allocate.');
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [payRows] = await connection.query('SELECT * FROM payments WHERE id = ? FOR UPDATE', [paymentId]);
+    if (payRows.length === 0) throw paymentError('Payment not found.', 404);
+    const payment = payRows[0];
+    if (payment.status !== 'CONFIRMED') throw paymentError('Only confirmed payments can be allocated.');
+
+    const [allocRows] = await connection.query('SELECT * FROM payment_allocations WHERE payment_id = ? ORDER BY id FOR UPDATE', [paymentId]);
+    const onAccountRows = allocRows.filter(a => !a.po_id && !a.invoice_id && UNALLOCATED_TYPES.includes(a.allocation_type));
+    const onAccountTotal = Math.round(onAccountRows.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0) * 100) / 100;
+    if (onAccountTotal <= 0) throw paymentError('This payment has no On Account amount left to allocate.');
+
+    const totalRequested = Math.round([...requested.values()].reduce((s, v) => s + v, 0) * 100) / 100;
+    if (totalRequested > onAccountTotal + 0.005) {
+      throw paymentError(`Allocation total (₹${totalRequested.toFixed(2)}) exceeds the unallocated On Account amount (₹${onAccountTotal.toFixed(2)}).`);
+    }
+
+    // Validate every bill: same vendor, enough outstanding
+    const bills = [];
+    for (const [invoiceId, amount] of requested) {
+      const bill = await vendorInvoiceService.getVendorInvoiceById(invoiceId);
+      if (!bill) throw paymentError('One of the selected bills was not found.');
+      if (String(bill.vendor_id) !== String(payment.vendor_id)) {
+        throw paymentError(`Bill ${bill.display_invoice_no} does not belong to this payment's vendor.`);
+      }
+      const outstanding = parseFloat(bill.outstanding) || 0;
+      if (outstanding <= 0.005) {
+        throw paymentError(`Bill ${bill.display_invoice_no} has nothing outstanding (it is already fully paid).`);
+      }
+      if (amount > outstanding + 0.005) {
+        throw paymentError(`Allocation for ${bill.display_invoice_no} (₹${amount.toFixed(2)}) exceeds its outstanding amount (₹${outstanding.toFixed(2)}).`);
+      }
+      bills.push({ bill, amount });
+    }
+
+    // 1. Reduce the On Account line(s) by the allocated total
+    let toTake = totalRequested;
+    for (const row of onAccountRows) {
+      if (toTake <= 0.004) break;
+      const rowAmount = parseFloat(row.amount) || 0;
+      const take = Math.min(rowAmount, toTake);
+      const left = Math.round((rowAmount - take) * 100) / 100;
+      if (left <= 0.004) {
+        await connection.query('DELETE FROM payment_allocations WHERE id = ?', [row.id]);
+      } else {
+        await connection.query('UPDATE payment_allocations SET amount = ? WHERE id = ?', [left, row.id]);
+      }
+      toTake = Math.round((toTake - take) * 100) / 100;
+    }
+
+    // 2. Add the bill-wise lines under the same payment and voucher number
+    for (const { bill, amount } of bills) {
+      await connection.query(
+        `INSERT INTO payment_allocations (payment_id, voucher_no, vendor_id, po_id, invoice_id, allocation_type, reference_no, amount)
+         VALUES (?, ?, ?, ?, ?, 'Agst Ref', ?, ?)`,
+        [paymentId, payment.payment_voucher_no, payment.vendor_id, bill.po_id || null, bill.id, bill.display_invoice_no, amount]
+      );
+
+      // Mark the PO paid once fully settled (same rule as a normal payment)
+      if (bill.po_id) {
+        const [poRows] = await connection.query('SELECT total_amount FROM purchase_orders WHERE id = ?', [bill.po_id]);
+        const [paidRows] = await connection.query(
+          `SELECT
+            COALESCE((SELECT SUM(pa.amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = ? AND p.status = 'CONFIRMED'), 0) +
+            COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = ? AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0) as total_paid`,
+          [bill.po_id, bill.po_id]
+        );
+        if (poRows.length > 0 && parseFloat(paidRows[0].total_paid) >= parseFloat(poRows[0].total_amount)) {
+          await connection.query('UPDATE purchase_orders SET status = ? WHERE id = ?', ['PAID', bill.po_id]);
+        }
+      }
+    }
+
+    await connection.commit();
+
+    const remainingOnAccount = Math.round((onAccountTotal - totalRequested) * 100) / 100;
+    return {
+      paymentId: Number(paymentId),
+      voucherNo: payment.payment_voucher_no,
+      allocated: totalRequested,
+      remainingOnAccount,
+      bills: bills.map(({ bill, amount }) => ({
+        invoiceId: bill.id,
+        reference: bill.display_invoice_no,
+        amount,
+        outstandingAfter: Math.round(((parseFloat(bill.outstanding) || 0) - amount) * 100) / 100
+      }))
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const getVendorBalance = async (vendorId) => {
   const [rows] = await pool.query(
     `SELECT 
@@ -2356,6 +2480,7 @@ module.exports = {
   processPayment,
   getPayments,
   getPaymentById,
+  allocateOnAccountPayment,
   getVendorBalance,
   getPendingPayments,
   updatePaymentStatus,

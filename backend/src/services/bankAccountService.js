@@ -448,11 +448,124 @@ const deleteBankAccount = async (accountId) => {
   return { id: accountId, message: 'Bank account deleted successfully' };
 };
 
+/**
+ * Period balance statement for a bank account. Uses the same rule as the live bank balance:
+ * opening balance + customer receipts + contra in - vendor payments - contra out.
+ * Opening = master opening balance + net movement before the period; Closing = Opening + net movement in the period.
+ */
+const getBankPeriodSummary = async (accountId, startDateInput, endDateInput) => {
+  const [accRows] = await pool.query(
+    'SELECT id, bank_name, account_number, opening_balance FROM bank_accounts WHERE id = ?',
+    [accountId]
+  );
+  if (!accRows.length) {
+    const error = new Error('Bank account not found');
+    error.status = 404;
+    throw error;
+  }
+  const acc = accRows[0];
+
+  // Default period = current month, same as the customer statement
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const startDate = (startDateInput || `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`).slice(0, 10);
+  const endDate = (endDateInput || `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())}`).slice(0, 10);
+
+  // The four movements that make up a bank balance (same sources as calculateBankBalances)
+  const sources = [
+    { table: 'customer_payments', amount: 'payment_amount', bank: 'bank_account_id', date: 'payment_date', status: true },
+    { table: 'payments', amount: 'payment_amount', bank: 'bank_account_id', date: 'payment_date', status: true },
+    { table: 'contra_vouchers', amount: 'amount', bank: 'to_bank_account_id', date: 'voucher_date', status: false },
+    { table: 'contra_vouchers', amount: 'amount', bank: 'from_bank_account_id', date: 'voucher_date', status: false }
+  ];
+  const sumFor = async (src, dateCondition, dateParams) => {
+    const [rows] = await pool.query(
+      `SELECT COALESCE(SUM(${src.amount}), 0) as total FROM ${src.table}
+       WHERE ${src.bank} = ? ${src.status ? "AND status = 'CONFIRMED'" : ''} AND ${dateCondition.replace(/%D%/g, `DATE(${src.date})`)}`,
+      [accountId, ...dateParams]
+    );
+    return parseFloat(rows[0]?.total || 0);
+  };
+  const before = (src) => sumFor(src, '%D% < ?', [startDate]);
+  const within = (src) => sumFor(src, '%D% >= ? AND %D% <= ?', [startDate, endDate]);
+
+  // The master opening balance only exists from the day the account was opened: the day it was
+  // registered, or its first entry if one is dated earlier. Periods that end before that show nothing.
+  const firstDates = await Promise.all(sources.map(async (src) => {
+    const [rows] = await pool.query(
+      `SELECT DATE_FORMAT(MIN(${src.date}), '%Y-%m-%d') as d FROM ${src.table} WHERE ${src.bank} = ? ${src.status ? "AND status = 'CONFIRMED'" : ''}`,
+      [accountId]
+    );
+    return rows[0]?.d || null;
+  }));
+  const [createdRows] = await pool.query("SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as d FROM bank_accounts WHERE id = ?", [accountId]);
+  const accountStartDate = [createdRows[0]?.d, ...firstDates].filter(Boolean).sort()[0] || startDate;
+  const round2 = (n) => Math.round(n * 100) / 100;
+
+  if (endDate < accountStartDate) {
+    return {
+      bankAccountId: acc.id,
+      bankName: acc.bank_name,
+      accountNumber: acc.account_number,
+      startDate,
+      endDate,
+      accountStartDate,
+      accountOpened: false,
+      accountOpeningBalance: 0,
+      openingBalance: 0,
+      moneyIn: 0,
+      moneyOut: 0,
+      customerReceipts: 0,
+      contraIn: 0,
+      vendorPayments: 0,
+      contraOut: 0,
+      currentTotal: 0,
+      closingBalance: 0
+    };
+  }
+
+  const [priorReceipts, priorPayments, priorContraIn, priorContraOut] = await Promise.all(sources.map(before));
+  const [receipts, payments, contraIn, contraOut] = await Promise.all(sources.map(within));
+
+  const masterOpening = parseFloat(acc.opening_balance) || 0;
+  // If the account is opened inside this period, its opening balance is an entry of the period
+  // (the account had no balance on the first day); otherwise it is carried in the opening balance.
+  const openedInPeriod = accountStartDate >= startDate;
+  const accountOpeningBalance = openedInPeriod ? round2(masterOpening) : 0;
+  const openingBalance = openedInPeriod
+    ? 0
+    : round2(masterOpening + priorReceipts + priorContraIn - priorPayments - priorContraOut);
+  const moneyIn = round2(receipts + contraIn);
+  const moneyOut = round2(payments + contraOut);
+  const currentTotal = round2(accountOpeningBalance + moneyIn - moneyOut);
+
+  return {
+    bankAccountId: acc.id,
+    bankName: acc.bank_name,
+    accountNumber: acc.account_number,
+    startDate,
+    endDate,
+    accountStartDate,
+    accountOpened: true,
+    accountOpeningBalance,
+    openingBalance,
+    moneyIn,
+    moneyOut,
+    customerReceipts: round2(receipts),
+    contraIn: round2(contraIn),
+    vendorPayments: round2(payments),
+    contraOut: round2(contraOut),
+    currentTotal,
+    closingBalance: round2(openingBalance + currentTotal)
+  };
+};
+
 module.exports = {
   createBankAccount,
   getBankAccounts,
   getBankAccountById,
   getBankAccountBalance,
+  getBankPeriodSummary,
   calculateBankBalances,
   updateBankAccount,
   toggleBankAccountStatus,

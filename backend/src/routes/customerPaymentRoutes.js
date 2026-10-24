@@ -9,6 +9,7 @@ router.get('/credit-notes/sources', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS'
 router.get('/credit-notes/next-voucher-no', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS']), creditNoteController.getNextCreditNoteNo);
 router.post('/credit-notes', authorize(['PAYMENT_PROCESS']), creditNoteController.recordCreditNote);
 router.get('/credit-notes', authorize(['PAYMENT_VIEW']), creditNoteController.getCreditNotes);
+router.get('/credit-notes/:id/pdf', authorize(['PAYMENT_VIEW']), creditNoteController.generateCreditNotePDF);
 router.post('/credit-notes/:id/cancel', authorize(['PAYMENT_EDIT']), creditNoteController.cancelCreditNote);
 
 router.post('/', authorize(['PAYMENT_PROCESS']), customerPaymentController.recordPaymentReceived);

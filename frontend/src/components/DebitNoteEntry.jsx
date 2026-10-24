@@ -409,7 +409,7 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
           </div>
 
           <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
-            <Field label="Voucher No.">
+            <Field label="Debit Note No.">
               <input type="text" value={nextNo} readOnly className={`${inputClass} bg-slate-50 font-mono text-slate-600`} />
             </Field>
             <Field label="Date" required>

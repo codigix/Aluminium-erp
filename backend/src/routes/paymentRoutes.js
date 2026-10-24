@@ -23,6 +23,7 @@ router.get('/:paymentId/pdf', authorize(['PAYMENT_VIEW']), paymentController.get
 router.get('/vendor-invoice/:id/pdf', authorize(['PAYMENT_VIEW', 'PURCHASE_ORDER_VIEW']), paymentController.getVendorInvoicePDF);
 router.post('/vendor-invoice/:id/send-email', authorize(['PAYMENT_PROCESS']), paymentController.sendVendorInvoiceEmail);
 router.post('/:paymentId/send-email', authorize(['PAYMENT_PROCESS']), paymentController.sendPaymentVoucherEmail);
+router.post('/:paymentId/allocate', authorize(['PAYMENT_EDIT']), paymentController.allocateOnAccountPayment);
 router.patch('/:paymentId/status', authorize(['PAYMENT_EDIT']), paymentController.updatePaymentStatus);
 router.delete('/:paymentId', authorize(['PAYMENT_EDIT']), paymentController.deletePayment);
 
