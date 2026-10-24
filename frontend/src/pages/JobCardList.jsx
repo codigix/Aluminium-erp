@@ -191,6 +191,12 @@ const JobCardList = ({
         const pct = total ? Math.round((done / total) * 100) : 0;
         const isCollapsed = collapsed[g.key] ?? false;
         const wo = g.wo;
+        // Rework links within this work order. Older rework cards stored the source id in remarks.
+        const cardById = new Map(g.all.map(j => [j.id, j]));
+        const reworkSource = rw => cardById.get(rw.rework_of_job_card_id)
+          || (/^\d+$/.test(String(rw.remarks || '').trim()) ? cardById.get(parseInt(rw.remarks, 10)) : null)
+          || null;
+        const openReworks = g.all.filter(j => j.is_rework && !['COMPLETED', 'CANCELLED'].includes(j.status));
         return (
           <div key={g.key} className="bg-white border border-slate-200 rounded">
             <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-slate-50 border-b border-slate-100 rounded-t cursor-pointer" onClick={e => { e.stopPropagation(); setCollapsed(c => ({ ...c, [g.key]: !isCollapsed })); }}>
@@ -212,8 +218,15 @@ const JobCardList = ({
                 {g.jobs.map(jc => {
                   const a = analyse(jc, { isPlanFulfilled });
                   const P = a.primary.icon;
-                  const planned = num(jc.planned_qty);
+                  // Rejected pieces sent back to this operation for rework are made on top of the plan
+                  const reworkExtra = jc.is_rework ? 0 : num(jc.rework_qty);
+                  // planned_qty on later operations only counts pieces received so far from the previous step;
+                  // the operation's target is the full work order quantity (plus any rework sent to it)
+                  const received = num(jc.planned_qty);
+                  const baseTarget = jc.is_rework ? received : Math.max(received, num(jc.wo_quantity));
+                  const planned = baseTarget + reworkExtra;
                   const produced = num(jc.produced_qty);
+                  const awaitingInput = !jc.is_rework && received < baseTarget;
                   const pctDone = planned > 0 ? Math.min(100, Math.round((produced / planned) * 100)) : 0;
                   const late = isLate(jc);
                   const due = formatWhen(jc.end_time);
@@ -229,12 +242,32 @@ const JobCardList = ({
                             {isSubcontract(jc) ? <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700">Subcontract</span> : null}
                           </div>
                           <div className="text-[11px] text-slate-500">{jc.job_card_no}</div>
+                          {jc.is_rework ? (() => {
+                            const src = reworkSource(jc);
+                            return src ? <div className="text-[11px] text-rose-600">Rework of {src.job_card_no} · rejected at {String(src.operation_name || '').trim()}</div> : null;
+                          })() : (() => {
+                            // Pieces still being reworked at an earlier step will arrive at this operation later
+                            const pending = openReworks.filter(rw => num(jc.sequence_no) > num(rw.sequence_no));
+                            const qty = pending.reduce((s, rw) => s + Math.max(0, num(rw.planned_qty) - num(rw.produced_qty)), 0);
+                            if (!pending.length || qty <= 0) return null;
+                            return (
+                              <div className="text-[11px] text-amber-700">
+                                {qty} pc in rework at {String(pending[0].operation_name || '').replace(/^Rework:\s*/i, '').trim()} ({pending.map(rw => rw.job_card_no).join(', ')}), arrives after it passes QC
+                              </div>
+                            );
+                          })()}
                         </div>
                         <span className={`text-[11px] px-2 py-0.5 rounded w-20 text-center ${STATUS_STYLE[jc.status] || ''}`}>{STATUS_LABEL[jc.status] || jc.status}</span>
                         <div className="w-40">
                           <div className="flex justify-between text-[11px] text-slate-500"><span>{isShipment(jc) ? 'Shipped' : 'Made'} {produced} / {planned}</span><span>{pctDone}%</span></div>
                           <div className="h-1.5 bg-slate-100 rounded overflow-hidden"><div className="h-full bg-blue-500" style={{ width: `${pctDone}%` }} /></div>
-                          {(num(jc.accepted_qty) > 0 || num(jc.rejected_qty) > 0) && <div className="text-[10px] text-slate-400">{num(jc.accepted_qty)} accepted{num(jc.rejected_qty) > 0 ? ` · ${num(jc.rejected_qty)} rejected` : ''}</div>}
+                          {(num(jc.accepted_qty) > 0 || num(jc.rejected_qty) > 0 || reworkExtra > 0 || awaitingInput) && (
+                            <div className="text-[10px] text-slate-400">
+                              {num(jc.accepted_qty)} accepted{num(jc.rejected_qty) > 0 ? ` · ${num(jc.rejected_qty)} rejected` : ''}
+                              {awaitingInput && <span className="ml-1 text-slate-500" title="Pieces handed over from the previous operation so far">· {received} received</span>}
+                              {reworkExtra > 0 && <span className="ml-1 px-1 rounded bg-amber-100 text-amber-800 font-semibold" title="Rejected pieces sent back to this operation for rework">+{reworkExtra} rework</span>}
+                            </div>
+                          )}
                         </div>
                         <div className="w-44 text-[11px] text-slate-500 space-y-0.5">
                           <div className="flex items-center gap-1"><Cpu className="w-3 h-3" />{isShipment(jc) ? 'Dispatch' : isSubcontract(jc) ? (jc.vendor_name || 'Vendor not set') : (jc.workstation_name || 'No machine')}</div>

@@ -163,6 +163,17 @@ test('re-saving the same QC entry does not create a second rework card', async (
   expect(n(rework[0].planned_qty)).toBe(1);
 });
 
+test('job card list returns the rework link used by the Job Card screen labels', async ({ request }) => {
+  const res = await request.get('/job-cards', { headers: { Authorization: `Bearer ${token}` } });
+  expect(res.status(), await res.text()).toBe(200);
+  const list = await res.json();
+  const rows = (Array.isArray(list) ? list : list.data || []).filter(jc => jc.work_order_id === ids.wo);
+  const rework = rows.find(jc => jc.is_rework);
+  expect(rework, 'rework card is listed').toBeTruthy();
+  expect(rework.rework_of_job_card_id).toBe(ids.vmc);
+  expect(rows.find(jc => jc.id === rework.rework_of_job_card_id).job_card_no).toBe(`${tag}-V`);
+});
+
 test('production database was not touched', async () => {
   const [[{ c }]] = await prodDb.query('SELECT COUNT(id) AS c FROM job_cards');
   expect(Number(c)).toBe(prodJobCardCount);

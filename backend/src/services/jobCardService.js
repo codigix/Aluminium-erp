@@ -228,7 +228,7 @@ const listJobCards = async () => {
   const [rows] = await pool.query(
     `SELECT jc.id, jc.job_card_no, jc.work_order_id, jc.operation_id, COALESCE(jc.workstation_id, w.id) as workstation_id, jc.assigned_to, jc.planned_qty, jc.status, jc.execution_mode, jc.public_id,
             jc.sequence_no, jc.actual_start_date, jc.created_at,
-            jc.start_time, jc.end_time, jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.rework_qty, jc.scrap_qty, jc.remarks, jc.vendor_id, jc.vendor_rate, jc.is_rework, jc.hold_reason, jc.held_at,
+            jc.start_time, jc.end_time, jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.rework_qty, jc.scrap_qty, jc.remarks, jc.vendor_id, jc.vendor_rate, jc.is_rework, jc.rework_of_job_card_id, jc.hold_reason, jc.held_at,
             ROW_NUMBER() OVER (PARTITION BY COALESCE(wo.plan_id, wo.parent_wo_id, wo.id) ORDER BY CASE WHEN wo.source_type = 'SA' OR wo.source_type = 'PART' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC) as operation_sequence,
             wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             wo.plan_id, wo.sales_order_id, wo.parent_wo_id, wo.item_code, wo.sales_order_item_id,
@@ -3307,10 +3307,12 @@ const syncReworkQuantities = async (workOrderId, connection) => {
   // pass again through every later step up to the rejected one, so those steps need room for them.
   const byId = new Map(jobCards.map(jc => [jc.id, jc]));
   const routedExtra = new Map();
+  const sourcesWithReworkCard = new Set();
   for (const rw of jobCards) {
     if (!rw.is_rework || rw.status === 'CANCELLED') continue;
     const legacyId = /^\d+$/.test(String(rw.remarks || '').trim()) ? parseInt(rw.remarks, 10) : null;
     const source = byId.get(rw.rework_of_job_card_id) || byId.get(legacyId);
+    if (source) sourcesWithReworkCard.add(source.id);
     if (!source || num(rw.sequence_no) >= num(source.sequence_no)) continue;
     for (const op of jobCards) {
       if (op.is_rework || op.status === 'CANCELLED') continue;
@@ -3320,9 +3322,11 @@ const syncReworkQuantities = async (workOrderId, connection) => {
     }
   }
 
-  // In-house operations get a dedicated rework job card (productionFlowService.syncReworkJobCard).
-  // Counting their rejections here as well would let upstream operations produce the same piece twice.
-  const getsReworkCard = jc => !jc.is_rework && !isShipmentOperation(jc.operation_name) && !isSubcontractJobCard(jc);
+  // Rejections that already have a dedicated rework job card (productionFlowService.syncReworkJobCard)
+  // must not also add capacity upstream, or the same piece would be produced twice. Rejections without
+  // one (subcontract, shipment, rework cards, or approved before rework cards existed) keep the
+  // original behaviour: the rejected quantity is added to the earlier operations.
+  const getsReworkCard = jc => sourcesWithReworkCard.has(jc.id);
 
   const reworkGenerated = jobCards.map(jc => {
     if (getsReworkCard(jc)) return 0;

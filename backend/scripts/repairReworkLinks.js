@@ -11,7 +11,6 @@
 
 require('dotenv').config();
 const pool = require('../src/config/db');
-const { isShipmentOperation, isSubcontractJobCard } = require('../src/config/productionWorkflow');
 
 const APPLY = process.argv.includes('--apply');
 
@@ -60,8 +59,8 @@ const repairLinks = async (connection) => {
   return fixes;
 };
 
-// Same rule as jobCardService.syncReworkQuantities: only rejections without a rework job card
-// (subcontract, shipment, or on a rework card) are pushed back onto upstream operations.
+// Same rule as jobCardService.syncReworkQuantities: only rejections that have no rework job card
+// are pushed back onto upstream operations.
 const recomputeReworkQty = async (connection) => {
   const [workOrders] = await connection.query(
     'SELECT DISTINCT work_order_id FROM job_cards WHERE COALESCE(rework_qty, 0) > 0 OR COALESCE(rejected_qty, 0) > 0'
@@ -69,11 +68,19 @@ const recomputeReworkQty = async (connection) => {
   const changes = [];
   for (const { work_order_id: woId } of workOrders) {
     const [jobCards] = await connection.query(
-      `SELECT id, job_card_no, rework_qty, rejected_qty, scrap_qty, is_rework, operation_name, execution_mode, execution_type
+      `SELECT id, job_card_no, rework_qty, rejected_qty, scrap_qty, is_rework, status, rework_of_job_card_id, remarks
        FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no ASC, id ASC`,
       [woId]
     );
-    const getsReworkCard = jc => !jc.is_rework && !isShipmentOperation(jc.operation_name) && !isSubcontractJobCard(jc);
+    const byId = new Map(jobCards.map(jc => [jc.id, jc]));
+    const covered = new Set();
+    for (const rw of jobCards) {
+      if (!rw.is_rework || rw.status === 'CANCELLED') continue;
+      const legacyId = /^\d+$/.test(String(rw.remarks || '').trim()) ? parseInt(rw.remarks, 10) : null;
+      const source = byId.get(rw.rework_of_job_card_id) || byId.get(legacyId);
+      if (source) covered.add(source.id);
+    }
+    const getsReworkCard = jc => covered.has(jc.id);
     const generated = jobCards.map(jc => (getsReworkCard(jc) ? 0 : Math.max(0, (parseFloat(jc.rejected_qty) || 0) - (parseFloat(jc.scrap_qty) || 0))));
 
     for (let i = 0; i < jobCards.length; i++) {
