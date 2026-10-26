@@ -510,8 +510,10 @@ const CustomerPaymentHistory = () => {
     // (money out, Debit column) and the destination account (money in, Credit column).
     contraVouchers.forEach(cv => {
       const amt = parseFloat(cv.amount) || 0;
-      const fromAcc = cv.from_account || 'Cash / Bank Account';
-      const toAcc = cv.to_account || 'Bank / Cash Account';
+      // Display name only: the cash ledger is shown as "Cash"
+      const showCash = (text) => String(text || '').replace(/Cash in Hand/gi, 'Cash');
+      const fromAcc = showCash(cv.from_account) || 'Cash / Bank Account';
+      const toAcc = showCash(cv.to_account) || 'Bank / Cash Account';
 
       // "Bank Name (Account No.)" from the bank master; cash accounts keep the stored name
       const bankLabel = (bankId, storedName) => {
@@ -559,7 +561,7 @@ const CustomerPaymentHistory = () => {
         debit: l.debit,
         credit: l.credit,
         amount: amt,
-        narration: cv.narration || 'Internal fund transfer between company accounts',
+        narration: showCash(cv.narration) || 'Internal fund transfer between company accounts',
         status: 'CONFIRMED',
         // Both accounts kept for the voucher breakdown modal and PDF
         from_account: fromAcc,
