@@ -54,6 +54,9 @@ const getRefNo = (row) => {
   return row.transaction_ref_no || row.remarks?.match(/Ref:\s*([^\s,|;\[\]]+)/i)?.[1]?.trim();
 };
 
+// Download and email buttons in the list rows are hidden; the voucher view dialog keeps its own Download / Print
+const SHOW_ROW_DOCUMENT_ACTIONS = false;
+
 const CustomerPaymentHistory = () => {
   // Raw Data States
   const [customerPayments, setCustomerPayments] = useState([]);
@@ -1195,15 +1198,17 @@ const CustomerPaymentHistory = () => {
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => handleDownloadPDF(row)}
-            className="p-1.5 hover:bg-blue-50 rounded-lg text-slate-500 hover:text-blue-600 transition-colors border border-slate-200 shadow-2xs cursor-pointer"
-            title="Download / Print"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
-          {row.kind !== 'CONTRA_VOUCHER' && row.kind !== 'DEBIT_NOTE' && row.kind !== 'CREDIT_NOTE' && (
+          {SHOW_ROW_DOCUMENT_ACTIONS && (
+            <button
+              type="button"
+              onClick={() => handleDownloadPDF(row)}
+              className="p-1.5 hover:bg-blue-50 rounded-lg text-slate-500 hover:text-blue-600 transition-colors border border-slate-200 shadow-2xs cursor-pointer"
+              title="Download / Print"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {SHOW_ROW_DOCUMENT_ACTIONS && row.kind !== 'CONTRA_VOUCHER' && row.kind !== 'DEBIT_NOTE' && row.kind !== 'CREDIT_NOTE' && (
             <button
               type="button"
               onClick={() => handleOpenEmailModal(row)}
