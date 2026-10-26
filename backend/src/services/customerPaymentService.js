@@ -298,6 +298,154 @@ const recordPaymentReceived = async (payload) => {
   }
 };
 
+const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+// Receipts recorded as Advance / On Account carry no bill; they are tagged in the remarks
+const getUnallocatedKind = (payment) => {
+  if (payment.invoice_id) return null;
+  const remarks = String(payment.remarks || '');
+  if (/^\[Advance/i.test(remarks)) return 'Advance';
+  if (/^\[On Account\]/i.test(remarks)) return 'On Account';
+  return null;
+};
+
+// Adds unallocated_kind / unallocated_amount (receipt amount not yet tied to an invoice) to each receipt
+const attachUnallocatedAmounts = async (payments) => {
+  const candidates = payments.filter(p => p.status === 'CONFIRMED' && getUnallocatedKind(p));
+  const allocatedById = new Map();
+  if (candidates.length > 0) {
+    const [rows] = await pool.query(
+      'SELECT customer_payment_id, SUM(amount) as allocated FROM customer_payment_allocations WHERE customer_payment_id IN (?) GROUP BY customer_payment_id',
+      [candidates.map(p => p.id)]
+    );
+    rows.forEach(r => allocatedById.set(r.customer_payment_id, parseFloat(r.allocated) || 0));
+  }
+  payments.forEach(p => {
+    const kind = p.status === 'CONFIRMED' ? getUnallocatedKind(p) : null;
+    p.unallocated_kind = kind;
+    p.unallocated_amount = kind ? Math.max(0, round2((parseFloat(p.payment_amount) || 0) - (allocatedById.get(p.id) || 0))) : 0;
+  });
+};
+
+const receiptError = (message, status = 400) => {
+  const error = new Error(message);
+  error.status = status;
+  error.statusCode = status;
+  return error;
+};
+
+/**
+ * Allocate (part of) an Advance / On Account receipt against customer invoices after the fact.
+ * The receipt number, amount, bank entry and customer ledger stay as recorded; only bill-wise
+ * 'Agst Ref' lines are added, which lowers those invoices' outstanding.
+ */
+const allocateUnallocatedReceipt = async (paymentId, allocations = []) => {
+  const requested = new Map();
+  for (const a of Array.isArray(allocations) ? allocations : []) {
+    const invoiceId = parseInt(a.invoiceId ?? a.invoice_id, 10);
+    const amount = round2(a.amount);
+    if (!invoiceId || amount <= 0) continue;
+    requested.set(invoiceId, round2((requested.get(invoiceId) || 0) + amount));
+  }
+  if (requested.size === 0) throw receiptError('Select at least one invoice and enter an amount to allocate.');
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [payRows] = await connection.query('SELECT * FROM customer_payments WHERE id = ? FOR UPDATE', [paymentId]);
+    if (payRows.length === 0) throw receiptError('Receipt not found.', 404);
+    const payment = payRows[0];
+    if (payment.status !== 'CONFIRMED') throw receiptError('Only confirmed receipts can be allocated.');
+    const kind = getUnallocatedKind(payment);
+    if (!kind) throw receiptError('Only Advance or On Account receipts can be allocated.');
+
+    const [allocSum] = await connection.query(
+      'SELECT COALESCE(SUM(amount), 0) as allocated FROM customer_payment_allocations WHERE customer_payment_id = ? FOR UPDATE',
+      [paymentId]
+    );
+    const unallocated = round2((parseFloat(payment.payment_amount) || 0) - (parseFloat(allocSum[0].allocated) || 0));
+    if (unallocated <= 0.004) throw receiptError(`This receipt has no ${kind} amount left to allocate.`);
+
+    const totalRequested = round2([...requested.values()].reduce((s, v) => s + v, 0));
+    if (totalRequested > unallocated + 0.005) {
+      throw receiptError(`Allocation total (₹${totalRequested.toFixed(2)}) exceeds the unallocated ${kind} amount (₹${unallocated.toFixed(2)}).`);
+    }
+
+    const invoices = [];
+    for (const [invoiceId, amount] of requested) {
+      const [rows] = await connection.query(
+        `SELECT si.id, si.invoice_no, si.order_id, si.client_id, si.total_amount, si.status, si.sent_to_accounts,
+          (si.total_amount - COALESCE((SELECT SUM(cn.total_amount) FROM credit_notes cn WHERE cn.sales_invoice_id = si.id AND cn.status = 'POSTED'), 0) - (COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = si.id AND cp.status = 'CONFIRMED'), 0) +
+           COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0))) as outstanding
+         FROM sales_invoices si WHERE si.id = ?`,
+        [invoiceId]
+      );
+      if (rows.length === 0) throw receiptError('One of the selected invoices was not found.');
+      const inv = rows[0];
+      if (String(inv.client_id) !== String(payment.customer_id)) {
+        throw receiptError(`Invoice ${inv.invoice_no} does not belong to this receipt's customer.`);
+      }
+      if (inv.status === 'Cancelled' || !inv.sent_to_accounts) {
+        throw receiptError(`Invoice ${inv.invoice_no} is not open for payment.`);
+      }
+      const outstanding = parseFloat(inv.outstanding) || 0;
+      if (outstanding <= 0.005) {
+        throw receiptError(`Invoice ${inv.invoice_no} has nothing outstanding (it is already fully paid).`);
+      }
+      if (amount > outstanding + 0.005) {
+        throw receiptError(`Allocation for ${inv.invoice_no} (₹${amount.toFixed(2)}) exceeds its outstanding amount (₹${outstanding.toFixed(2)}).`);
+      }
+      invoices.push({ inv, amount, outstanding });
+    }
+
+    for (const { inv, amount, outstanding } of invoices) {
+      await connection.query(
+        `INSERT INTO customer_payment_allocations (customer_payment_id, receipt_no, customer_id, invoice_id, sales_order_id, sales_order_source, allocation_type, reference_no, amount)
+         VALUES (?, ?, ?, ?, ?, 'SALES_INVOICE', 'Agst Ref', ?, ?)`,
+        [paymentId, payment.payment_receipt_no, payment.customer_id, inv.id, inv.order_id || null, inv.invoice_no, amount]
+      );
+
+      // Same paid-status rule as a normal receipt (credit notes are not counted here, as in recordPaymentReceived)
+      const [payRowsAfter] = await connection.query(
+        `SELECT
+          COALESCE((SELECT SUM(cpa.amount) FROM customer_payment_allocations cpa JOIN customer_payments cp ON cpa.customer_payment_id = cp.id WHERE cpa.invoice_id = ? AND cp.status = 'CONFIRMED'), 0) +
+          COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = ? OR (cp.sales_order_id = ? AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0) as total_paid`,
+        [inv.id, inv.id, inv.id]
+      );
+      const totalPaid = parseFloat(payRowsAfter[0]?.total_paid) || 0;
+      const invoiceTotal = parseFloat(inv.total_amount) || 0;
+      if (totalPaid >= invoiceTotal) {
+        await connection.query('UPDATE sales_invoices SET status = ?, updated_at = NOW() WHERE id = ?', ['Paid', inv.id]);
+      } else if (totalPaid > 0) {
+        await connection.query('UPDATE sales_invoices SET status = ?, updated_at = NOW() WHERE id = ?', ['Partially Paid', inv.id]);
+      }
+      inv.outstandingAfter = round2(outstanding - amount);
+    }
+
+    await connection.commit();
+
+    return {
+      paymentId: Number(paymentId),
+      receiptNo: payment.payment_receipt_no,
+      kind,
+      allocated: totalRequested,
+      remainingUnallocated: round2(unallocated - totalRequested),
+      invoices: invoices.map(({ inv, amount }) => ({
+        invoiceId: inv.id,
+        reference: inv.invoice_no,
+        amount,
+        outstandingAfter: inv.outstandingAfter
+      }))
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const getPaymentsReceived = async (filters = {}) => {
   let query = `
     SELECT 
@@ -366,6 +514,7 @@ const getPaymentsReceived = async (filters = {}) => {
   query += ' ORDER BY cp.created_at DESC, cp.id DESC';
 
   const [payments] = await pool.query(query, params);
+  await attachUnallocatedAmounts(payments);
   return payments;
 };
 
@@ -1048,6 +1197,7 @@ SPTECHPIONEER PVT LTD`;
 module.exports = {
   recordPaymentReceived,
   getPaymentsReceived,
+  allocateUnallocatedReceipt,
   getPaymentReceivedById,
   getCustomerBalance,
   getCustomerMonthlySummary,

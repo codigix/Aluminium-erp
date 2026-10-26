@@ -96,6 +96,18 @@ const updatePaymentStatus = async (req, res, next) => {
   }
 };
 
+const allocateUnallocatedReceipt = async (req, res, next) => {
+  try {
+    const result = await customerPaymentService.allocateUnallocatedReceipt(req.params.paymentId, req.body.allocations);
+    res.json({
+      message: 'Receipt allocated successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const deletePayment = async (req, res, next) => {
   try {
     const result = await customerPaymentService.deletePayment(req.params.paymentId);
@@ -158,6 +170,7 @@ module.exports = {
   getOutstandingInvoices,
   getAllOutstandingInvoices,
   updatePaymentStatus,
+  allocateUnallocatedReceipt,
   deletePayment,
   getCustomerPaymentReceiptPDF,
   sendCustomerPaymentReceiptEmail,

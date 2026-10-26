@@ -22,6 +22,7 @@ router.post('/invoice/:id/send-email', authorize(['PAYMENT_PROCESS']), customerP
 router.get('/customer/:customerId/balance', authorize(['PAYMENT_VIEW']), customerPaymentController.getCustomerBalance);
 router.get('/customer/:customerId/monthly-summary', authorize(['PAYMENT_VIEW']), customerPaymentController.getCustomerMonthlySummary);
 router.get('/customer/:customerId/outstanding', authorize(['PAYMENT_VIEW']), customerPaymentController.getOutstandingInvoices);
+router.post('/:paymentId/allocate', authorize(['PAYMENT_EDIT']), customerPaymentController.allocateUnallocatedReceipt);
 router.patch('/:paymentId/status', authorize(['PAYMENT_EDIT']), customerPaymentController.updatePaymentStatus);
 router.delete('/:paymentId', authorize(['PAYMENT_EDIT']), customerPaymentController.deletePayment);
 

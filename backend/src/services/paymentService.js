@@ -1994,21 +1994,6 @@ const recordContraVoucher = async (payload) => {
       }
     }
 
-    if (resolvedFromBankId) {
-      const bankInfo = await bankAccountService.getBankAccountBalance(resolvedFromBankId);
-      if (bankInfo) {
-        const available = parseFloat(bankInfo.current_balance) || 0;
-        if (numericAmount > available) {
-          const formattedAvail = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(available);
-          const formattedReq = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(numericAmount);
-          const shortfall = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(numericAmount - available);
-          const error = new Error(`Insufficient balance in ${bankInfo.bank_name}! Available balance is ${formattedAvail}, but requested transfer is ${formattedReq} (shortfall: ${shortfall}). Account balance cannot go negative.`);
-          error.statusCode = 400;
-          throw error;
-        }
-      }
-    }
-
     const [result] = await connection.query(
       `INSERT INTO contra_vouchers (
         voucher_no, voucher_date, from_account, from_bank_account_id,

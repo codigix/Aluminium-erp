@@ -188,10 +188,6 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       newErrors.paymentMode = 'Payment mode is required';
     }
 
-    if ((formData.paymentMode === 'BANK_TRANSFER' || formData.paymentMode === 'CREDIT_CARD' || formData.paymentMode === 'DEBIT_CARD') && !formData.transactionRefNo) {
-      newErrors.transactionRefNo = 'Transaction reference number is required for this payment mode';
-    }
-
     if (formData.paymentMode === 'BANK_TRANSFER') {
       if (!formData.bankAccount) {
         newErrors.bankAccount = 'Bank account is required for bank transfers';
@@ -217,9 +213,6 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
     }
 
     if (formData.paymentMode === 'CHEQUE') {
-      if (!formData.chequeNumber) {
-        newErrors.chequeNumber = 'Cheque number is required';
-      }
       if (!formData.bankName) {
         newErrors.bankName = 'Bank name is required';
       }
@@ -684,7 +677,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
 
             {/* Transaction Ref No */}
             {(['BANK_TRANSFER', 'CREDIT_CARD', 'DEBIT_CARD'].includes(formData.paymentMode)) && (
-              <FormControl label="Transaction Ref No *">
+              <FormControl label="Transaction Ref No">
                 <input
                   type="text"
                   value={formData.transactionRefNo}
@@ -729,7 +722,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             {formData.paymentMode === 'CHEQUE' && (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <FormControl label="Cheque Number *">
+                  <FormControl label="Cheque Number">
                     <input
                       type="text"
                       value={formData.chequeNumber}

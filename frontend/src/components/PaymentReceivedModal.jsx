@@ -583,19 +583,6 @@ const PaymentReceivedModal = ({
     const amt = parseFloat(voucherForm.contraAmount);
     if (isNaN(amt) || amt <= 0) {
       newErrors.contraAmount = 'Valid transfer amount greater than 0 is required';
-    } else {
-      // Validate source bank balance to prevent negative balance
-      const sourceBank = bankAccounts.find(b => 
-        voucherForm.contraFromAccount.includes(b.bank_name) || 
-        (b.account_number && voucherForm.contraFromAccount.includes(b.account_number))
-      );
-      if (sourceBank) {
-        const avail = parseFloat(sourceBank.current_balance ?? sourceBank.total_balance ?? sourceBank.opening_balance) || 0;
-        if (amt > avail) {
-          const shortfall = amt - avail;
-          newErrors.contraAmount = `Insufficient balance in ${sourceBank.bank_name}! Available is ${formatCurrency(avail)}. Shortfall: ${formatCurrency(shortfall)}. Account balance cannot go negative (e.g. -₹200).`;
-        }
-      }
     }
     if (!voucherForm.date) newErrors.date = 'Date is required';
 
@@ -1569,15 +1556,8 @@ const PaymentReceivedModal = ({
     }
 
     if (formData.paymentMode === 'CHEQUE') {
-      if (!formData.chequeNumber) newErrors.chequeNumber = 'Cheque number is required';
       if (!formData.bankName) newErrors.bankName = 'Bank name is required';
       if (!formData.chequeDate) newErrors.chequeDate = 'Cheque date is required';
-    }
-
-    if (['CREDIT_CARD', 'DEBIT_CARD'].includes(formData.paymentMode)) {
-      if (!formData.transactionRefNo) {
-        newErrors.transactionRefNo = 'Transaction reference or authorization code is required';
-      }
     }
 
     setErrors(newErrors);
@@ -3258,7 +3238,7 @@ const PaymentReceivedModal = ({
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
-                      Cheque No. / Ref No. {formData.paymentMode === 'CHEQUE' ? '*' : ''}
+                      Cheque No. / Ref No.
                     </label>
                     {lastFetchedCheque && (
                       <button

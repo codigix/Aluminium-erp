@@ -47,6 +47,10 @@ const formatDate = (dateStr) => {
 
 const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
 
+// Customer receipts come with unallocated_kind / unallocated_amount from the API (vendor payments don't)
+const isReceiptRow = (row) => row?.unallocated_kind !== undefined;
+const getUnallocatedAmount = (row) => (isReceiptRow(row) ? round2(row.unallocated_amount) : getOnAccountAmount(row));
+
 // Part of a vendor payment recorded 'On Account' that is not yet tied to any bill
 const getOnAccountAmount = (payment) => round2(
   (Array.isArray(payment?.allocations) ? payment.allocations : [])
@@ -581,7 +585,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     const others = round2(Object.entries(allocateAmounts)
       .filter(([id]) => String(id) !== String(bill.id))
       .reduce((sum, [, v]) => sum + (parseFloat(v) || 0), 0));
-    const cap = round2(Math.min(round2(bill.outstanding), getOnAccountAmount(allocateTarget) - others));
+    const cap = round2(Math.min(round2(bill.outstanding), getUnallocatedAmount(allocateTarget) - others));
     if (cap <= 0) return;
     setAllocateAmounts(prev => (
       Math.abs((parseFloat(prev[bill.id]) || 0) - cap) < 0.005
@@ -602,17 +606,27 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     try {
       setAllocateSaving(true);
       const token = localStorage.getItem('authToken');
-      const res = await fetch(`${API_BASE}/payments/${allocateTarget.id}/allocate`, {
+      const isReceipt = isReceiptRow(allocateTarget);
+      const res = await fetch(`${API_BASE}/${isReceipt ? 'customer-payments' : 'payments'}/${allocateTarget.id}/allocate`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ allocations })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Failed to allocate payment');
-      successToast(`${allocateTarget.payment_voucher_no} allocated: ${formatCurrency(data.data?.allocated)}`);
+      successToast(`${allocateTarget.payment_voucher_no || allocateTarget.payment_receipt_no} allocated: ${formatCurrency(data.data?.allocated)}`);
       setAllocateTarget(null);
       setAllocateAmounts({});
-      await Promise.all([fetchVendorPayments(selectedVendorId), fetchVendorInvoices(selectedVendorId)]);
+      if (isReceipt) {
+        await Promise.all([
+          fetchCustomerPaymentHistory(selectedCompanyId),
+          fetchCustomerInvoices(selectedCompanyId),
+          fetchCustomerBalance(selectedCompanyId),
+          fetchMonthlySummary(selectedCompanyId, selectedMonth, fromDate, toDate)
+        ]);
+      } else {
+        await Promise.all([fetchVendorPayments(selectedVendorId), fetchVendorInvoices(selectedVendorId)]);
+      }
     } catch (err) {
       errorToast(err.message || 'Failed to allocate payment');
     } finally {
@@ -1555,14 +1569,26 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         ) : row.is_journal ? (
           <span className="text-[10px] text-slate-400 font-semibold pr-1.5">Journal Voucher</span>
         ) : (
-          <button
-            type="button"
-            onClick={() => handleDownloadReceipt(row.id, row.receipt_number)}
-            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
-            title="Download Receipt PDF"
-          >
-            <Download className="w-4 h-4" />
-          </button>
+          <div className="flex items-center justify-end gap-1.5">
+            {getUnallocatedAmount(row) > 0 && (
+              <button
+                type="button"
+                onClick={() => openAllocateModal(row)}
+                className="px-2.5 py-1 text-[10.5px] font-bold rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer whitespace-nowrap"
+                title={`${formatCurrency(getUnallocatedAmount(row))} is ${row.unallocated_kind} – allocate it against an invoice`}
+              >
+                Edit Allocation
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => handleDownloadReceipt(row.id, row.receipt_number)}
+              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+              title="Download Receipt PDF"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          </div>
         )
       )
     }
@@ -3635,15 +3661,19 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
 
       {/* ── Edit Allocation: allocate an On Account vendor payment against bills ── */}
       {allocateTarget && (() => {
-        const onAccountLeft = getOnAccountAmount(allocateTarget);
-        const bills = vendorInvoices.filter(b => (parseFloat(b.outstanding) || 0) > 0.005);
+        const isReceipt = isReceiptRow(allocateTarget);
+        const onAccountLeft = getUnallocatedAmount(allocateTarget);
+        const unallocatedLabel = isReceipt
+          ? allocateTarget.unallocated_kind
+          : ((allocateTarget.allocations || []).some(a => !a.po_id && !a.invoice_id && a.allocation_type === 'Advance') ? 'Advance' : 'On Account');
+        const bills = (isReceipt ? invoices : vendorInvoices).filter(b => (parseFloat(b.outstanding) || 0) > 0.005);
         const allocatedTotal = round2(Object.values(allocateAmounts).reduce((sum, v) => sum + (parseFloat(v) || 0), 0));
         const remaining = round2(onAccountLeft - allocatedTotal);
         const overBill = bills.find(b => (parseFloat(allocateAmounts[b.id]) || 0) > round2(b.outstanding) + 0.005);
         const problem = remaining < -0.005
-          ? `Allocated ${formatCurrency(allocatedTotal)} is more than the On Account amount ${formatCurrency(onAccountLeft)}`
+          ? `Allocated ${formatCurrency(allocatedTotal)} is more than the ${unallocatedLabel} amount ${formatCurrency(onAccountLeft)}`
           : overBill
-            ? `${overBill.display_invoice_no}: amount is more than its outstanding ${formatCurrency(overBill.outstanding)}`
+            ? `${overBill.display_invoice_no || overBill.invoice_no}: amount is more than its outstanding ${formatCurrency(overBill.outstanding)}`
             : '';
         return (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={closeAllocateModal}>
@@ -3652,8 +3682,8 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                 <div>
                   <h3 className="text-sm font-bold text-slate-800">Edit Allocation</h3>
                   <p className="text-[11px] text-slate-500">
-                    Voucher <span className="font-mono font-semibold text-slate-700">{allocateTarget.payment_voucher_no}</span>
-                    {selectedVendor?.vendor_name ? ` · ${selectedVendor.vendor_name}` : ''}
+                    Voucher <span className="font-mono font-semibold text-slate-700">{allocateTarget.payment_voucher_no || allocateTarget.payment_receipt_no}</span>
+                    {(isReceipt ? selectedCompany?.company_name : selectedVendor?.vendor_name) ? ` · ${isReceipt ? selectedCompany?.company_name : selectedVendor?.vendor_name}` : ''}
                   </p>
                 </div>
                 <button type="button" onClick={closeAllocateModal} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 cursor-pointer">
@@ -3663,12 +3693,12 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
 
               <div className="px-5 py-3 grid grid-cols-3 gap-3 border-b border-slate-100 text-xs">
                 <div>
-                  <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Payment Amount</div>
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">{isReceipt ? 'Receipt Amount' : 'Payment Amount'}</div>
                   <div className="font-mono font-bold text-slate-800">{formatCurrency(allocateTarget.payment_amount)}</div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">
-                    {(allocateTarget.allocations || []).some(a => !a.po_id && !a.invoice_id && a.allocation_type === 'Advance') ? 'Advance' : 'On Account'} (Unallocated)
+                    {unallocatedLabel} (Unallocated)
                   </div>
                   <div className="font-mono font-bold text-amber-700">{formatCurrency(onAccountLeft)}</div>
                 </div>
@@ -3681,13 +3711,15 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
               <div className="max-h-[320px] overflow-y-auto">
                 {bills.length === 0 ? (
                   <div className="px-6 py-10 text-center text-sm text-slate-400">
-                    No unpaid bills for this vendor. The payment stays On Account until a bill is available.
+                    {isReceipt
+                      ? `No unpaid invoices for this customer. The receipt stays ${unallocatedLabel} until an invoice is available.`
+                      : 'No unpaid bills for this vendor. The payment stays unallocated until a bill is available.'}
                   </div>
                 ) : (
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 text-[10.5px] uppercase text-slate-500 sticky top-0">
                       <tr>
-                        <th className="px-4 py-2 text-left">Bill / PO</th>
+                        <th className="px-4 py-2 text-left">{isReceipt ? 'Invoice' : 'Bill / PO'}</th>
                         <th className="px-3 py-2 text-left">Date</th>
                         <th className="px-3 py-2 text-right">Outstanding</th>
                         <th className="px-4 py-2 text-right w-44">Allocate</th>
@@ -3700,8 +3732,8 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                         const overThis = (parseFloat(value) || 0) > round2(b.outstanding) + 0.005;
                         return (
                           <tr key={b.id} className="hover:bg-slate-50/70">
-                            <td className="px-4 py-2.5 font-mono font-bold text-blue-700">{b.display_invoice_no}</td>
-                            <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(b.bill_date)}</td>
+                            <td className="px-4 py-2.5 font-mono font-bold text-blue-700">{b.display_invoice_no || b.invoice_no}</td>
+                            <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(b.bill_date || b.invoice_date)}</td>
                             <td className="px-3 py-2.5 text-right font-mono font-semibold text-slate-800">{formatCurrency(b.outstanding)}</td>
                             <td className="px-4 py-2 text-right">
                               <div className="flex items-center justify-end gap-1.5">
@@ -3736,7 +3768,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                 <div className="text-[11px]">
                   {problem
                     ? <span className="text-rose-600 font-semibold">{problem}</span>
-                    : <span className="text-slate-500">Allocating <strong className="font-mono text-slate-800">{formatCurrency(allocatedTotal)}</strong>; the rest stays unallocated.</span>}
+                    : <span className="text-slate-500">Allocating <strong className="font-mono text-slate-800">{formatCurrency(allocatedTotal)}</strong>; the rest stays {unallocatedLabel}.</span>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button type="button" onClick={closeAllocateModal} disabled={allocateSaving}
