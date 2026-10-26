@@ -191,15 +191,6 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
     if (formData.paymentMode === 'BANK_TRANSFER') {
       if (!formData.bankAccount) {
         newErrors.bankAccount = 'Bank account is required for bank transfers';
-      } else {
-        const bankObj = bankAccounts.find(b => String(b.id) === String(formData.bankAccount));
-        if (bankObj) {
-          const bal = parseFloat(bankObj.current_balance ?? bankObj.total_balance ?? bankObj.opening_balance) || 0;
-          const req = parseFloat(formData.paymentAmount) || 0;
-          if (req > bal) {
-            newErrors.paymentAmount = `Insufficient balance in ${bankObj.bank_name}! Available: ${formatCurrency(bal)}. Account balance cannot go negative (e.g. -₹200).`;
-          }
-        }
       }
     }
 
@@ -655,19 +646,12 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   const sel = bankAccounts.find(b => String(b.id) === String(formData.bankAccount));
                   if (!sel) return null;
                   const bal = parseFloat(sel.current_balance ?? sel.total_balance ?? sel.opening_balance) || 0;
-                  const req = parseFloat(formData.paymentAmount) || 0;
-                  const isInsufficient = req > bal;
                   return (
                     <div className="mt-1.5 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs">
                       <div className="flex justify-between font-mono">
                         <span>Available Balance: <strong className={bal < 0 ? 'text-rose-600' : 'text-emerald-700'}>{formatCurrency(bal)}</strong></span>
                         <span className="text-slate-500">Cr: +{formatCurrency(sel.total_credits || 0)} | Dr: -{formatCurrency(sel.total_debits || 0)}</span>
                       </div>
-                      {isInsufficient && (
-                        <div className="text-rose-600 font-bold mt-1 text-[11px]">
-                          ⚠️ Insufficient balance! Shortfall: {formatCurrency(req - bal)}. Account balance cannot go negative.
-                        </div>
-                      )}
                     </div>
                   );
                 })()}

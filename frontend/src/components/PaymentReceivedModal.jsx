@@ -1656,20 +1656,6 @@ const PaymentReceivedModal = ({
           }];
         }
 
-        // Validate bank account balance before dispatching payment
-        if (numBankId) {
-          const bankObj = bankAccounts.find(b => b.id === numBankId);
-          if (bankObj) {
-            const avail = parseFloat(bankObj.current_balance ?? bankObj.total_balance ?? bankObj.opening_balance) || 0;
-            if (totalAmt > avail) {
-              const shortfall = totalAmt - avail;
-              errorToast(`Insufficient balance in ${bankObj.bank_name}! Available is ${formatCurrency(avail)}, requested is ${formatCurrency(totalAmt)} (shortfall: ${formatCurrency(shortfall)}). Account balance cannot go negative.`);
-              setLoading(false);
-              return;
-            }
-          }
-        }
-
         const vNo = dynamicPaymentVoucherNo || getVoucherNumber('PAYMENT');
         const paymentPayload = {
           vendorId: parseInt(finalVendorId, 10),
@@ -3190,14 +3176,9 @@ const PaymentReceivedModal = ({
                     const selBank = bankAccounts.find(b => String(b.id) === String(formData.bankAccount));
                     if (!selBank) return null;
                     const liveBal = parseFloat(selBank.current_balance ?? selBank.total_balance ?? selBank.opening_balance) || 0;
-                    const effectiveAmount = parseFloat(totalAllocated || formData.paymentAmount) || 0;
-                    const isOverdraft = (voucherType === 'PAYMENT' || isVendorMode) && (effectiveAmount > liveBal);
-                    const shortfall = effectiveAmount - liveBal;
 
                     return (
-                      <div className={`mt-2 p-2.5 rounded-xl border text-xs transition-all shadow-2xs ${
-                        isOverdraft ? 'bg-rose-50/90 border-rose-300' : 'bg-slate-50 border-slate-200'
-                      }`}>
+                      <div className="mt-2 p-2.5 rounded-xl border text-xs transition-all shadow-2xs bg-slate-50 border-slate-200">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
                             Live Available Balance
@@ -3216,15 +3197,6 @@ const PaymentReceivedModal = ({
                           </span>
                         </div>
 
-                        {/* Insufficient Balance Alert */}
-                        {isOverdraft && (
-                          <div className="mt-2 p-2 rounded-lg bg-rose-100 border border-rose-300 text-rose-800 text-[11px] flex items-start gap-1.5 leading-tight">
-                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                            <div>
-                              <strong className="font-bold">Insufficient Balance:</strong> Shortfall of <span className="font-mono font-bold">{formatCurrency(shortfall)}</span>. Bank account cannot go negative (e.g. -₹200). Please select another bank account or reduce the payment amount.
-                            </div>
-                          </div>
-                        )}
                       </div>
                     );
                   })()}
@@ -3421,31 +3393,17 @@ const PaymentReceivedModal = ({
                   Cancel
                 </button>
                 {(() => {
-                  const selBank = bankAccounts.find(b => String(b.id) === String(formData.bankAccount));
-                  const liveBal = selBank ? (parseFloat(selBank.current_balance ?? selBank.total_balance ?? selBank.opening_balance) || 0) : null;
-                  const effectiveAmount = parseFloat(totalAllocated || formData.paymentAmount) || 0;
-                  const isInsufficient = (voucherType === 'PAYMENT' || isVendorMode) && selBank && (effectiveAmount > liveBal);
-
                   return (
                     <button
                       type="button"
                       onClick={handleReceiptSubmit}
-                      disabled={loading || isInsufficient}
-                      className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
-                        isInsufficient
-                          ? 'bg-rose-500 text-white cursor-not-allowed opacity-85'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/25 active:scale-[0.98] cursor-pointer'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      disabled={loading}
+                      className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/25 active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {loading ? (
                         <>
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                           <span>{voucherType === 'PAYMENT' ? 'Recording Payment...' : 'Recording Receipt...'}</span>
-                        </>
-                      ) : isInsufficient ? (
-                        <>
-                          <AlertCircle className="w-4 h-4" />
-                          <span>Insufficient Balance ({formatCurrency(effectiveAmount)})</span>
                         </>
                       ) : (
                         <>

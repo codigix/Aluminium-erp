@@ -1809,17 +1809,6 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       errorToast('Please select a Payment Ledger (Bank or Cash)');
       return;
     }
-    if (selectedBankAccountId && selectedBankAccountId !== 'cash') {
-      const bankObj = bankAccounts.find(b => String(b.id) === String(selectedBankAccountId));
-      if (bankObj) {
-        const avail = parseFloat(bankObj.current_balance ?? bankObj.total_balance ?? bankObj.opening_balance) || 0;
-        if (totalVoucherAmount > avail) {
-          const shortfall = totalVoucherAmount - avail;
-          errorToast(`Insufficient balance in ${bankObj.bank_name}! Available is ${formatCurrency(avail)}, requested is ${formatCurrency(totalVoucherAmount)} (shortfall: ${formatCurrency(shortfall)}). Account balance cannot go negative.`);
-          return;
-        }
-      }
-    }
     if (totalVoucherAmount <= 0) {
       errorToast('Total voucher settlement amount must be greater than zero');
       return;

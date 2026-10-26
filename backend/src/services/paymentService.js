@@ -104,23 +104,6 @@ const processPayment = async (payload) => {
       }
     }
 
-    // Validate sufficient bank balance to prevent negative balance
-    if (bankAccountId) {
-      const bankInfo = await bankAccountService.getBankAccountBalance(bankAccountId);
-      if (bankInfo) {
-        const available = parseFloat(bankInfo.current_balance) || 0;
-        const requested = parseFloat(paymentAmount) || 0;
-        if (requested > available) {
-          const formattedAvail = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(available);
-          const formattedReq = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(requested);
-          const shortfall = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(requested - available);
-          const error = new Error(`Insufficient balance in ${bankInfo.bank_name}! Available balance is ${formattedAvail}, but requested payment is ${formattedReq} (shortfall: ${shortfall}). Account balance cannot go negative.`);
-          error.statusCode = 400;
-          throw error;
-        }
-      }
-    }
-
     // Normalize payment mode to valid enum: 'BANK_TRANSFER','UPI','CHEQUE','CREDIT_CARD','DEBIT_CARD','CASH'
     const validModes = ['BANK_TRANSFER', 'UPI', 'CHEQUE', 'CREDIT_CARD', 'DEBIT_CARD', 'CASH'];
     let normalizedPaymentMode = 'BANK_TRANSFER';
