@@ -982,7 +982,28 @@ const BOMFormPage = () => {
       }
     });
 
-    return options.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
+    // Display only: hide entries without a name and keep one entry per drawing number,
+    // preferring the one that has a valid item code (underlying data is untouched)
+    const hasValidCode = (o) => Boolean(o.itemCode) && String(o.itemCode).trim().toLowerCase() !== 'null';
+    const byDrawing = new Map();
+    const uniqueOptions = [];
+    options.forEach(o => {
+      if (!String(o.label || '').trim() || String(o.label).trim().toLowerCase() === 'null') return;
+      const dwg = cleanDwgNo(o.drawingNo);
+      if (!dwg || dwg === 'N/A') {
+        uniqueOptions.push(o);
+        return;
+      }
+      const idx = byDrawing.get(dwg);
+      if (idx === undefined) {
+        byDrawing.set(dwg, uniqueOptions.length);
+        uniqueOptions.push(o);
+      } else if (!hasValidCode(uniqueOptions[idx]) && hasValidCode(o)) {
+        uniqueOptions[idx] = o;
+      }
+    });
+
+    return uniqueOptions.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
   }, [stockItems, approvedDrawings, approvedBOMs, showAllDrawings, selectedItem, productForm.itemCode, productForm.drawingNo, productForm.itemGroup, isReadOnly]);
 
   const fetchDrawingName = useCallback(async (drawingNo) => {
