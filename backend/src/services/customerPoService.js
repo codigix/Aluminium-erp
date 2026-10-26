@@ -2707,7 +2707,7 @@ const getBulkDrawingDetails = async (drawingNumbers = []) => {
 
     const drawingId = dwgRecord?.id || soRecord?.drawing_id || null;
     const drawingNo = dwgRecord?.drawing_no || itemRecord?.item_code || soRecord?.drawing_no || rawDwg;
-    const description = rawItem.description || dwgRecord?.description || itemRecord?.description || soRecord?.description || `Item ${rawDwg}`;
+    const description = rawItem.description || dwgRecord?.description || itemRecord?.description || soRecord?.description || '';
     const hsnCode = rawItem.hsnCode || dwgRecord?.hsn_code || '';
     const unit = rawItem.unit || itemRecord?.uom || soRecord?.unit || 'NOS';
     const quantity = rawItem.quantity || 1;

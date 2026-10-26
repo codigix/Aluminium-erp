@@ -344,19 +344,41 @@ const extractTableLineItems = (text, knownDrawingsSet = new Set()) => {
   const drawingNumbers = [];
   let currentItem = null;
 
+  // Builds the drawing description from the PDF lines of one item. The PDF repeats the name: first as
+  // the table cell (cut short with a trailing '@') and again in full, and long technical specification
+  // text and split-off rate/date rows can follow it. Only the item's own name is kept, without duplicates.
+  const norm = (s) => s.replace(/[@\s]/g, '').toUpperCase();
+  const buildDescription = (descLines) => {
+    const parts = [];
+    descLines
+      .map(l => l.trim())
+      .filter(l => l
+        && !IGNORE_DESC_PATTERNS.some(p => p.test(l))
+        && !/^(freight|p\s*&\s*f|insurance)\b/i.test(l)
+        && !/^\d{1,2}-[A-Za-z]{3}-\d{2}\b/.test(l)
+        && !/^(?:(?:PC|PCS|NOS|EA|SET|UNIT|KG|MTR|ROLL|LOT)\s+)?[\d.,%:\s\t-]+$/i.test(l)
+        && l.length <= 90)
+      .forEach(raw => {
+        const line = raw.replace(/@\s*$/, '').replace(/[§]/g, '').replace(/\s+/g, ' ').trim();
+        if (!line) return;
+        const acc = parts.join(' ');
+        if (acc && norm(line).startsWith(norm(acc))) {
+          // full text of what was cut off earlier replaces the short version
+          parts.length = 0;
+          parts.push(line);
+        } else if (acc && norm(acc).includes(norm(line))) {
+          // exact repeat of text already collected
+        } else {
+          parts.push(line);
+        }
+      });
+    return parts.reduce((text, part) => (text.endsWith('-') ? `${text}${part}` : `${text} ${part}`.trim()), '');
+  };
+
   const finalizeItem = () => {
     if (!currentItem) return;
-    const cleanDesc = (currentItem.descLines || [])
-      .filter(l => !IGNORE_DESC_PATTERNS.some(p => p.test(l.trim())))
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (cleanDesc) {
-      currentItem.description = cleanDesc;
-    } else {
-      currentItem.description = `Item ${currentItem.drawingNo}`;
-    }
+    // No default text is invented here; an empty description is filled from the drawing master later
+    currentItem.description = buildDescription(currentItem.descLines || []);
     delete currentItem.descLines;
     items.push(currentItem);
     currentItem = null;
