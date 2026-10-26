@@ -1211,7 +1211,14 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
 
         .tax-words-box { padding: 2.5px 6px; border-bottom: 1px solid #000; font-size: 7pt; line-height: 1.2; }
 
+        .bank-box { display: flex; flex-wrap: wrap; padding-bottom: 2px; margin-bottom: 2px; border-bottom: 1px solid #000; font-size: 7pt; line-height: 1.25; }
+        .bank-title { width: 100%; font-weight: bold; font-size: 7pt; }
+        .bank-item { width: 50%; }
+        .bank-item span { font-weight: bold; }
         .footer-flex { display: flex; border-bottom: 1px solid #000; min-height: 48px; }
+        .footer-flex.last-footer { min-height: 80px; }
+        .footer-flex.last-footer .decl-box { width: 58%; }
+        .footer-flex.last-footer .sig-box-right { width: 42%; }
         .decl-box { width: 50%; padding: 3px 6px; font-size: 6.8pt; line-height: 1.2; border-right: 1px solid #000; }
         .sig-box-right { width: 50%; padding: 3px 6px; display: flex; flex-direction: column; justify-content: space-between; text-align: center; font-size: 7.2pt; }
         .computer-msg { text-align: center; font-size: 6.5pt; padding: 2px 0; }
@@ -1525,16 +1532,27 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
           <strong>Tax Amount (in words) : </strong> <span>{{tax_total_words}}</span>
         </div>
 
-        <!-- Declaration & Signatures -->
-        <div class="footer-flex">
+        <!-- Section 1: Bank Details (Company Master) + Declaration | Section 2: Authorised Signature -->
+        <div class="footer-flex last-footer">
           <div class="decl-box">
-            <strong>Declaration:</strong><br/>
-            We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+            {{#has_bank_details}}
+            <div class="bank-box">
+              <div class="bank-title">Company's Bank Details</div>
+              {{#hostBankName}}<div class="bank-item">Bank Name : <span>{{hostBankName}}</span></div>{{/hostBankName}}
+              {{#hostBranchName}}<div class="bank-item">Branch : <span>{{hostBranchName}}</span></div>{{/hostBranchName}}
+              {{#hostAccountNumber}}<div class="bank-item">A/c No. : <span>{{hostAccountNumber}}</span></div>{{/hostAccountNumber}}
+              {{#hostIfscCode}}<div class="bank-item">IFS Code : <span>{{hostIfscCode}}</span></div>{{/hostIfscCode}}
+            </div>
+            {{/has_bank_details}}
+            <div class="decl-text">
+              <strong>Declaration:</strong><br/>
+              We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+            </div>
           </div>
           <div class="sig-box-right">
             <div><strong>for {{hostCompanyName}}</strong></div>
             {{#signatureBase64}}
-            <div style="margin-top: 2px; margin-bottom: 2px;"><img src="{{signatureBase64}}" style="max-height: 28px;" /></div>
+            <div style="margin-top: 2px; margin-bottom: 2px;"><img src="{{signatureBase64}}" style="max-height: 36px;" /></div>
             {{/signatureBase64}}
             {{^signatureBase64}}
             <div style="margin-top: 20px;"></div>
@@ -1596,6 +1614,13 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
     hostGSTIN,
     hostStateName,
     hostStateCode,
+
+    // Bank details come from the selected company in Admin > Company Master
+    hostBankName: activeCompany?.bank_name || '',
+    hostAccountNumber: activeCompany?.account_number || '',
+    hostBranchName: activeCompany?.branch_name || '',
+    hostIfscCode: activeCompany?.ifsc_code || '',
+    has_bank_details: Boolean(activeCompany?.bank_name || activeCompany?.account_number || activeCompany?.branch_name || activeCompany?.ifsc_code),
 
     consignee_name: invoice.client_name,
     consignee_address: invoice.shipping_address || invoice.billing_address,
