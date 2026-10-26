@@ -760,7 +760,7 @@ const CreditNoteEntry = ({ initialCustomerId = '', onPosted }) => {
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700"><FilePlus className="w-4 h-4" /></div>
                 <div>
-                  <h3 className="text-xs font-bold text-slate-800">Select Credit Note Copy Type</h3>
+                  <h3 className="text-xs font-bold text-slate-800">Print / Download Credit Note</h3>
                   <p className="text-[10.5px] text-slate-500 font-medium">
                     Credit Note: <span className="font-semibold text-slate-700 font-mono">{copyModalNote.voucher_no}</span>
                   </p>
@@ -769,25 +769,6 @@ const CreditNoteEntry = ({ initialCustomerId = '', onPosted }) => {
               <button type="button" onClick={() => setCopyModalNote(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
-            </div>
-
-            <div className="p-4 space-y-2">
-              <p className="text-[11px] font-semibold text-slate-500 mb-1">Choose the copy type to print or download:</p>
-              {COPY_TYPES.map(type => {
-                const isSelected = selectedCopy === type.value;
-                return (
-                  <label key={type.value}
-                    className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition select-none ${isSelected ? 'border-emerald-500 bg-emerald-50/60' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'}`}>
-                    <input type="radio" name="creditNoteCopyType" value={type.value} checked={isSelected}
-                      onChange={() => setSelectedCopy(type.value)}
-                      className="mt-0.5 h-4 w-4 text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer" />
-                    <div className="flex-1">
-                      <div className={`text-xs font-bold leading-tight ${isSelected ? 'text-emerald-900' : 'text-slate-800'}`}>{type.label || type.value}</div>
-                      <div className="text-[10.5px] text-slate-500 mt-0.5 leading-tight">{type.description}</div>
-                    </div>
-                  </label>
-                );
-              })}
             </div>
 
             <div className="flex items-center justify-end gap-2 px-4 py-3 bg-slate-50 border-t border-slate-200">

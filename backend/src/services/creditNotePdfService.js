@@ -102,9 +102,9 @@ const htmlTemplate = `
     .item-table { width: 100%; border-collapse: collapse; height: 100%; }
     .item-table th { border: 1px solid #000; padding: 2px 2px; font-size: 6.8pt; font-weight: bold; text-align: center; background-color: #ffffff; height: 16px; }
     .item-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 2px 4px; vertical-align: top; font-size: 7.2pt; line-height: 1.2; }
-    .item-table tr.item-row td { padding: 3px 4px 4px; }
-    .item-code { font-weight: bold; font-size: 7.2pt; }
-    .item-desc { font-size: 7.2pt; font-weight: bold; margin-top: 0px; text-transform: uppercase; }
+    .item-table tr.item-row td { padding: 2px 4px 2px; }
+    .item-code { font-weight: bold; font-size: 7.2pt; line-height: 1.2; margin: 0; padding: 0; }
+    .item-desc { font-size: 7.2pt; font-weight: bold; line-height: 1.2; margin: 1px 0 0 0; padding: 0; text-transform: uppercase; }
     .item-table tr.tax-row td { height: 16px; padding: 1.5px 4px; vertical-align: middle; }
     .item-table tr.tax-row td.lbl { text-align: right; font-style: italic; font-weight: bold; white-space: nowrap; }
     .item-table tr.tax-row td.pct { text-align: center; font-style: italic; font-weight: bold; white-space: nowrap; }
@@ -132,7 +132,6 @@ const htmlTemplate = `
       {{#is_cancelled}}<div class="header-left-badges"><span class="cancelled-badge">CANCELLED</span></div>{{/is_cancelled}}
       <span class="title-main">Credit Note</span>
       <div class="header-right-badges">
-        <span class="copy-type-title">({{copy_type}})</span>
         {{#show_page_number}}<span class="page-badge">Page {{page_number}} of {{total_pages}}</span>{{/show_page_number}}
       </div>
     </div>
@@ -418,8 +417,8 @@ const generateCreditNotePDF = async (creditNoteId, copyType = 'Original for Reci
 
     return {
       index: idx + 1,
-      drawing_no: it.drawing_no || it.item_code || '',
-      description: it.description || '',
+      drawing_no: String(it.drawing_no || it.item_code || '').trim(),
+      description: String(it.description || '').replace(/\s*[\r\n]+\s*/g, ' ').trim(),
       hsn_code: isItemLine ? hsn : '',
       quantity: isItemLine ? `${qty.toFixed(3)} ${it.unit || 'Nos'}` : '',
       unit: isItemLine ? (it.unit || 'Nos') : '',
