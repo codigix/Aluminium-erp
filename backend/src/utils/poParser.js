@@ -329,7 +329,10 @@ const IGNORE_DESC_PATTERNS = [
   /our\s*ref/i, /your\s*ref/i, /purchase\s*term/i, /terms\b/i, /sl\s*no/i, /item\s*no/i, /item\s*description/i,
   /despatch\s*address/i, /created\s*by/i, /sidel\b/i, /plot\s*no/i, /mahalunge/i, /pune/i, /industries/i,
   /near\s*masal/i, /midc\b/i, /bhosari/i, /%\s*cgst/i, /sgst/i, /^\d{4}-\d{2}-\d{2}$/, /^\d{2}-\d{2}-\d{4}$/,
-  /old\s*material/i, /version\s*no/i, /header\s*text/i, /po\s*date/i, /^\s*in\s*$/i
+  /old\s*material/i, /version\s*no/i, /header\s*text/i, /po\s*date/i, /^\s*in\s*$/i,
+  /conversion\s*rate/i, /^currency\b/i, /sub\s*total/i, /net\s*order\s*value/i, /^remarks\b/i,
+  /reason\s*for\s*amendment/i, /important\s*notes/i, /authorized\s*by/i, /electronically\s*generated/i,
+  /general\s*terms/i, /^article\s*\d+/i
 ];
 
 /**
@@ -403,6 +406,8 @@ const extractTableLineItems = (text, knownDrawingsSet = new Set()) => {
     ) {
       if (/^(?:subtotal|total\s*value|grand\s*total|amount\s*payable|special\s*instructions)/i.test(line)) {
         inTable = false;
+        // the item ends at the totals row; text on later pages (remarks, notes, terms) is not its description
+        finalizeItem();
       }
       continue;
     }
