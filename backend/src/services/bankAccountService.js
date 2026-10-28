@@ -453,7 +453,8 @@ const deleteBankAccount = async (accountId) => {
  * opening balance + customer receipts + contra in - vendor payments - contra out.
  * Opening = master opening balance + net movement before the period; Closing = Opening + net movement in the period.
  */
-const getBankPeriodSummary = async (accountId, startDateInput, endDateInput) => {
+const getBankPeriodSummary = async (accountId, startDateInput, endDateInput, hostCompanyId = null) => {
+  const hostId = parseInt(hostCompanyId, 10) || null;
   const [accRows] = await pool.query(
     'SELECT id, bank_name, account_number, opening_balance FROM bank_accounts WHERE id = ?',
     [accountId]
@@ -478,11 +479,14 @@ const getBankPeriodSummary = async (accountId, startDateInput, endDateInput) => 
     { table: 'contra_vouchers', amount: 'amount', bank: 'to_bank_account_id', date: 'voucher_date', status: false },
     { table: 'contra_vouchers', amount: 'amount', bank: 'from_bank_account_id', date: 'voucher_date', status: false }
   ];
+  // Company-wise statement: only vouchers recorded for the chosen company
+  const hostCondition = hostId ? 'AND host_company_id = ?' : '';
+  const hostParams = hostId ? [hostId] : [];
   const sumFor = async (src, dateCondition, dateParams) => {
     const [rows] = await pool.query(
       `SELECT COALESCE(SUM(${src.amount}), 0) as total FROM ${src.table}
-       WHERE ${src.bank} = ? ${src.status ? "AND status = 'CONFIRMED'" : ''} AND ${dateCondition.replace(/%D%/g, `DATE(${src.date})`)}`,
-      [accountId, ...dateParams]
+       WHERE ${src.bank} = ? ${src.status ? "AND status = 'CONFIRMED'" : ''} ${hostCondition} AND ${dateCondition.replace(/%D%/g, `DATE(${src.date})`)}`,
+      [accountId, ...hostParams, ...dateParams]
     );
     return parseFloat(rows[0]?.total || 0);
   };
@@ -527,7 +531,9 @@ const getBankPeriodSummary = async (accountId, startDateInput, endDateInput) => 
   const [priorReceipts, priorPayments, priorContraIn, priorContraOut] = await Promise.all(sources.map(before));
   const [receipts, payments, contraIn, contraOut] = await Promise.all(sources.map(within));
 
-  const masterOpening = parseFloat(acc.opening_balance) || 0;
+  // The bank's master opening balance is not attributed to a company, so a company-wise statement
+  // starts from that company's own movements only
+  const masterOpening = hostId ? 0 : (parseFloat(acc.opening_balance) || 0);
   // If the account is opened inside this period, its opening balance is an entry of the period
   // (the account had no balance on the first day); otherwise it is carried in the opening balance.
   const openedInPeriod = accountStartDate >= startDate;

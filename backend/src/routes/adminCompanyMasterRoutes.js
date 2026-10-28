@@ -6,6 +6,7 @@ const upload = require('../middleware/upload');
 
 // Fetch the active company master for documents & invoices (accessible by all authenticated users)
 router.get('/active', adminCompanyMasterController.getActiveCompany);
+router.get('/options', adminCompanyMasterController.getCompanyOptions);
 
 // Protected endpoints for system admin management
 router.get('/', authorize(['COMPANY_VIEW']), adminCompanyMasterController.getCompanies);

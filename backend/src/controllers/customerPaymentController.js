@@ -20,6 +20,7 @@ const getPaymentsReceived = async (req, res, next) => {
   try {
     const filters = {
       customerId: req.query.customerId,
+      hostCompanyId: req.query.hostCompanyId,
       status: req.query.status,
       paymentMode: req.query.paymentMode,
       startDate: req.query.startDate,
@@ -55,8 +56,8 @@ const getCustomerBalance = async (req, res, next) => {
 const getCustomerMonthlySummary = async (req, res, next) => {
   try {
     const { customerId } = req.params;
-    const { year, month, startDate, endDate } = req.query;
-    const summary = await customerPaymentService.getCustomerMonthlySummary(customerId, year, month, startDate, endDate);
+    const { year, month, startDate, endDate, hostCompanyId } = req.query;
+    const summary = await customerPaymentService.getCustomerMonthlySummary(customerId, year, month, startDate, endDate, hostCompanyId);
     res.json(summary);
   } catch (error) {
     next(error);
@@ -65,7 +66,7 @@ const getCustomerMonthlySummary = async (req, res, next) => {
 
 const getOutstandingInvoices = async (req, res, next) => {
   try {
-    const invoices = await customerPaymentService.getOutstandingInvoices(req.params.customerId);
+    const invoices = await customerPaymentService.getOutstandingInvoices(req.params.customerId, req.query.hostCompanyId);
     res.json(invoices);
   } catch (error) {
     next(error);

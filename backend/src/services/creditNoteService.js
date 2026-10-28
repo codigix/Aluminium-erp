@@ -101,6 +101,7 @@ const recordCreditNote = async (payload) => {
     ledgerGstPercent,
     narration,
     bankAccountId,
+    hostCompanyId,
     createdBy
   } = payload;
 
@@ -209,6 +210,17 @@ const recordCreditNote = async (payload) => {
   const finalNarration = narration || `${CREDIT_NOTE_REASONS[reason]} – Credit note to ${customer.company_name}${invoiceRef ? ` against ${invoiceRef}` : ''}`;
   const voucherNo = await generateNextCreditNoteNo();
 
+  // Company: as chosen on the page, else the company of the referenced invoice (or its order)
+  let resolvedHostCompanyId = parseInt(hostCompanyId, 10) || null;
+  if (!resolvedHostCompanyId && invoice) {
+    const [hostRows] = await pool.query(
+      `SELECT COALESCE(si.host_company_id, o.host_company_id) AS host_company_id
+       FROM sales_invoices si LEFT JOIN orders o ON o.id = si.order_id WHERE si.id = ?`,
+      [invoice.id]
+    );
+    resolvedHostCompanyId = hostRows[0]?.host_company_id || null;
+  }
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -217,12 +229,12 @@ const recordCreditNote = async (payload) => {
       `INSERT INTO credit_notes (
         voucher_no, voucher_date, customer_id, sales_invoice_id, bank_account_id, reference_invoice_no,
         reason, entry_mode, affected_ledger, gst_type, taxable_amount, cgst_amount, sgst_amount,
-        igst_amount, total_amount, narration, status, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?)`,
+        igst_amount, total_amount, narration, status, host_company_id, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?, ?)`,
       [
         voucherNo, voucherDate, customerId, invoice ? invoice.id : null, bankAccount ? bankAccount.id : null, invoiceRef,
         reason, entryMode, ledgerName, gstType, taxableAmount, cgst, sgst,
-        igst, totalAmount, finalNarration, createdBy || null
+        igst, totalAmount, finalNarration, resolvedHostCompanyId, createdBy || null
       ]
     );
     const creditNoteId = result.insertId;

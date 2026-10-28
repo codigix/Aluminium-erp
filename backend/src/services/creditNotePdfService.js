@@ -321,7 +321,7 @@ const generateCreditNotePDF = async (creditNoteId, copyType = 'Original for Reci
   const [rows] = await pool.query(
     `SELECT cn.*, c.company_name AS customer_name, c.gstin AS company_gstin,
             si.invoice_no, si.invoice_date, si.billing_address, si.shipping_address,
-            si.gstin AS invoice_gstin, si.customer_po_no, si.host_company_id,
+            si.gstin AS invoice_gstin, si.customer_po_no, si.host_company_id AS invoice_host_company_id,
             o.host_company_id AS order_host_company_id,
             ba.bank_name, ba.account_number AS bank_account_number
      FROM credit_notes cn
@@ -362,7 +362,8 @@ const generateCreditNotePDF = async (creditNoteId, copyType = 'Original for Reci
     }
   }
 
-  const activeCompany = await getHostCompany(cn.host_company_id || cn.order_host_company_id);
+  // Company saved on the credit note first; older notes fall back to their invoice / order company
+  const activeCompany = await getHostCompany(cn.host_company_id || cn.invoice_host_company_id || cn.order_host_company_id);
   const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PRIVATE LIMITED';
   const rawAddressLines = (activeCompany?.company_address || 'Plot No. 97, Sector 7,\nPCNTDA, Bhosari, Pune - 26')
     .split('\n').map(l => l.trim().replace(/\r/g, '')).filter(Boolean);

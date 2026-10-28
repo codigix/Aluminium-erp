@@ -22,6 +22,23 @@ const formatNum = (n) => String(Math.round((parseFloat(n) || 0) * 1000) / 1000);
 
 const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
 
+// Same rules as the server: CGST and SGST are each rounded to 2 decimals separately (like a PO line)
+const buildGstLine = (taxable, gstPercent, gstType) => {
+  if (gstType === 'INTRA') {
+    const half = round2(taxable * gstPercent / 2 / 100);
+    return { cgst: half, sgst: half, igst: 0, gst: round2(half * 2) };
+  }
+  if (gstType === 'INTER') {
+    const igst = round2(taxable * gstPercent / 100);
+    return { cgst: 0, sgst: 0, igst, gst: igst };
+  }
+  return { cgst: 0, sgst: 0, igst: 0, gst: 0 };
+};
+
+// A PO rounds quantity x rate and its GST on its own, so a full-value debit note can land a few paise
+// above the bill. Up to MAX_ROUNDING_FIT_PAISE is absorbed into the last line; a larger excess stays an error.
+const MAX_ROUNDING_FIT_PAISE = 5;
+
 // Same display rules as Purchase Order Detail
 const getDesignQty = (it) => {
   const design = parseFloat(it.design_qty);
@@ -79,7 +96,7 @@ const emptyForm = () => ({
   narration: ''
 });
 
-const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
+const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, onPosted }) => {
   const [vendors, setVendors] = useState([]);
   const [vendorId, setVendorId] = useState(initialVendorId ? String(initialVendorId) : '');
   const [sources, setSources] = useState([]);
@@ -276,16 +293,30 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
   // ── Debit calculation (same rules as the server: GST per line, then summed) ──
   const calc = useMemo(() => {
     const rate = form.gstType === 'NONE' ? 0 : (parseFloat(form.gstRate) || 0);
-    const lines = itemMode
+    const toLine = (t) => ({ taxable: t, ...buildGstLine(t, rate, form.gstType) });
+    const lines = (itemMode
       ? selectedItems.map(r => round2((parseFloat(r.qty) || 0) * r.rate))
-      : [round2(form.amount)];
-    const taxable = round2(lines.reduce((s, t) => s + t, 0));
-    const gst = round2(lines.reduce((s, t) => s + round2(t * rate / 100), 0));
-    const cgst = form.gstType === 'INTRA' ? round2(gst / 2) : 0;
-    const sgst = form.gstType === 'INTRA' ? round2(gst - cgst) : 0;
-    const igst = form.gstType === 'INTER' ? gst : 0;
+      : [round2(form.amount)]
+    ).map(toLine);
+
+    // Fit the note to the bill value (the bill is debitable up to bill amount less earlier debit notes)
+    const sourceBill = selectedSource?.bill || null;
+    const debitable = sourceBill ? round2((parseFloat(sourceBill.bill_amount) || 0) - (parseFloat(sourceBill.debit_note_amount) || 0)) : null;
+    const sumTotal = () => round2(lines.reduce((s, l) => s + l.taxable + l.gst, 0));
+    if (debitable !== null && lines.length && sumTotal() - debitable <= MAX_ROUNDING_FIT_PAISE / 100 + 0.0001) {
+      const last = lines[lines.length - 1];
+      for (let i = 0; i < MAX_ROUNDING_FIT_PAISE && sumTotal() > debitable + 0.0001 && last.taxable > 0.01; i++) {
+        Object.assign(last, toLine(round2(last.taxable - 0.01)));
+      }
+    }
+
+    const taxable = round2(lines.reduce((s, l) => s + l.taxable, 0));
+    const gst = round2(lines.reduce((s, l) => s + l.gst, 0));
+    const cgst = round2(lines.reduce((s, l) => s + l.cgst, 0));
+    const sgst = round2(lines.reduce((s, l) => s + l.sgst, 0));
+    const igst = round2(lines.reduce((s, l) => s + l.igst, 0));
     return { taxable, rate, cgst, sgst, igst, total: round2(taxable + gst) };
-  }, [itemMode, selectedItems, form.amount, form.gstType, form.gstRate]);
+  }, [itemMode, selectedItems, selectedSource, form.amount, form.gstType, form.gstRate]);
 
   const qtyErrors = selectedItems
     .filter(r => parseFloat(r.qty) > getLimit(r, form.reason) + 0.0005)
@@ -320,6 +351,7 @@ const DebitNoteEntry = ({ initialVendorId = '', onPosted }) => {
         body: JSON.stringify({
           date: form.date,
           vendorId,
+          hostCompanyId,
           poId: selectedSource ? selectedSource.po_id : null,
           vendorInvoiceId: bill ? bill.id : null,
           reason: form.reason,

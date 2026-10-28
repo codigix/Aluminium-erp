@@ -34,11 +34,27 @@ const recordPaymentReceived = async (payload) => {
     last4Digits,
     authorizationCode,
     allocations,
+    hostCompanyId,
     createdBy
   } = payload;
 
   const hasAllocations = Array.isArray(allocations) && allocations.length > 0;
   const receiptNo = await generatePaymentReceiptNo();
+
+  // Host company (company master) the receipt belongs to: as chosen on the Record Payment page,
+  // otherwise taken from the first invoice the receipt is allocated against.
+  let resolvedHostCompanyId = parseInt(hostCompanyId, 10) || null;
+  if (!resolvedHostCompanyId) {
+    const hostInvoiceId = (hasAllocations && allocations.find(a => a.invoiceId)?.invoiceId) || invoiceId;
+    if (hostInvoiceId) {
+      const [hostRows] = await pool.query(
+        `SELECT COALESCE(si.host_company_id, o.host_company_id) AS host_company_id
+         FROM sales_invoices si LEFT JOIN orders o ON o.id = si.order_id WHERE si.id = ?`,
+        [hostInvoiceId]
+      );
+      resolvedHostCompanyId = hostRows[0]?.host_company_id || null;
+    }
+  }
 
   // Logic to handle bank account: either a numeric ID from bank_accounts or a manual string
   let bankAccountId = null;
@@ -117,8 +133,9 @@ const recordPaymentReceived = async (payload) => {
         card_last_4_digits,
         authorization_code,
         status,
+        host_company_id,
         created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         receiptNo,
         primaryInvoiceId,
@@ -141,6 +158,7 @@ const recordPaymentReceived = async (payload) => {
         last4Digits || null,
         authorizationCode || null,
         'CONFIRMED',
+        resolvedHostCompanyId,
         createdBy || null
       ]
     );
@@ -483,6 +501,13 @@ const getPaymentsReceived = async (filters = {}) => {
     params.push(filters.customerId);
   }
 
+  // Receipts saved before host_company_id existed fall back to their invoice's company;
+  // receipts with no company at all (advance / on account) stay visible under every company.
+  if (filters.hostCompanyId) {
+    query += ' AND (COALESCE(cp.host_company_id, si.host_company_id, o.host_company_id) = ? OR COALESCE(cp.host_company_id, si.host_company_id, o.host_company_id) IS NULL)';
+    params.push(filters.hostCompanyId);
+  }
+
   if (filters.status) {
     query += ' AND cp.status = ?';
     params.push(filters.status);
@@ -615,8 +640,13 @@ const getCustomerBalance = async (customerId) => {
   };
 };
 
-const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, customStartDate, customEndDate) => {
+const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, customStartDate, customEndDate, hostCompanyId = null) => {
   const now = new Date();
+  // Company-wise statement: only invoices, receipts, credit notes and journals of the chosen company
+  const hostId = parseInt(hostCompanyId, 10) || null;
+  const hostParams = hostId ? [hostId] : [];
+  const invHostSql = hostId ? 'AND COALESCE(si.host_company_id, o.host_company_id) = ?' : '';
+  const hostSql = hostId ? 'AND host_company_id = ?' : '';
   let startDate, endDate, monthName, year, month;
 
   if (customStartDate && customEndDate) {
@@ -650,11 +680,11 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
 
   // 1. Prior Invoices (before current month)
   const [priorInvRows] = await pool.query(
-    `SELECT COALESCE(SUM(total_amount), 0) as total
-     FROM sales_invoices
-     WHERE client_id = ? AND sent_to_accounts = 1 AND status != 'Cancelled'
-       AND COALESCE(invoice_date, created_at) < ?`,
-    [customerId, startDate]
+    `SELECT COALESCE(SUM(si.total_amount), 0) as total
+     FROM sales_invoices si LEFT JOIN orders o ON o.id = si.order_id
+     WHERE si.client_id = ? AND si.sent_to_accounts = 1 AND si.status != 'Cancelled' ${invHostSql}
+       AND COALESCE(si.invoice_date, si.created_at) < ?`,
+    [customerId, ...hostParams, startDate]
   );
   const priorInvoiced = parseFloat(priorInvRows[0]?.total || 0);
 
@@ -662,9 +692,9 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
   const [priorPayRows] = await pool.query(
     `SELECT COALESCE(SUM(payment_amount), 0) as total
      FROM customer_payments
-     WHERE customer_id = ? AND status = 'CONFIRMED'
+     WHERE customer_id = ? AND status = 'CONFIRMED' ${hostSql}
        AND payment_date < ?`,
-    [customerId, startDate]
+    [customerId, ...hostParams, startDate]
   );
   const priorPaid = parseFloat(priorPayRows[0]?.total || 0);
 
@@ -672,8 +702,8 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
   const [priorCnRows] = await pool.query(
     `SELECT COALESCE(SUM(total_amount), 0) as total
      FROM credit_notes
-     WHERE customer_id = ? AND status = 'POSTED' AND voucher_date < ?`,
-    [customerId, startDate]
+     WHERE customer_id = ? AND status = 'POSTED' ${hostSql} AND voucher_date < ?`,
+    [customerId, ...hostParams, startDate]
   );
   const priorCredited = parseFloat(priorCnRows[0]?.total || 0);
 
@@ -689,8 +719,9 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
        JOIN journal_vouchers jv ON jv.id = jvi.journal_voucher_id
        WHERE (jvi.ledger_account LIKE '%Sundry Debtors%' OR jvi.ledger_account LIKE '%Customer%')
          AND LOWER(jvi.ledger_account) LIKE CONCAT('%', LOWER(?), '%')
+         ${hostId ? 'AND jv.host_company_id = ?' : ''}
          AND ${dateCondition}`,
-      [customerName, ...params]
+      [customerName, ...hostParams, ...params]
     );
     return parseFloat(rows[0]?.total || 0);
   };
@@ -700,12 +731,12 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
 
   // 3. Current Month Invoices
   const [curInvRows] = await pool.query(
-    `SELECT COALESCE(SUM(total_amount), 0) as total
-     FROM sales_invoices
-     WHERE client_id = ? AND sent_to_accounts = 1 AND status != 'Cancelled'
-       AND COALESCE(invoice_date, created_at) >= ?
-       AND COALESCE(invoice_date, created_at) <= ?`,
-    [customerId, startDate, endDate]
+    `SELECT COALESCE(SUM(si.total_amount), 0) as total
+     FROM sales_invoices si LEFT JOIN orders o ON o.id = si.order_id
+     WHERE si.client_id = ? AND si.sent_to_accounts = 1 AND si.status != 'Cancelled' ${invHostSql}
+       AND COALESCE(si.invoice_date, si.created_at) >= ?
+       AND COALESCE(si.invoice_date, si.created_at) <= ?`,
+    [customerId, ...hostParams, startDate, endDate]
   );
   const currentMonthInvoices = parseFloat(curInvRows[0]?.total || 0);
 
@@ -713,20 +744,20 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
   const [curPayRows] = await pool.query(
     `SELECT COALESCE(SUM(payment_amount), 0) as total
      FROM customer_payments
-     WHERE customer_id = ? AND status = 'CONFIRMED'
+     WHERE customer_id = ? AND status = 'CONFIRMED' ${hostSql}
        AND payment_date >= ?
        AND payment_date <= ?`,
-    [customerId, startDate, endDate]
+    [customerId, ...hostParams, startDate, endDate]
   );
   const currentMonthPayments = parseFloat(curPayRows[0]?.total || 0);
 
   const [curCnRows] = await pool.query(
     `SELECT COALESCE(SUM(total_amount), 0) as total
      FROM credit_notes
-     WHERE customer_id = ? AND status = 'POSTED'
+     WHERE customer_id = ? AND status = 'POSTED' ${hostSql}
        AND voucher_date >= ?
        AND voucher_date <= ?`,
-    [customerId, startDate.split(' ')[0], endDate.split(' ')[0]]
+    [customerId, ...hostParams, startDate.split(' ')[0], endDate.split(' ')[0]]
   );
   const currentMonthCreditNotes = parseFloat(curCnRows[0]?.total || 0);
 
@@ -755,7 +786,13 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
   };
 };
 
-const getOutstandingInvoices = async (customerId) => {
+const getOutstandingInvoices = async (customerId, hostCompanyId = null) => {
+  const params = [customerId];
+  let hostFilter = '';
+  if (hostCompanyId) {
+    hostFilter = ' AND COALESCE(si.host_company_id, o.host_company_id) = ?';
+    params.push(hostCompanyId);
+  }
   const [invoices] = await pool.query(
     `SELECT 
       si.id as id,
@@ -774,16 +811,17 @@ const getOutstandingInvoices = async (customerId) => {
        COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0))) as outstanding,
       CONVERT('SALES_INVOICE' USING utf8mb4) as source,
       si.created_at,
-      si.invoice_date
+      si.invoice_date,
+      COALESCE(si.host_company_id, o.host_company_id) as host_company_id
     FROM sales_invoices si
     JOIN orders o ON o.id = si.order_id
     JOIN companies c ON si.client_id = c.id
     LEFT JOIN sales_orders so ON so.id = si.sales_order_id
     LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
-    WHERE si.client_id = ? AND si.sent_to_accounts = 1 AND si.status != 'Cancelled'
+    WHERE si.client_id = ? AND si.sent_to_accounts = 1 AND si.status != 'Cancelled'${hostFilter}
     HAVING outstanding >= 0
     ORDER BY si.created_at DESC`,
-    [customerId]
+    params
   );
 
   return invoices;

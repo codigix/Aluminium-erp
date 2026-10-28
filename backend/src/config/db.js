@@ -3296,6 +3296,13 @@ const ensureAccountingTables = async () => {
         await connection.query(`CREATE INDEX ${indexName} ON ${table} (bank_account_id)`);
       }
     }
+    // Company (company_master) each voucher was recorded for
+    for (const table of ['journal_vouchers', 'contra_vouchers', 'debit_notes', 'credit_notes']) {
+      const [hostCols] = await connection.query(`SHOW COLUMNS FROM ${table} LIKE 'host_company_id'`);
+      if (hostCols.length === 0) {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN host_company_id INT NULL`);
+      }
+    }
     console.log('Accounting tables (journal_vouchers, contra_vouchers, debit_notes, credit_notes) synchronized');
   } catch (error) {
     console.error('Error synchronizing accounting tables:', error.message);
@@ -3312,6 +3319,13 @@ const ensureCustomerPaymentColumns = async () => {
     if (cols.length > 0 && !cols[0].Type.includes('SALES_INVOICE')) {
       await connection.query("ALTER TABLE customer_payments MODIFY COLUMN sales_order_source ENUM('SALES_ORDER', 'DIRECT_ORDER', 'SALES_INVOICE') NULL DEFAULT 'SALES_ORDER'");
       console.log('Synchronized customer_payments.sales_order_source to include SALES_INVOICE');
+    }
+    for (const table of ['customer_payments', 'payments']) {
+      const [hostCols] = await connection.query(`SHOW COLUMNS FROM ${table} LIKE 'host_company_id'`);
+      if (hostCols.length === 0) {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN host_company_id INT NULL`);
+        console.log(`Added ${table}.host_company_id`);
+      }
     }
     await connection.query(`
       CREATE TABLE IF NOT EXISTS customer_payment_allocations (

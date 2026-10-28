@@ -2,7 +2,7 @@ const vendorInvoiceService = require('../services/vendorInvoiceService');
 
 const getVendorInvoices = async (req, res, next) => {
   try {
-    const invoices = await vendorInvoiceService.getVendorInvoices(req.query.vendorId);
+    const invoices = await vendorInvoiceService.getVendorInvoices(req.query.vendorId, req.query.hostCompanyId);
     res.json(invoices);
   } catch (error) {
     next(error);

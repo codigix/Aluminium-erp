@@ -20,6 +20,7 @@ const getPayments = async (req, res, next) => {
   try {
     const filters = {
       vendorId: req.query.vendorId,
+      hostCompanyId: req.query.hostCompanyId,
       status: req.query.status,
       paymentMode: req.query.paymentMode,
       startDate: req.query.startDate,

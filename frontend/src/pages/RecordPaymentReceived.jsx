@@ -68,7 +68,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   const [balanceData, setBalanceData] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [customerCreditNotes, setCustomerCreditNotes] = useState([]);
+  const [allCustomerCreditNotes, setCustomerCreditNotes] = useState([]);
 
   // Vendor State (for Payment Voucher / Sundry Creditors)
   const [vendors, setVendors] = useState([]);
@@ -82,7 +82,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   const [allocateAmounts, setAllocateAmounts] = useState({});
   const [allocateSaving, setAllocateSaving] = useState(false);
   const [vendorHistoryLoading, setVendorHistoryLoading] = useState(false);
-  const [vendorDebitNotes, setVendorDebitNotes] = useState([]);
+  const [allVendorDebitNotes, setVendorDebitNotes] = useState([]);
   const [isProcessPaymentModalOpen, setIsProcessPaymentModalOpen] = useState(false);
   const [selectedVendorInvoice, setSelectedVendorInvoice] = useState(null);
 
@@ -107,6 +107,18 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   const [voucherAllocations, setVoucherAllocations] = useState([]);
   const [isSavingVoucher, setIsSavingVoucher] = useState(false);
   const [isVoucherPanelOpen, setIsVoucherPanelOpen] = useState(false);
+
+  // Step 1: Host company (company master) the vouchers are recorded for. Step 2: voucher type.
+  // The workflow opens only after both have been chosen.
+  const [hostCompanies, setHostCompanies] = useState([]);
+  const [hostCompaniesLoading, setHostCompaniesLoading] = useState(false);
+  const [selectedHostId, setSelectedHostId] = useState('');
+  const [isHostPanelOpen, setIsHostPanelOpen] = useState(false);
+  const [isVoucherChosen, setIsVoucherChosen] = useState(false);
+  const selectedHost = useMemo(
+    () => hostCompanies.find(h => String(h.id) === String(selectedHostId)) || null,
+    [hostCompanies, selectedHostId]
+  );
 
   // Monthly & Date-wise Filter State
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -155,12 +167,21 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   const [selectedGeneralLedgerId, setSelectedGeneralLedgerId] = useState('');
 
   // Journal Voucher Register State
-  const [journalVouchersList, setJournalVouchersList] = useState([]);
+  const [allJournalVouchers, setJournalVouchersList] = useState([]);
   const [journalLoading, setJournalLoading] = useState(false);
 
   // Contra Voucher Register State
-  const [contraVouchersList, setContraVouchersList] = useState([]);
+  const [allContraVouchers, setContraVouchersList] = useState([]);
   const [contraLoading, setContraLoading] = useState(false);
+
+  // Vouchers of the selected company (rows with no company stored yet stay visible)
+  const forSelectedHost = (rows) => (selectedHostId
+    ? rows.filter(r => r.host_company_id == null || String(r.host_company_id) === String(selectedHostId))
+    : rows);
+  const journalVouchersList = useMemo(() => forSelectedHost(allJournalVouchers), [allJournalVouchers, selectedHostId]);
+  const contraVouchersList = useMemo(() => forSelectedHost(allContraVouchers), [allContraVouchers, selectedHostId]);
+  const customerCreditNotes = useMemo(() => forSelectedHost(allCustomerCreditNotes), [allCustomerCreditNotes, selectedHostId]);
+  const vendorDebitNotes = useMemo(() => forSelectedHost(allVendorDebitNotes), [allVendorDebitNotes, selectedHostId]);
 
   // Dynamic Party / Entity Mapping based on selectedLedgerGroup
   const activePartyMeta = useMemo(() => {
@@ -235,6 +256,38 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       fetchCompanies();
     }
   }, [isPaymentMode]);
+
+  useEffect(() => {
+    fetchHostCompanies();
+  }, []);
+
+  const fetchHostCompanies = async () => {
+    try {
+      setHostCompaniesLoading(true);
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/admin-company-master/options`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : [];
+        setHostCompanies(list);
+        // Start on the Active company of Company Master; it can be changed from the Company button
+        const active = list.find(c => String(c.status).toUpperCase() === 'ACTIVE');
+        if (active) setSelectedHostId(prev => prev || String(active.id));
+      } else {
+        errorToast('Failed to load companies from Company Master');
+      }
+    } catch (err) {
+      console.error('Error fetching host companies:', err);
+      errorToast('Failed to load companies from Company Master');
+    } finally {
+      setHostCompaniesLoading(false);
+    }
+  };
+
+  // Query-string suffix that scopes customer / vendor lookups to the selected host company
+  const hostQuery = (prefix) => (selectedHostId ? `${prefix}hostCompanyId=${selectedHostId}` : '');
 
   const fetchJournalVouchers = async () => {
     try {
@@ -346,7 +399,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         setMonthlySummary(null);
       }
     }
-  }, [selectedCompanyId, companies, isPaymentMode]);
+  }, [selectedCompanyId, companies, isPaymentMode, selectedHostId]);
 
   // 3. Fetch Invoices and Payment History when Vendor changes (Payment Mode)
   useEffect(() => {
@@ -365,7 +418,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         setVendorDebitNotes([]);
       }
     }
-  }, [selectedVendorId, vendors, isPaymentMode]);
+  }, [selectedVendorId, vendors, isPaymentMode, selectedHostId]);
 
   const handleMonthChange = (newMonth) => {
     setSelectedMonth(newMonth);
@@ -406,7 +459,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     try {
       setInvoicesLoading(true);
       const token = localStorage.getItem('authToken');
-      const res = await fetch(`${API_BASE}/customer-payments/customer/${customerId}/outstanding`, {
+      const res = await fetch(`${API_BASE}/customer-payments/customer/${customerId}/outstanding${hostQuery('?')}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -445,7 +498,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     try {
       setHistoryLoading(true);
       const token = localStorage.getItem('authToken');
-      const res = await fetch(`${API_BASE}/customer-payments?customerId=${customerId}&status=CONFIRMED`, {
+      const res = await fetch(`${API_BASE}/customer-payments?customerId=${customerId}&status=CONFIRMED${hostQuery('&')}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -513,7 +566,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     try {
       setVendorInvoicesLoading(true);
       const token = localStorage.getItem('authToken');
-      const res = await fetch(`${API_BASE}/vendor-invoices?vendorId=${vendorId}`, {
+      const res = await fetch(`${API_BASE}/vendor-invoices?vendorId=${vendorId}${hostQuery('&')}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -536,7 +589,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     try {
       setVendorHistoryLoading(true);
       const token = localStorage.getItem('authToken');
-      const res = await fetch(`${API_BASE}/payments?vendorId=${vendorId}&status=CONFIRMED`, {
+      const res = await fetch(`${API_BASE}/payments?vendorId=${vendorId}&status=CONFIRMED${hostQuery('&')}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -679,7 +732,8 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     }
   };
 
-  const handleSelectVoucherType = (typeId) => {
+  const handleSelectVoucherType = (typeId, confirmChoice = true) => {
+    if (confirmChoice) setIsVoucherChosen(true);
     setSelectedVoucherType(typeId);
     setSelectedInvoiceIds(new Set());
     if (typeId === 'PAYMENT') {
@@ -698,7 +752,8 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   // Synchronize initialVoucherType prop when navigation/route changes
   useEffect(() => {
     if (initialVoucherType) {
-      handleSelectVoucherType(initialVoucherType);
+      // Pre-select only; the user still confirms the voucher type after choosing the company
+      handleSelectVoucherType(initialVoucherType, false);
     }
   }, [initialVoucherType]);
 
@@ -2447,6 +2502,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         isOpen={true}
         isPage={true}
         initialVoucherType={selectedVoucherType}
+        hostCompanyId={selectedHostId ? Number(selectedHostId) : null}
         customerId={selectedCompanyId}
         companyId={selectedCompanyId}
         vendorId={selectedVendorId}
@@ -2483,6 +2539,8 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       />
     );
   }
+
+  const selectedVoucherOption = VOUCHER_OPTIONS.find(v => v.id === selectedVoucherType);
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300 pb-12">
@@ -2527,7 +2585,17 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsHostPanelOpen(true)}
+            className="px-3.5 py-2 text-xs font-bold rounded-lg border shadow-xs flex items-center gap-2 transition-all cursor-pointer bg-white hover:bg-slate-50 text-slate-700 border-slate-300"
+            title="Change Company"
+          >
+            <Building2 className="w-3.5 h-3.5 text-blue-600" />
+            <span className="max-w-[200px] truncate">{selectedHost?.company_name || 'Select Company'}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsVoucherPanelOpen(prev => !prev)}
@@ -2539,7 +2607,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
             title="Toggle Voucher Types Panel"
           >
             <Layers className={`w-3.5 h-3.5 ${isVoucherPanelOpen ? 'text-white' : 'text-blue-600'}`} />
-            <span>{isVoucherPanelOpen ? 'Hide Voucher Types' : 'Voucher Types'}</span>
+            <span>{isVoucherPanelOpen ? 'Hide Voucher Types' : `Voucher Types · ${selectedVoucherOption?.name || ''}`}</span>
           </button>
 
           <button
@@ -2559,6 +2627,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       <div className="w-full space-y-4">
         {selectedVoucherType === 'CREDIT_NOTE' ? (
           <CreditNoteEntry
+            hostCompanyId={selectedHostId ? Number(selectedHostId) : null}
             initialCustomerId={selectedCompanyId}
             onPosted={() => {
               if (selectedCompanyId) {
@@ -2570,6 +2639,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
           />
         ) : selectedVoucherType === 'DEBIT_NOTE' ? (
           <DebitNoteEntry
+            hostCompanyId={selectedHostId ? Number(selectedHostId) : null}
             initialVendorId={selectedVendorId}
             onPosted={() => {
               if (selectedVendorId) {
@@ -2585,6 +2655,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
               isOpen={true}
               isPage={true}
               initialVoucherType="CONTRA"
+              hostCompanyId={selectedHostId ? Number(selectedHostId) : null}
               hideHeader={true}
               onClose={() => handleSelectVoucherType(isPaymentMode ? 'PAYMENT' : 'RECEIPT')}
               onSuccess={() => {
@@ -2679,6 +2750,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
               isOpen={true}
               isPage={true}
               initialVoucherType="JOURNAL"
+              hostCompanyId={selectedHostId ? Number(selectedHostId) : null}
               hideHeader={true}
               onClose={() => handleSelectVoucherType(isPaymentMode ? 'PAYMENT' : 'RECEIPT')}
               onSuccess={() => {
@@ -3777,12 +3849,13 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       })()}
 
       {/* ── Slide-Over Drawer: Voucher Types (F5/F6/F7...) ── */}
-      {isVoucherPanelOpen && (
+      {/* After the company is chosen, opens automatically until a voucher type is chosen */}
+      {(isVoucherPanelOpen || (selectedHostId && !isVoucherChosen)) && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           {/* Backdrop */}
-          <div 
+          <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-            onClick={() => setIsVoucherPanelOpen(false)}
+            onClick={() => isVoucherChosen && setIsVoucherPanelOpen(false)}
           />
 
           {/* Drawer Panel */}
@@ -3871,11 +3944,89 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         </div>
       )}
 
+      {/* ── Slide-Over Drawer: Company (Company Master) ── */}
+      {/* Opens from the Company button. Only if Company Master has no Active company does it open by itself */}
+      {(isHostPanelOpen || (!selectedHostId && !hostCompaniesLoading && hostCompanies.length > 0)) && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200"
+            onClick={() => selectedHostId && setIsHostPanelOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-sm bg-white shadow-2xl p-5 flex flex-col overflow-y-auto animate-in slide-in-from-right duration-200 border-l border-slate-200">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold tracking-wider uppercase text-slate-800">Company</h3>
+                    <p className="text-[10.5px] text-slate-400">Select a company from Company Master</p>
+                    <p className="text-[10.5px] text-slate-400">Active company is selected by default</p>
+                  </div>
+                </div>
+                {selectedHostId && (
+                  <button
+                    type="button"
+                    onClick={() => setIsHostPanelOpen(false)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Close Drawer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-2.5 mt-4">
+                {hostCompaniesLoading && <p className="text-xs text-slate-500">Loading companies…</p>}
+                {!hostCompaniesLoading && hostCompanies.length === 0 && (
+                  <p className="text-xs text-slate-500">No companies found in Company Master.</p>
+                )}
+                {hostCompanies.map(h => {
+                  const isSelected = String(h.id) === String(selectedHostId);
+                  return (
+                    <button
+                      key={h.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedHostId(String(h.id));
+                        setIsHostPanelOpen(false);
+                      }}
+                      className={`w-full text-left p-3.5 rounded-2xl border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-blue-50/70 border-2 border-blue-600 shadow-sm ring-2 ring-blue-500/10'
+                          : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 shadow-2xs'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                          <Building2 className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className={`text-xs font-bold uppercase ${isSelected ? 'text-blue-700' : 'text-slate-800'}`}>
+                            {h.company_name}
+                            {String(h.status).toUpperCase() === 'ACTIVE' && (
+                              <span className="ml-2 align-middle text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">ACTIVE</span>
+                            )}
+                          </div>
+                          {h.gstin && <div className="text-[11px] text-slate-400 font-mono mt-1">GST: {h.gstin}</div>}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 5. Modals Integration ── */}
       {/* Customer / Vendor Modal Fallback */}
       <PaymentReceivedModal
         isOpen={isPaymentModalOpen}
         initialVoucherType={selectedVoucherType}
+        hostCompanyId={selectedHostId ? Number(selectedHostId) : null}
         customerId={selectedCompanyId}
         companyId={selectedCompanyId}
         vendorId={selectedVendorId}
@@ -4277,6 +4428,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       <ProcessPaymentModal
         isOpen={isProcessPaymentModalOpen}
         invoice={selectedVendorInvoice}
+        hostCompanyId={selectedHostId ? Number(selectedHostId) : null}
         onClose={() => {
           setIsProcessPaymentModalOpen(false);
           setSelectedVendorInvoice(null);

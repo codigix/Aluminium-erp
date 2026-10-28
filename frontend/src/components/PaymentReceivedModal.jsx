@@ -84,7 +84,8 @@ const PaymentReceivedModal = ({
   onSuccess,
   isPage = false,
   initialVoucherType = 'RECEIPT',
-  hideHeader = false
+  hideHeader = false,
+  hostCompanyId = null
 }) => {
   // Normalize incoming selection
   const selectedInvoices = useMemo(() => {
@@ -532,7 +533,7 @@ const PaymentReceivedModal = ({
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ ...payload, hostCompanyId })
       });
       if (res.ok) {
         const json = await res.json();
@@ -611,7 +612,7 @@ const PaymentReceivedModal = ({
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ ...payload, hostCompanyId })
       });
 
       if (!res.ok) {
@@ -1680,7 +1681,7 @@ const PaymentReceivedModal = ({
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(paymentPayload)
+          body: JSON.stringify({ ...paymentPayload, hostCompanyId })
         });
 
         if (!res.ok) {
@@ -1763,7 +1764,7 @@ const PaymentReceivedModal = ({
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify(paymentPayload)
+            body: JSON.stringify({ ...paymentPayload, hostCompanyId })
           });
 
           if (!response.ok) {
@@ -1810,7 +1811,7 @@ const PaymentReceivedModal = ({
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(advPayload)
+          body: JSON.stringify({ ...advPayload, hostCompanyId })
         });
 
         if (!response.ok) {
@@ -1854,7 +1855,7 @@ const PaymentReceivedModal = ({
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(onAccPayload)
+          body: JSON.stringify({ ...onAccPayload, hostCompanyId })
         });
 
         if (!response.ok) {
@@ -1898,7 +1899,7 @@ const PaymentReceivedModal = ({
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(newRefPayload)
+          body: JSON.stringify({ ...newRefPayload, hostCompanyId })
         });
 
         if (!response.ok) {
@@ -1945,7 +1946,7 @@ const PaymentReceivedModal = ({
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(paymentPayload)
+        body: JSON.stringify({ ...paymentPayload, hostCompanyId })
       });
 
       if (!response.ok) {

@@ -9,8 +9,12 @@ const PAID_SQL = `(
 // Includes DNs raised against the PO before it was forwarded to Accounts as a bill
 const DEBIT_NOTE_SQL = `COALESCE((SELECT SUM(dn.total_amount) FROM debit_notes dn WHERE dn.status = 'POSTED' AND (dn.vendor_invoice_id = vi.id OR (dn.vendor_invoice_id IS NULL AND dn.po_id = vi.po_id))), 0)`;
 
+// Host company of a bill = host company of the quotation its purchase order was raised from
+const HOST_COMPANY_SQL = `(SELECT q.host_company_id FROM purchase_orders hpo JOIN quotations q ON q.id = hpo.quotation_id WHERE hpo.id = vi.po_id LIMIT 1)`;
+
 const VENDOR_INVOICE_SELECT = `SELECT
       vi.id,
+      ${HOST_COMPANY_SQL} as host_company_id,
       vi.po_id,
       vi.po_number,
       vi.po_date,
@@ -44,14 +48,21 @@ const VENDOR_INVOICE_SELECT = `SELECT
      FROM vendor_invoices vi
      JOIN vendors v ON vi.vendor_id = v.id`;
 
-const getVendorInvoices = async (vendorId = null) => {
+const getVendorInvoices = async (vendorId = null, hostCompanyId = null) => {
   let query = VENDOR_INVOICE_SELECT;
 
+  const conditions = [];
   const params = [];
   if (vendorId) {
-    query += ` WHERE vi.vendor_id = ?`;
+    conditions.push('vi.vendor_id = ?');
     params.push(vendorId);
   }
+  // Bills whose PO has no company on its quotation (older data) stay visible under every company
+  if (hostCompanyId) {
+    conditions.push(`(${HOST_COMPANY_SQL} = ? OR ${HOST_COMPANY_SQL} IS NULL)`);
+    params.push(hostCompanyId);
+  }
+  if (conditions.length) query += ` WHERE ${conditions.join(' AND ')}`;
   query += ` ORDER BY vi.created_at DESC`;
 
   const [rows] = await pool.query(query, params);

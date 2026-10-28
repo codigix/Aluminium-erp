@@ -73,6 +73,8 @@ const CustomerPaymentHistory = () => {
   // Clean One-Line Filter States (Tabs removed, unified company searchable select)
   const [selectedCompany, setSelectedCompany] = useState('');
   const [selectedVoucherType, setSelectedVoucherType] = useState('ALL'); // 'ALL', 'RECEIPT', 'PAYMENT', 'JOURNAL', 'CONTRA'
+  const [hostCompanies, setHostCompanies] = useState([]);
+  const [selectedHostId, setSelectedHostId] = useState(''); // '' = All Companies
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -91,7 +93,24 @@ const CustomerPaymentHistory = () => {
     fetchRegisteredBanks();
     fetchCompanies();
     fetchVendors();
+    fetchHostCompanies();
   }, []);
+
+  // Company Master (the companies vouchers are recorded for)
+  const fetchHostCompanies = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/admin-company-master/options`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHostCompanies(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Error fetching host companies:', err);
+    }
+  };
 
   const fetchRegisteredBanks = async () => {
     try {
@@ -211,6 +230,7 @@ const CustomerPaymentHistory = () => {
         const end = `${year}-${pad(month)}-${pad(lastDay)}`;
         url += `&startDate=${start}&endDate=${end}`;
       }
+      if (selectedHostId) url += `&hostCompanyId=${selectedHostId}`;
 
       const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -245,21 +265,27 @@ const CustomerPaymentHistory = () => {
     } else {
       setMonthlySummary(null);
     }
-  }, [activeCustomer, startDate, endDate]);
+  }, [activeCustomer, startDate, endDate, selectedHostId]);
 
   // Bank selected in the main search (e.g. 'State Bank of India') – may cover more than one account
+  // When only a company is chosen (no bank / party in the search box), the statement covers all
+  // bank accounts for that company.
+  const isCompanyWideStatement = Boolean(selectedHostId && !selectedCompany);
   const activeBanks = useMemo(() => {
+    if (isCompanyWideStatement) {
+      return allRegisteredBanks.filter(b => b.is_active !== false && b.is_active !== 0);
+    }
     if (!selectedCompany) return [];
     const target = selectedCompany.replace(/\s*\(\s*\d[\d\s]*\)\s*$/, '').toLowerCase().trim();
     if (!target) return [];
     return allRegisteredBanks.filter(b => (b.bank_name || b.account_name || '').toLowerCase().trim() === target);
-  }, [selectedCompany, allRegisteredBanks]);
+  }, [selectedCompany, allRegisteredBanks, isCompanyWideStatement]);
 
   const [loadedBankSummary, setBankSummary] = useState(null);
   const [bankSummaryLoading, setBankSummaryLoading] = useState(false);
 
   // The summary is only shown while it belongs to the currently selected bank(s) and dates
-  const bankSummaryKey = `${activeBanks.map(b => b.id).join(',')}|${startDate}|${endDate}`;
+  const bankSummaryKey = `${activeBanks.map(b => b.id).join(',')}|${startDate}|${endDate}|${selectedHostId}`;
   const bankSummary = activeBanks.length > 0 && loadedBankSummary?.key === bankSummaryKey ? loadedBankSummary : null;
 
   useEffect(() => {
@@ -269,7 +295,10 @@ const CustomerPaymentHistory = () => {
       try {
         setBankSummaryLoading(true);
         const token = localStorage.getItem('authToken');
-        const qs = startDate && endDate ? `?startDate=${startDate}&endDate=${endDate}` : '';
+        const qsParts = [];
+        if (startDate && endDate) qsParts.push(`startDate=${startDate}`, `endDate=${endDate}`);
+        if (selectedHostId) qsParts.push(`hostCompanyId=${selectedHostId}`);
+        const qs = qsParts.length ? `?${qsParts.join('&')}` : '';
         const results = await Promise.all(activeBanks.map(async (b) => {
           const res = await fetch(`${API_BASE}/bank-accounts/${b.id}/period-summary${qs}`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -281,8 +310,8 @@ const CustomerPaymentHistory = () => {
         const sum = (key) => Math.round(results.reduce((s, r) => s + (parseFloat(r[key]) || 0), 0) * 100) / 100;
         setBankSummary({
           key: bankSummaryKey,
-          bankName: activeBanks[0].bank_name || activeBanks[0].account_name,
-          accountNumbers: results.map(r => r.accountNumber).filter(Boolean),
+          bankName: isCompanyWideStatement ? 'All Bank Accounts' : (activeBanks[0].bank_name || activeBanks[0].account_name),
+          accountNumbers: isCompanyWideStatement ? [] : results.map(r => r.accountNumber).filter(Boolean),
           startDate: results[0].startDate,
           endDate: results[0].endDate,
           accountOpened: results.some(r => r.accountOpened),
@@ -303,7 +332,7 @@ const CustomerPaymentHistory = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, [activeBanks, startDate, endDate, bankSummaryKey]);
+  }, [activeBanks, startDate, endDate, selectedHostId, bankSummaryKey, isCompanyWideStatement]);
 
   // Discount Allowed journals that credit the selected customer inside the statement period.
   // Ledger lines are stored as 'Sundry Debtors (Customers) (<customer name>)'.
@@ -315,6 +344,7 @@ const CustomerPaymentHistory = () => {
     return journalVouchers.flatMap(jv => {
       const date = String(jv.voucher_date || jv.created_at || '').slice(0, 10);
       if ((from && date < from) || (to && date > to)) return [];
+      if (selectedHostId && String(jv.host_company_id ?? '') !== String(selectedHostId)) return [];
       const items = Array.isArray(jv.items) ? jv.items : [];
       const partyLine = items.find(it => {
         const acc = (it.ledger_account || '').toLowerCase();
@@ -324,7 +354,7 @@ const CustomerPaymentHistory = () => {
       const amount = (parseFloat(partyLine.credit_amount) || 0) - (parseFloat(partyLine.debit_amount) || 0);
       return amount > 0 ? [{ id: jv.id, voucherNo: jv.voucher_no || `JV-${jv.id}`, amount }] : [];
     });
-  }, [activeCustomer, journalVouchers, startDate, endDate, monthlySummary]);
+  }, [activeCustomer, journalVouchers, startDate, endDate, monthlySummary, selectedHostId]);
 
   const statementPeriod = useMemo(() => {
     if (startDate && endDate) {
@@ -354,6 +384,7 @@ const CustomerPaymentHistory = () => {
         id: `cp_${p.id}`,
         rawId: p.id,
         kind: 'CUSTOMER_RECEIPT',
+        host_company_id: p.host_company_id ?? null,
         voucher_date: (p.payment_date || p.created_at || '').slice(0, 10),
         raw_date: p.payment_date || p.created_at,
         created_at: p.created_at,
@@ -397,6 +428,7 @@ const CustomerPaymentHistory = () => {
         id: `vp_${p.id}`,
         rawId: p.id,
         kind: 'VENDOR_PAYMENT',
+        host_company_id: p.host_company_id ?? null,
         voucher_date: (p.payment_date || p.created_at || '').slice(0, 10),
         raw_date: p.payment_date || p.created_at,
         created_at: p.created_at,
@@ -460,18 +492,23 @@ const CustomerPaymentHistory = () => {
         }
       }
 
+      // Only a journal with a discount ledger is a discount adjustment; any other journal is shown as a plain journal
+      const isDiscountJournal = items.some(it => /discount/i.test(it.ledger_account || ''));
+      const otherLedger = items.find(it => !/Sundry Creditors|Vendor|Sundry Debtors|Customer/i.test(it.ledger_account || ''))?.ledger_account || '';
+
       const particularsTitle = partyName
-        ? `${partyName} – Discount Adjustment`
+        ? `${partyName} – ${isDiscountJournal ? 'Discount Adjustment' : 'Journal Adjustment'}`
         : (jv.narration && jv.narration !== 'okk' ? jv.narration : 'Journal Voucher');
 
       // Discount Allowed (customer) is shown on the Debit side, Discount Received (vendor) on the Credit side
       const isDiscountAllowed = partyType === 'CLIENT' || /discount allowed/i.test(discountCreditAccount);
-      const discountLabel = isDiscountAllowed ? 'Discount Allowed' : 'Discount Received';
+      const discountLabel = !isDiscountJournal ? 'Journal Adjustment' : (isDiscountAllowed ? 'Discount Allowed' : 'Discount Received');
 
       list.push({
         id: `jv_${jv.id}`,
         rawId: jv.id,
         kind: 'JOURNAL_VOUCHER',
+        host_company_id: jv.host_company_id ?? null,
         voucher_date: (jv.voucher_date || jv.created_at || '').slice(0, 10),
         raw_date: jv.voucher_date || jv.created_at,
         created_at: jv.created_at,
@@ -482,7 +519,9 @@ const CustomerPaymentHistory = () => {
         party_id: null,
         party_type: partyType,
         particulars_title: particularsTitle,
-        particulars_subtitle: discountCreditAccount || (isDiscountAllowed ? 'Discount Allowed (Expenses)' : 'Discount Received (Income)'),
+        particulars_subtitle: !isDiscountJournal
+          ? (otherLedger || 'Journal Entry')
+          : (discountCreditAccount || (isDiscountAllowed ? 'Discount Allowed (Expenses)' : 'Discount Received (Income)')),
         payment_mode: 'JOURNAL_ENTRY',
         bill_ref: `Agst: ${discountLabel}`,
         agst_ref: discountLabel,
@@ -498,7 +537,7 @@ const CustomerPaymentHistory = () => {
         // Full voucher totals for the double-entry breakdown in the view modal
         journal_debit: drAmt,
         journal_credit: crAmt,
-        narration: jv.narration && jv.narration !== 'okk' ? jv.narration : 'Discount Adjustment',
+        narration: jv.narration && jv.narration !== 'okk' ? jv.narration : (isDiscountJournal ? 'Discount Adjustment' : 'Journal Adjustment'),
         status: 'CONFIRMED',
         items: items,
         raw: jv
@@ -536,6 +575,7 @@ const CustomerPaymentHistory = () => {
         id: `cv_${cv.id}_${l.leg}`,
         rawId: cv.id,
         kind: 'CONTRA_VOUCHER',
+        host_company_id: cv.host_company_id ?? null,
         contra_leg: l.leg,
         ledger_account: l.account,
         voucher_date: (cv.voucher_date || cv.created_at || '').slice(0, 10),
@@ -577,6 +617,7 @@ const CustomerPaymentHistory = () => {
         id: `dn_${dn.id}`,
         rawId: dn.id,
         kind: 'DEBIT_NOTE',
+        host_company_id: dn.host_company_id ?? null,
         voucher_date: String(dn.voucher_date || dn.created_at || '').slice(0, 10),
         raw_date: dn.voucher_date || dn.created_at,
         created_at: dn.created_at,
@@ -614,6 +655,7 @@ const CustomerPaymentHistory = () => {
         id: `cn_${cn.id}`,
         rawId: cn.id,
         kind: 'CREDIT_NOTE',
+        host_company_id: cn.host_company_id ?? null,
         voucher_date: String(cn.voucher_date || cn.created_at || '').slice(0, 10),
         raw_date: cn.voucher_date || cn.created_at,
         created_at: cn.created_at,
@@ -811,14 +853,16 @@ const CustomerPaymentHistory = () => {
 
   const isFiltered = Boolean(
     selectedCompany || 
-    selectedVoucherType !== 'ALL' || 
-    startDate || 
+    selectedVoucherType !== 'ALL' ||
+    selectedHostId ||
+    startDate ||
     endDate
   );
 
   const handleResetFilters = () => {
     setSelectedCompany('');
     setSelectedVoucherType('ALL');
+    setSelectedHostId('');
     setStartDate('');
     setEndDate('');
   };
@@ -857,6 +901,12 @@ const CustomerPaymentHistory = () => {
         if (row.voucher_type_code !== selectedVoucherType) return false;
       }
 
+      // Company filter: only vouchers saved against the chosen company. Vouchers with no company
+      // stored (older receipts, journals, contras, notes) appear under "All Companies" only.
+      if (selectedHostId && String(row.host_company_id ?? '') !== String(selectedHostId)) {
+        return false;
+      }
+
       // 3. Date Range Filter (From Date)
       if (startDate) {
         if (row.voucher_date && row.voucher_date < startDate) return false;
@@ -869,7 +919,7 @@ const CustomerPaymentHistory = () => {
 
       return true;
     });
-  }, [unifiedVouchers, selectedCompany, selectedVoucherType, startDate, endDate]);
+  }, [unifiedVouchers, selectedCompany, selectedVoucherType, selectedHostId, startDate, endDate]);
 
   // Aggregate Metrics
   const summaryMetrics = useMemo(() => {
@@ -905,6 +955,56 @@ const CustomerPaymentHistory = () => {
       contrasCount
     };
   }, [filteredVouchers]);
+
+  // Company-wise statement: every other voucher of the company inside the statement period is added to
+  // Money In (credits) / Money Out (debits) so the statement agrees with the voucher register.
+  // The bank figures already cover bank receipts, bank payments and contra; what is added here is
+  // journals, debit notes, credit notes and receipts / payments that have no bank account.
+  const OTHER_VOUCHER_LABELS = {
+    JOURNAL_VOUCHER: 'Journal',
+    DEBIT_NOTE: 'Debit Note',
+    CREDIT_NOTE: 'Credit Note',
+    CUSTOMER_RECEIPT: 'Cash Receipt',
+    VENDOR_PAYMENT: 'Cash Payment'
+  };
+  const otherVouchers = useMemo(() => {
+    const empty = { inParts: [], outParts: [], totalIn: 0, totalOut: 0 };
+    if (!bankSummary || !isCompanyWideStatement) return empty;
+    const round = (n) => Math.round(n * 100) / 100;
+    const inByKind = {};
+    const outByKind = {};
+    unifiedVouchers.forEach(v => {
+      const label = OTHER_VOUCHER_LABELS[v.kind];
+      if (!label) return;
+      // Receipts / payments that went through a bank are already in the bank figures
+      if ((v.kind === 'CUSTOMER_RECEIPT' || v.kind === 'VENDOR_PAYMENT') && v.raw?.bank_account_id) return;
+      if (String(v.host_company_id ?? '') !== String(selectedHostId)) return;
+      if (v.voucher_date < bankSummary.startDate || v.voucher_date > bankSummary.endDate) return;
+      if (v.credit) inByKind[label] = round((inByKind[label] || 0) + (parseFloat(v.credit) || 0));
+      if (v.debit) outByKind[label] = round((outByKind[label] || 0) + (parseFloat(v.debit) || 0));
+    });
+    const toParts = (map) => Object.entries(map).filter(([, amt]) => amt > 0).map(([label, amount]) => ({ label, amount }));
+    const inParts = toParts(inByKind);
+    const outParts = toParts(outByKind);
+    return {
+      inParts,
+      outParts,
+      totalIn: round(inParts.reduce((s, p) => s + p.amount, 0)),
+      totalOut: round(outParts.reduce((s, p) => s + p.amount, 0))
+    };
+  }, [bankSummary, isCompanyWideStatement, unifiedVouchers, selectedHostId]);
+
+  const statementView = useMemo(() => {
+    if (!bankSummary) return null;
+    const { totalIn, totalOut } = otherVouchers;
+    const round = (n) => Math.round(n * 100) / 100;
+    return {
+      moneyIn: round(bankSummary.moneyIn + totalIn),
+      moneyOut: round(bankSummary.moneyOut + totalOut),
+      currentTotal: round(bankSummary.currentTotal + totalIn - totalOut),
+      closingBalance: round(bankSummary.closingBalance + totalIn - totalOut)
+    };
+  }, [bankSummary, otherVouchers]);
 
   // PDF Download Handler
   const handleDownloadPDF = async (row) => {
@@ -1126,18 +1226,25 @@ const CustomerPaymentHistory = () => {
       key: 'voucher_number',
       sortable: true,
       render: (val, row) => (
-        <button
-          type="button"
-          onClick={() => setViewingVoucher(row)}
-          className={`font-mono font-bold text-xs px-2 py-0.5 rounded border hover:underline transition-colors cursor-pointer text-left ${
-            row.kind === 'CONTRA_VOUCHER'
-              ? 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
-              : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200/90'
-          }`}
-          title="Click to view voucher breakdown"
-        >
-          {val}
-        </button>
+        <div className="flex flex-col items-start gap-0.5">
+          <button
+            type="button"
+            onClick={() => setViewingVoucher(row)}
+            className={`font-mono font-bold text-xs px-2 py-0.5 rounded border hover:underline transition-colors cursor-pointer text-left ${
+              row.kind === 'CONTRA_VOUCHER'
+                ? 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200/90'
+            }`}
+            title="Click to view voucher breakdown"
+          >
+            {val}
+          </button>
+          {row.host_company_id != null && (
+            <span className="text-[10px] text-slate-500 font-semibold truncate max-w-[170px]">
+              {hostCompanies.find(h => String(h.id) === String(row.host_company_id))?.company_name || `Company #${row.host_company_id}`}
+            </span>
+          )}
+        </div>
       )
     },
     {
@@ -1382,6 +1489,21 @@ const CustomerPaymentHistory = () => {
             />
           </div>
 
+          {/* 2a. Company (Company Master) */}
+          <div className="w-44 shrink-0">
+            <select
+              value={selectedHostId}
+              onChange={(e) => setSelectedHostId(e.target.value)}
+              title="Company"
+              className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 h-8.5 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all text-slate-800 font-semibold cursor-pointer truncate"
+            >
+              <option value="">All Companies</option>
+              {hostCompanies.map(h => (
+                <option key={h.id} value={h.id}>{h.company_name}</option>
+              ))}
+            </select>
+          </div>
+
           {/* 2. Voucher Type */}
           <div className="w-32 shrink-0">
             <select
@@ -1617,6 +1739,14 @@ const CustomerPaymentHistory = () => {
                 <span className="text-xs font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
                   {bankSummary.bankName}{bankSummary.accountNumbers.length === 1 ? ` (${bankSummary.accountNumbers[0]})` : ''}
                 </span>
+                {selectedHostId && (
+                  <>
+                    <span className="text-[11px] text-slate-400 ml-2">Company:</span>
+                    <span className="text-xs font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      {hostCompanies.find(h => String(h.id) === String(selectedHostId))?.company_name || `Company #${selectedHostId}`}
+                    </span>
+                  </>
+                )}
               </div>
               {!bankSummary.accountOpened && (
                 <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1">
@@ -1639,8 +1769,8 @@ const CustomerPaymentHistory = () => {
                     <span className="text-xs sm:text-sm font-semibold text-slate-700">Current Total :</span>
                     <span className="text-[10px] text-slate-400 font-normal">(Net in Period)</span>
                   </div>
-                  <span className={`font-mono text-xs sm:text-sm font-bold text-right ${bankSummary.currentTotal < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                    {bankSummaryLoading ? 'Loading...' : formatCurrency(bankSummary.currentTotal)}
+                  <span className={`font-mono text-xs sm:text-sm font-bold text-right ${statementView.currentTotal < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                    {bankSummaryLoading ? 'Loading...' : formatCurrency(statementView.currentTotal)}
                   </span>
                 </div>
                 {bankSummary.accountOpeningBalance > 0 && (
@@ -1657,19 +1787,33 @@ const CustomerPaymentHistory = () => {
                 <div className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-emerald-200">
                   <div className="text-[11px] leading-tight text-slate-600">
                     <span className="text-slate-400">Description:</span> <span className="font-semibold text-emerald-800">Money In</span>
-                    <div className="text-[10px] text-slate-400 mt-0.5">Receipts &amp; Contra (Cr)</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {isCompanyWideStatement ? 'All vouchers (Cr)' : 'Receipts & Contra (Cr)'}
+                    </div>
+                    {isCompanyWideStatement && otherVouchers.inParts.length > 0 && (
+                      <div className="text-[10px] text-slate-400">
+                        Bank {formatCurrency(bankSummary.moneyIn)}{otherVouchers.inParts.map(p => ` + ${p.label} ${formatCurrency(p.amount)}`).join('')}
+                      </div>
+                    )}
                   </div>
                   <span className="font-mono text-[11px] font-semibold text-emerald-700 whitespace-nowrap">
-                    + {formatCurrency(bankSummary.moneyIn)}
+                    + {formatCurrency(statementView.moneyIn)}
                   </span>
                 </div>
                 <div className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-rose-200">
                   <div className="text-[11px] leading-tight text-slate-600">
                     <span className="text-slate-400">Description:</span> <span className="font-semibold text-rose-800">Money Out</span>
-                    <div className="text-[10px] text-slate-400 mt-0.5">Payments &amp; Contra (Dr)</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {isCompanyWideStatement ? 'All vouchers (Dr)' : 'Payments & Contra (Dr)'}
+                    </div>
+                    {isCompanyWideStatement && otherVouchers.outParts.length > 0 && (
+                      <div className="text-[10px] text-slate-400">
+                        Bank {formatCurrency(bankSummary.moneyOut)}{otherVouchers.outParts.map(p => ` + ${p.label} ${formatCurrency(p.amount)}`).join('')}
+                      </div>
+                    )}
                   </div>
                   <span className="font-mono text-[11px] font-semibold text-rose-700 whitespace-nowrap">
-                    − {formatCurrency(bankSummary.moneyOut)}
+                    − {formatCurrency(statementView.moneyOut)}
                   </span>
                 </div>
               </div>
@@ -1677,11 +1821,39 @@ const CustomerPaymentHistory = () => {
               <div className="flex items-center justify-between gap-6 py-2.5 bg-blue-50/50 px-3 rounded-lg border border-blue-200 mt-1">
                 <span className="text-xs sm:text-sm font-bold text-slate-900">Outstanding Balance :</span>
                 <span className="font-mono text-sm sm:text-base font-extrabold text-slate-900 text-right">
-                  {bankSummaryLoading ? 'Loading...' : formatCurrency(bankSummary.closingBalance)}
+                  {bankSummaryLoading ? 'Loading...' : formatCurrency(statementView.closingBalance)}
                 </span>
               </div>
             </div>
           </div>
+
+          {/* All of this company's vouchers in the register above (every type, incl. journals that never touch a bank) */}
+          {selectedHostId && (
+            <div className="px-4 sm:px-6 py-4 border-t border-slate-100 bg-slate-50/40">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-2">
+                Voucher Register · {hostCompanies.find(h => String(h.id) === String(selectedHostId))?.company_name || 'Company'}
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                {[
+                  { label: 'Vouchers', value: summaryMetrics.totalCount },
+                  { label: 'Receipts', value: summaryMetrics.receiptsCount },
+                  { label: 'Payments', value: summaryMetrics.paymentsCount },
+                  { label: 'Journals', value: summaryMetrics.journalsCount },
+                  { label: 'Contra', value: summaryMetrics.contrasCount },
+                  { label: 'Total Debit', value: formatCurrency(summaryMetrics.totalDebit), tone: 'text-rose-700' },
+                  { label: 'Total Credit', value: formatCurrency(summaryMetrics.totalCredit), tone: 'text-emerald-700' }
+                ].map(m => (
+                  <div key={m.label} className="bg-white border border-slate-200 rounded-lg px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{m.label}</div>
+                    <div className={`font-mono text-sm font-bold ${m.tone || 'text-slate-800'}`}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2">
+                Includes journals and other entries that do not move money in a bank, so Total Credit can be higher than the bank's Money In.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

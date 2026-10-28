@@ -69,7 +69,7 @@ const emptyForm = () => ({
   narration: ''
 });
 
-const CreditNoteEntry = ({ initialCustomerId = '', onPosted }) => {
+const CreditNoteEntry = ({ initialCustomerId = '', hostCompanyId = null, onPosted }) => {
   const [customers, setCustomers] = useState([]);
   const [customerId, setCustomerId] = useState(initialCustomerId ? String(initialCustomerId) : '');
   const [sources, setSources] = useState([]);
@@ -293,6 +293,7 @@ const CreditNoteEntry = ({ initialCustomerId = '', onPosted }) => {
         body: JSON.stringify({
           date: form.date,
           customerId,
+          hostCompanyId,
           salesInvoiceId: selectedInvoice ? selectedInvoice.id : null,
           reason: form.reason,
           entryMode: itemMode ? 'ITEM' : 'LEDGER',

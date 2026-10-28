@@ -21,7 +21,7 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
+const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess, hostCompanyId = null }) => {
   const [formData, setFormData] = useState({
     paymentAmount: '',
     paymentDate: '',
@@ -258,6 +258,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         cardType: formData.cardType,
         last4Digits: formData.last4Digits,
         authorizationCode: formData.authorizationCode,
+        hostCompanyId,
       };
 
       const response = await fetch(`${API_BASE}/payments`, {

@@ -207,6 +207,7 @@ model customer_payments {
   card_last_4_digits  String?                               @db.VarChar(4)
   authorization_code  String?                               @db.VarChar(255)
   status              customer_payments_status?             @default(CONFIRMED)
+  host_company_id     Int?
   created_by          Int?
   created_at          DateTime?                             @default(now()) @db.Timestamp(0)
   updated_at          DateTime?                             @default(now()) @db.Timestamp(0)
@@ -220,6 +221,7 @@ model customer_payments {
   @@index([created_by], map: "created_by")
   @@index([customer_id, payment_date], map: "idx_customer_date")
   @@index([status], map: "idx_status")
+  @@index([host_company_id], map: "idx_cp_host_company")
 }
 
 model customer_po_item_subassemblies {
@@ -1067,6 +1069,7 @@ model payments {
   card_last_4_digits      String?                @db.VarChar(4)
   authorization_code      String?                @db.VarChar(255)
   status                  payments_status?       @default(CONFIRMED)
+  host_company_id         Int?
   created_by              Int?
   created_at              DateTime?              @default(now()) @db.Timestamp(0)
   updated_at              DateTime?              @default(now()) @db.Timestamp(0)
@@ -1078,6 +1081,7 @@ model payments {
   @@index([job_card_quality_log_id], map: "fk_payment_quality_log")
   @@index([vendor_id], map: "payments_vendor_fk")
   @@index([po_id], map: "po_id")
+  @@index([host_company_id], map: "idx_pay_host_company")
 }
 
 model permissions {
@@ -2857,6 +2861,7 @@ model journal_vouchers {
   total_debit           Decimal                 @db.Decimal(14, 2)
   total_credit          Decimal                 @db.Decimal(14, 2)
   narration             String                  @db.Text
+  host_company_id       Int?
   created_by            Int?
   created_at            DateTime?               @default(now()) @db.Timestamp(0)
   updated_at            DateTime?               @default(now()) @db.Timestamp(0)
@@ -2864,6 +2869,7 @@ model journal_vouchers {
 
   @@index([voucher_date], map: "idx_jv_date")
   @@index([voucher_no], map: "idx_jv_no")
+  @@index([host_company_id], map: "idx_jv_host_company")
 }
 
 model journal_voucher_items {
@@ -2889,12 +2895,14 @@ model contra_vouchers {
   amount               Decimal   @db.Decimal(15, 2)
   reference_no         String?   @db.VarChar(100)
   narration            String?   @db.Text
+  host_company_id      Int?
   created_by           Int?
   created_at           DateTime? @default(now()) @db.Timestamp(0)
   updated_at           DateTime? @default(now()) @db.Timestamp(0)
 
   @@index([voucher_date], map: "idx_contra_voucher_date")
   @@index([voucher_no], map: "idx_contra_voucher_no")
+  @@index([host_company_id], map: "idx_contra_host_company")
 }
 
 model debit_notes {
@@ -2918,6 +2926,7 @@ model debit_notes {
   narration            String?            @db.Text
   status               String             @default("POSTED") @db.VarChar(20)
   cancelled_at         DateTime?          @db.Timestamp(0)
+  host_company_id      Int?
   created_by           Int?
   created_at           DateTime?          @default(now()) @db.Timestamp(0)
   updated_at           DateTime?          @default(now()) @db.Timestamp(0)
@@ -2928,6 +2937,7 @@ model debit_notes {
   @@index([po_id], map: "idx_dn_po")
   @@index([bank_account_id], map: "idx_dn_bank_account")
   @@index([voucher_date], map: "idx_dn_date")
+  @@index([host_company_id], map: "idx_dn_host_company")
 }
 
 model debit_note_items {
@@ -2970,6 +2980,7 @@ model credit_notes {
   narration            String?             @db.Text
   status               String              @default("POSTED") @db.VarChar(20)
   cancelled_at         DateTime?           @db.Timestamp(0)
+  host_company_id      Int?
   created_by           Int?
   created_at           DateTime?           @default(now()) @db.Timestamp(0)
   updated_at           DateTime?           @default(now()) @db.Timestamp(0)
@@ -2979,6 +2990,7 @@ model credit_notes {
   @@index([sales_invoice_id], map: "idx_cn_invoice")
   @@index([bank_account_id], map: "idx_cn_bank_account")
   @@index([voucher_date], map: "idx_cn_date")
+  @@index([host_company_id], map: "idx_cn_host_company")
 }
 
 model credit_note_items {

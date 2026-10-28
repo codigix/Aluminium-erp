@@ -9,6 +9,21 @@ const getCompanies = async (req, res, next) => {
   }
 };
 
+// Minimal host-company list (id, name, status) for company pickers; no admin permission needed
+const getCompanyOptions = async (req, res, next) => {
+  try {
+    const companies = await adminCompanyMasterService.getCompanies();
+    res.json(companies.map(c => ({
+      id: c.id,
+      company_name: c.company_name,
+      gstin: c.gstin || null,
+      status: c.status
+    })));
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getCompanyById = async (req, res, next) => {
   try {
     const company = await adminCompanyMasterService.getCompanyById(req.params.id);
@@ -165,6 +180,7 @@ module.exports = {
   getCompanies,
   getCompanyById,
   getActiveCompany,
+  getCompanyOptions,
   createCompany,
   updateCompany,
   deleteCompany

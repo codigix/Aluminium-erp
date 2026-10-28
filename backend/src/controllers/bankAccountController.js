@@ -39,7 +39,7 @@ const getBankAccountById = async (req, res, next) => {
 
 const getBankPeriodSummary = async (req, res, next) => {
   try {
-    const summary = await bankAccountService.getBankPeriodSummary(req.params.accountId, req.query.startDate, req.query.endDate);
+    const summary = await bankAccountService.getBankPeriodSummary(req.params.accountId, req.query.startDate, req.query.endDate, req.query.hostCompanyId);
     res.json({ success: true, data: summary });
   } catch (error) {
     next(error);

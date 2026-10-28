@@ -55,9 +55,11 @@ const processPayment = async (payload) => {
     last4Digits,
     authorizationCode,
     allocations,
+    hostCompanyId,
     createdBy
   } = payload;
 
+  const resolvedHostCompanyId = parseInt(hostCompanyId, 10) || null;
   const hasAllocations = Array.isArray(allocations) && allocations.length > 0;
 
   if (!hasAllocations && (!poId && !jobCardQualityLogId)) {
@@ -195,8 +197,9 @@ const processPayment = async (payload) => {
           card_last_4_digits,
           authorization_code,
           status,
+          host_company_id,
           created_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           voucherNo,
           primaryInvoiceId,
@@ -219,6 +222,7 @@ const processPayment = async (payload) => {
           last4Digits || null,
           authorizationCode || null,
           'CONFIRMED',
+          resolvedHostCompanyId,
           createdBy || null
         ]
       );
@@ -359,8 +363,9 @@ const processPayment = async (payload) => {
         card_last_4_digits,
         authorization_code,
         status,
+        host_company_id,
         created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         voucherNo,
         (invoiceId && !isNaN(parseInt(invoiceId, 10))) ? parseInt(invoiceId, 10) : null,
@@ -383,6 +388,7 @@ const processPayment = async (payload) => {
         last4Digits || null,
         authorizationCode || null,
         'CONFIRMED',
+        resolvedHostCompanyId,
         createdBy || null
       ]
     );
@@ -511,6 +517,12 @@ const getPayments = async (filters = {}) => {
   if (filters.vendorId) {
     query += ' AND p.vendor_id = ?';
     params.push(filters.vendorId);
+  }
+
+  // Payments saved before host_company_id existed (NULL) stay visible under every company
+  if (filters.hostCompanyId) {
+    query += ' AND (p.host_company_id = ? OR p.host_company_id IS NULL)';
+    params.push(filters.hostCompanyId);
   }
 
   if (filters.status) {
@@ -1773,6 +1785,7 @@ const recordJournalVoucher = async (payload) => {
     totalDebit,
     totalCredit,
     narration,
+    hostCompanyId,
     createdBy
   } = payload;
 
@@ -1793,8 +1806,8 @@ const recordJournalVoucher = async (payload) => {
     await connection.beginTransaction();
 
     const [result] = await connection.query(
-      `INSERT INTO journal_vouchers (voucher_no, voucher_date, reference_no, total_debit, total_credit, narration, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO journal_vouchers (voucher_no, voucher_date, reference_no, total_debit, total_credit, narration, host_company_id, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         voucherNo,
         date || new Date().toISOString().split('T')[0],
@@ -1802,6 +1815,7 @@ const recordJournalVoucher = async (payload) => {
         drTotal,
         crTotal,
         narration,
+        parseInt(hostCompanyId, 10) || null,
         createdBy || null
       ]
     );
@@ -1932,6 +1946,7 @@ const recordContraVoucher = async (payload) => {
     amount,
     referenceNo,
     narration,
+    hostCompanyId,
     createdBy
   } = payload;
 
@@ -1980,8 +1995,8 @@ const recordContraVoucher = async (payload) => {
     const [result] = await connection.query(
       `INSERT INTO contra_vouchers (
         voucher_no, voucher_date, from_account, from_bank_account_id,
-        to_account, to_bank_account_id, amount, reference_no, narration, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        to_account, to_bank_account_id, amount, reference_no, narration, host_company_id, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         voucherNo,
         date || new Date().toISOString().split('T')[0],
@@ -1992,6 +2007,7 @@ const recordContraVoucher = async (payload) => {
         numericAmount,
         referenceNo || null,
         narration || `Transfer from ${fromAccount} to ${toAccount}`,
+        parseInt(hostCompanyId, 10) || null,
         createdBy || null
       ]
     );
@@ -2041,6 +2057,38 @@ const DEBIT_NOTE_REASONS = {
 };
 
 const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+// GST of one debit note line. Intra-state: CGST and SGST are each rounded to 2 decimals separately
+// (same as a Purchase Order line); inter-state: a single IGST amount.
+const buildGstLine = (taxable, gstPercent, gstType) => {
+  if (gstType === 'INTRA') {
+    const half = round2(taxable * gstPercent / 2 / 100);
+    return { cgstAmt: half, sgstAmt: half, igstAmt: 0, gstAmt: round2(half * 2) };
+  }
+  if (gstType === 'INTER') {
+    const igst = round2(taxable * gstPercent / 100);
+    return { cgstAmt: 0, sgstAmt: 0, igstAmt: igst, gstAmt: igst };
+  }
+  return { cgstAmt: 0, sgstAmt: 0, igstAmt: 0, gstAmt: 0 };
+};
+
+// Largest rounding gap (paise) that may be absorbed into the last line's taxable value.
+// A Purchase Order rounds quantity x rate and its GST on its own, so a full-value debit note can land
+// a few paise above the bill. Anything larger is a real excess and is rejected by the bill-value check.
+const MAX_ROUNDING_FIT_PAISE = 5;
+
+// Trim the last line's taxable value, 1 paisa at a time, until the note total fits the bill value
+const fitLinesToBillValue = (lines, gstType, debitable) => {
+  if (!lines.length || debitable === null) return;
+  const total = () => round2(lines.reduce((s, l) => s + l.total, 0));
+  if (total() - debitable > MAX_ROUNDING_FIT_PAISE / 100 + 0.0001) return;
+  const last = lines[lines.length - 1];
+  for (let i = 0; i < MAX_ROUNDING_FIT_PAISE && total() > debitable + 0.0001 && last.taxable > 0.01; i++) {
+    last.taxable = round2(last.taxable - 0.01);
+    Object.assign(last, buildGstLine(last.taxable, last.gstPercent, gstType));
+    last.total = round2(last.taxable + last.gstAmt);
+  }
+};
 
 // errorHandler reads err.status
 const badRequest = (message) => {
@@ -2173,6 +2221,7 @@ const recordDebitNote = async (payload) => {
     ledgerGstPercent,
     narration,
     bankAccountId,
+    hostCompanyId,
     createdBy
   } = payload;
 
@@ -2239,7 +2288,7 @@ const recordDebitNote = async (payload) => {
         const rate = parseFloat(it.rate) || 0;
         const gstPercent = gstEnabled ? (parseFloat(it.gstPercent) || 0) : 0;
         const taxable = round2(qty * rate);
-        const gstAmt = round2(taxable * gstPercent / 100);
+        const gst = buildGstLine(taxable, gstPercent, gstType);
         return {
           poItemId: poItem.id,
           itemCode: poItem.item_code || null,
@@ -2249,8 +2298,8 @@ const recordDebitNote = async (payload) => {
           rate,
           gstPercent,
           taxable,
-          gstAmt,
-          total: round2(taxable + gstAmt)
+          ...gst,
+          total: round2(taxable + gst.gstAmt)
         };
       });
     if (lines.length === 0) throw badRequest('Enter a return quantity for at least one item.');
@@ -2258,7 +2307,7 @@ const recordDebitNote = async (payload) => {
     const taxable = round2(ledgerAmount);
     if (taxable <= 0) throw badRequest('Debit amount must be greater than 0.');
     const gstPercent = gstEnabled ? (parseFloat(ledgerGstPercent) || 0) : 0;
-    const gstAmt = round2(taxable * gstPercent / 100);
+    const gst = buildGstLine(taxable, gstPercent, gstType);
     lines = [{
       poItemId: null,
       itemCode: null,
@@ -2268,23 +2317,27 @@ const recordDebitNote = async (payload) => {
       rate: taxable,
       gstPercent,
       taxable,
-      gstAmt,
-      total: round2(taxable + gstAmt)
+      ...gst,
+      total: round2(taxable + gst.gstAmt)
     }];
   }
 
+  // A bill can be debited up to its value (less earlier DNs). If it is already paid, the
+  // outstanding goes negative = amount recoverable from the supplier.
+  const debitable = invoice
+    ? round2((parseFloat(invoice.bill_amount) || 0) - (parseFloat(invoice.debit_note_amount) || 0))
+    : null;
+  fitLinesToBillValue(lines, gstType, debitable);
+
   const taxableAmount = round2(lines.reduce((s, l) => s + l.taxable, 0));
   const gstTotal = round2(lines.reduce((s, l) => s + l.gstAmt, 0));
-  const cgst = gstType === 'INTRA' ? round2(gstTotal / 2) : 0;
-  const sgst = gstType === 'INTRA' ? round2(gstTotal - cgst) : 0;
-  const igst = gstType === 'INTER' ? gstTotal : 0;
+  const cgst = round2(lines.reduce((s, l) => s + l.cgstAmt, 0));
+  const sgst = round2(lines.reduce((s, l) => s + l.sgstAmt, 0));
+  const igst = round2(lines.reduce((s, l) => s + l.igstAmt, 0));
   const totalAmount = round2(taxableAmount + gstTotal);
 
   if (totalAmount <= 0) throw badRequest('Debit note total must be greater than 0.');
-  // A bill can be debited up to its value (less earlier DNs). If it is already paid, the
-  // outstanding goes negative = amount recoverable from the supplier.
   if (invoice) {
-    const debitable = (parseFloat(invoice.bill_amount) || 0) - (parseFloat(invoice.debit_note_amount) || 0);
     if (totalAmount > debitable + 0.01) {
       throw badRequest(`Debit note total (₹${totalAmount.toFixed(2)}) exceeds the bill value available for debit (₹${debitable.toFixed(2)}).`);
     }
@@ -2296,6 +2349,17 @@ const recordDebitNote = async (payload) => {
   const finalNarration = narration || `${DEBIT_NOTE_REASONS[reason]} – Debit note to ${vendor.vendor_name}${billRef ? ` against ${billRef}` : ''}`;
   const voucherNo = await generateNextDebitNoteNo();
 
+  // Company: as chosen on the page, else the company of the PO's quotation
+  let resolvedHostCompanyId = parseInt(hostCompanyId, 10) || null;
+  const hostPoId = po ? po.id : (invoice ? invoice.po_id : null);
+  if (!resolvedHostCompanyId && hostPoId) {
+    const [hostRows] = await pool.query(
+      `SELECT q.host_company_id FROM purchase_orders hpo JOIN quotations q ON q.id = hpo.quotation_id WHERE hpo.id = ?`,
+      [hostPoId]
+    );
+    resolvedHostCompanyId = hostRows[0]?.host_company_id || null;
+  }
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -2304,12 +2368,12 @@ const recordDebitNote = async (payload) => {
       `INSERT INTO debit_notes (
         voucher_no, voucher_date, vendor_id, vendor_invoice_id, po_id, bank_account_id, reference_invoice_no,
         reason, entry_mode, affected_ledger, gst_type, taxable_amount, cgst_amount, sgst_amount,
-        igst_amount, total_amount, narration, status, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?)`,
+        igst_amount, total_amount, narration, status, host_company_id, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?, ?)`,
       [
         voucherNo, voucherDate, vendorId, invoice ? invoice.id : null, po ? po.id : null, bankAccount ? bankAccount.id : null, billRef,
         reason, entryMode, ledgerName, gstType, taxableAmount, cgst, sgst,
-        igst, totalAmount, finalNarration, createdBy || null
+        igst, totalAmount, finalNarration, resolvedHostCompanyId, createdBy || null
       ]
     );
     const debitNoteId = result.insertId;
