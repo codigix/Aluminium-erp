@@ -133,6 +133,7 @@ const processPayment = async (payload) => {
       // Records ONE payment record under this voucher, with bill-wise allocations in payment_allocations
       let calculatedTotal = 0;
       const validAllocs = [];
+      const allocatedToBill = new Map(); // invoice id -> amount allocated so far in this voucher
 
       for (const alloc of allocations) {
         const allocAmt = parseFloat(alloc.amount || alloc.settlementAmount) || 0;
@@ -151,6 +152,20 @@ const processPayment = async (payload) => {
           const [invRows] = await pool.query('SELECT po_id FROM vendor_invoices WHERE id = ?', [allocInvoiceId]);
           if (invRows.length > 0 && invRows[0].po_id) {
             allocPoId = invRows[0].po_id;
+          }
+        }
+
+        // An 'Agst Ref' payment cannot exceed what is still outstanding on the bill (a paid bill cannot be paid again)
+        if (allocInvoiceId && (alloc.type || 'Agst Ref') === 'Agst Ref') {
+          const bill = await vendorInvoiceService.getVendorInvoiceById(allocInvoiceId);
+          if (bill) {
+            const allocatedSoFar = allocatedToBill.get(allocInvoiceId) || 0;
+            const billOutstanding = parseFloat(bill.outstanding) || 0;
+            if (allocAmt + allocatedSoFar > billOutstanding + 0.01) {
+              const label = bill.display_invoice_no || bill.po_number || `bill ${allocInvoiceId}`;
+              throw badRequest(`Payment for ${label} (₹${(allocAmt + allocatedSoFar).toFixed(2)}) exceeds its outstanding amount (₹${Math.max(0, billOutstanding).toFixed(2)}).`);
+            }
+            allocatedToBill.set(allocInvoiceId, allocatedSoFar + allocAmt);
           }
         }
 

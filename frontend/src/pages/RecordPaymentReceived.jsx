@@ -1280,7 +1280,10 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   // Format vendor bill payload for PaymentReceivedModal
   const formatVendorBillForModal = (row) => {
     const totalAmt = parseFloat(row.bill_amount) || (parseFloat(row.invoice_amount) > 0 ? parseFloat(row.invoice_amount) : parseFloat(row.po_amount)) || (parseFloat(row.total_amount) || 0);
-    const outAmt = parseFloat(row.outstanding) > 0 ? parseFloat(row.outstanding) : totalAmt;
+    // A bill the server reports as paid (outstanding 0 or less) stays at 0 outstanding; only a row
+    // that carries no outstanding figure at all falls back to its full amount
+    const reportedOut = parseFloat(row.outstanding);
+    const outAmt = Number.isFinite(reportedOut) ? Math.max(0, reportedOut) : totalAmt;
     const invNo = row.display_invoice_no || row.vendor_invoice_no || row.po_number || (row.id ? `BILL-${row.id}` : 'BILL');
     const poNo = row.po_number || '';
     return {
@@ -1314,10 +1317,16 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     }
     let listToLoad = [];
     if (singleRow) {
+      if (!(parseFloat(singleRow.outstanding) > 0)) {
+        errorToast('This bill is already fully paid');
+        return;
+      }
       listToLoad = [formatVendorBillForModal(singleRow)];
     } else {
-      // All bills, including fully paid ones (shown with 0 outstanding)
-      listToLoad = displayedVendorInvoices.map(formatVendorBillForModal);
+      // Only bills that still have an outstanding balance can be paid
+      listToLoad = displayedVendorInvoices
+        .filter(inv => parseFloat(inv.outstanding) > 0)
+        .map(formatVendorBillForModal);
     }
     setSelectedInvoicesForModal(listToLoad);
     setSelectedInvoice(listToLoad.length === 1 ? listToLoad[0] : null);

@@ -1027,8 +1027,8 @@ const PaymentReceivedModal = ({
 
     baseList.forEach(inv => {
       const out = parseFloat(inv?.outstanding) || 0;
-      // Vendor payments also list fully paid bills (0 outstanding) for reference
-      if (inv && inv.id && !removedBillIds.has(String(inv.id)) && (out > 0 || isVendorMode)) {
+      // Only bills that still have an outstanding balance are offered for payment (customer and vendor)
+      if (inv && inv.id && !removedBillIds.has(String(inv.id)) && out > 0) {
         if (!map.has(String(inv.id))) {
           map.set(String(inv.id), inv);
         } else {
@@ -1049,7 +1049,7 @@ const PaymentReceivedModal = ({
       const dateB = new Date(b.invoice_date || b.created_at || 0).getTime();
       return dateA - dateB;
     });
-  }, [selectedInvoices, customerInvoices, manuallyAddedInvoices, removedBillIds, isVendorMode]);
+  }, [selectedInvoices, customerInvoices, manuallyAddedInvoices, removedBillIds]);
 
   // List of available unadded invoices of this customer that user can add via + Add Agst Ref
   const unaddedCustomerInvoices = useMemo(() => {
