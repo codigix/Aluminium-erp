@@ -1108,7 +1108,7 @@ const generateSalesInvoicePDF = async (invoiceId, copyType = 'Original for Recip
   const roundOffNum = Number((netTotalRounded - rawNetTotal).toFixed(2));
   const totalTaxAmt = totalCgst + totalSgst + totalIgst;
 
-  const ITEMS_PER_PAGE = 10;
+  const ITEMS_PER_PAGE = 15;
   const pageChunks = [];
   for (let i = 0; i < formattedItems.length; i += ITEMS_PER_PAGE) {
     pageChunks.push(formattedItems.slice(i, i + ITEMS_PER_PAGE));
