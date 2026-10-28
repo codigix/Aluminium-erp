@@ -999,11 +999,39 @@ const StockEntries = () => {
                     <div className="md:col-span-1">
                       <label className="blocktext-xs   text-slate-500 mb-1.5 ">Item Code *</label>
                       <SearchableSelect
-                        options={stockBalances.map(item => ({
-                          id: item.item_code,
-                          label: `${item.material_name || item.item_name} (${item.item_code})`,
-                          value: item.item_code
-                        }))}
+                        options={(() => {
+                          // same grouping as the Production Plan material picker: raw materials show once per
+                          // material (name + grade + drawing) with a single primary code; other items once per code
+                          const groups = new Map();
+                          stockBalances.forEach(item => {
+                            const code = String(item.item_code || '').trim().toUpperCase();
+                            const name = String(item.material_name || item.item_name || '').trim();
+                            const type = String(item.material_type || item.item_group || '').toLowerCase();
+                            const isRaw = (type.includes('raw') || type === 'rm' || code.startsWith('RAW-') || code.startsWith('RM-')) &&
+                              !code.startsWith('CON-') && !code.startsWith('BO-') && !code.startsWith('PAC-') && !code.startsWith('TOOL-') && !code.startsWith('SER-');
+                            const key = isRaw && name
+                              ? `RAW:::${name.toUpperCase()}:::${String(item.material_grade || '').trim().toUpperCase()}:::${(item.drawing_no && item.drawing_no !== 'N/A' && item.drawing_no !== '—') ? String(item.drawing_no).trim().toUpperCase() : ''}`
+                              : `OTHER:::${code || name.toUpperCase()}`;
+                            const group = groups.get(key);
+                            if (!group) {
+                              groups.set(key, { name, primary: item, codes: new Set(code ? [code] : []) });
+                              return;
+                            }
+                            if (code) group.codes.add(code);
+                            const pCode = String(group.primary.item_code || '').toUpperCase();
+                            if (!pCode.startsWith('RM-') && code.startsWith('RM-')) group.primary = item;
+                            else if (pCode.startsWith('RM-') === code.startsWith('RM-') && code && code < pCode) group.primary = item;
+                          });
+                          return Array.from(groups.values())
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(({ name, primary, codes }) => ({
+                              id: primary.item_code,
+                              label: `${name || primary.item_code} (${primary.item_code})`,
+                              value: primary.item_code,
+                              subLabel: codes.size > 1 ? `${codes.size} stock codes` : ''
+                            }));
+                        })()}
+                        subLabelField="subLabel"
                         value={currentItem.itemCode}
                         onChange={(e) => {
                           const code = e.target.value;
