@@ -79,13 +79,12 @@ export const formatDimensions = (item) => {
       matchedShape = 'round bar';
     }
   } else {
-    // Fallback detection by dimension values
-    if (dia > 0) {
-      if (thk > 0) {
-        matchedShape = 'threaded rod';
-      } else {
-        matchedShape = 'round bar';
-      }
+    // Fallback detection by dimension values (no explicit shape or recognizable material name).
+    // A threaded rod is never inferred here: it needs an explicit shape.
+    if (wid > 0 && thk > 0 && len > 0 && dia === 0 && od === 0) {
+      matchedShape = 'plate';
+    } else if (dia > 0) {
+      matchedShape = 'round bar';
     } else if (od > 0 && thk > 0) {
       matchedShape = 'pipe';
     } else if (wid > 0 && od > 0 && thk > 0 && len > 0) {
@@ -317,8 +316,20 @@ export const calculateWeight = ({
  * Rule: Shape-based raw materials with calculated physical weight are billed by weight (KG).
  * Bought-out components (BO-, fasteners, hardware, non-weight) are billed by quantity (NOS).
  */
+/**
+ * Laser-cutting lines are billed on design qty (Nos) × rate, same rule as the backend PO/quotation totals.
+ */
+export const isLaserCuttingItem = (item) => {
+  if (!item) return false;
+  const lc = String(item.laser_cutting || '').trim().toUpperCase();
+  return !!lc && !['SELECT', 'NONE', 'NULL', 'UNDEFINED'].includes(lc);
+};
+
 export const isWeightBasedItem = (item) => {
   if (!item) return false;
+
+  // 0. Laser-cutting operation lines are billed per piece, never by weight
+  if (isLaserCuttingItem(item)) return false;
 
   // 1. Bought-out components / standard hardware are NEVER weight-billed
   const matType = (item.material_type || item.item_type || '').toUpperCase().trim();

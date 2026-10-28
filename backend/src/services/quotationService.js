@@ -370,23 +370,43 @@ const getQuotations = async (filters = {}) => {
     `SELECT qi.*, 
             COALESCE(qi.shape_type, mri.shape_type) as shape_type,
             COALESCE(qi.shape_type, mri.shape_type) as shape_name,
-            COALESCE(NULLIF(qi.length, 0), mri.length, sb.length, 0) as length,
-            COALESCE(NULLIF(qi.width, 0), mri.width, sb.width, 0) as width,
-            COALESCE(NULLIF(qi.thickness, 0), mri.thickness, sb.thickness, 0) as thickness,
-            COALESCE(NULLIF(qi.diameter, 0), mri.diameter, sb.diameter, 0) as diameter,
-            COALESCE(NULLIF(qi.outer_diameter, 0), mri.outer_diameter, sb.outer_diameter, 0) as outer_diameter,
+            CASE WHEN (COALESCE(qi.length,0) + COALESCE(qi.width,0) + COALESCE(qi.thickness,0) + COALESCE(qi.diameter,0) + COALESCE(qi.outer_diameter,0)) > 0 THEN COALESCE(qi.length, 0)
+                 WHEN (COALESCE(mri.length,0) + COALESCE(mri.width,0) + COALESCE(mri.thickness,0) + COALESCE(mri.diameter,0) + COALESCE(mri.outer_diameter,0)) > 0 THEN COALESCE(mri.length, 0)
+                 ELSE COALESCE(sb.length, 0) END as length,
+            CASE WHEN (COALESCE(qi.length,0) + COALESCE(qi.width,0) + COALESCE(qi.thickness,0) + COALESCE(qi.diameter,0) + COALESCE(qi.outer_diameter,0)) > 0 THEN COALESCE(qi.width, 0)
+                 WHEN (COALESCE(mri.length,0) + COALESCE(mri.width,0) + COALESCE(mri.thickness,0) + COALESCE(mri.diameter,0) + COALESCE(mri.outer_diameter,0)) > 0 THEN COALESCE(mri.width, 0)
+                 ELSE COALESCE(sb.width, 0) END as width,
+            CASE WHEN (COALESCE(qi.length,0) + COALESCE(qi.width,0) + COALESCE(qi.thickness,0) + COALESCE(qi.diameter,0) + COALESCE(qi.outer_diameter,0)) > 0 THEN COALESCE(qi.thickness, 0)
+                 WHEN (COALESCE(mri.length,0) + COALESCE(mri.width,0) + COALESCE(mri.thickness,0) + COALESCE(mri.diameter,0) + COALESCE(mri.outer_diameter,0)) > 0 THEN COALESCE(mri.thickness, 0)
+                 ELSE COALESCE(sb.thickness, 0) END as thickness,
+            CASE WHEN (COALESCE(qi.length,0) + COALESCE(qi.width,0) + COALESCE(qi.thickness,0) + COALESCE(qi.diameter,0) + COALESCE(qi.outer_diameter,0)) > 0 THEN COALESCE(qi.diameter, 0)
+                 WHEN (COALESCE(mri.length,0) + COALESCE(mri.width,0) + COALESCE(mri.thickness,0) + COALESCE(mri.diameter,0) + COALESCE(mri.outer_diameter,0)) > 0 THEN COALESCE(mri.diameter, 0)
+                 ELSE COALESCE(sb.diameter, 0) END as diameter,
+            CASE WHEN (COALESCE(qi.length,0) + COALESCE(qi.width,0) + COALESCE(qi.thickness,0) + COALESCE(qi.diameter,0) + COALESCE(qi.outer_diameter,0)) > 0 THEN COALESCE(qi.outer_diameter, 0)
+                 WHEN (COALESCE(mri.length,0) + COALESCE(mri.width,0) + COALESCE(mri.thickness,0) + COALESCE(mri.diameter,0) + COALESCE(mri.outer_diameter,0)) > 0 THEN COALESCE(mri.outer_diameter, 0)
+                 ELSE COALESCE(sb.outer_diameter, 0) END as outer_diameter,
             COALESCE(NULLIF(qi.density, 0), mri.density, sb.density, 0) as density,
             COALESCE(NULLIF(qi.weight_per_unit, 0), mri.weight_per_unit, sb.weight_per_unit, 0) as weight_per_unit
      FROM quotation_items qi
      LEFT JOIN quotations q ON qi.quotation_id = q.id
-     LEFT JOIN material_request_items mri ON q.mr_id = mri.mr_id AND qi.item_code = mri.item_code AND ABS(qi.quantity - mri.quantity) < 0.01
+     LEFT JOIN material_request_items mri ON mri.id = (
+       -- one MR line per quotation line: closest dimension match, so repeated item codes never duplicate rows
+       SELECT m2.id
+       FROM material_request_items m2
+       WHERE m2.mr_id = q.mr_id AND m2.item_code = qi.item_code AND ABS(qi.quantity - m2.quantity) < 0.01
+       ORDER BY (ABS(COALESCE(qi.length,0) - COALESCE(m2.length,0)) + ABS(COALESCE(qi.width,0) - COALESCE(m2.width,0)) + ABS(COALESCE(qi.thickness,0) - COALESCE(m2.thickness,0)) + ABS(COALESCE(qi.diameter,0) - COALESCE(m2.diameter,0)) + ABS(COALESCE(qi.outer_diameter,0) - COALESCE(m2.outer_diameter,0))) ASC, m2.id ASC
+       LIMIT 1
+     )
      LEFT JOIN (
-       SELECT item_code, 
-              MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness, 
+       -- stock dimensions are used only when the item code has exactly one distinct dimension set
+       SELECT item_code,
+              MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
               MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter,
               MAX(density) as density, MAX(weight_per_unit) as weight_per_unit
-       FROM stock_balance 
+       FROM stock_balance
+       WHERE (COALESCE(length,0) + COALESCE(width,0) + COALESCE(thickness,0) + COALESCE(diameter,0) + COALESCE(outer_diameter,0)) > 0
        GROUP BY item_code
+       HAVING COUNT(DISTINCT CONCAT_WS('|', COALESCE(length,0), COALESCE(width,0), COALESCE(thickness,0), COALESCE(diameter,0), COALESCE(outer_diameter,0))) = 1
      ) sb ON qi.item_code = sb.item_code
      WHERE qi.quotation_id IN (?)`,
     [quotationIds]
@@ -497,18 +517,19 @@ const getQuotationById = async (quotationId) => {
                 JOIN material_requests mr ON mr.plan_id = ppm.plan_id
                 WHERE mr.id = q.mr_id
                   AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
+                  AND ppm.bom_ref NOT LIKE 'MANUAL%'
                 LIMIT 1
               ),
               -- 2. Try sales_order_item_materials
               (
-                SELECT som.drawing_no 
+                SELECT som.drawing_no
                 FROM sales_order_item_materials som
                 JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
                 WHERE soi.sales_order_id = q.sales_order_id
                   AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
                 LIMIT 1
               ),
-              qi.drawing_no,
+              NULLIF(qi.drawing_no, ''),
               qi.item_code
             ) AS drawing_no,
             (
@@ -535,116 +556,22 @@ const getQuotationById = async (quotationId) => {
               )
               LIMIT 1
             ) AS drawing_name,
-            COALESCE(
-              qi.length,
-              (
-                SELECT ppm.length 
-                FROM production_plan_materials ppm
-                JOIN material_requests mr ON mr.plan_id = ppm.plan_id
-                WHERE mr.id = q.mr_id
-                  AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
-                LIMIT 1
-              ),
-              (
-                SELECT som.length 
-                FROM sales_order_item_materials som
-                JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
-                WHERE soi.sales_order_id = q.sales_order_id
-                  AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
-                LIMIT 1
-              ),
-              mri.length,
-              sb.length,
-              0
-            ) as length,
-            COALESCE(
-              qi.width,
-              (
-                SELECT ppm.width 
-                FROM production_plan_materials ppm
-                JOIN material_requests mr ON mr.plan_id = ppm.plan_id
-                WHERE mr.id = q.mr_id
-                  AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
-                LIMIT 1
-              ),
-              (
-                SELECT som.width 
-                FROM sales_order_item_materials som
-                JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
-                WHERE soi.sales_order_id = q.sales_order_id
-                  AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
-                LIMIT 1
-              ),
-              mri.width,
-              sb.width,
-              0
-            ) as width,
-            COALESCE(
-              qi.thickness,
-              (
-                SELECT ppm.thickness 
-                FROM production_plan_materials ppm
-                JOIN material_requests mr ON mr.plan_id = ppm.plan_id
-                WHERE mr.id = q.mr_id
-                  AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
-                LIMIT 1
-              ),
-              (
-                SELECT som.thickness 
-                FROM sales_order_item_materials som
-                JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
-                WHERE soi.sales_order_id = q.sales_order_id
-                  AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
-                LIMIT 1
-              ),
-              mri.thickness,
-              sb.thickness,
-              0
-            ) as thickness,
-            COALESCE(
-              qi.diameter,
-              (
-                SELECT ppm.diameter 
-                FROM production_plan_materials ppm
-                JOIN material_requests mr ON mr.plan_id = ppm.plan_id
-                WHERE mr.id = q.mr_id
-                  AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
-                LIMIT 1
-              ),
-              (
-                SELECT som.diameter 
-                FROM sales_order_item_materials som
-                JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
-                WHERE soi.sales_order_id = q.sales_order_id
-                  AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
-                LIMIT 1
-              ),
-              mri.diameter,
-              sb.diameter,
-              0
-            ) as diameter,
-            COALESCE(
-              qi.outer_diameter,
-              (
-                SELECT ppm.outer_diameter 
-                FROM production_plan_materials ppm
-                JOIN material_requests mr ON mr.plan_id = ppm.plan_id
-                WHERE mr.id = q.mr_id
-                  AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
-                LIMIT 1
-              ),
-              (
-                SELECT som.outer_diameter 
-                FROM sales_order_item_materials som
-                JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
-                WHERE soi.sales_order_id = q.sales_order_id
-                  AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
-                LIMIT 1
-              ),
-              mri.outer_diameter,
-              sb.outer_diameter,
-              0
-            ) as outer_diameter,
+            -- dimensions come from one source only: quotation item, else material request item, else single-variant stock
+            CASE WHEN (COALESCE(qi.length,0) + COALESCE(qi.width,0) + COALESCE(qi.thickness,0) + COALESCE(qi.diameter,0) + COALESCE(qi.outer_diameter,0)) > 0 THEN COALESCE(qi.length, 0)
+                 WHEN (COALESCE(mri.length,0) + COALESCE(mri.width,0) + COALESCE(mri.thickness,0) + COALESCE(mri.diameter,0) + COALESCE(mri.outer_diameter,0)) > 0 THEN COALESCE(mri.length, 0)
+                 ELSE COALESCE(sb.length, 0) END as length,
+            CASE WHEN (COALESCE(qi.length,0) + COALESCE(qi.width,0) + COALESCE(qi.thickness,0) + COALESCE(qi.diameter,0) + COALESCE(qi.outer_diameter,0)) > 0 THEN COALESCE(qi.width, 0)
+                 WHEN (COALESCE(mri.length,0) + COALESCE(mri.width,0) + COALESCE(mri.thickness,0) + COALESCE(mri.diameter,0) + COALESCE(mri.outer_diameter,0)) > 0 THEN COALESCE(mri.width, 0)
+                 ELSE COALESCE(sb.width, 0) END as width,
+            CASE WHEN (COALESCE(qi.length,0) + COALESCE(qi.width,0) + COALESCE(qi.thickness,0) + COALESCE(qi.diameter,0) + COALESCE(qi.outer_diameter,0)) > 0 THEN COALESCE(qi.thickness, 0)
+                 WHEN (COALESCE(mri.length,0) + COALESCE(mri.width,0) + COALESCE(mri.thickness,0) + COALESCE(mri.diameter,0) + COALESCE(mri.outer_diameter,0)) > 0 THEN COALESCE(mri.thickness, 0)
+                 ELSE COALESCE(sb.thickness, 0) END as thickness,
+            CASE WHEN (COALESCE(qi.length,0) + COALESCE(qi.width,0) + COALESCE(qi.thickness,0) + COALESCE(qi.diameter,0) + COALESCE(qi.outer_diameter,0)) > 0 THEN COALESCE(qi.diameter, 0)
+                 WHEN (COALESCE(mri.length,0) + COALESCE(mri.width,0) + COALESCE(mri.thickness,0) + COALESCE(mri.diameter,0) + COALESCE(mri.outer_diameter,0)) > 0 THEN COALESCE(mri.diameter, 0)
+                 ELSE COALESCE(sb.diameter, 0) END as diameter,
+            CASE WHEN (COALESCE(qi.length,0) + COALESCE(qi.width,0) + COALESCE(qi.thickness,0) + COALESCE(qi.diameter,0) + COALESCE(qi.outer_diameter,0)) > 0 THEN COALESCE(qi.outer_diameter, 0)
+                 WHEN (COALESCE(mri.length,0) + COALESCE(mri.width,0) + COALESCE(mri.thickness,0) + COALESCE(mri.diameter,0) + COALESCE(mri.outer_diameter,0)) > 0 THEN COALESCE(mri.outer_diameter, 0)
+                 ELSE COALESCE(sb.outer_diameter, 0) END as outer_diameter,
             COALESCE(NULLIF(qi.density, 0), mri.density, sb.density, 0) as density,
             COALESCE(NULLIF(qi.weight_per_unit, 0), mri.weight_per_unit, sb.weight_per_unit, 0) as weight_per_unit,
             COALESCE(
@@ -659,15 +586,25 @@ const getQuotationById = async (quotationId) => {
             ) as shape_type
      FROM quotation_items qi
      LEFT JOIN quotations q ON qi.quotation_id = q.id
-     LEFT JOIN material_request_items mri ON q.mr_id = mri.mr_id AND qi.item_code = mri.item_code AND ABS(qi.quantity - mri.quantity) < 0.01
+     LEFT JOIN material_request_items mri ON mri.id = (
+       -- one MR line per quotation line: closest dimension match, so repeated item codes never duplicate rows
+       SELECT m2.id
+       FROM material_request_items m2
+       WHERE m2.mr_id = q.mr_id AND m2.item_code = qi.item_code AND ABS(qi.quantity - m2.quantity) < 0.01
+       ORDER BY (ABS(COALESCE(qi.length,0) - COALESCE(m2.length,0)) + ABS(COALESCE(qi.width,0) - COALESCE(m2.width,0)) + ABS(COALESCE(qi.thickness,0) - COALESCE(m2.thickness,0)) + ABS(COALESCE(qi.diameter,0) - COALESCE(m2.diameter,0)) + ABS(COALESCE(qi.outer_diameter,0) - COALESCE(m2.outer_diameter,0))) ASC, m2.id ASC
+       LIMIT 1
+     )
      LEFT JOIN (
-       SELECT item_code, 
-              MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness, 
+       -- stock dimensions/shape are used only when the item code has exactly one distinct dimension set
+       SELECT item_code,
+              MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
               MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter,
               MAX(density) as density, MAX(weight_per_unit) as weight_per_unit,
               MAX(shape_id) as shape_id
-       FROM stock_balance 
+       FROM stock_balance
+       WHERE (COALESCE(length,0) + COALESCE(width,0) + COALESCE(thickness,0) + COALESCE(diameter,0) + COALESCE(outer_diameter,0)) > 0
        GROUP BY item_code
+       HAVING COUNT(DISTINCT CONCAT_WS('|', COALESCE(length,0), COALESCE(width,0), COALESCE(thickness,0), COALESCE(diameter,0), COALESCE(outer_diameter,0))) = 1
      ) sb ON qi.item_code = sb.item_code
      LEFT JOIN (
          SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
@@ -694,7 +631,7 @@ const getQuotationById = async (quotationId) => {
     const isParentDwgPattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(parentDrawingNo);
     if (!isParentDwgPattern) {
       items.forEach(item => {
-        const itemNeedsDrawing = !item.drawing_no || /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no);
+        const itemNeedsDrawing = !item.drawing_no || /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-|MANUAL)/i.test(item.drawing_no);
         if (itemNeedsDrawing) {
           item.drawing_no = parentDrawingNo;
         }

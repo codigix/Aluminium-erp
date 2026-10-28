@@ -43,8 +43,16 @@ const formatAddressToTwoLines = (addressStr) => {
  * Rule: Shape-based raw materials with calculated physical weight are billed by weight (KG).
  * Bought-out components (BO-, fasteners, hardware, non-weight) are billed by quantity (NOS).
  */
+const isLaserCuttingItem = (item) => {
+  const lc = String((item && item.laser_cutting) || '').trim().toUpperCase();
+  return !!lc && !['SELECT', 'NONE', 'NULL', 'UNDEFINED'].includes(lc);
+};
+
 const isItemWeightBased = (item) => {
   if (!item) return false;
+
+  // Laser-cutting operation lines are billed on design qty (Nos) × rate, never by weight
+  if (isLaserCuttingItem(item)) return false;
 
   // 1. Bought-out components / standard hardware are NEVER weight-billed
   const matType = (item.material_type || item.item_type || '').toUpperCase().trim();
@@ -1105,6 +1113,11 @@ const getPurchaseOrders = async (filters = {}) => {
               OR (LOWER(TRIM(qi.material_name)) = LOWER(TRIM(poi.material_name)) AND ABS(COALESCE(qi.design_qty, 0) - COALESCE(poi.design_qty, 0)) < 0.01)
               OR (qi.item_code = poi.item_code)
             )
+            ORDER BY
+              COALESCE(qi.id = poi.source_po_item_id, 0) DESC,
+              (LOWER(TRIM(qi.material_name)) = LOWER(TRIM(poi.material_name)) AND ABS(COALESCE(qi.design_qty, 0) - COALESCE(poi.design_qty, 0)) < 0.01 AND ABS(COALESCE(qi.quantity, 0) - COALESCE(poi.quantity, 0)) < 0.001) DESC,
+              (LOWER(TRIM(qi.material_name)) = LOWER(TRIM(poi.material_name)) AND ABS(COALESCE(qi.design_qty, 0) - COALESCE(poi.design_qty, 0)) < 0.01) DESC,
+              qi.id
             LIMIT 1
           ),
           'Select'
@@ -1573,7 +1586,12 @@ const getPurchaseOrderById = async (poId) => {
           (LOWER(TRIM(qi.material_name)) = LOWER(TRIM(poi.material_name)) AND ABS(COALESCE(qi.quantity,0) - COALESCE(poi.quantity,0)) < 0.001) OR
           (qi.item_code = poi.item_code AND qi.item_code IS NOT NULL AND qi.item_code != '') OR
           (qi.drawing_no = poi.drawing_no AND (poi.drawing_no IS NOT NULL AND poi.drawing_no NOT LIKE 'RM-%' AND poi.drawing_no NOT LIKE 'OTH-%'))
-        ) 
+        )
+        ORDER BY
+          COALESCE(qi.id = poi.source_po_item_id, 0) DESC,
+          (LOWER(TRIM(qi.material_name)) = LOWER(TRIM(poi.material_name)) AND ABS(COALESCE(qi.quantity,0) - COALESCE(poi.quantity,0)) < 0.001 AND ABS(COALESCE(qi.design_qty,0) - COALESCE(poi.design_qty,0)) < 0.01) DESC,
+          (LOWER(TRIM(qi.material_name)) = LOWER(TRIM(poi.material_name)) AND ABS(COALESCE(qi.quantity,0) - COALESCE(poi.quantity,0)) < 0.001) DESC,
+          qi.id
         LIMIT 1
       ) as laser_cutting,
       COALESCE((
@@ -1659,11 +1677,11 @@ const getPurchaseOrderById = async (poId) => {
         )
       ) as drawing_no,
       poi.accepted_quantity,
-      COALESCE(NULLIF(poi.length, 0), sb.length, 0) as length,
-      COALESCE(NULLIF(poi.width, 0), sb.width, 0) as width,
-      COALESCE(NULLIF(poi.thickness, 0), sb.thickness, 0) as thickness,
-      COALESCE(NULLIF(poi.diameter, 0), sb.diameter, 0) as diameter,
-      COALESCE(NULLIF(poi.outer_diameter, 0), sb.outer_diameter, 0) as outer_diameter,
+      CASE WHEN (COALESCE(poi.length,0) + COALESCE(poi.width,0) + COALESCE(poi.thickness,0) + COALESCE(poi.diameter,0) + COALESCE(poi.outer_diameter,0)) > 0 THEN COALESCE(poi.length, 0) ELSE COALESCE(sbd.length, 0) END as length,
+      CASE WHEN (COALESCE(poi.length,0) + COALESCE(poi.width,0) + COALESCE(poi.thickness,0) + COALESCE(poi.diameter,0) + COALESCE(poi.outer_diameter,0)) > 0 THEN COALESCE(poi.width, 0) ELSE COALESCE(sbd.width, 0) END as width,
+      CASE WHEN (COALESCE(poi.length,0) + COALESCE(poi.width,0) + COALESCE(poi.thickness,0) + COALESCE(poi.diameter,0) + COALESCE(poi.outer_diameter,0)) > 0 THEN COALESCE(poi.thickness, 0) ELSE COALESCE(sbd.thickness, 0) END as thickness,
+      CASE WHEN (COALESCE(poi.length,0) + COALESCE(poi.width,0) + COALESCE(poi.thickness,0) + COALESCE(poi.diameter,0) + COALESCE(poi.outer_diameter,0)) > 0 THEN COALESCE(poi.diameter, 0) ELSE COALESCE(sbd.diameter, 0) END as diameter,
+      CASE WHEN (COALESCE(poi.length,0) + COALESCE(poi.width,0) + COALESCE(poi.thickness,0) + COALESCE(poi.diameter,0) + COALESCE(poi.outer_diameter,0)) > 0 THEN COALESCE(poi.outer_diameter, 0) ELSE COALESCE(sbd.outer_diameter, 0) END as outer_diameter,
       COALESCE(NULLIF(poi.density, 0), sb.density, 0) as density,
       COALESCE(NULLIF(poi.weight_per_unit, 0), sb.weight_per_unit, 0) as weight_per_unit,
       (SELECT status FROM sales_order_items soi 
@@ -1688,6 +1706,15 @@ const getPurchaseOrderById = async (poId) => {
        FROM stock_balance 
        GROUP BY item_code
      ) sb ON poi.item_code = sb.item_code
+    LEFT JOIN (
+      -- stock dimensions are used only when the item code has exactly one distinct dimension set
+      SELECT item_code, MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
+             MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter
+      FROM stock_balance
+      WHERE (COALESCE(length,0) + COALESCE(width,0) + COALESCE(thickness,0) + COALESCE(diameter,0) + COALESCE(outer_diameter,0)) > 0
+      GROUP BY item_code
+      HAVING COUNT(DISTINCT CONCAT_WS('|', COALESCE(length,0), COALESCE(width,0), COALESCE(thickness,0), COALESCE(diameter,0), COALESCE(outer_diameter,0))) = 1
+    ) sbd ON poi.item_code = sbd.item_code
      LEFT JOIN (
          SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
                 MAX(s.name) as shape_name
@@ -2029,11 +2056,11 @@ const getPOMaterialRequests = async (filters = {}) => {
       poi.quantity as po_qty,
       poi.unit,
       poi.accepted_quantity,
-      COALESCE(NULLIF(poi.length, 0), sb.length, 0) as length,
-      COALESCE(NULLIF(poi.width, 0), sb.width, 0) as width,
-      COALESCE(NULLIF(poi.thickness, 0), sb.thickness, 0) as thickness,
-      COALESCE(NULLIF(poi.diameter, 0), sb.diameter, 0) as diameter,
-      COALESCE(NULLIF(poi.outer_diameter, 0), sb.outer_diameter, 0) as outer_diameter,
+      CASE WHEN (COALESCE(poi.length,0) + COALESCE(poi.width,0) + COALESCE(poi.thickness,0) + COALESCE(poi.diameter,0) + COALESCE(poi.outer_diameter,0)) > 0 THEN COALESCE(poi.length, 0) ELSE COALESCE(sbd.length, 0) END as length,
+      CASE WHEN (COALESCE(poi.length,0) + COALESCE(poi.width,0) + COALESCE(poi.thickness,0) + COALESCE(poi.diameter,0) + COALESCE(poi.outer_diameter,0)) > 0 THEN COALESCE(poi.width, 0) ELSE COALESCE(sbd.width, 0) END as width,
+      CASE WHEN (COALESCE(poi.length,0) + COALESCE(poi.width,0) + COALESCE(poi.thickness,0) + COALESCE(poi.diameter,0) + COALESCE(poi.outer_diameter,0)) > 0 THEN COALESCE(poi.thickness, 0) ELSE COALESCE(sbd.thickness, 0) END as thickness,
+      CASE WHEN (COALESCE(poi.length,0) + COALESCE(poi.width,0) + COALESCE(poi.thickness,0) + COALESCE(poi.diameter,0) + COALESCE(poi.outer_diameter,0)) > 0 THEN COALESCE(poi.diameter, 0) ELSE COALESCE(sbd.diameter, 0) END as diameter,
+      CASE WHEN (COALESCE(poi.length,0) + COALESCE(poi.width,0) + COALESCE(poi.thickness,0) + COALESCE(poi.diameter,0) + COALESCE(poi.outer_diameter,0)) > 0 THEN COALESCE(poi.outer_diameter, 0) ELSE COALESCE(sbd.outer_diameter, 0) END as outer_diameter,
       COALESCE(NULLIF(poi.density, 0), sb.density, 0) as density,
       COALESCE(NULLIF(poi.weight_per_unit, 0), sb.weight_per_unit, 0) as weight_per_unit,
       (poi.quantity - IFNULL((
@@ -2063,6 +2090,15 @@ const getPOMaterialRequests = async (filters = {}) => {
       FROM stock_balance 
       GROUP BY item_code
     ) sb ON poi.item_code = sb.item_code
+    LEFT JOIN (
+      -- stock dimensions are used only when the item code has exactly one distinct dimension set
+      SELECT item_code, MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
+             MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter
+      FROM stock_balance
+      WHERE (COALESCE(length,0) + COALESCE(width,0) + COALESCE(thickness,0) + COALESCE(diameter,0) + COALESCE(outer_diameter,0)) > 0
+      GROUP BY item_code
+      HAVING COUNT(DISTINCT CONCAT_WS('|', COALESCE(length,0), COALESCE(width,0), COALESCE(thickness,0), COALESCE(diameter,0), COALESCE(outer_diameter,0))) = 1
+    ) sbd ON poi.item_code = sbd.item_code
     WHERE 1=1
     AND UPPER(poi.material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')
   `;

@@ -1151,7 +1151,8 @@ const PurchaseOrders = () => {
             diameter: item.diameter || 0,
             outer_diameter: item.outer_diameter || 0,
             density: item.density || 0,
-            weight_per_unit: item.weight_per_unit || 0
+            weight_per_unit: item.weight_per_unit || 0,
+            laser_cutting: item.laser_cutting || null
           }))
         };
 
@@ -1236,7 +1237,8 @@ const PurchaseOrders = () => {
           diameter: item.diameter || 0,
           outer_diameter: item.outer_diameter || 0,
           density: item.density || 0,
-          weight_per_unit: item.weight_per_unit || 0
+          weight_per_unit: item.weight_per_unit || 0,
+          laser_cutting: item.laser_cutting || null
         }))
       };
 
@@ -1651,6 +1653,7 @@ const PurchaseOrders = () => {
           outer_diameter: item.outer_diameter || 0,
           density: item.density || 0,
           weight_per_unit: item.weight_per_unit || 0,
+          laser_cutting: item.laser_cutting || '',
           rate: rate,
           amount: amount,
           cgst_percent: parseFloat(item.cgst_percent) || 9,

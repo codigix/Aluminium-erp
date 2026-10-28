@@ -3409,14 +3409,18 @@ const Quotations = () => {
                                           if (selected?.unit) {
                                             handleRecordItemChange(idx, 'uom', selected.unit);
                                           }
-                                          if (selected?.length) handleRecordItemChange(idx, 'length', selected.length);
-                                          if (selected?.width) handleRecordItemChange(idx, 'width', selected.width);
-                                          if (selected?.thickness) handleRecordItemChange(idx, 'thickness', selected.thickness);
-                                          if (selected?.diameter) handleRecordItemChange(idx, 'diameter', selected.diameter);
-                                          if (selected?.outer_diameter) handleRecordItemChange(idx, 'outer_diameter', selected.outer_diameter);
+                                          // a line that already has dimensions keeps them; stock dimensions only fill an empty line
+                                          const lineHasDims = [item.length, item.width, item.thickness, item.diameter, item.outer_diameter].some(v => parseFloat(v) > 0);
+                                          if (!lineHasDims) {
+                                            if (selected?.length) handleRecordItemChange(idx, 'length', selected.length);
+                                            if (selected?.width) handleRecordItemChange(idx, 'width', selected.width);
+                                            if (selected?.thickness) handleRecordItemChange(idx, 'thickness', selected.thickness);
+                                            if (selected?.diameter) handleRecordItemChange(idx, 'diameter', selected.diameter);
+                                            if (selected?.outer_diameter) handleRecordItemChange(idx, 'outer_diameter', selected.outer_diameter);
+                                          }
                                           if (selected?.density) handleRecordItemChange(idx, 'density', selected.density);
                                           if (selected?.weight_per_unit) handleRecordItemChange(idx, 'weight_per_unit', selected.weight_per_unit);
-                                          if (selected?.shape_type || selected?.shape_name) {
+                                          if (!lineHasDims && (selected?.shape_type || selected?.shape_name)) {
                                             handleRecordItemChange(idx, 'shape_type', selected.shape_type || selected.shape_name);
                                             handleRecordItemChange(idx, 'shape_name', selected.shape_name || selected.shape_type);
                                           }
@@ -3990,14 +3994,18 @@ const Quotations = () => {
                                   if (selected?.unit) {
                                     newItems[idx].uom = selected.unit;
                                   }
-                                  if (selected?.length) newItems[idx].length = selected.length;
-                                  if (selected?.width) newItems[idx].width = selected.width;
-                                  if (selected?.thickness) newItems[idx].thickness = selected.thickness;
-                                  if (selected?.diameter) newItems[idx].diameter = selected.diameter;
-                                  if (selected?.outer_diameter) newItems[idx].outer_diameter = selected.outer_diameter;
+                                  // a line that already has dimensions keeps them; stock dimensions only fill an empty line
+                                  const lineHasDims = [newItems[idx].length, newItems[idx].width, newItems[idx].thickness, newItems[idx].diameter, newItems[idx].outer_diameter].some(v => parseFloat(v) > 0);
+                                  if (!lineHasDims) {
+                                    if (selected?.length) newItems[idx].length = selected.length;
+                                    if (selected?.width) newItems[idx].width = selected.width;
+                                    if (selected?.thickness) newItems[idx].thickness = selected.thickness;
+                                    if (selected?.diameter) newItems[idx].diameter = selected.diameter;
+                                    if (selected?.outer_diameter) newItems[idx].outer_diameter = selected.outer_diameter;
+                                  }
                                   if (selected?.density) newItems[idx].density = selected.density;
                                   if (selected?.weight_per_unit) newItems[idx].weight_per_unit = selected.weight_per_unit;
-                                  if (selected?.shape_type || selected?.shape_name) {
+                                  if (!lineHasDims && (selected?.shape_type || selected?.shape_name)) {
                                     newItems[idx].shape_type = selected.shape_type || selected.shape_name;
                                     newItems[idx].shape_name = selected.shape_name || selected.shape_type;
                                   }
@@ -4106,14 +4114,18 @@ const Quotations = () => {
                                   if (selected?.unit) {
                                     newItems[idx].uom = selected.unit;
                                   }
-                                  if (selected?.length) newItems[idx].length = selected.length;
-                                  if (selected?.width) newItems[idx].width = selected.width;
-                                  if (selected?.thickness) newItems[idx].thickness = selected.thickness;
-                                  if (selected?.diameter) newItems[idx].diameter = selected.diameter;
-                                  if (selected?.outer_diameter) newItems[idx].outer_diameter = selected.outer_diameter;
+                                  // a line that already has dimensions keeps them; stock dimensions only fill an empty line
+                                  const lineHasDims = [newItems[idx].length, newItems[idx].width, newItems[idx].thickness, newItems[idx].diameter, newItems[idx].outer_diameter].some(v => parseFloat(v) > 0);
+                                  if (!lineHasDims) {
+                                    if (selected?.length) newItems[idx].length = selected.length;
+                                    if (selected?.width) newItems[idx].width = selected.width;
+                                    if (selected?.thickness) newItems[idx].thickness = selected.thickness;
+                                    if (selected?.diameter) newItems[idx].diameter = selected.diameter;
+                                    if (selected?.outer_diameter) newItems[idx].outer_diameter = selected.outer_diameter;
+                                  }
                                   if (selected?.density) newItems[idx].density = selected.density;
                                   if (selected?.weight_per_unit) newItems[idx].weight_per_unit = selected.weight_per_unit;
-                                  if (selected?.shape_type || selected?.shape_name) {
+                                  if (!lineHasDims && (selected?.shape_type || selected?.shape_name)) {
                                     newItems[idx].shape_type = selected.shape_type || selected.shape_name;
                                     newItems[idx].shape_name = selected.shape_name || selected.shape_type;
                                   }
