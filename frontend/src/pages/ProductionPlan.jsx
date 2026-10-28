@@ -244,7 +244,13 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       });
       if (response.ok) {
         const data = await response.json();
-        setPlans(data);
+        // the API can return the same plan id twice; duplicate row keys leave stale rows in the table while searching
+        const seenPlanIds = new Set();
+        setPlans(Array.isArray(data) ? data.filter(p => {
+          if (seenPlanIds.has(p.id)) return false;
+          seenPlanIds.add(p.id);
+          return true;
+        }) : data);
       }
     } catch (error) {
       console.error('Error fetching plans:', error);
@@ -3496,11 +3502,27 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     </Modal>
   );
 
-  const filteredPlans = plans.filter(plan =>
-    plan.plan_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    plan.order_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    plan.project_name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Search every value shown in the table row (plan, sales order, customer, drawing, description, status);
+  // all typed words must match.
+  const filteredPlans = plans.filter(plan => {
+    const terms = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+    if (terms.length === 0) return true;
+    const haystack = [
+      plan.plan_code,
+      plan.order_no || 'Direct Order',
+      plan.project_id,
+      plan.project_name,
+      plan.company_name,
+      plan.bom_no,
+      plan.drawing_no,
+      plan.item_code,
+      plan.item_description,
+      plan.description,
+      plan.status,
+      plan.mr_status === 'Completed' ? 'MR: Fulfilled' : `MR: ${plan.mr_status || 'Pending'}`
+    ].filter(v => v !== null && v !== undefined).join(' ').toLowerCase();
+    return terms.every(term => haystack.includes(term));
+  });
 
   const mrColumns = [
     {
@@ -3877,7 +3899,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           data={filteredPlans}
           loading={loading}
           searchPlaceholder="Search strategic formulations..."
-          searchKey="plan_code"
+          onSearchChange={setSearchQuery}
+          customFilter={() => true}
           selectable={true}
           selectedRows={selectedPlanIds}
           onSelectionChange={setSelectedPlanIds}
