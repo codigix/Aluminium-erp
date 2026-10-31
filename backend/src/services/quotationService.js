@@ -1096,55 +1096,82 @@ const generateQuotationPDF = async (quotationId) => {
       <meta charset="utf-8">
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        
+
         @page {
           size: A4 portrait;
-          margin: 10mm 12mm;
+          margin: 0;
         }
 
-        body { 
-          font-family: 'Inter', sans-serif; 
-          color: #1e293b; 
-          line-height: 1.4; 
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          font-family: 'Inter', sans-serif;
+          color: #111827;
+          line-height: 1.3;
           margin: 0;
           padding: 0;
           background-color: #fff;
-          font-size: 10px;
-        }
-        
-        .page {
-          padding: 10px;
-          min-height: 270mm;
-          box-sizing: border-box;
-          display: flex;
-          flex-direction: column;
+          font-size: 9.5px;
         }
 
-        .header-box {
-          border: 1px solid #1e293b;
+        /* One A4 sheet per block of 15 items; every block below has a fixed height */
+        .page-wrap {
+          width: 210mm;
+          height: 297mm;
+          padding: 7mm 8mm 0 8mm;
+          overflow: hidden;
+          page-break-after: always;
+        }
+
+        .page-wrap.last-page {
+          page-break-after: auto;
+        }
+
+        .sheet {
+          height: 278mm;
+          border: 1.5px solid #111827;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+
+        .header-block {
+          height: 22mm;
+          flex-shrink: 0;
+        }
+
+        .doc-title {
+          text-align: center;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+          padding: 3px 0 0 0;
+        }
+
+        .header {
           display: flex;
           align-items: center;
-          padding: 10px 15px;
-          margin-bottom: 12px;
+          padding: 0 10px;
         }
 
         .logo-container {
-          width: 80px;
-          height: 80px;
+          width: 70px;
+          height: 54px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-right: 1px solid #1e293b;
-          padding-right: 15px;
           flex-shrink: 0;
         }
 
         .logo-placeholder {
-          font-size: 24px;
+          font-size: 20px;
           font-weight: 800;
           color: #64748b;
           border: 2px solid #64748b;
-          padding: 5px;
+          padding: 4px;
           text-align: center;
           border-radius: 4px;
           line-height: 1;
@@ -1153,445 +1180,458 @@ const generateQuotationPDF = async (quotationId) => {
         .header-content {
           flex-grow: 1;
           text-align: center;
-          padding-left: 15px;
-        }
-
-        .rfq-title {
-          color: #ff6b00;
-          font-size: 20px;
-          font-weight: 800;
-          letter-spacing: 1px;
-          text-transform: uppercase;
-          margin: 0 0 4px 0;
+          padding-right: 70px;
+          overflow: hidden;
         }
 
         .company-name {
-          color: #1e293b;
-          font-size: 16px;
-          font-weight: 700;
-          margin: 0 0 4px 0;
-          text-transform: uppercase;
-        }
-
-        .company-address {
-          color: #475569;
-          font-size: 9.5px;
-          margin: 1px 0;
-        }
-
-        .company-contact {
-          color: #475569;
-          font-size: 9.5px;
-          margin: 1px 0;
-          font-weight: 500;
-        }
-
-        .info-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          margin-bottom: 10px;
-        }
-
-        .info-card {
-          border: 1px solid #1e293b;
-          padding: 8px 10px;
-          background: #fff;
-        }
-
-        .info-header {
-          font-size: 9.5px;
+          font-size: 19px;
           font-weight: 800;
-          color: #1e293b;
-          text-transform: uppercase;
-          border-bottom: 1px solid #cbd5e1;
-          padding-bottom: 4px;
-          margin-bottom: 6px;
+          margin: 0 0 2px 0;
         }
 
-        .info-body p {
-          margin: 2px 0;
+        .company-line {
+          font-size: 9px;
+          font-weight: 600;
+          margin: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .services-band {
+          height: 8mm;
+          flex-shrink: 0;
+          border-top: 1px solid #111827;
+          padding: 2px 10px;
+          text-align: center;
+          font-size: 9px;
+          font-weight: 600;
+          text-transform: uppercase;
           line-height: 1.3;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+
+        .services-band p {
+          margin: 0;
+        }
+
+        .party-grid {
+          height: 26mm;
+          flex-shrink: 0;
+          display: grid;
+          grid-template-columns: 3fr 2fr;
+          border-top: 1px solid #111827;
+          border-bottom: 1px solid #111827;
+          overflow: hidden;
+        }
+
+        .party-to {
+          padding: 4px 10px;
+          border-right: 1px solid #111827;
+          overflow: hidden;
+        }
+
+        .party-to p, .party-meta p {
+          margin: 0;
+        }
+
+        .party-meta {
+          padding: 4px 10px;
+          overflow: hidden;
+        }
+
+        .meta-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        .meta-table td {
+          padding: 0.5px 0;
+          font-size: 9px;
+          vertical-align: top;
+        }
+
+        .meta-label {
+          width: 40%;
+          color: #374151;
+        }
+
+        .meta-value {
+          font-weight: 700;
+        }
+
+        .salutation {
+          height: 7mm;
+          flex-shrink: 0;
+          padding: 2px 10px;
+          border-bottom: 1px solid #111827;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+
+        .salutation p {
+          margin: 0;
+          font-weight: 700;
         }
 
         .details-table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 12px;
-          page-break-inside: auto;
+          table-layout: fixed;
+          flex-shrink: 0;
         }
 
-        .details-table thead {
-          display: table-header-group;
-        }
-
-        .details-table tr {
-          page-break-inside: avoid;
-        }
-
-        .details-table th, .details-table td {
-          border: 1px solid #1e293b;
-          padding: 5px 6px;
-          font-size: 9.5px;
+        .details-table th {
+          height: 6mm;
+          border-bottom: 1px solid #111827;
+          border-right: 1px solid #111827;
+          padding: 0 4px;
+          font-size: 9px;
+          font-weight: 700;
           text-align: center;
           vertical-align: middle;
         }
 
-        .details-table th {
-          background: #f8fafc;
-          font-weight: 700;
-          text-transform: uppercase;
-          color: #1e293b;
-          border-bottom: 1px solid #1e293b;
+        .details-table td {
+          border-right: 1px solid #111827;
+          border-bottom: 1px solid #e5e7eb;
+          padding: 0 5px;
+          font-size: 9px;
+          vertical-align: middle;
+        }
+
+        .details-table th:last-child, .details-table td:last-child {
+          border-right: none;
+        }
+
+        /* Fixed row height: content is clipped, never shrunk */
+        /* No horizontal lines between entries; row height alone separates them */
+        .item-row td {
+          height: 13mm;
+          border-bottom: none;
+        }
+
+        /* Small gap between lines of one entry; row padding gives the medium gap between entries */
+        .cell {
+          height: 13mm;
+          padding: 0.6mm 0;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 1px;
+          line-height: 1.1;
+        }
+
+        .one-line {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .amount-col {
           text-align: right !important;
+          white-space: nowrap;
         }
 
         .center-col {
           text-align: center !important;
         }
 
-        .summary-block {
-          display: grid;
-          grid-template-columns: 3fr 2fr;
-          border: 1px solid #1e293b;
-          margin-bottom: 12px;
-          background: #fff;
+        .details-table th.money-head {
+          border-bottom: 1px solid #111827;
         }
 
-        .remarks-container {
-          padding: 8px;
-          border-right: 1px solid #1e293b;
+        /* Rs. / Ps. labels under one money column, no divider between them */
+        .rs-ps {
+          display: flex;
+          justify-content: space-between;
+          padding: 0 4px;
         }
 
-        .summary-table {
-          width: 100%;
-          border-collapse: collapse;
+        .sub-text {
+          font-size: 8px;
+          color: #374151;
         }
 
-        .summary-table td {
-          padding: 5px 8px;
-          font-size: 9.5px;
-          border-bottom: 1px solid #e2e8f0;
-        }
-
-        .summary-table tr:last-child td {
+        .details-table .totals-row td {
+          height: 4.8mm;
           border-bottom: none;
-        }
-
-        .summary-label {
-          color: #475569;
-          font-weight: 500;
-        }
-
-        .summary-value {
-          text-align: right;
+          padding: 0 6px;
           font-weight: 600;
-          color: #1e293b;
         }
 
-        .grand-total-row {
-          background: #f8fafc;
-          font-size: 10.5px;
-          font-weight: 800 !important;
+        .details-table .totals-row.first-total td {
+          border-top: 1px solid #111827;
         }
 
-        .grand-total-value {
-          color: #10b981;
+        .totals-label {
+          text-align: right;
+        }
+
+        .details-table .grand-row td {
+          border-top: 1px solid #111827;
+          font-size: 10px;
+          font-weight: 800;
+        }
+
+        .terms {
+          flex: 0 0 auto;
+          min-height: 0;
+          overflow: hidden;
+          border-top: 1px solid #111827;
+          padding: 3px 10px 2px 10px;
+          font-size: 8.5px;
+        }
+
+        .terms-title {
+          font-size: 10px;
+          font-weight: 800;
+          margin: 0 0 2px 0;
+        }
+
+        .terms ol {
+          margin: 0;
+          padding-left: 18px;
+        }
+
+        .terms li {
+          margin: 1px 0;
+        }
+
+        .note-box {
+          flex-shrink: 0;
+          border-top: 1px solid #111827;
+          padding: 3px 10px;
+          max-height: 12mm;
+          overflow: hidden;
+        }
+
+        .note-box p {
+          margin: 0;
+        }
+
+        .continued {
+          flex: 1 1 auto;
+          border-top: 1px solid #111827;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          color: #374151;
+        }
+
+        /* Signature box takes all remaining space at the bottom of the sheet */
+        .sign-row {
+          flex: 1 1 auto;
+          min-height: 12mm;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          align-items: flex-end;
+          border-top: 1px solid #111827;
+          padding: 4px 10px 5px 10px;
+        }
+
+        .sign-for {
+          font-weight: 700;
           font-size: 11px;
-          font-weight: 800;
         }
 
-        .section-box {
-          border: 1px solid #1e293b;
-          margin-bottom: 10px;
-        }
-
-        .section-box-header {
-          background: #f8fafc;
-          border-bottom: 1px solid #1e293b;
-          padding: 5px 8px;
-          font-size: 9px;
-          font-weight: 800;
-          color: #1e293b;
-          text-transform: uppercase;
-        }
-
-        .section-box-content {
-          padding: 8px;
-          font-size: 9.5px;
-          color: #334155;
+        .sign-label {
+          font-size: 10px;
+          font-weight: 600;
+          color: #111827;
         }
 
         .footer {
-          margin-top: auto;
-          padding-top: 8px;
-          border-top: 1px solid #cbd5e1;
+          height: 5mm;
           display: flex;
           justify-content: space-between;
-          color: #64748b;
-          font-size: 8.5px;
+          align-items: center;
+          color: #6b7280;
+          font-size: 7.5px;
         }
       </style>
     </head>
     <body>
-      <div class="page">
-        <div class="header-box">
-          <div class="logo-container">
-            {{#logoBase64}}
-            <img src="{{logoBase64}}" style="max-height: 70px; max-width: 70px; object-fit: contain;" />
-            {{/logoBase64}}
-            {{^logoBase64}}
-            <div class="logo-placeholder">SP<br><span style="font-size: 10px;">TP</span></div>
-            {{/logoBase64}}
-          </div>
-          <div class="header-content">
-            <h1 class="rfq-title">{{#isRFQ}}REQUEST FOR QUOTATION (RFQ){{/isRFQ}}{{^isRFQ}}SUPPLIER PO{{/isRFQ}}</h1>
-            <h2 class="company-name">{{hostCompanyName}}</h2>
-            <p class="company-address">{{hostCompanyAddress}}</p>
-            {{#hostGSTIN}}
-            <p class="company-address">GSTIN: {{hostGSTIN}}</p>
-            {{/hostGSTIN}}
-            <p class="company-contact">
-              {{#hostEmail}}Email: {{hostEmail}}{{/hostEmail}}
-              {{#hostPhone}} | Contact: {{hostPhone}}{{/hostPhone}}
-            </p>
-          </div>
-        </div>
-
-        {{#isRFQ}}
-        <div class="info-grid font-sans">
-          <div class="info-card">
-            <div class="info-header">RFQ INFORMATION</div>
-            <table style="width: 100%; border: none; margin: 0; background: transparent;">
-              <tr style="background: transparent;">
-                <td style="width: 40%; border: none; padding: 2px 0; color: #475569;">RFQ Number</td>
-                <td style="border: none; padding: 2px 0; font-weight: 700; font-family: monospace;">{{quote_number}}</td>
-              </tr>
-              <tr style="background: transparent;">
-                <td style="border: none; padding: 2px 0; color: #475569;">RFQ Date</td>
-                <td style="border: none; padding: 2px 0; font-weight: 600;">{{created_at}}</td>
-              </tr>
-              <tr style="background: transparent;">
-                <td style="border: none; padding: 2px 0; color: #475569;">Valid Until</td>
-                <td style="border: none; padding: 2px 0; font-weight: 600;">{{valid_until}}</td>
-              </tr>
-              <tr style="background: transparent;">
-                <td style="border: none; padding: 2px 0; color: #475569;">RFQ Status</td>
-                <td style="border: none; padding: 2px 0; font-weight: 700; color: #2563eb;">{{status}}</td>
-              </tr>
-            </table>
-          </div>
-
-          <div class="info-card">
-            <div class="info-header">SUPPLIER DETAILS</div>
-            <p style="font-weight: 700; font-size: 10.5px; margin-bottom: 3px;">{{vendor_name}}</p>
-            <p style="color: #475569; margin: 1px 0;">Contact Person: {{vendor_contact_person}}</p>
-            <p style="color: #475569; margin: 1px 0;">Mobile: {{phone}} | Email: {{vendor_email}}</p>
-            {{#vendor_gstin}}
-            <p style="color: #475569; margin: 1px 0; font-weight: 500;">GSTIN: {{vendor_gstin}}</p>
-            {{/vendor_gstin}}
-          </div>
-        </div>
-
-        <div class="info-grid font-sans" style="margin-top: -2px;">
-          <div class="info-card">
-            <div class="info-header">PROJECT DETAILS</div>
-            <table style="width: 100%; border: none; margin: 0; background: transparent;">
-              <tr style="background: transparent;">
-                <td style="width: 40%; border: none; padding: 2px 0; color: #475569;">Customer</td>
-                <td style="border: none; padding: 2px 0; font-weight: 600;">{{customer_name}}</td>
-              </tr>
-              <tr style="background: transparent;">
-                <td style="border: none; padding: 2px 0; color: #475569;">Project</td>
-                <td style="border: none; padding: 2px 0; font-weight: 600;">{{project_name}}</td>
-              </tr>
-              <tr style="background: transparent;">
-                <td style="border: none; padding: 2px 0; color: #475569;">Customer PO</td>
-                <td style="border: none; padding: 2px 0; font-weight: 600;">{{customer_po}}</td>
-              </tr>
-              <tr style="background: transparent;">
-                <td style="border: none; padding: 2px 0; color: #475569;">Sales Order</td>
-                <td style="border: none; padding: 2px 0; font-weight: 600;">{{so_number}}</td>
-              </tr>
-            </table>
-          </div>
-
-          <div class="info-card">
-            <div class="info-header">DRAWING DETAILS</div>
-            <table style="width: 100%; border: none; margin: 0; background: transparent;">
-              <tr style="background: transparent;">
-                <td style="width: 40%; border: none; padding: 2px 0; color: #475569;">Drawing Number</td>
-                <td style="border: none; padding: 2px 0; font-weight: 700; font-family: monospace;">{{drawing_no}}</td>
-              </tr>
-              <tr style="background: transparent;">
-                <td style="border: none; padding: 2px 0; color: #475569;">Drawing Name</td>
-                <td style="border: none; padding: 2px 0; font-weight: 600;">{{drawing_name}}</td>
-              </tr>
-              <tr style="background: transparent;">
-                <td style="border: none; padding: 2px 0; color: #475569;">Revision</td>
-                <td style="border: none; padding: 2px 0; font-weight: 600;">{{revision}}</td>
-              </tr>
-            </table>
-          </div>
-        </div>
-        {{/isRFQ}}
-
-        {{^isRFQ}}
-        <div class="info-grid">
-          <div class="info-card">
-            <div class="info-header">SUPPLIER DETAILS</div>
-            <div class="info-body">
-              <p><strong>{{vendor_name}}</strong></p>
-              <p>{{location}}</p>
-              <p style="color: #475569; font-size: 9px; margin-top: 4px;">Email: {{vendor_email}}</p>
-              <p style="color: #475569; font-size: 9px;">Phone: {{phone}}</p>
-              {{#vendor_gstin}}
-              <p style="color: #475569; font-size: 9px; font-weight: 500;">GSTIN: {{vendor_gstin}}</p>
-              {{/vendor_gstin}}
+      {{#pages}}
+      <div class="page-wrap{{#isLastPage}} last-page{{/isLastPage}}">
+        <div class="sheet">
+          <div class="header-block">
+            <div class="doc-title">{{#isRFQ}}Request For Quotation{{/isRFQ}}{{^isRFQ}}Quotation{{/isRFQ}}</div>
+            <div class="header">
+              <div class="logo-container">
+                {{#logoBase64}}
+                <img src="{{logoBase64}}" style="max-height: 54px; max-width: 68px; object-fit: contain;" />
+                {{/logoBase64}}
+                {{^logoBase64}}
+                <div class="logo-placeholder">SP<br><span style="font-size: 10px;">TP</span></div>
+                {{/logoBase64}}
+              </div>
+              <div class="header-content">
+                <h1 class="company-name">{{hostCompanyName}}</h1>
+                <p class="company-line">{{hostCompanyAddress}}</p>
+                {{#hostPhone}}<p class="company-line">Mob no - {{hostPhone}}</p>{{/hostPhone}}
+                <p class="company-line" style="font-weight: 500;">
+                  {{#hostGSTIN}}GSTIN: {{hostGSTIN}}{{/hostGSTIN}}
+                  {{#hostEmail}}{{#hostGSTIN}} | {{/hostGSTIN}}Email: {{hostEmail}}{{/hostEmail}}
+                </p>
+              </div>
             </div>
           </div>
-          <div class="info-card">
-            <div class="info-header">PO DETAILS</div>
-            <table style="width: 100%; border: none; margin: 0; background: transparent;">
-              <tr style="background: transparent;">
-                <td style="width: 35%; border: none; padding: 2px 0; color: #475569;">Date</td>
-                <td style="width: 5%; border: none; padding: 2px 0; color: #475569;">:</td>
-                <td style="width: 60%; border: none; padding: 2px 0; font-weight: 600;">{{created_at}}</td>
-              </tr>
-              <tr style="background: transparent;">
-                <td style="border: none; padding: 2px 0; color: #475569;">RFQ No</td>
-                <td style="border: none; padding: 2px 0; color: #475569;">:</td>
-                <td style="border: none; padding: 2px 0; font-weight: 600; font-family: monospace;">{{quote_number}}</td>
-              </tr>
-              <tr style="background: transparent;">
-                <td style="border: none; padding: 2px 0; color: #475569;">Valid Till</td>
-                <td style="border: none; padding: 2px 0; color: #475569;">:</td>
-                <td style="border: none; padding: 2px 0; font-weight: 600;">{{valid_until}}</td>
-              </tr>
-            </table>
-          </div>
-        </div>
-        {{/isRFQ}}
 
-        <table class="details-table">
-          <thead>
-            {{#isRFQ}}
-            <tr>
-              <th style="width: 5%; text-align: center;">Sr No</th>
-              <th style="width: 16%;">Drawing No</th>
-              <th style="width: 22%;">Material Name</th>
-              <th style="width: 20%;">Description / Size</th>
-              <th style="width: 13%;">Material Type</th>
-              <th style="width: 9%; text-align: center;">Design Qty</th>
-              <th style="width: 9%; text-align: center;">Required Qty</th>
-              <th style="width: 6%; text-align: center;">UOM</th>
-            </tr>
-            {{/isRFQ}}
-            {{^isRFQ}}
-            <tr>
-              <th style="width: 5%; text-align: center;">Sr. No</th>
-              <th style="width: 11%">Drawing No</th>
-              <th style="width: 18%">Grade</th>
-              <th style="width: 29%">Item Size</th>
-              <th style="width: 7%; text-align: center;">Design Qty</th>
-              <th style="width: 9%; text-align: center;">Required Weight</th>
-              <th style="width: 8%; text-align: right;">Unit Rate (₹)</th>
-              <th style="width: 5%; text-align: center;">GST</th>
-              <th style="width: 8%; text-align: right;">Total</th>
-            </tr>
-            {{/isRFQ}}
-          </thead>
-          <tbody>
-            {{#items}}
-            <tr>
-              <td class="center-col">{{sr}}</td>
-              {{#isRFQ}}
-              <td style="font-family: monospace; font-weight: 500;">{{drawing_no}}</td>
-              <td>
-                <strong>{{material_name}}</strong>
-                {{#drawing_name}}<br><span style="font-family: sans-serif; font-size: 8px; font-weight: 700; color: #1e293b;">{{drawing_name}}</span>{{/drawing_name}}
-                {{#laser_cutting_label}}<br><span style="font-family: sans-serif; font-size: 8.5px; font-weight: 700; color: #2563eb;">{{laser_cutting_label}}</span>{{/laser_cutting_label}}
-              </td>
-              <td>{{material_description}}</td>
-              <td>{{material_type}}</td>
-              <td class="center-col"><strong>{{design_qty_str}}</strong></td>
-              <td class="center-col"><strong>{{required_weight_str}}</strong></td>
-              <td class="center-col">{{uom}}</td>
-              {{/isRFQ}}
+          <div class="services-band">
+            <p>Special Purpose Machines / Fixtures Design &amp; Manufacturing, Reverse Engineering,</p>
+            <p>Precision Engineering Work, CAD Services</p>
+          </div>
+
+          <div class="party-grid">
+            <div class="party-to">
+              <p>To,</p>
+              <p style="font-weight: 700; font-size: 10px;">{{vendor_name}}</p>
+              {{#vendor_address}}<p>{{vendor_address}}</p>{{/vendor_address}}
+              {{#vendor_contact_person}}<p>Kind Attn: {{vendor_contact_person}}</p>{{/vendor_contact_person}}
+              {{#vendor_contact_line}}<p>{{vendor_contact_line}}</p>{{/vendor_contact_line}}
+              {{#vendor_gstin}}<p>GSTIN: {{vendor_gstin}}</p>{{/vendor_gstin}}
+            </div>
+            <div class="party-meta">
+              <table class="meta-table">
+                <tr><td class="meta-label">RFQ No</td><td class="meta-value">: {{rfq_ref}}</td></tr>
+                <tr><td class="meta-label">Quotation No</td><td class="meta-value" style="word-break: break-all;">: {{quote_number}}</td></tr>
+                <tr><td class="meta-label">Date</td><td class="meta-value">: {{created_at}}</td></tr>
+                {{#mr_number}}<tr><td class="meta-label">MR No</td><td class="meta-value">: {{mr_number}}</td></tr>{{/mr_number}}
+              </table>
+            </div>
+          </div>
+
+          <div class="salutation">
+            <p>Dear Sir,</p>
+            {{#isRFQ}}<p style="padding-left: 12px;">Please submit your best quotation for the following requirement.</p>{{/isRFQ}}
+            {{^isRFQ}}<p style="padding-left: 12px;">We thank you for your quotation. The details for our requirement are as below.</p>{{/isRFQ}}
+          </div>
+
+          <table class="details-table">
+            <colgroup>
+              <col style="width: 5%;">
+              <col style="width: 13%;">
+              <col style="width: 44%;">
+              <col style="width: 10%;">
+              <col style="width: 13%;">
+              <col style="width: 15%;">
+            </colgroup>
+            <thead>
+              <tr>
+                <th rowspan="2">Sr no</th>
+                <th rowspan="2">Drawing No.</th>
+                <th rowspan="2">Description</th>
+                <th rowspan="2">Quantity</th>
+                <th class="money-head">Unit Rate</th>
+                <th class="money-head">Amount</th>
+              </tr>
+              <tr>
+                <th><div class="rs-ps"><span>Rs.</span><span>Ps.</span></div></th>
+                <th><div class="rs-ps"><span>Rs.</span><span>Ps.</span></div></th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#rows}}
+              <tr class="item-row{{#isBlank}} blank-row{{/isBlank}}">
+                {{#isBlank}}
+                <td></td><td></td><td></td><td></td><td></td><td></td>
+                {{/isBlank}}
+                {{^isBlank}}
+                <td class="center-col"><div class="cell">{{sr}}</div></td>
+                <td><div class="cell"><span class="one-line" style="font-weight: 700;">{{drawing_no}}</span></div></td>
+                <td>
+                  <div class="cell">
+                    <span class="one-line" style="font-weight: 700;">{{desc_line1}}</span>
+                    {{#desc_line2}}<span class="one-line sub-text" style="font-weight: 700; color: #111827;">{{desc_line2}}</span>{{/desc_line2}}
+                    {{#desc_line3}}<span class="one-line sub-text" style="font-weight: 700; color: #111827; white-space: pre;">{{desc_line3}}</span>{{/desc_line3}}
+                  </div>
+                </td>
+                <td class="center-col">
+                  <div class="cell">
+                    <span class="one-line">{{design_qty_str}}</span>
+                    {{#has_required_weight}}<span class="one-line sub-text">{{required_weight_str}}</span>{{/has_required_weight}}
+                  </div>
+                </td>
+                <td class="amount-col">{{^isRFQ}}{{unit_rate}}{{/isRFQ}}</td>
+                <td class="amount-col">{{^isRFQ}}{{amount}}{{/isRFQ}}</td>
+                {{/isBlank}}
+              </tr>
+              {{/rows}}
+              {{#isLastPage}}
               {{^isRFQ}}
-              <td style="font-family: monospace; font-weight: 500;">
-                {{drawing_no}}
-              </td>
-              <td>
-                <strong>{{material_name}}</strong>
-                {{#drawing_name}}<br><span style="font-family: sans-serif; font-size: 8px; font-weight: 700; color: #1e293b;">{{drawing_name}}</span>{{/drawing_name}}
-                {{#laser_cutting_label}}<br><span style="font-family: sans-serif; font-size: 8.5px; font-weight: 700; color: #2563eb;">{{laser_cutting_label}}</span>{{/laser_cutting_label}}
-              </td>
-              <td><strong>{{item_size}}</strong></td>
-              <td class="center-col"><strong>{{design_qty_str}}</strong></td>
-              <td class="center-col"><strong>{{required_weight_str}}</strong></td>
-              <td class="amount-col">{{unit_rate}}</td>
-              <td class="center-col">{{gst_percent}}</td>
-              <td class="amount-col">{{amount}}</td>
+              <tr class="totals-row first-total">
+                <td colspan="5" class="totals-label">Sub Total</td>
+                <td class="amount-col">{{total_amount}}</td>
+              </tr>
+              {{#isIGST}}
+              <tr class="totals-row">
+                <td colspan="5" class="totals-label">IGST @ {{igst_rate}}%</td>
+                <td class="amount-col">{{igst_amount}}</td>
+              </tr>
+              {{/isIGST}}
+              {{^isIGST}}
+              <tr class="totals-row">
+                <td colspan="5" class="totals-label">CGST @ {{cgst_rate}}%</td>
+                <td class="amount-col">{{cgst_amount}}</td>
+              </tr>
+              <tr class="totals-row">
+                <td colspan="5" class="totals-label">SGST @ {{sgst_rate}}%</td>
+                <td class="amount-col">{{sgst_amount}}</td>
+              </tr>
+              {{/isIGST}}
+              <tr class="totals-row grand-row">
+                <td colspan="5" class="totals-label">Grand Total</td>
+                <td class="amount-col">{{grand_total}}</td>
+              </tr>
               {{/isRFQ}}
-            </tr>
-            {{/items}}
-          </tbody>
-        </table>
+              {{/isLastPage}}
+            </tbody>
+          </table>
 
-        {{#isRFQ}}
-        <div class="section-box">
-          <div class="section-box-header">Remarks / Delivery Requirements</div>
-          <div class="section-box-content">
-            {{notes}}{{^notes}}Request for quotation created from the procurement requirements. Please submit your best rate and delivery timeline.{{/notes}}
+          {{#isLastPage}}
+          <div class="terms">
+            <p class="terms-title">Terms &amp; Conditions</p>
+            <ol>
+              <li>Validity: This quotation hold good for acceptance for 30days after which it is subject to our confirmation.<br>We hope that the above is clear &amp; look forward to the pleasure of receiving your valuable order at the earliest.</li>
+              <li>Prices quoted are on F.O.R. basis.</li>
+              <li>Packing &amp; Forwarding Charges</li>
+              <li>Taxes: {{tax_term}}</li>
+              <li>Delivery: Depends on delivery schedule</li>
+              <li>Payment Terms: 30 days</li>
+            </ol>
           </div>
-        </div>
-        {{/isRFQ}}
 
-        {{^isRFQ}}
-        <div class="summary-block">
-          <div class="remarks-container">
-            <p style="margin: 0 0 5px 0; font-weight: 700; font-size: 10px;">Remarks:</p>
-            <p style="margin: 0; color: #475569; font-size: 10px; line-height: 1.4;">{{notes}}{{^notes}}Request for quotation created from the procurement requirements.{{/notes}}</p>
+          {{#notes}}
+          <div class="note-box">
+            <p><strong>Note:</strong> {{notes}}</p>
           </div>
-          <div>
-            <table class="summary-table">
-              <tr>
-                <td class="summary-label">Sub Total (Before Tax)</td>
-                <td class="summary-value">₹{{total_amount}}</td>
-              </tr>
-              <tr>
-                <td class="summary-label" style="color: #2563eb;">Total Profit</td>
-                <td class="summary-value" style="color: #2563eb;">₹0.00</td>
-              </tr>
-              <tr>
-                <td class="summary-label">Tax (GST {{gst_percentage}}%)</td>
-                <td class="summary-value">₹{{tax_amount}}</td>
-              </tr>
-              <tr class="grand-total-row">
-                <td style="font-weight: 800; border: none;">Grand Total</td>
-                <td class="grand-total-value" style="border: none;">₹{{grand_total}}</td>
-              </tr>
-            </table>
-          </div>
-        </div>
-        {{/isRFQ}}
+          {{/notes}}
+          {{/isLastPage}}
 
-        <div class="section-box">
-          <div class="section-box-header">Special Instructions & Terms</div>
-          <div class="section-box-content">
-            RFQ Ref: {{rfq_ref}} | Terms: {{invoiceFooterNotes}}{{^invoiceFooterNotes}}Standard procurement terms apply.{{/invoiceFooterNotes}}
+          {{^isLastPage}}
+          <div class="continued">Continued on page {{nextPageNo}}...</div>
+          {{/isLastPage}}
+
+          <div class="sign-row">
+            <div class="sign-for">For {{hostCompanyName}}</div>
+            <div class="sign-label">Authorised Signatory</div>
           </div>
         </div>
 
         <div class="footer">
-          <div class="footer-left">Generated By: {{generated_by}} | Generated Date & Time: {{generated_at}}</div>
-          <div class="footer-right">{{hostCompanyName}} | Page 1 of 1</div>
+          <div>Generated By: {{generated_by}} | Generated Date &amp; Time: {{generated_at}}</div>
+          <div>{{hostCompanyName}} | Page {{pageNo}} of {{totalPages}}</div>
         </div>
       </div>
+      {{/pages}}
     </body>
     </html>
   `;
@@ -1618,6 +1658,22 @@ const generateQuotationPDF = async (quotationId) => {
   const pdfTaxAmount = recalcTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const pdfGrandTotal = recalcGrandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  // GST breakup: IGST when host and vendor GSTIN state codes differ, else CGST + SGST (same total tax)
+  const fmtINR = (n) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });  const hostStateCode = String(hostGSTIN || '').trim().slice(0, 2);
+  const vendorStateCode = String(vendor?.gstin || '').trim().slice(0, 2);
+  const isIGST = /^\d{2}$/.test(hostStateCode) && /^\d{2}$/.test(vendorStateCode) && hostStateCode !== vendorStateCode;
+  const halfGstRate = Number((quoteGstPct / 2).toFixed(2));
+  const cgstAmountVal = Number((recalcTax / 2).toFixed(2));
+  const sgstAmountVal = Number((recalcTax - cgstAmountVal).toFixed(2));
+  const taxTerm = isIGST
+    ? `IGST ${quoteGstPct}%`
+    : `CGST ${halfGstRate}% and SGST ${halfGstRate}%`;
+
+  const vendorContactLine = [
+    vendor?.phone ? `Mob: ${vendor.phone}` : '',
+    vendor?.email ? `Email: ${vendor.email}` : ''
+  ].filter(Boolean).join(' | ');
+
   const viewData = {
     ...quotation,
     gst_percentage: quoteGstPct,
@@ -1626,7 +1682,17 @@ const generateQuotationPDF = async (quotationId) => {
     valid_until: formatDate(quotation.valid_until),
     status: quotation.status || 'DRAFT',
     vendor_name: vendor?.vendor_name || 'N/A',
-    vendor_contact_person: vendor?.contact_person || vendor?.name || 'N/A',
+    vendor_contact_person: vendor?.contact_person || '',
+    vendor_address: vendor?.address || vendor?.location || '',
+    vendor_contact_line: vendorContactLine,
+    isIGST,
+    igst_rate: quoteGstPct,
+    igst_amount: fmtINR(recalcTax),
+    cgst_rate: halfGstRate,
+    sgst_rate: halfGstRate,
+    cgst_amount: fmtINR(cgstAmountVal),
+    sgst_amount: fmtINR(sgstAmountVal),
+    tax_term: taxTerm,
     vendor_email: vendor?.email || 'N/A',
     location: vendor?.location || 'N/A',
     phone: vendor?.phone || 'N/A',
@@ -1644,7 +1710,7 @@ const generateQuotationPDF = async (quotationId) => {
     vendor_email: vendor?.email || 'N/A',
     location: vendor?.location || 'N/A',
     phone: vendor?.phone || 'N/A',
-    vendor_gstin: vendor?.gstin || '22ABCDE1234F1Z5',
+    vendor_gstin: vendor?.gstin || '',
     project_name: quotation.project_name,
     project_ref: quotation.mr_id ? `MR: ${quotation.mr_number}` : (quotation.sales_order_id ? `SO: ${quotation.so_number || quotation.sales_order_id}` : 'General Requirement'),
     total_amount: pdfTotalAmount,
@@ -1787,11 +1853,14 @@ const generateQuotationPDF = async (quotationId) => {
         design_qty_str,
         required_weight_str,
         material_type: i.material_type || '—',
+        has_required_weight: required_weight_str !== '—',
+        desc_line1: i.drawing_name || i.description || i.material_name || '—',
+        desc_line2: (i.drawing_name || i.description) ? (i.material_name || null) : null,
+        desc_line3: [dimsSpec || null, laser_cutting_label].filter(Boolean).join('  ') || null,
         quantity: qty.toFixed(3),
         unit: i.unit || 'NOS',
         gst_percent: `${totalGst}%`,
-        unit_rate: rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        amount: amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        unit_rate: rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),        amount: amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       };
     }),
     hostCompanyName,
@@ -1809,6 +1878,21 @@ const generateQuotationPDF = async (quotationId) => {
     logoBase64
   };
 
+  // Fixed 10 item rows per A4 page; short pages are padded with blank rows
+  const ROWS_PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(viewData.items.length / ROWS_PER_PAGE));
+  viewData.pages = Array.from({ length: totalPages }, (_, p) => {
+    const rows = viewData.items.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE);
+    while (rows.length < ROWS_PER_PAGE) rows.push({ isBlank: true });
+    return {
+      rows,
+      pageNo: p + 1,
+      nextPageNo: p + 2,
+      totalPages,
+      isLastPage: p === totalPages - 1
+    };
+  });
+
   const html = mustache.render(htmlTemplate, viewData);
 
   const browser = await puppeteer.launch({
@@ -1820,7 +1904,8 @@ const generateQuotationPDF = async (quotationId) => {
   const pdf = await page.pdf({
     format: 'A4',
     printBackground: true,
-    margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+    preferCSSPageSize: true,
+    margin: { top: '0', right: '0', bottom: '0', left: '0' }
   });
   await browser.close();
 
