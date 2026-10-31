@@ -81,18 +81,44 @@ const listJobCards = async () => {
      LEFT JOIN work_orders wo_parent ON wo.parent_wo_id = wo_parent.id
      LEFT JOIN sales_order_items soi_parent ON wo_parent.sales_order_item_id = soi_parent.id
      LEFT JOIN order_items oi_parent ON wo_parent.sales_order_item_id = oi_parent.id AND wo_parent.sales_order_id = oi_parent.order_id
-     LEFT JOIN sales_order_items soi_source ON (wo.source_fg = soi_source.item_code OR wo.source_fg = soi_source.drawing_no) AND (soi_source.sales_order_id = wo.sales_order_id OR soi_source.sales_order_id IS NULL)
-     LEFT JOIN sales_order_items soi_fallback ON (wo_parent.item_code = soi_fallback.item_code OR wo_parent.bom_no = soi_fallback.drawing_no) AND soi_fallback.sales_order_id IS NULL
-     LEFT JOIN order_items oi_fallback ON (wo_parent.item_code = oi_fallback.item_code OR wo_parent.bom_no = oi_fallback.drawing_no) AND oi_fallback.order_id = wo_parent.sales_order_id
+     -- Lookups by item code / drawing no can match many rows (same assembly on several orders,
+     -- stock in several warehouses); each picks exactly one row so a job card is never listed twice
+     LEFT JOIN sales_order_items soi_source ON soi_source.id = (
+       SELECT s.id FROM sales_order_items s
+       WHERE (wo.source_fg = s.item_code OR wo.source_fg = s.drawing_no) AND (s.sales_order_id = wo.sales_order_id OR s.sales_order_id IS NULL)
+       ORDER BY (s.sales_order_id = wo.sales_order_id) DESC, s.id ASC LIMIT 1
+     )
+     LEFT JOIN sales_order_items soi_fallback ON soi_fallback.id = (
+       SELECT s.id FROM sales_order_items s
+       WHERE (wo_parent.item_code = s.item_code OR wo_parent.bom_no = s.drawing_no) AND s.sales_order_id IS NULL
+       ORDER BY s.id ASC LIMIT 1
+     )
+     LEFT JOIN order_items oi_fallback ON oi_fallback.id = (
+       SELECT oi2.id FROM order_items oi2
+       WHERE (wo_parent.item_code = oi2.item_code OR wo_parent.bom_no = oi2.drawing_no) AND oi2.order_id = wo_parent.sales_order_id
+       ORDER BY oi2.id ASC LIMIT 1
+     )
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
-     LEFT JOIN sales_order_items soi_item ON (soi.id IS NULL AND wo.item_code = soi_item.item_code)
-     LEFT JOIN stock_balance sb ON wo.item_code = sb.item_code
+     LEFT JOIN sales_order_items soi_item ON soi.id IS NULL AND soi_item.id = (
+       SELECT s.id FROM sales_order_items s
+       WHERE s.item_code = wo.item_code
+       ORDER BY (s.sales_order_id = wo.sales_order_id) DESC, s.id ASC LIMIT 1
+     )
+     LEFT JOIN stock_balance sb ON sb.id = (
+       SELECT b.id FROM stock_balance b
+       WHERE b.item_code = wo.item_code
+       ORDER BY (b.material_type IS NOT NULL AND b.material_type != '') DESC, b.id ASC LIMIT 1
+     )
      LEFT JOIN (
-       SELECT component_code, MAX(item_group) as item_group 
-       FROM sales_order_item_components 
+       SELECT component_code, MAX(item_group) as item_group
+       FROM sales_order_item_components
        GROUP BY component_code
      ) soic ON wo.item_code = soic.component_code
-     LEFT JOIN customer_drawings cd ON wo.item_code = cd.drawing_no
+     LEFT JOIN customer_drawings cd ON cd.id = (
+       SELECT d.id FROM customer_drawings d
+       WHERE d.drawing_no = wo.item_code
+       ORDER BY (d.drawing_type IS NOT NULL AND d.drawing_type != '') DESC, d.id DESC LIMIT 1
+     )
      LEFT JOIN sales_orders so ON (
        (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
        (soi.id IS NULL AND wo.sales_order_id = so.id)
