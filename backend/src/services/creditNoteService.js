@@ -210,9 +210,10 @@ const recordCreditNote = async (payload) => {
   const finalNarration = narration || `${CREDIT_NOTE_REASONS[reason]} – Credit note to ${customer.company_name}${invoiceRef ? ` against ${invoiceRef}` : ''}`;
   const voucherNo = await generateNextCreditNoteNo();
 
-  // Company: as chosen on the page, else the company of the referenced invoice (or its order)
-  let resolvedHostCompanyId = parseInt(hostCompanyId, 10) || null;
-  if (!resolvedHostCompanyId && invoice) {
+  // Company: a credit note against an invoice always belongs to that invoice's company (or its order's);
+  // the company chosen on the page applies only to notes with no invoice (or an invoice with no company)
+  let resolvedHostCompanyId = null;
+  if (invoice) {
     const [hostRows] = await pool.query(
       `SELECT COALESCE(si.host_company_id, o.host_company_id) AS host_company_id
        FROM sales_invoices si LEFT JOIN orders o ON o.id = si.order_id WHERE si.id = ?`,
@@ -220,6 +221,7 @@ const recordCreditNote = async (payload) => {
     );
     resolvedHostCompanyId = hostRows[0]?.host_company_id || null;
   }
+  if (!resolvedHostCompanyId) resolvedHostCompanyId = parseInt(hostCompanyId, 10) || null;
 
   const connection = await pool.getConnection();
   try {

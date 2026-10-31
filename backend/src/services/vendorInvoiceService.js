@@ -9,8 +9,21 @@ const PAID_SQL = `(
 // Includes DNs raised against the PO before it was forwarded to Accounts as a bill
 const DEBIT_NOTE_SQL = `COALESCE((SELECT SUM(dn.total_amount) FROM debit_notes dn WHERE dn.status = 'POSTED' AND (dn.vendor_invoice_id = vi.id OR (dn.vendor_invoice_id IS NULL AND dn.po_id = vi.po_id))), 0)`;
 
-// Host company of a bill = host company of the quotation its purchase order was raised from
-const HOST_COMPANY_SQL = `(SELECT q.host_company_id FROM purchase_orders hpo JOIN quotations q ON q.id = hpo.quotation_id WHERE hpo.id = vi.po_id LIMIT 1)`;
+// Host company of a bill = host company of the quotation its purchase order was raised from.
+// When the quotation has none (older data), fall back to the company of the confirmed payment,
+// then of the posted debit note, recorded against the bill, so one company's bill never shows under another.
+const HOST_COMPANY_SQL = `COALESCE(
+      (SELECT hpo.host_company_id FROM purchase_orders hpo WHERE hpo.id = vi.po_id LIMIT 1),
+      (SELECT q.host_company_id FROM purchase_orders hpo JOIN quotations q ON q.id = hpo.quotation_id WHERE hpo.id = vi.po_id LIMIT 1),
+      (SELECT hp.host_company_id FROM payments hp
+        WHERE hp.status = 'CONFIRMED' AND hp.host_company_id IS NOT NULL
+          AND (hp.po_id = vi.po_id OR EXISTS (SELECT 1 FROM payment_allocations hpa WHERE hpa.payment_id = hp.id AND (hpa.po_id = vi.po_id OR hpa.invoice_id = vi.id)))
+        ORDER BY hp.id LIMIT 1),
+      (SELECT hd.host_company_id FROM debit_notes hd
+        WHERE hd.status = 'POSTED' AND hd.host_company_id IS NOT NULL
+          AND (hd.vendor_invoice_id = vi.id OR (hd.vendor_invoice_id IS NULL AND hd.po_id = vi.po_id))
+        ORDER BY hd.id LIMIT 1)
+    )`;
 
 const VENDOR_INVOICE_SELECT = `SELECT
       vi.id,
@@ -57,7 +70,7 @@ const getVendorInvoices = async (vendorId = null, hostCompanyId = null) => {
     conditions.push('vi.vendor_id = ?');
     params.push(vendorId);
   }
-  // Bills whose PO has no company on its quotation (older data) stay visible under every company
+  // Bills with no company on their quotation, payments or debit notes (older data) stay visible under every company
   if (hostCompanyId) {
     conditions.push(`(${HOST_COMPANY_SQL} = ? OR ${HOST_COMPANY_SQL} IS NULL)`);
     params.push(hostCompanyId);

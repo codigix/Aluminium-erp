@@ -1387,6 +1387,7 @@ model purchase_orders {
   po_type                                                                 String                                   @default("DRAWING") @db.VarChar(30)
   company_id                                                              Int?
   customer_po_no                                                          String?                                  @db.VarChar(100)
+  host_company_id                                                         Int?
   payments                                                                payments[]
   purchase_order_items_purchase_order_items_source_po_idTopurchase_orders purchase_order_items[]                   @relation("purchase_order_items_source_po_idTopurchase_orders")
   purchase_order_items                                                    purchase_order_items[]
@@ -1402,6 +1403,7 @@ model purchase_orders {
   @@index([vendor_id], map: "idx_vendor_id")
   @@index([sales_order_id], map: "sales_order_id")
   @@index([merged_into_po_id], map: "fk_merged_into_po")
+  @@index([host_company_id], map: "idx_po_host_company")
 }
 
 model qc_attachments {

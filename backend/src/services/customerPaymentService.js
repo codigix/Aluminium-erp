@@ -41,20 +41,20 @@ const recordPaymentReceived = async (payload) => {
   const hasAllocations = Array.isArray(allocations) && allocations.length > 0;
   const receiptNo = await generatePaymentReceiptNo();
 
-  // Host company (company master) the receipt belongs to: as chosen on the Record Payment page,
-  // otherwise taken from the first invoice the receipt is allocated against.
-  let resolvedHostCompanyId = parseInt(hostCompanyId, 10) || null;
-  if (!resolvedHostCompanyId) {
-    const hostInvoiceId = (hasAllocations && allocations.find(a => a.invoiceId)?.invoiceId) || invoiceId;
-    if (hostInvoiceId) {
-      const [hostRows] = await pool.query(
-        `SELECT COALESCE(si.host_company_id, o.host_company_id) AS host_company_id
-         FROM sales_invoices si LEFT JOIN orders o ON o.id = si.order_id WHERE si.id = ?`,
-        [hostInvoiceId]
-      );
-      resolvedHostCompanyId = hostRows[0]?.host_company_id || null;
-    }
+  // Host company (company master) the receipt belongs to: a receipt against an invoice always belongs to
+  // that invoice's company; the company chosen on the Record Payment page applies only to On Account / Advance
+  // receipts (or invoices with no company), so one company's receipt never lands in another's ledger.
+  let resolvedHostCompanyId = null;
+  const hostInvoiceId = (hasAllocations && allocations.find(a => a.invoiceId)?.invoiceId) || invoiceId;
+  if (hostInvoiceId) {
+    const [hostRows] = await pool.query(
+      `SELECT COALESCE(si.host_company_id, o.host_company_id) AS host_company_id
+       FROM sales_invoices si LEFT JOIN orders o ON o.id = si.order_id WHERE si.id = ?`,
+      [hostInvoiceId]
+    );
+    resolvedHostCompanyId = hostRows[0]?.host_company_id || null;
   }
+  if (!resolvedHostCompanyId) resolvedHostCompanyId = parseInt(hostCompanyId, 10) || null;
 
   // Logic to handle bank account: either a numeric ID from bank_accounts or a manual string
   let bankAccountId = null;
@@ -727,7 +727,9 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
   };
   const priorJournalCredits = await journalNetCredit('jv.voucher_date < ?', [startDate.split(' ')[0]]);
 
-  const openingBalance = Math.max(0, priorInvoiced - priorPaid - priorCredited - priorJournalCredits);
+  // Customer ledger: invoices are Dr, receipts / credit notes / journal credits are Cr.
+  // Balance = Dr − Cr; positive = receivable (Dr), negative = advance received (Cr). Not clamped, so advances stay visible.
+  const openingBalance = Math.round((priorInvoiced - priorPaid - priorCredited - priorJournalCredits) * 100) / 100;
 
   // 3. Current Month Invoices
   const [curInvRows] = await pool.query(
@@ -767,7 +769,7 @@ const getCustomerMonthlySummary = async (customerId, yearInput, monthInput, cust
   );
 
   // 5. Closing Balance: Opening + Invoiced - Paid - Credit Notes - Journal credits (discount allowed)
-  const closingBalance = Math.max(0, Math.round((openingBalance + currentMonthInvoices - currentMonthPayments - currentMonthCreditNotes - currentMonthJournalCredits) * 100) / 100);
+  const closingBalance = Math.round((openingBalance + currentMonthInvoices - currentMonthPayments - currentMonthCreditNotes - currentMonthJournalCredits) * 100) / 100;
 
   return {
     customerId: Number(customerId),

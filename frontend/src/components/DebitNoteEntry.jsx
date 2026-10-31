@@ -96,7 +96,7 @@ const emptyForm = () => ({
   narration: ''
 });
 
-const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, onPosted }) => {
+const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompanies = [], onPosted }) => {
   const [vendors, setVendors] = useState([]);
   const [vendorId, setVendorId] = useState(initialVendorId ? String(initialVendorId) : '');
   const [sources, setSources] = useState([]);
@@ -422,9 +422,14 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, onPosted }
     w.document.close();
   };
 
+  // Debit notes of the selected supplier under the selected company only
+  // (notes saved before a company was stored stay visible, as on the rest of the page)
   const displayedHistory = useMemo(
-    () => (vendorId ? history.filter(dn => String(dn.vendor_id) === String(vendorId)) : history),
-    [history, vendorId]
+    () => history.filter(dn =>
+      (!vendorId || String(dn.vendor_id) === String(vendorId)) &&
+      (!hostCompanyId || dn.host_company_id == null || String(dn.host_company_id) === String(hostCompanyId))
+    ),
+    [history, vendorId, hostCompanyId]
   );
 
   return (
@@ -771,9 +776,16 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, onPosted }
             <tbody className="divide-y divide-slate-100">
               {displayedHistory.map(dn => {
                 const cancelled = dn.status === 'CANCELLED';
+                // Company (Company Master) the debit note was recorded for
+                const dnCompanyName = hostCompanies.find(h => String(h.id) === String(dn.host_company_id))?.company_name;
                 return (
                   <tr key={dn.id} className="hover:bg-slate-50/80">
-                    <td className="px-3 py-2 font-mono font-bold text-rose-700 whitespace-nowrap">{dn.voucher_no}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="font-mono font-bold text-rose-700">{dn.voucher_no}</div>
+                      {dnCompanyName && (
+                        <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide mt-0.5">{dnCompanyName}</div>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{formatDate(dn.voucher_date)}</td>
                     <td className="px-3 py-2 text-slate-800">{dn.vendor_name}</td>
                     <td className="px-3 py-2 font-mono text-slate-600">{dn.reference_invoice_no || 'On Account'}</td>

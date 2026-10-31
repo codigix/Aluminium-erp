@@ -1471,7 +1471,7 @@ const getPurchaseOrderById = async (poId) => {
      (SELECT phone FROM contacts WHERE company_id = po.vendor_id AND contact_type = 'PRIMARY' LIMIT 1) as contact_phone,
      mr.mr_number, so.so_number,
      po.invoice_url,
-     (SELECT q.host_company_id FROM quotations q WHERE q.id = po.quotation_id LIMIT 1) as host_company_id,
+     COALESCE(po.host_company_id, (SELECT q.host_company_id FROM quotations q WHERE q.id = po.quotation_id LIMIT 1)) as host_company_id,
      (SELECT p.payment_mode FROM payments p WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as payment_mode,
      (SELECT p.transaction_ref_no FROM payments p WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as transaction_ref_no,
      (SELECT p.upi_transaction_id FROM payments p WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as upi_transaction_id,
@@ -1799,7 +1799,8 @@ const updatePurchaseOrder = async (poId, payload) => {
     orderDate,
     order_date,
     companyId,
-    company_id
+    company_id,
+    hostCompanyId
   } = payload;
 
   const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'APPROVED', 'PENDING_PAYMENT', 'PAID', 'COMPLETED', 'CLOSED', 'FULFILLED'];
@@ -1845,6 +1846,11 @@ const updatePurchaseOrder = async (poId, payload) => {
       const compVal = companyId !== undefined ? companyId : company_id;
       updates.push('company_id = ?');
       params.push(compVal ? parseInt(compVal) : null);
+    }
+    // Issuing billing profile (Company Master) chosen on the PO; empty keeps the quotation's company
+    if (hostCompanyId !== undefined) {
+      updates.push('host_company_id = ?');
+      params.push(parseInt(hostCompanyId, 10) || null);
     }
     if (orderDate !== undefined || order_date !== undefined) {
       const oDate = orderDate !== undefined ? orderDate : order_date;
@@ -2404,8 +2410,17 @@ const generatePurchaseOrderPDF = async (poId) => {
   const adminCompanyMasterService = require('./adminCompanyMasterService');
   let activeCompany = null;
 
+  // 0. Billing profile chosen on the PO itself
+  if (po.host_company_id) {
+    try {
+      activeCompany = await adminCompanyMasterService.getCompanyById(po.host_company_id);
+    } catch (err) {
+      console.error('Error fetching PO host_company_id:', err);
+    }
+  }
+
   // 1. If PO is linked to a quotation, check its host_company_id
-  if (po.quotation_id) {
+  if (!activeCompany && po.quotation_id) {
     try {
       const [quoteRow] = await pool.query('SELECT host_company_id FROM quotations WHERE id = ?', [po.quotation_id]);
       if (quoteRow.length > 0 && quoteRow[0].host_company_id) {

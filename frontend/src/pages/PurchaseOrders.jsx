@@ -3,13 +3,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plus, Search, RefreshCw, Package, Clock, CheckCircle2,
   AlertCircle, Truck, FileText, LayoutGrid, List, Filter, GitMerge, X, Lock, Upload,
-  Pencil, Trash2
+  Pencil, Trash2, Building2
 } from 'lucide-react';
 import { Card, SearchableSelect, Button, Tabs } from '../components/ui.jsx';
 import DataTable from '../components/DataTable.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { getFileUrl } from '../utils/url';
 import { formatDimensions, calculateWeight, validateShapeDimensions, isWeightBasedItem, calculateItemAmount, getItemEffectiveBillingQty } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -194,6 +195,28 @@ const PurchaseOrders = () => {
     discountValue: 0,
     items: []
   });
+
+  const invalidToastShownRef = useRef(false);
+
+  // Company Master billing profiles for the Edit PO "Select Issuing Billing Profile" field
+  const [hostCompanies, setHostCompanies] = useState([]);
+  useEffect(() => {
+    const fetchHostCompanies = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/admin-company-master`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setHostCompanies(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error('Error fetching host companies:', err);
+      }
+    };
+    fetchHostCompanies();
+  }, []);
 
   const [materials, setMaterials] = useState([]);
   const [shapes, setShapes] = useState([]);
@@ -1109,6 +1132,8 @@ const PurchaseOrders = () => {
   const handleCreateManualPO = async (e) => {
     e.preventDefault();
 
+    if (manualFormData.id && !manualFormData.hostCompanyId) return errorToast('Please select an issuing billing profile');
+
     if (manualFormData.poType === 'DIRECT_COMPANY') {
       if (!manualFormData.companyId) return errorToast('Please select a company');
       if (!manualFormData.vendorId) return errorToast('Please select a supplier');
@@ -1155,6 +1180,8 @@ const PurchaseOrders = () => {
             laser_cutting: item.laser_cutting || null
           }))
         };
+
+        if (manualFormData.id && manualFormData.hostCompanyId) payload.hostCompanyId = manualFormData.hostCompanyId;
 
         const url = manualFormData.id
           ? `${API_BASE}/purchase-orders/${manualFormData.id}`
@@ -1241,6 +1268,8 @@ const PurchaseOrders = () => {
           laser_cutting: item.laser_cutting || null
         }))
       };
+
+      if (manualFormData.id && manualFormData.hostCompanyId) payload.hostCompanyId = manualFormData.hostCompanyId;
 
       const url = manualFormData.id
         ? `${API_BASE}/purchase-orders/${manualFormData.id}`
@@ -1666,17 +1695,22 @@ const PurchaseOrders = () => {
         poType: isDirect ? 'DIRECT_COMPANY' : 'DRAWING',
         poNumber: data.po_number || '',
         customerPoNo: data.customer_po_no || '',
-        orderDate: data.created_at ? data.created_at.split('T')[0] : (data.order_date ? data.order_date.split('T')[0] : new Date().toISOString().split('T')[0]),
+        // Dates arrive as 'YYYY-MM-DD HH:mm:ss' (dateStrings) or ISO; the date input needs just 'YYYY-MM-DD'
+        orderDate: data.created_at ? String(data.created_at).slice(0, 10) : (data.order_date ? String(data.order_date).slice(0, 10) : new Date().toISOString().split('T')[0]),
         companyId: data.company_id ? String(data.company_id) : (data.company_name || ''),
         vendorId: data.vendor_id ? String(data.vendor_id) : '',
         quotationId: data.quotation_id ? String(data.quotation_id) : '',
-        expectedDeliveryDate: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
+        expectedDeliveryDate: data.expected_delivery_date ? String(data.expected_delivery_date).slice(0, 10) : '',
         notes: data.notes || '',
         status: data.status || 'DRAFT',
         currency: data.currency ? `${data.currency} (${data.currency === 'INR' ? 'Indian Rupee' : 'US Dollar'})` : 'INR (Indian Rupee)',
         discountType: data.discount_type || 'AMOUNT',
         discountValue: data.discount_value !== undefined && data.discount_value !== null ? data.discount_value : 0,
         discountAmount: data.discount_amount || 0,
+        // No company stored on the PO / its quotation: default to the Active company, as the Quotation edit screen does
+        hostCompanyId: data.host_company_id
+          ? String(data.host_company_id)
+          : String((hostCompanies.find(h => h.status === 'ACTIVE') || {}).id || ''),
         items: mappedItems
       });
 
@@ -2639,7 +2673,20 @@ const PurchaseOrders = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateManualPO} className="p-2 space-y-2 max-h-[calc(90vh-100px)] overflow-y-auto custom-scrollbar">
+            <form
+              onSubmit={handleCreateManualPO}
+              onInvalidCapture={(e) => {
+                // Name the first empty required field; the browser's own bubble can be scrolled out of view
+                if (invalidToastShownRef.current) return;
+                invalidToastShownRef.current = true;
+                setTimeout(() => { invalidToastShownRef.current = false; }, 0);
+                const wrap = e.target.closest('div');
+                const labelEl = wrap?.querySelector('label') || wrap?.parentElement?.querySelector('label');
+                const label = labelEl?.textContent?.replace('*', '').trim();
+                errorToast(label ? `Please fill ${label}` : 'Please fill all required fields');
+              }}
+              className="p-2 space-y-2 max-h-[calc(90vh-100px)] overflow-y-auto custom-scrollbar"
+            >
               {/* Purchase Order Type Selector */}
               <div className="bg-slate-50 border border-slate-200 rounded p-3">
                 <div className="flex items-center justify-between mb-2">
@@ -2695,6 +2742,90 @@ const PurchaseOrders = () => {
                   </label>
                 </div>
               </div>
+
+              {/* Host Billing Entity (Edit PO only) — defaults to the company of the PO's quotation */}
+              {manualFormData.id && (
+                <div className="bg-white border border-slate-200 rounded p-3 space-y-3">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <div className="p-1.5 bg-rose-50 text-rose-600 rounded">
+                      <Building2 className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-xs font-semibold text-slate-800">Host Billing Entity Details</h3>
+                  </div>
+
+                  <div className="w-full md:max-w-md space-y-1">
+                    <label className="text-[10px] text-slate-400 ml-1">Select Issuing Billing Profile *</label>
+                    <select
+                      className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 font-medium"
+                      value={manualFormData.hostCompanyId || ''}
+                      onChange={(e) => setManualFormData(prev => ({ ...prev, hostCompanyId: e.target.value }))}
+                    >
+                      <option value="">Select billing profile...</option>
+                      {hostCompanies.map(h => (
+                        <option key={h.id} value={h.id}>
+                          {h.company_name} {h.status === 'ACTIVE' ? '(ACTIVE)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {(() => {
+                    const host = hostCompanies.find(h => String(h.id) === String(manualFormData.hostCompanyId));
+                    if (!host) return null;
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                        <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg border border-slate-100 text-center">
+                          {host.company_logo ? (
+                            <img
+                              src={getFileUrl(host.company_logo)}
+                              alt="Logo"
+                              className="h-12 max-w-full object-contain mb-1 bg-white border border-slate-200 p-1 rounded shadow-sm"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-500 font-bold text-sm mb-1">
+                              {(host.company_name || '?').charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="text-[10px] font-bold text-slate-800 leading-tight truncate w-full">{host.company_name}</span>
+                          <span className={`text-[8px] mt-1 px-1.5 py-0.5 rounded-full font-semibold border ${host.status === 'ACTIVE'
+                            ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                            : 'bg-slate-100 border-slate-200 text-slate-500'
+                            }`}>
+                            {host.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
+                          </span>
+                        </div>
+
+                        <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                          <span className="text-[9px] text-slate-400 block font-semibold uppercase">Office & Contact Details</span>
+                          <div className="text-[10px] text-slate-600 space-y-0.5 leading-normal">
+                            <p className="font-semibold text-slate-700 whitespace-pre-line">{host.company_address || '—'}</p>
+                            {host.contact_person && (
+                              <p className="text-[9px] text-slate-500">
+                                Contact Person: <span className="font-semibold text-slate-700">{host.contact_person}</span>
+                              </p>
+                            )}
+                            {host.email && <p>Email: {host.email}</p>}
+                            {host.phone && <p>Mobile: {host.phone}</p>}
+                            <div className="pt-1 flex flex-col gap-0.5 border-t border-slate-200 mt-1">
+                              <p className="text-[9px] font-mono">GSTIN: <span className="font-bold text-slate-700">{host.gstin || '—'}</span></p>
+                              <p className="text-[9px] font-mono">PAN: <span className="font-bold text-slate-700">{host.pan || '—'}</span></p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                          <span className="text-[9px] text-slate-400 block font-semibold uppercase">Bank Credentials</span>
+                          <div className="text-[10px] text-slate-600 space-y-0.5 leading-normal font-mono">
+                            <p className="font-semibold text-slate-700 font-sans">{host.bank_name || '—'}</p>
+                            <p>A/C: {host.account_number || '—'}</p>
+                            {host.ifsc_code && <p>IFSC: {host.ifsc_code.toUpperCase()}</p>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Basic Information Section */}
               <div className="bg-white border border-slate-200 rounded overflow-visible">

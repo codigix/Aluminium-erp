@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   CreditCard, Search, RefreshCw, Building2, Calendar, FileText, 
   CheckCircle2, Clock, AlertCircle, ChevronDown, Download, Check, 
@@ -46,6 +46,16 @@ const formatDate = (dateStr) => {
 };
 
 const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+
+// Ledger balance with its side; zero has no side.
+// Supplier (default): positive = Cr (payable), negative = Dr (advance paid).
+// Customer (positiveSide 'Dr'): positive = Dr (receivable), negative = Cr (advance received).
+const formatDrCr = (amount, positiveSide = 'Cr') => {
+  const v = round2(amount);
+  if (Math.abs(v) < 0.005) return formatCurrency(0);
+  const negativeSide = positiveSide === 'Cr' ? 'Dr' : 'Cr';
+  return `${formatCurrency(Math.abs(v))} ${v < 0 ? negativeSide : positiveSide}`;
+};
 
 // Customer receipts come with unallocated_kind / unallocated_amount from the API (vendor payments don't)
 const isReceiptRow = (row) => row?.unallocated_kind !== undefined;
@@ -114,7 +124,6 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   const [hostCompaniesLoading, setHostCompaniesLoading] = useState(false);
   const [selectedHostId, setSelectedHostId] = useState('');
   const [isHostPanelOpen, setIsHostPanelOpen] = useState(false);
-  const [isVoucherChosen, setIsVoucherChosen] = useState(false);
   const selectedHost = useMemo(
     () => hostCompanies.find(h => String(h.id) === String(selectedHostId)) || null,
     [hostCompanies, selectedHostId]
@@ -144,6 +153,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   const [historyFilterMode, setHistoryFilterMode] = useState('period'); // 'period' | 'all'
   const [monthlySummary, setMonthlySummary] = useState(null);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
+  const monthlyRequestRef = useRef(0);
 
   // Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -533,6 +543,8 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       setMonthlySummary(null);
       return;
     }
+    // Only the latest request may update the statement (a slower reply for the previous company is ignored)
+    const requestId = ++monthlyRequestRef.current;
     try {
       setMonthlyLoading(true);
       const targetMonthStr = monthStr || selectedMonth;
@@ -544,20 +556,25 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       if (start && end) {
         url += `&startDate=${start}&endDate=${end}`;
       }
+      // Company-wise statement for the selected company
+      url += hostQuery('&');
       const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      if (requestId !== monthlyRequestRef.current) return;
       if (res.ok) {
         const data = await res.json();
+        if (requestId !== monthlyRequestRef.current) return;
         setMonthlySummary(data);
       } else {
         setMonthlySummary(null);
       }
     } catch (err) {
+      if (requestId !== monthlyRequestRef.current) return;
       console.error('Error fetching monthly summary:', err);
       setMonthlySummary(null);
     } finally {
-      setMonthlyLoading(false);
+      if (requestId === monthlyRequestRef.current) setMonthlyLoading(false);
     }
   };
 
@@ -732,8 +749,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     }
   };
 
-  const handleSelectVoucherType = (typeId, confirmChoice = true) => {
-    if (confirmChoice) setIsVoucherChosen(true);
+  const handleSelectVoucherType = (typeId) => {
     setSelectedVoucherType(typeId);
     setSelectedInvoiceIds(new Set());
     if (typeId === 'PAYMENT') {
@@ -752,8 +768,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
   // Synchronize initialVoucherType prop when navigation/route changes
   useEffect(() => {
     if (initialVoucherType) {
-      // Pre-select only; the user still confirms the voucher type after choosing the company
-      handleSelectVoucherType(initialVoucherType, false);
+      handleSelectVoucherType(initialVoucherType);
     }
   }, [initialVoucherType]);
 
@@ -1049,34 +1064,59 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
     };
   }, [vendorInvoices, vendorJournalDebit]);
 
-  // Vendor Monthly Reconciliation Summary
+  // Vendor Monthly Reconciliation Summary — supplier ledger of the selected vendor under the selected company.
+  // Sign rule: Cr increases the payable (bills, JV credits to the vendor); Dr reduces it (payments,
+  // posted debit notes, JV debits to the vendor). Balance = Cr − Dr: positive = payable (Cr), negative = advance (Dr).
+  //   Opening     = all entries dated before fromDate
+  //   Outstanding = Opening + period bills − period payments − period debit notes − period net JV debits
   const vendorMonthlySummary = useMemo(() => {
     if (!selectedVendorId) return null;
     const getBillAmt = (inv) => parseFloat(inv.bill_amount) || (parseFloat(inv.invoice_amount) > 0 ? parseFloat(inv.invoice_amount) : parseFloat(inv.po_amount)) || 0;
+    // Local calendar date (timestamps arrive in UTC, so slicing them would shift IST dates back a day)
+    const toYmd = (v) => {
+      if (!v) return '';
+      const s = String(v);
+      if (!s.includes('T')) return s.slice(0, 10);
+      const d = new Date(s);
+      if (isNaN(d)) return s.slice(0, 10);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const isBefore = (d) => !!fromDate && d < fromDate;
+    const inPeriod = (d) => (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
 
-    const priorBills = vendorInvoices
-      .filter(inv => (inv.bill_date || inv.invoice_date || inv.po_date || inv.created_at || '').slice(0, 10) < fromDate)
-      .reduce((sum, inv) => sum + getBillAmt(inv), 0);
-    const priorPaid = vendorPaymentHistory
-      .filter(p => (p.payment_date || p.created_at || '').slice(0, 10) < fromDate)
-      .reduce((sum, p) => sum + (parseFloat(p.payment_amount) || 0), 0);
-    const openingBalance = Math.max(0, priorBills - priorPaid);
+    // Ledger lines: amount > 0 is Cr (adds to payable), amount < 0 is Dr (reduces payable)
+    const bills = vendorInvoices.map(inv => ({
+      date: toYmd(inv.bill_date || inv.invoice_date || inv.po_date || inv.created_at),
+      amount: getBillAmt(inv)
+    }));
+    const payments = vendorPaymentHistory.map(p => ({
+      date: toYmd(p.payment_date || p.created_at),
+      amount: -(parseFloat(p.payment_amount) || 0)
+    }));
+    const debitNotes = vendorDebitNotes
+      .filter(dn => dn.status === 'POSTED')
+      .map(dn => ({ date: toYmd(dn.voucher_date || dn.created_at), amount: -(parseFloat(dn.total_amount) || 0) }));
+    const vName = (selectedVendor?.vendor_name || '').trim().toLowerCase();
+    const vId = String(selectedVendor?.id || '');
+    const journals = vName ? journalVouchersList.flatMap(jv => {
+      const items = Array.isArray(jv.items) ? jv.items : [];
+      const line = items.find(it => {
+        const acc = (it.ledger_account || '').toLowerCase();
+        return acc.includes(vName) || acc.includes(`vendor:${vId}`);
+      });
+      if (!line) return [];
+      const net = (parseFloat(line.credit_amount) || 0) - (parseFloat(line.debit_amount) || 0);
+      return net ? [{ date: toYmd(jv.voucher_date || jv.created_at), amount: net }] : [];
+    }) : [];
 
-    const curBills = vendorInvoices
-      .filter(inv => {
-        const d = (inv.bill_date || inv.invoice_date || inv.po_date || inv.created_at || '').slice(0, 10);
-        return (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
-      })
-      .reduce((sum, inv) => sum + getBillAmt(inv), 0);
-
-    const curPaid = vendorPaymentHistory
-      .filter(p => {
-        const d = (p.payment_date || p.created_at || '').slice(0, 10);
-        return (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
-      })
-      .reduce((sum, p) => sum + (parseFloat(p.payment_amount) || 0), 0);
-
-    const closingBalance = Math.max(0, openingBalance + curBills - curPaid - vendorJournalDebit);
+    const sum = (rows, pick) => rows.filter(r => pick(r.date)).reduce((s, r) => s + r.amount, 0);
+    const openingBalance = round2(sum(bills, isBefore) + sum(payments, isBefore) + sum(debitNotes, isBefore) + sum(journals, isBefore));
+    const curBills = round2(sum(bills, inPeriod));
+    const curPaid = round2(-sum(payments, inPeriod));
+    const curDebitNotes = round2(-sum(debitNotes, inPeriod));
+    const periodJournalNet = round2(sum(journals, inPeriod));
+    const periodJournalDebit = round2(Math.max(0, -periodJournalNet));
+    const closingBalance = round2(openingBalance + curBills - curPaid - curDebitNotes + periodJournalNet);
 
     let formattedMonth = 'October 2026';
     if (selectedMonth) {
@@ -1093,11 +1133,13 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       openingBalance,
       currentMonthInvoices: curBills,
       currentMonthPayments: curPaid,
+      currentMonthDebitNotes: curDebitNotes,
       closingBalance,
-      vendorJournalDebit,
+      vendorJournalDebit: periodJournalDebit,
+      hostCompanyName: selectedHost?.company_name || '',
       monthName: formattedMonth
     };
-  }, [vendorInvoices, vendorPaymentHistory, selectedVendorId, fromDate, toDate, selectedMonth, vendorJournalDebit]);
+  }, [vendorInvoices, vendorPaymentHistory, vendorDebitNotes, journalVouchersList, selectedVendor, selectedVendorId, selectedHost, fromDate, toDate, selectedMonth]);
 
   // All Invoices with outstanding balances
   const allOutstandingInvoices = useMemo(() => {
@@ -2649,6 +2691,7 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         ) : selectedVoucherType === 'DEBIT_NOTE' ? (
           <DebitNoteEntry
             hostCompanyId={selectedHostId ? Number(selectedHostId) : null}
+            hostCompanies={hostCompanies}
             initialVendorId={selectedVendorId}
             onPosted={() => {
               if (selectedVendorId) {
@@ -2709,11 +2752,18 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                   {contraVouchersList.length > 0 ? (
                     contraVouchersList.map((cv) => {
                       const accountName = (acc) => (acc === 'Cash in Hand' ? 'Cash' : acc || '—');
+                      // Company (Company Master) the contra voucher was recorded for
+                      const cvCompanyName = hostCompanies.find(h => String(h.id) === String(cv.host_company_id))?.company_name;
                       return (
                         <tr key={cv.id} className="hover:bg-slate-50/70 transition-colors align-top">
                           <td className="px-4 py-3">
                             <div className="font-mono font-bold text-blue-700 truncate">{cv.voucher_no}</div>
                             <div className="text-[11px] text-slate-400 mt-0.5">{formatDate(cv.voucher_date || cv.created_at)}</div>
+                            {cvCompanyName && (
+                              <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide truncate mt-0.5" title={cvCompanyName}>
+                                {cvCompanyName}
+                              </div>
+                            )}
                           </td>
                           <td className="px-3 py-3">
                             <div className="flex items-baseline gap-1.5 min-w-0">
@@ -3609,6 +3659,11 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
               </div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
                 <span>Period Balance Statement</span>
+                {selectedHost?.company_name && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                    {selectedHost.company_name}
+                  </span>
+                )}
                 {((isPaymentMode ? vendorMonthlySummary : monthlySummary)?.monthName) && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                     {(isPaymentMode ? vendorMonthlySummary : monthlySummary).monthName}
@@ -3640,6 +3695,11 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
               <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
                 {isPaymentMode ? 'Vendor Statement Summary' : 'Account Statement Summary'}
               </span>
+              {isPaymentMode && selectedVendor && (
+                <p className="text-slate-600 text-[11px] font-semibold">
+                  {selectedVendor.vendor_name}{vendorMonthlySummary?.hostCompanyName ? ` · ${vendorMonthlySummary.hostCompanyName}` : ''}
+                </p>
+              )}
               <p className="text-slate-500 text-[11px] leading-relaxed">
                 Statement period reconciliation from <strong className="text-slate-700 font-medium">{fromDate}</strong> to <strong className="text-slate-700 font-medium">{toDate}</strong>.
               </p>
@@ -3650,7 +3710,9 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
               <div className="flex items-center justify-between gap-6 py-2">
                 <span className="text-xs sm:text-sm font-semibold text-slate-700">Opening Balance :</span>
                 <span className="font-mono text-xs sm:text-sm font-bold text-slate-800 text-right">
-                  {monthlyLoading ? 'Loading...' : formatCurrency((isPaymentMode ? vendorMonthlySummary : monthlySummary)?.openingBalance || 0)}
+                  {isPaymentMode
+                    ? formatDrCr(vendorMonthlySummary?.openingBalance)
+                    : (monthlyLoading ? 'Loading...' : formatDrCr(monthlySummary?.openingBalance, 'Dr'))}
                 </span>
               </div>
 
@@ -3664,7 +3726,9 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                     </span>
                   </div>
                   <span className="font-mono text-xs sm:text-sm font-bold text-emerald-700 text-right">
-                    {monthlyLoading ? 'Loading...' : formatCurrency((isPaymentMode ? vendorMonthlySummary : monthlySummary)?.currentMonthPayments ?? 0)}
+                    {isPaymentMode
+                      ? `${formatCurrency(vendorMonthlySummary?.currentMonthPayments ?? 0)}${vendorMonthlySummary?.currentMonthPayments > 0 ? ' Dr' : ''}`
+                      : (monthlyLoading ? 'Loading...' : formatCurrency(monthlySummary?.currentMonthPayments ?? 0))}
                   </span>
                 </div>
 
@@ -3700,6 +3764,17 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
                   </div>
                 )}
 
+                {isPaymentMode && (vendorMonthlySummary?.currentMonthDebitNotes > 0) && (
+                  <div className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-teal-200">
+                    <div className="text-[11px] leading-tight text-slate-600">
+                      <span className="text-slate-400">Description:</span> <span className="font-semibold text-teal-800">Debit Notes</span>
+                    </div>
+                    <span className="font-mono text-[11px] font-semibold text-teal-700 whitespace-nowrap">
+                      − {formatCurrency(vendorMonthlySummary.currentMonthDebitNotes)}
+                    </span>
+                  </div>
+                )}
+
                 {!isPaymentMode && (monthlySummary?.currentMonthCreditNotes > 0) && (
                   <div className="flex items-start justify-between gap-6 mt-1.5 pl-3 border-l-2 border-teal-200">
                     <div className="text-[11px] leading-tight text-slate-600">
@@ -3717,7 +3792,9 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
               <div className="flex items-center justify-between gap-6 py-2.5 bg-blue-50/50 px-3 rounded-lg border border-blue-200 mt-1">
                 <span className="text-xs sm:text-sm font-bold text-slate-900">Outstanding Balance :</span>
                 <span className="font-mono text-sm sm:text-base font-extrabold text-slate-900 text-right">
-                  {monthlyLoading ? 'Loading...' : formatCurrency((isPaymentMode ? vendorMonthlySummary : monthlySummary)?.closingBalance ?? 0)}
+                  {isPaymentMode
+                    ? formatDrCr(vendorMonthlySummary?.closingBalance)
+                    : (monthlyLoading ? 'Loading...' : formatDrCr(monthlySummary?.closingBalance, 'Dr'))}
                 </span>
               </div>
             </div>
@@ -3858,13 +3935,13 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       })()}
 
       {/* ── Slide-Over Drawer: Voucher Types (F5/F6/F7...) ── */}
-      {/* After the company is chosen, opens automatically until a voucher type is chosen */}
-      {(isVoucherPanelOpen || (selectedHostId && !isVoucherChosen)) && (
+      {/* Opens only when the user clicks the Voucher Types button */}
+      {isVoucherPanelOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-            onClick={() => isVoucherChosen && setIsVoucherPanelOpen(false)}
+            onClick={() => setIsVoucherPanelOpen(false)}
           />
 
           {/* Drawer Panel */}
