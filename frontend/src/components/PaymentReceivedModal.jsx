@@ -809,18 +809,25 @@ const PaymentReceivedModal = ({
     }
   };
 
+  // Query-string suffix that scopes pending invoices to the selected company (Company Master)
+  const hostQuery = (prefix) => (hostCompanyId ? `${prefix}hostCompanyId=${hostCompanyId}` : '');
+
   const fetchCustomerInvoices = async (customerId) => {
     try {
       const token = localStorage.getItem('authToken');
-      const url = customerId 
-        ? `${API_BASE}/customer-payments/customer/${customerId}/outstanding`
+      const url = customerId
+        ? `${API_BASE}/customer-payments/customer/${customerId}/outstanding${hostQuery('?')}`
         : `${API_BASE}/customer-payments/outstanding`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const data = await response.json();
-        setCustomerInvoices(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        // Only the selected company's bills are offered for settlement
+        setCustomerInvoices(hostCompanyId
+          ? list.filter(inv => inv.host_company_id == null || String(inv.host_company_id) === String(hostCompanyId))
+          : list);
       }
     } catch (error) {
       console.error('Error fetching customer invoices:', error);
@@ -830,7 +837,7 @@ const PaymentReceivedModal = ({
   const fetchCustomerSalesOrders = async (customerId) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/customer-payments/customer/${customerId}/outstanding`, {
+      const response = await fetch(`${API_BASE}/customer-payments/customer/${customerId}/outstanding${hostQuery('?')}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -1014,7 +1021,7 @@ const PaymentReceivedModal = ({
       fetchCustomerSalesOrders(formData.customerId);
       fetchCustomerLedgerBalance(formData.customerId);
     }
-  }, [formData.customerId, singleInvoice, isMultiMode, isOpen]);
+  }, [formData.customerId, singleInvoice, isMultiMode, isOpen, hostCompanyId]);
 
   // Combined list of bill references for the selected company (only explicitly selected or all pending references with outstanding > 0)
   const companyBillReferences = useMemo(() => {
@@ -1249,12 +1256,17 @@ const PaymentReceivedModal = ({
     return companyBillReferences.reduce((sum, inv) => sum + (parseFloat(allocations[inv.id]) || 0), 0);
   }, [billAllocationOption, companyBillReferences, allocations, advanceDetails.amount, onAccountDetails.amount, newRefDetails.amount]);
 
-  // Dynamic Up To Balance (from Customer Ledger or Outstanding sum)
+  // Dynamic Up To Balance. Customer: pending invoices of the selected company (customer_ledger is not
+  // company-wise and posts receipts on the debit side, so it can't give the receivable).
+  const customerPendingTotal = useMemo(
+    () => (customerInvoices || []).reduce((sum, inv) => sum + Math.max(0, parseFloat(inv.outstanding) || 0), 0),
+    [customerInvoices]
+  );
   const rawLedgerBalance = (isVendorMode || voucherType === 'PAYMENT')
     ? (totalSelectedOutstanding || parseFloat(vendor?.totalOutstanding || 0))
-    : (customerBalance?.outstanding !== undefined
-        ? parseFloat(customerBalance.outstanding)
-        : totalSelectedOutstanding);
+    : (customerInvoices && customerInvoices.length > 0
+        ? customerPendingTotal
+        : (hostCompanyId ? totalSelectedOutstanding : (customerBalance?.outstanding !== undefined ? parseFloat(customerBalance.outstanding) : totalSelectedOutstanding)));
 
   const upToAmount = Math.abs(rawLedgerBalance);
   const upToDrCr = (isVendorMode || voucherType === 'PAYMENT') ? 'Dr' : (rawLedgerBalance < 0 ? 'Cr' : 'Dr');

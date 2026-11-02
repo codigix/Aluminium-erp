@@ -849,7 +849,8 @@ const getAllOutstandingInvoices = async () => {
        COALESCE((SELECT SUM(cp.payment_amount) FROM customer_payments cp WHERE (cp.invoice_id = si.id OR (cp.sales_order_id = si.id AND cp.sales_order_source = 'SALES_INVOICE')) AND cp.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM customer_payment_allocations cpa WHERE cpa.customer_payment_id = cp.id)), 0))) as outstanding,
       CONVERT('SALES_INVOICE' USING utf8mb4) as source,
       si.created_at,
-      si.invoice_date
+      si.invoice_date,
+      COALESCE(si.host_company_id, o.host_company_id) as host_company_id
     FROM sales_invoices si
     JOIN orders o ON o.id = si.order_id
     JOIN companies c ON si.client_id = c.id
