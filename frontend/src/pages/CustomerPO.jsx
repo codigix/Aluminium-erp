@@ -1842,6 +1842,15 @@ const CustomerPO = ({
       }
     }
 
+    // Strict: a new Customer PO is created only when every line item is Matched
+    if (isCreateBlockedByPendingDesign) {
+      isSubmittingRef.current = false;
+      showToast(pendingDesignBlockMessage);
+      setLocalError(`${pendingDesignBlockMessage} Pending: ${pendingDesignDrawingNos.join(', ')}`);
+      setItemStatusFilter('PENDING');
+      return;
+    }
+
     if (attachments.length === 0 && existingAttachments.length === 0) {
       isSubmittingRef.current = false;
       const msg = 'Please upload at least one PO / Document attachment';
@@ -2331,6 +2340,15 @@ const CustomerPO = ({
   const pendingItemsCount = useMemo(() => {
     return (poForm.items || []).filter(item => isItemPendingDesign(item, allDrawings)).length;
   }, [poForm.items, allDrawings, isItemPendingDesign]);
+
+  // New Customer PO: every line item must be Matched; any Pending Design item blocks creation (Edit is unchanged)
+  const pendingDesignDrawingNos = useMemo(() => (
+    (poForm.items || [])
+      .filter(item => isItemPendingDesign(item, allDrawings))
+      .map(item => String(item.drawingNo || '').trim() || '(no drawing no)')
+  ), [poForm.items, allDrawings, isItemPendingDesign]);
+  const isCreateBlockedByPendingDesign = formMode === 'CREATE' && pendingDesignDrawingNos.length > 0;
+  const pendingDesignBlockMessage = `Customer PO cannot be created. ${pendingDesignDrawingNos.length} item${pendingDesignDrawingNos.length === 1 ? ' is' : 's are'} Pending Design. Please complete drawing/design matching for all pending items before creating the PO.`;
 
   // Filtered Items memo with original index preserved
   const filteredModalItems = useMemo(() => {
@@ -3957,6 +3975,7 @@ const CustomerPO = ({
                       data={filteredModalItems}
                       pageSize={100}
                       hideSearch={true}
+                      rowClassName={(row) => (formMode === 'CREATE' && isItemPendingDesign(row, allDrawings) ? 'bg-amber-50/70' : '')}
                       emptyMessage={
                         itemSearchQuery || itemStatusFilter !== 'ALL'
                           ? "No purchase items match your search or filter."
@@ -4139,6 +4158,16 @@ const CustomerPO = ({
             </div>
 
             <div className="p-2 border-t border-slate-100 bg-slate-50/80 backdrop-blur-md flex flex-col sticky bottom-0 z-10">
+              {isCreateBlockedByPendingDesign && !localError && (
+                <div className="p-2.5 mb-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="font-semibold">PO Creation Blocked — {matchedItemsCount} Matched, {pendingDesignDrawingNos.length} Pending Design</p>
+                    <p className="mt-0.5">{pendingDesignBlockMessage}</p>
+                    <p className="mt-0.5 font-mono text-[11px] break-words">Pending: {pendingDesignDrawingNos.join(', ')}</p>
+                  </div>
+                </div>
+              )}
               {localError && (
                 <div className="p-2.5 mb-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
@@ -4163,7 +4192,8 @@ const CustomerPO = ({
                       id="btn-confirm-create-po"
                       form="po-manual-form"
                       type="submit"
-                      disabled={poFormLoading}
+                      disabled={poFormLoading || isCreateBlockedByPendingDesign}
+                      title={isCreateBlockedByPendingDesign ? pendingDesignBlockMessage : undefined}
                       className="flex-1 md:flex-none bg-indigo-600 text-white p-2 rounded text-xs hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100 flex items-center justify-center gap-2"
                     >
                       {poFormLoading ? (

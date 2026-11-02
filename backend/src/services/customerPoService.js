@@ -119,6 +119,28 @@ const createCustomerPo = async payload => {
 
     const trimmedPoNumber = header.poNumber.trim();
 
+    // Strict validation: a Customer PO is created only when every line item is Matched to a drawing in the
+    // Drawing Master (customer_drawings) — the same lookup used below. Any Pending Design item blocks creation.
+    const pendingDesignDrawingNos = [];
+    for (const item of items) {
+      const drawingNo = String(item.drawingNo || '').trim();
+      const drawingId = (item.drawingId && !isNaN(Number(item.drawingId))) ? Number(item.drawingId) : null;
+      const [found] = await connection.execute(
+        `SELECT id FROM customer_drawings
+         WHERE (? IS NOT NULL AND id = ?) OR (? <> '' AND TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)))
+         LIMIT 1`,
+        [drawingId, drawingId, drawingNo, drawingNo]
+      );
+      if (found.length === 0) pendingDesignDrawingNos.push(drawingNo || '(no drawing no)');
+    }
+    if (pendingDesignDrawingNos.length > 0) {
+      const count = pendingDesignDrawingNos.length;
+      const error = new Error(`Customer PO cannot be created. ${count} item${count === 1 ? ' is' : 's are'} Pending Design. Please complete drawing/design matching for all pending items before creating the PO. Pending: ${pendingDesignDrawingNos.join(', ')}`);
+      error.status = 400;
+      error.details = { pendingDesignCount: count, pendingDrawingNos: pendingDesignDrawingNos };
+      throw error;
+    }
+
     const [poResult] = await connection.execute(
       `INSERT INTO customer_pos
         (company_id, project_name, po_number, po_date, po_version, order_type, plant, currency, payment_terms,
