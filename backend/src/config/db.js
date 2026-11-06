@@ -223,7 +223,8 @@ const ensureCustomerPoColumns = async () => {
       { name: 'special_notes', definition: 'TEXT NULL' },
       { name: 'inspection_clause', definition: 'VARCHAR(50) NULL' },
       { name: 'test_certificate', definition: 'VARCHAR(50) NULL' },
-      { name: 'host_company_id', definition: 'INT NULL' }
+      { name: 'host_company_id', definition: 'INT NULL' },
+      { name: 'customer_master_contact_ids', definition: 'TEXT NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));

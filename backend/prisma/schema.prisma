@@ -308,6 +308,7 @@ model customer_pos {
   gstin                    String?              @db.VarChar(100)
   billing_address          String?              @db.Text
   shipping_address         String?              @db.Text
+  customer_master_contact_ids String?           @db.Text
   customer_po_items        customer_po_items[]
   companies                companies            @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "customer_pos_ibfk_1")
   departments              departments?         @relation(fields: [requesting_department_id], references: [id], onUpdate: NoAction, map: "customer_pos_ibfk_2")
@@ -2940,6 +2941,38 @@ model debit_notes {
   @@index([bank_account_id], map: "idx_dn_bank_account")
   @@index([voucher_date], map: "idx_dn_date")
   @@index([host_company_id], map: "idx_dn_host_company")
+}
+
+model customers {
+  id                Int                 @id @default(autoincrement())
+  customer_name     String              @db.VarChar(255)
+  gst_no            String?             @unique(map: "uq_customers_gst_no") @db.VarChar(20)
+  address           String              @db.Text
+  pincode           String              @db.VarChar(10)
+  email             String?             @db.VarChar(150)
+  status            String              @default("ACTIVE") @db.VarChar(20)
+  created_by        Int?
+  created_at        DateTime            @default(now()) @db.Timestamp(0)
+  updated_at        DateTime            @default(now()) @db.Timestamp(0)
+  customer_contacts customer_contacts[]
+
+  @@index([customer_name], map: "idx_customers_name")
+  @@index([status], map: "idx_customers_status")
+}
+
+model customer_contacts {
+  id           Int       @id @default(autoincrement())
+  customer_id  Int
+  contact_name String    @db.VarChar(150)
+  mobile       String?   @db.VarChar(20)
+  email        String?   @db.VarChar(150)
+  sort_order   Int       @default(0)
+  created_at   DateTime  @default(now()) @db.Timestamp(0)
+  updated_at   DateTime  @default(now()) @db.Timestamp(0)
+  customers    customers @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "customer_contacts_customer_fk")
+
+  @@index([customer_id], map: "idx_customer_contacts_customer")
+  @@index([contact_name], map: "idx_customer_contacts_name")
 }
 
 model debit_note_items {

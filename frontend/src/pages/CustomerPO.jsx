@@ -20,6 +20,118 @@ const poStatusColors = {
   REJECTED: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', icon: AlertCircle },
 };
 
+// customer_pos.customer_master_contact_ids (JSON array text) → array of numbers
+const parseContactIds = (value) => {
+  if (!value) return [];
+  try {
+    const list = Array.isArray(value) ? value : JSON.parse(value);
+    return Array.isArray(list) ? list.map(Number).filter(n => Number.isInteger(n) && n > 0) : [];
+  } catch {
+    return [];
+  }
+};
+
+// Searchable select of Customer Master contact persons (name · mobile · email); `single` allows one contact only
+const ContactMultiSelect = ({ contacts = [], selectedIds = [], onChange, disabled = false, fallbackText = '', single = false }) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const wrapRef = React.useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const selectedSet = new Set(selectedIds.map(Number));
+  const selected = contacts.filter(c => selectedSet.has(Number(c.id)));
+  const q = query.trim().toLowerCase();
+  const visible = contacts.filter(c => !q || [c.contact_name, c.mobile, c.email].some(v => String(v || '').toLowerCase().includes(q)));
+
+  const toggle = (id) => {
+    if (single) {
+      // One contact only: picking another replaces it; picking the same one again clears it
+      onChange(selectedSet.has(Number(id)) ? [] : [Number(id)]);
+      setOpen(false);
+      return;
+    }
+    const next = selectedSet.has(Number(id))
+      ? selectedIds.filter(x => Number(x) !== Number(id))
+      : [...selectedIds, Number(id)];
+    onChange(next);
+  };
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(o => !o)}
+        className="w-full min-h-[22px] bg-white border border-slate-200 rounded px-2 py-0.5 text-[11px] text-left flex items-center gap-1 flex-wrap focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:bg-slate-50 disabled:cursor-not-allowed"
+        title={selected.map(c => c.contact_name).join(', ') || fallbackText}
+      >
+        {selected.length > 0 ? (
+          selected.map(c => (
+            <span key={c.id} className="inline-flex items-center gap-0.5 px-1.5 rounded bg-indigo-50 border border-indigo-100 text-indigo-700 font-semibold">
+              {c.contact_name}
+              {!disabled && (
+                <X
+                  className="w-2.5 h-2.5 cursor-pointer hover:text-rose-600"
+                  onClick={(e) => { e.stopPropagation(); toggle(c.id); }}
+                />
+              )}
+            </span>
+          ))
+        ) : (
+          <span className={fallbackText ? 'text-slate-700 font-semibold truncate' : 'text-slate-400'}>
+            {fallbackText || `Select contacts (${contacts.length})`}
+          </span>
+        )}
+      </button>
+
+      {open && !disabled && (
+        <div className="absolute left-0 right-0 sm:right-auto sm:min-w-[260px] top-full mt-1 z-30 bg-white border border-slate-200 rounded-lg shadow-lg">
+          <div className="p-1.5 border-b border-slate-100">
+            <input
+              type="text"
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search contact..."
+              className="w-full border border-slate-200 rounded px-2 py-1 text-[11px] outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto py-1">
+            {visible.length === 0 && <div className="px-3 py-2 text-[11px] text-slate-400">No contacts match</div>}
+            {visible.map(c => (
+              <label key={c.id} className="flex items-start gap-2 px-2.5 py-1.5 hover:bg-indigo-50 cursor-pointer">
+                <input
+                  type={single ? 'radio' : 'checkbox'}
+                  name={single ? 'customer-master-contact' : undefined}
+                  checked={selectedSet.has(Number(c.id))}
+                  onChange={() => toggle(c.id)}
+                  onClick={single && selectedSet.has(Number(c.id)) ? () => toggle(c.id) : undefined}
+                  className={`mt-0.5 w-3.5 h-3.5 text-indigo-600 border-slate-300 ${single ? '' : 'rounded'}`}
+                />
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-semibold text-slate-800">{c.contact_name}</span>
+                  <span className="block text-[10px] text-slate-500 truncate">{[c.mobile, c.email].filter(Boolean).join(' · ') || '—'}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const CustomerPO = ({
   formatCurrency,
   customerPos = [],
@@ -352,6 +464,20 @@ const CustomerPO = ({
   const [pdfParsingLoading, setPdfParsingLoading] = useState(false)
   const [excelParsingLoading, setExcelParsingLoading] = useState(false)
   const [parsedPdfSummary, setParsedPdfSummary] = useState(null)
+  // Customer details read from the uploaded PO PDF; they take priority over Company Master values
+  const pdfCustomerDetailsRef = React.useRef(null)
+
+  // Customer Master (Sales → Customer Master): contact persons for the selected Company / Client
+  const [masterCustomers, setMasterCustomers] = useState([])
+  const fetchMasterCustomers = useCallback(async () => {
+    try {
+      const data = await apiRequest('/customer-master?status=ACTIVE');
+      setMasterCustomers(Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []));
+    } catch (err) {
+      console.error('Error fetching Customer Master:', err);
+      if (showToast) showToast(`Customer Master contacts could not be loaded: ${err.message || 'request failed'}`);
+    }
+  }, [apiRequest, showToast]);
   const poPdfInputRef = React.useRef(null)
   const poExcelInputRef = React.useRef(null)
   const isSubmittingRef = React.useRef(false)
@@ -487,6 +613,45 @@ const CustomerPO = ({
     if (!poForm.companyId) return null;
     return companies.find(c => String(c.id) === String(poForm.companyId)) || null;
   }, [poForm.companyId, companies]);
+
+  // Customer Master record of the selected Company / Client: same GSTIN, else same name (ignoring Pvt Ltd / Limited)
+  const matchedMasterCustomer = useMemo(() => {
+    if (!poForm.companyId || masterCustomers.length === 0) return null;
+    const comp = (activeCompanies || []).find(c => String(c.id) === String(poForm.companyId))
+      || companies.find(c => String(c.id) === String(poForm.companyId));
+    if (!comp) return null;
+    const norm = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const baseName = (v) => norm(v).replace(/(PRIVATELIMITED|PVTLTD|PVTLIMITED|PRIVATELTD|LIMITED|LTD)$/, '');
+    const gst = norm(comp.gstin);
+    return (gst && masterCustomers.find(m => norm(m.gst_no) === gst))
+      || masterCustomers.find(m => baseName(m.customer_name) && baseName(m.customer_name) === baseName(comp.company_name))
+      || null;
+  }, [poForm.companyId, masterCustomers, activeCompanies, companies]);
+  const masterContacts = matchedMasterCustomer?.contacts || [];
+
+  // Load Customer Master when the PO form opens and again whenever the Company / Client changes,
+  // so contacts added in Customer Master meanwhile are offered too
+  useEffect(() => {
+    if (showPoForm) fetchMasterCustomers();
+  }, [showPoForm, poForm.companyId, fetchMasterCustomers]);
+
+  // Selecting contact persons fills Contact Person / Email / Phone (comma-separated when several are chosen)
+  const handleMasterContactsChange = (ids) => {
+    const chosen = masterContacts.filter(c => ids.map(Number).includes(Number(c.id)));
+    setPoForm(prev => ({
+      ...prev,
+      customerMasterContactIds: ids,
+      ...(chosen.length > 0 ? {
+        customerContactPerson: chosen.map(c => c.contact_name).join(', '),
+        customerEmail: chosen.map(c => c.email).filter(Boolean).join(', '),
+        customerPhone: chosen.map(c => c.mobile).filter(Boolean).join(', ')
+      } : {
+        customerContactPerson: '',
+        customerEmail: '',
+        customerPhone: ''
+      })
+    }));
+  };
 
   const customerContactInfo = useMemo(() => {
     if (!poForm.companyId) return null;
@@ -1133,15 +1298,20 @@ const CustomerPO = ({
           updatedHeader.currency = header.currency;
         }
 
-        // Auto-match company if not selected yet
-        if (!prev.companyId && (header.companyCode || header.companyName)) {
-          const searchCode = (header.companyCode || '').trim().toUpperCase();
-          const searchName = (header.companyName || '').trim().toUpperCase();
+        // Auto-match company if not selected yet: by the customer GSTIN on the PDF, then by company name
+        if (!prev.companyId && (header.customerGstin || header.companyCode || header.companyName)) {
+          const normalize = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const stripSuffix = (v) => normalize(v).replace(/(PRIVATELIMITED|PVTLTD|PVTLIMITED|PRIVATELTD|LIMITED|LTD)$/, '');
+          const searchGstin = normalize(header.customerGstin);
+          const searchCode = normalize(header.companyCode);
+          const searchName = stripSuffix(header.companyName);
           const targetPool = activeCompanies?.length ? activeCompanies : (companiesList || []);
-          const comp = targetPool.find(c => {
-            const cName = (c.company_name || '').toUpperCase();
-            return (searchCode && cName.includes(searchCode)) || (searchName && cName.includes('SIDEL'));
-          });
+          const comp = (searchGstin && targetPool.find(c => normalize(c.gstin) === searchGstin))
+            || (searchName.length >= 3 && targetPool.find(c => {
+              const cName = stripSuffix(c.company_name);
+              return cName.length >= 3 && (cName === searchName || cName.startsWith(searchName) || searchName.startsWith(cName));
+            }))
+            || (searchCode && searchCode !== 'UNKNOWN' && targetPool.find(c => normalize(c.company_name).includes(searchCode)));
           if (comp) {
             updatedHeader.companyId = comp.id;
             const primaryContact = comp.contacts?.find(ct => ct.contact_type === 'PRIMARY') || comp.contacts?.[0];
@@ -1158,6 +1328,21 @@ const CustomerPO = ({
             updatedHeader.customerShippingAddress = shippingAddressStr || comp.shipping_address || '';
           }
         }
+
+        // Customer details printed on the PDF win over Company Master; a field missing from the PDF keeps
+        // the Company Master value, or stays empty (shown as "-")
+        const pdfCustomer = {
+          customerContactPerson: header.contactPerson || '',
+          customerEmail: header.customerEmail || '',
+          customerPhone: header.customerPhone || '',
+          customerGstin: header.customerGstin || '',
+          customerBillingAddress: header.billingAddress || '',
+          customerShippingAddress: header.shippingAddress || ''
+        };
+        pdfCustomerDetailsRef.current = pdfCustomer;
+        Object.entries(pdfCustomer).forEach(([key, val]) => {
+          if (val) updatedHeader[key] = val;
+        });
 
         // Direct binding without slow in-memory filtering!
         const populatedItems = items.map((item, idx) => ({
@@ -1549,6 +1734,7 @@ const CustomerPO = ({
     setLocalError('')
     isSubmittingRef.current = false
     setParsedPdfSummary(null)
+    pdfCustomerDetailsRef.current = null
     setPdfParsingLoading(false)
     setExcelParsingLoading(false)
     setItemSearchQuery('')
@@ -1641,6 +1827,7 @@ const CustomerPO = ({
           customerGstin: data.gstin || '',
           customerBillingAddress: data.billing_address || '',
           customerShippingAddress: data.shipping_address || '',
+          customerMasterContactIds: parseContactIds(data.customer_master_contact_ids),
           items: data.items.map(item => {
             const cleanDwg = String(item.drawing_no || item.drawingNo || '').trim().toUpperCase();
             const matchedMaster = allDrawings.find(d => String(d.drawing_no || d.drawingNo || '').trim().toUpperCase() === cleanDwg);
@@ -1886,6 +2073,7 @@ const CustomerPO = ({
       formData.append('gstin', poForm.customerGstin || '');
       formData.append('billingAddress', poForm.customerBillingAddress || '');
       formData.append('shippingAddress', poForm.customerShippingAddress || '');
+      formData.append('customerMasterContactIds', JSON.stringify(poForm.customerMasterContactIds || []));
 
       const mappedItems = poForm.items.map(item => {
         const cleanNo = String(item.drawingNo || '').trim().toUpperCase();
@@ -2242,6 +2430,7 @@ const CustomerPO = ({
                   customerGstin: data.gstin || '',
                   customerBillingAddress: data.billing_address || '',
                   customerShippingAddress: data.shipping_address || '',
+                  customerMasterContactIds: parseContactIds(data.customer_master_contact_ids),
                   items: (data.items || []).map(item => {
                     const cleanDwg = String(item.drawing_no || item.drawingNo || '').trim().toUpperCase();
                     const matchedMaster = allDrawings.find(d => String(d.drawing_no || d.drawingNo || '').trim().toUpperCase() === cleanDwg);
@@ -2341,11 +2530,12 @@ const CustomerPO = ({
     return (poForm.items || []).filter(item => isItemPendingDesign(item, allDrawings)).length;
   }, [poForm.items, allDrawings, isItemPendingDesign]);
 
-  // New Customer PO: every line item must be Matched; any Pending Design item blocks creation (Edit is unchanged)
+  // New Customer PO: every line item must be Matched; any Pending Design item blocks creation (Edit is unchanged).
+  // Rows without a drawing no (e.g. the empty starter row) are left to the "Drawing No is required" check.
   const pendingDesignDrawingNos = useMemo(() => (
     (poForm.items || [])
-      .filter(item => isItemPendingDesign(item, allDrawings))
-      .map(item => String(item.drawingNo || '').trim() || '(no drawing no)')
+      .filter(item => String(item.drawingNo || '').trim() && isItemPendingDesign(item, allDrawings))
+      .map(item => String(item.drawingNo).trim())
   ), [poForm.items, allDrawings, isItemPendingDesign]);
   const isCreateBlockedByPendingDesign = formMode === 'CREATE' && pendingDesignDrawingNos.length > 0;
   const pendingDesignBlockMessage = `Customer PO cannot be created. ${pendingDesignDrawingNos.length} item${pendingDesignDrawingNos.length === 1 ? ' is' : 's are'} Pending Design. Please complete drawing/design matching for all pending items before creating the PO.`;
@@ -3647,9 +3837,20 @@ const CustomerPO = ({
                             customerShippingAddress = shippingAddressStr || comp.shipping_address || '';
                           }
 
+                          // Details already read from an uploaded PO PDF keep priority over Company Master
+                          const pdfCustomer = pdfCustomerDetailsRef.current || {};
+                          customerContactPerson = pdfCustomer.customerContactPerson || customerContactPerson;
+                          customerEmail = pdfCustomer.customerEmail || customerEmail;
+                          customerPhone = pdfCustomer.customerPhone || customerPhone;
+                          customerGstin = pdfCustomer.customerGstin || customerGstin;
+                          customerBillingAddress = pdfCustomer.customerBillingAddress || customerBillingAddress;
+                          customerShippingAddress = pdfCustomer.customerShippingAddress || customerShippingAddress;
+
                           setPoForm(prev => ({
                             ...prev,
                             companyId: val,
+                            // A different customer: previously chosen Customer Master contacts no longer apply
+                            customerMasterContactIds: String(prev.companyId) === String(val) ? (prev.customerMasterContactIds || []) : [],
                             customerContactPerson,
                             customerEmail,
                             customerPhone,
@@ -3672,32 +3873,48 @@ const CustomerPO = ({
                         <span className="text-[11px] font-semibold text-slate-700">Customer Details (Editable)</span>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                      {/* Phone Number, Billing and Shipping Address are hidden from view only; their values are still filled and saved */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div className="space-y-0.5">
                           <label className="text-[10px] text-slate-400 font-medium">Contact Person</label>
-                          <input
-                            type="text"
-                            disabled={formMode === 'VIEW'}
-                            value={poForm.customerContactPerson || ''}
-                            onChange={(e) => setPoForm(prev => ({ ...prev, customerContactPerson: e.target.value }))}
-                            className="w-full bg-white border border-slate-200 rounded px-2 py-0.5 text-[11px] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-700 font-semibold"
-                          />
+                          {masterContacts.length > 0 ? (
+                            <ContactMultiSelect
+                              single
+                              contacts={masterContacts}
+                              selectedIds={poForm.customerMasterContactIds || []}
+                              onChange={handleMasterContactsChange}
+                              disabled={formMode === 'VIEW'}
+                              fallbackText={poForm.customerContactPerson || ''}
+                            />
+                          ) : (
+                            <input
+                              type="text"
+                              disabled={formMode === 'VIEW'}
+                              placeholder="-"
+                              value={poForm.customerContactPerson || ''}
+                              onChange={(e) => setPoForm(prev => ({ ...prev, customerContactPerson: e.target.value }))}
+                              className="w-full bg-white border border-slate-200 rounded px-2 py-0.5 text-[11px] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-700 font-semibold"
+                            />
+                          )}
                         </div>
                         <div className="space-y-0.5">
                           <label className="text-[10px] text-slate-400 font-medium">Email Address</label>
                           <input
                             type="email"
+                            multiple
                             disabled={formMode === 'VIEW'}
+                            placeholder="-"
                             value={poForm.customerEmail || ''}
                             onChange={(e) => setPoForm(prev => ({ ...prev, customerEmail: e.target.value }))}
                             className="w-full bg-white border border-slate-200 rounded px-2 py-0.5 text-[11px] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-700 font-semibold"
                           />
                         </div>
-                        <div className="space-y-0.5">
+                        <div className="space-y-0.5 hidden">
                           <label className="text-[10px] text-slate-400 font-medium">Phone Number</label>
                           <input
                             type="text"
                             disabled={formMode === 'VIEW'}
+                            placeholder="-"
                             value={poForm.customerPhone || ''}
                             onChange={(e) => setPoForm(prev => ({ ...prev, customerPhone: e.target.value }))}
                             className="w-full bg-white border border-slate-200 rounded px-2 py-0.5 text-[11px] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-700 font-semibold"
@@ -3708,26 +3925,29 @@ const CustomerPO = ({
                           <input
                             type="text"
                             disabled={formMode === 'VIEW'}
+                            placeholder="-"
                             value={poForm.customerGstin || ''}
                             onChange={(e) => setPoForm(prev => ({ ...prev, customerGstin: e.target.value }))}
                             className="w-full bg-white border border-slate-200 rounded px-2 py-0.5 text-[11px] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-700 font-mono font-semibold"
                           />
                         </div>
-                        <div className="space-y-0.5">
+                        <div className="space-y-0.5 hidden">
                           <label className="text-[10px] text-slate-400 font-medium">Billing Address</label>
                           <input
                             type="text"
                             disabled={formMode === 'VIEW'}
+                            placeholder="-"
                             value={poForm.customerBillingAddress || ''}
                             onChange={(e) => setPoForm(prev => ({ ...prev, customerBillingAddress: e.target.value }))}
                             className="w-full bg-white border border-slate-200 rounded px-2 py-0.5 text-[11px] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-700 font-semibold"
                           />
                         </div>
-                        <div className="space-y-0.5">
+                        <div className="space-y-0.5 hidden">
                           <label className="text-[10px] text-slate-400 font-medium">Shipping Address</label>
                           <input
                             type="text"
                             disabled={formMode === 'VIEW'}
+                            placeholder="-"
                             value={poForm.customerShippingAddress || ''}
                             onChange={(e) => setPoForm(prev => ({ ...prev, customerShippingAddress: e.target.value }))}
                             className="w-full bg-white border border-slate-200 rounded px-2 py-0.5 text-[11px] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-700 font-semibold"
@@ -3975,7 +4195,7 @@ const CustomerPO = ({
                       data={filteredModalItems}
                       pageSize={100}
                       hideSearch={true}
-                      rowClassName={(row) => (formMode === 'CREATE' && isItemPendingDesign(row, allDrawings) ? 'bg-amber-50/70' : '')}
+                      rowClassName={(row) => (formMode === 'CREATE' && String(row.drawingNo || '').trim() && isItemPendingDesign(row, allDrawings) ? 'bg-amber-50/70' : '')}
                       emptyMessage={
                         itemSearchQuery || itemStatusFilter !== 'ALL'
                           ? "No purchase items match your search or filter."

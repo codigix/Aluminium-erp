@@ -480,9 +480,31 @@ const extractTableLineItems = (text, knownDrawingsSet = new Set()) => {
     }
 
     if (currentItem) {
-      const tokens = line.split(/[\t\s]+/).filter(Boolean);
-      const unitIdx = tokens.findIndex(t => /^(PC|PCS|NOS|EA|SET|UNIT|KG|MTR|ROLL|LOT)$/i.test(t));
-      const hasDate = DATE_REGEX.test(line);
+      const UNIT_TOKEN = /^(PC|PCS|NOS|EA|SET|UNIT|KG|MTR|ROLL|LOT)$/i;
+      let valueLine = line;
+      // The PDF can wrap an item's value row over several lines, even mid-number:
+      //   "02-Nov-26  3001678550  31.00  228.00" / "0" / "PC  7068.00 ..."
+      // A row that starts with its delivery date but has no unit yet is joined with the next lines
+      // (up to 3) until the unit appears; a short digits-only line continues the previous number.
+      if (/^(?:\d{8}\s+)?\d{1,2}[-/.][A-Za-z0-9]{2,3}[-/.][0-9]{2,4}\b/.test(line)
+        && !line.split(/[\t\s]+/).some(t => UNIT_TOKEN.test(t))) {
+        let combined = line;
+        let j = i + 1;
+        for (; j < lines.length && j <= i + 3; j++) {
+          const next = lines[j].trim();
+          if (!next) break;
+          combined = /^\d{1,3}$/.test(next) ? `${combined}${next}` : `${combined}\t${next}`;
+          if (next.split(/[\t\s]+/).some(t => UNIT_TOKEN.test(t))) break;
+        }
+        if (combined.split(/[\t\s]+/).some(t => UNIT_TOKEN.test(t))) {
+          valueLine = combined;
+          i = Math.min(j, lines.length - 1);
+        }
+      }
+
+      const tokens = valueLine.split(/[\t\s]+/).filter(Boolean);
+      const unitIdx = tokens.findIndex(t => UNIT_TOKEN.test(t));
+      const hasDate = DATE_REGEX.test(valueLine);
 
       if (unitIdx > 0 && (hasDate || tokens.length >= 5)) {
         currentItem.unit = tokens[unitIdx].toUpperCase();
@@ -502,7 +524,7 @@ const extractTableLineItems = (text, knownDrawingsSet = new Set()) => {
           currentItem.purchaseReqNo = tokens[unitIdx - 3];
         }
 
-        const dateMatch = line.match(DATE_REGEX);
+        const dateMatch = valueLine.match(DATE_REGEX);
         if (dateMatch) {
           currentItem.deliveryDate = normalizeDate(dateMatch[1]) || dateMatch[1];
         }
@@ -530,10 +552,112 @@ const extractTableLineItems = (text, knownDrawingsSet = new Set()) => {
   return { drawingNumbers, items };
 };
 
+// ── Customer (buyer) details ──
+// A customer PO names two parties: the buyer at the top and the vendor (our own company) below it.
+// pdf text often puts the value before its label ("Atul Raikar\tCreated By :"), so labels are matched
+// anywhere on the line and stripped to leave the value. Values belonging to our own companies
+// (exclude: names / gstins / emails / phones from Company Master) are never taken as the customer's.
+const GSTIN_PATTERN = /\b([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b/i;
+const EMAIL_PATTERN = /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i;
+const PARTY_LABEL_LINE = /\b(CIN\s*No|GSTIN|PAN\s*No|Created\s*By|Contact\s*Person|Kind\s*Attn|Attn|Mobile|Telephone|Phone|Fax|E-?Mail|Website|Vendor\s*Code|Purchase\s*Order|PO\s*Date|Despatch\s*Address|Dispatch\s*Address|Shipping\s*Address|Ship\s*To|Delivery\s*Address)\b/i;
+const SHIPPING_LABEL = /\b(Despatch|Dispatch|Shipping|Delivery)\s*Address\b|\bShip\s*To\b/i;
+const CONTACT_LABEL = /\b(Contact\s*Person|Kind\s*Attn\.?|Attn\.?|Created\s*By|Buyer\s*Name)\b/i;
+const PHONE_LABEL = /\b(Mobile|Telephone|Phone|Tel|Contact\s*No)\b\.?/i;
+
+const normalizeKey = value => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const phoneDigits = value => String(value || '').replace(/\D/g, '').slice(-10);
+// Text left on a labelled line once its label, separators and other labels are removed
+const valueBesideLabel = (line, labelRegex) => cleanup(
+  line.replace(labelRegex, ' ').replace(/[:\t]/g, ' ').replace(PARTY_LABEL_LINE, ' ')
+);
+
+const extractCustomerParty = (text, exclude = {}) => {
+  const excludedNames = (exclude.names || []).map(normalizeKey).filter(Boolean);
+  const excludedGstins = new Set((exclude.gstins || []).map(normalizeKey).filter(Boolean));
+  const excludedEmails = new Set((exclude.emails || []).map(e => String(e || '').trim().toLowerCase()).filter(Boolean));
+  const excludedPhones = new Set((exclude.phones || []).map(phoneDigits).filter(p => p.length >= 8));
+  const isOwnParty = line => {
+    const key = normalizeKey(line);
+    return key.length >= 4 && excludedNames.some(name => name.length >= 4 && (key === name || key.startsWith(name) || name.startsWith(key)));
+  };
+
+  // First page only, without "Page x of y" / "-- 1 of 34 --" markers
+  const allLines = String(text || '').split(/\r?\n/);
+  const pageEnd = allLines.findIndex((l, i) => i > 0 && (/^--\s*\d+\s*of\s*\d+\s*--$/i.test(l.trim()) || /^Page\s+2\s+of\s+\d+/i.test(l.trim())));
+  const page = allLines.slice(0, pageEnd > 0 ? pageEnd : 80).map(l => l.trim()).filter(l => l && !/^Page\s+\d+\s+of\s+\d+$/i.test(l));
+
+  // Buyer block: from the top until our own company's name or the vendor section starts
+  let buyerEnd = page.findIndex((l, i) => i > 0 && (isOwnParty(l) || /\bVendor\s*(Code|Name|Address|Details)?\s*:|^(To|Supplier)\s*:?$/i.test(l)));
+  if (buyerEnd <= 0) buyerEnd = Math.min(page.length, 12);
+  const buyer = page.slice(0, buyerEnd);
+
+  const firstNonLabel = buyer.findIndex(l => !PARTY_LABEL_LINE.test(l) && !GSTIN_PATTERN.test(l) && !/^[A-Z]\d{5}[A-Z]{2}\d{4}[A-Z]{3}\d{6}/i.test(l));
+  const companyName = firstNonLabel >= 0 ? cleanup(buyer[firstNonLabel]) : '';
+  const addressLines = [];
+  for (let i = firstNonLabel + 1; firstNonLabel >= 0 && i < buyer.length; i++) {
+    const l = buyer[i];
+    if (PARTY_LABEL_LINE.test(l) || GSTIN_PATTERN.test(l) || /^[A-Z]\d{5}[A-Z]{2}\d{4}[A-Z]{3}\d{6}/i.test(l)) break;
+    addressLines.push(cleanup(l).replace(/,+$/, ''));
+  }
+
+  const pickGstin = lines => {
+    for (const l of lines) {
+      const m = l.match(GSTIN_PATTERN);
+      if (m && !excludedGstins.has(normalizeKey(m[1]))) return m[1].toUpperCase();
+    }
+    return '';
+  };
+  const pickEmail = lines => {
+    for (const l of lines) {
+      const m = l.match(EMAIL_PATTERN);
+      if (m && !excludedEmails.has(m[1].toLowerCase())) return m[1];
+    }
+    return '';
+  };
+
+  let contactPerson = '';
+  let customerPhone = '';
+  for (const l of buyer) {
+    if (!contactPerson && CONTACT_LABEL.test(l)) {
+      const v = valueBesideLabel(l, CONTACT_LABEL);
+      if (v && !EMAIL_PATTERN.test(v) && !/\d{6,}/.test(v)) contactPerson = v;
+    }
+    if (!customerPhone && PHONE_LABEL.test(l)) {
+      const m = l.match(/(\+?\d[\d\s\-()]{6,}\d)/);
+      if (m && phoneDigits(m[1]).length >= 8 && !excludedPhones.has(phoneDigits(m[1]))) customerPhone = cleanup(m[1]);
+    }
+  }
+
+  // Shipping / despatch address block
+  let shippingAddress = '';
+  const shipIdx = page.findIndex(l => SHIPPING_LABEL.test(l));
+  if (shipIdx >= 0) {
+    const shipLines = [];
+    const inline = valueBesideLabel(page[shipIdx], SHIPPING_LABEL);
+    if (inline) shipLines.push(inline.replace(/,+$/, ''));
+    for (let i = shipIdx + 1; i < page.length && shipLines.length < 6; i++) {
+      const l = page[i];
+      if (GSTIN_PATTERN.test(l) || PARTY_LABEL_LINE.test(l) || /^[A-Z]{2}$/.test(l) || l.includes('\t')) break;
+      shipLines.push(cleanup(l).replace(/,+$/, ''));
+    }
+    shippingAddress = shipLines.join(', ');
+  }
+
+  return {
+    companyName,
+    billingAddress: addressLines.join(', '),
+    customerGstin: pickGstin(buyer) || pickGstin(page),
+    customerEmail: pickEmail(buyer) || pickEmail(page),
+    customerPhone,
+    contactPerson,
+    shippingAddress
+  };
+};
+
 /**
  * Main parsePoPdf function
  */
-const parsePoPdf = async (buffer, knownDrawings = []) => {
+const parsePoPdf = async (buffer, knownDrawings = [], options = {}) => {
   if (!buffer) {
     return { header: {}, drawingNumbers: [], items: [] };
   }
@@ -644,14 +768,23 @@ const parsePoPdf = async (buffer, knownDrawings = []) => {
 
     const billingAddress = extractAddressBlock(sections.headerText, ['Billing Address', 'Address', 'Customer Address', 'Despatch Address']);
 
+    // Buyer details from the top block of the PO (our own company's values are excluded)
+    const party = extractCustomerParty(text, options.exclude);
+    const ownGstins = new Set(((options.exclude || {}).gstins || []).map(normalizeKey));
+    const fallbackGstin = customerGstin && !ownGstins.has(normalizeKey(customerGstin)) ? customerGstin : '';
+
     // Extract Drawing Numbers and rich Line Items strictly from Item No table column
     const { drawingNumbers, items } = extractTableLineItems(text, knownDrawingsSet);
 
     return {
       companyCode,
-      companyName,
-      customerGstin,
-      billingAddress,
+      companyName: party.companyName || companyName,
+      customerGstin: party.customerGstin || fallbackGstin,
+      billingAddress: party.billingAddress || billingAddress,
+      contactPerson: party.contactPerson,
+      customerEmail: party.customerEmail,
+      customerPhone: party.customerPhone,
+      shippingAddress: party.shippingAddress,
       poNumber: poNumber || '',
       poDate: poDate || '',
       paymentTerms,

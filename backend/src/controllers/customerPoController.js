@@ -104,7 +104,8 @@ const createCustomerPo = async (req, res, next) => {
       phone: req.body.phone || null,
       gstin: req.body.gstin || null,
       billingAddress: req.body.billingAddress || null,
-      shippingAddress: req.body.shippingAddress || null
+      shippingAddress: req.body.shippingAddress || null,
+      customerMasterContactIds: req.body.customerMasterContactIds
     };
 
     const result = await customerPoService.createCustomerPo(payload);
@@ -136,14 +137,23 @@ const parseCustomerPoPdf = async (req, res, next) => {
       } else {
         console.log('[PO Parser] Using PDF parser');
         let knownDrawings = [];
+        // Our own companies (Company Master) appear on the PO as the vendor; their details are never the customer's
+        const exclude = { names: [], gstins: [], emails: [], phones: [] };
         try {
           const pool = require('../config/db');
           const [rows] = await pool.query('SELECT DISTINCT drawing_no FROM customer_drawings WHERE drawing_no IS NOT NULL AND TRIM(drawing_no) != ""');
           knownDrawings = rows.map(r => String(r.drawing_no).trim()).filter(Boolean);
+          const [hosts] = await pool.query('SELECT company_name, gstin, email, phone FROM company_master');
+          hosts.forEach(h => {
+            if (h.company_name) exclude.names.push(h.company_name);
+            if (h.gstin) exclude.gstins.push(h.gstin);
+            if (h.email) exclude.emails.push(h.email);
+            if (h.phone) exclude.phones.push(h.phone);
+          });
         } catch (dbErr) {
-          console.warn('[PO Parser] Could not fetch known drawings from DB:', dbErr.message);
+          console.warn('[PO Parser] Could not fetch known drawings / companies from DB:', dbErr.message);
         }
-        insights = await parsePoPdf(fileBuffer, knownDrawings);
+        insights = await parsePoPdf(fileBuffer, knownDrawings, { exclude });
       }
     } catch (parseError) {
       console.error('[PO Parser] Parse error:', parseError);
@@ -159,6 +169,10 @@ const parseCustomerPoPdf = async (req, res, next) => {
       companyName: insights.companyName || '',
       customerGstin: insights.customerGstin || '',
       billingAddress: insights.billingAddress || '',
+      shippingAddress: insights.shippingAddress || '',
+      contactPerson: insights.contactPerson || '',
+      customerEmail: insights.customerEmail || '',
+      customerPhone: insights.customerPhone || '',
       poNumber: insights.poNumber || '',
       poDate: insights.poDate || '',
       paymentTerms: insights.paymentTerms || '',
@@ -309,7 +323,8 @@ const updateCustomerPo = async (req, res, next) => {
       phone: req.body.phone || null,
       gstin: req.body.gstin || null,
       billingAddress: req.body.billingAddress || null,
-      shippingAddress: req.body.shippingAddress || null
+      shippingAddress: req.body.shippingAddress || null,
+      customerMasterContactIds: req.body.customerMasterContactIds
     };
 
     const result = await customerPoService.updateCustomerPo(req.params.id, payload);

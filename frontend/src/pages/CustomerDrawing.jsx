@@ -1578,6 +1578,65 @@ const CustomerDrawing = () => {
   const [clientSuggestions, setClientSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // Customer Master (Sales → Customer Master): source of the Client Name dropdown and its contact persons
+  const [masterCustomers, setMasterCustomers] = useState([]);
+  useEffect(() => {
+    if (!showFormModal) return;
+    const fetchMasterCustomers = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/customer-master?status=ACTIVE`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch Customer Master');
+        const data = await response.json();
+        setMasterCustomers(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Fetch Customer Master error:', error);
+      }
+    };
+    fetchMasterCustomers();
+  }, [showFormModal]);
+
+  // Customer Master record for the client currently in the form (also works when editing a saved requirement)
+  const selectedMasterCustomer = useMemo(() => {
+    const name = (formik.values.client_name || '').trim().toLowerCase();
+    if (!name) return null;
+    return masterCustomers.find(c => (c.customer_name || '').trim().toLowerCase() === name) || null;
+  }, [masterCustomers, formik.values.client_name]);
+  const masterContacts = selectedMasterCustomer?.contacts || [];
+
+  // Phone field accepts 10 digits; Customer Master mobiles may carry +91 / spaces
+  const toTenDigits = (value) => String(value || '').replace(/\D/g, '').slice(-10);
+
+  const handleSelectMasterContact = (contact) => {
+    formik.setValues({
+      ...formik.values,
+      contact_person: contact?.contact_name || '',
+      phone_number: toTenDigits(contact?.mobile),
+      email_address: contact?.email || selectedMasterCustomer?.email || ''
+    });
+  };
+
+  const handleSelectMasterCustomer = (customer) => {
+    const contacts = customer.contacts || [];
+    // A single contact person is selected automatically; with several, the user picks one from the dropdown
+    const onlyContact = contacts.length === 1 ? contacts[0] : null;
+    const address = [customer.address, customer.pincode].filter(Boolean).join(' - ');
+    formik.setValues({
+      ...formik.values,
+      client_name: customer.customer_name,
+      contact_person: onlyContact?.contact_name || '',
+      phone_number: toTenDigits(onlyContact?.mobile),
+      email_address: onlyContact?.email || customer.email || '',
+      gstin: customer.gst_no || '',
+      billing_address: address,
+      shipping_address: formik.values.shipping_address || address
+    });
+    setClientLocked(true);
+    setShowSuggestions(false);
+  };
+
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState(null);
@@ -1702,19 +1761,22 @@ const CustomerDrawing = () => {
     }
   };
 
+  // Client Name dropdown: Customer Master customers (searchable by name); falls back to the existing
+  // company list only when Customer Master has no match, so older clients can still be picked
+  const buildClientSuggestions = (value) => {
+    const q = (value || '').trim().toLowerCase();
+    const fromMaster = masterCustomers
+      .filter(c => !q || (c.customer_name || '').toLowerCase().includes(q))
+      .map(c => ({ ...c, _source: 'master' }));
+    if (fromMaster.length > 0 || !q) return fromMaster;
+    return companies.filter(company => (company.company_name || '').toLowerCase().includes(q));
+  };
+
   const handleClientInput = (value) => {
     formik.setFieldValue('client_name', value);
-
-    if (value.trim()) {
-      const filtered = companies.filter(company =>
-        company.company_name.toLowerCase().includes(value.toLowerCase())
-      );
-      setClientSuggestions(filtered);
-      setShowSuggestions(true);
-    } else {
-      setClientSuggestions([]);
-      setShowSuggestions(false);
-    }
+    const suggestions = buildClientSuggestions(value);
+    setClientSuggestions(suggestions);
+    setShowSuggestions(suggestions.length > 0);
   };
 
   const handleSelectClient = (company) => {
@@ -1751,6 +1813,11 @@ const CustomerDrawing = () => {
   const handleClientBlur = () => {
     const typedName = formik.values.client_name?.trim();
     if (!typedName || clientLocked) return;
+    const matchedMaster = masterCustomers.find(c => (c.customer_name || '').trim().toLowerCase() === typedName.toLowerCase());
+    if (matchedMaster) {
+      handleSelectMasterCustomer(matchedMaster);
+      return;
+    }
     const matchedCompany = companies.find(c =>
       c.company_name?.toLowerCase() === typedName.toLowerCase()
     );
@@ -3036,7 +3103,12 @@ const CustomerDrawing = () => {
                     value={formik.values.client_name}
                     onChange={(e) => handleClientInput(e.target.value)}
                     onBlur={(e) => { formik.handleBlur(e); handleClientBlur(); }}
-                    onFocus={() => formik.values.client_name && setShowSuggestions(true)}
+                    onFocus={() => {
+                      if (clientLocked) return;
+                      const suggestions = buildClientSuggestions(formik.values.client_name);
+                      setClientSuggestions(suggestions);
+                      setShowSuggestions(suggestions.length > 0);
+                    }}
                   />
                   {formik.touched.client_name && formik.errors.client_name && (
                     <div className="text-red-500 text-xs  mt-0.5">{formik.errors.client_name}</div>
@@ -3044,16 +3116,32 @@ const CustomerDrawing = () => {
                   {showSuggestions && clientSuggestions.length > 0 && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-300 rounded shadow-lg z-10 max-h-48 overflow-y-auto">
                       {clientSuggestions.map((company) => (
-                        <button
-                          key={company.id}
-                          type="button"
-                          onClick={() => handleSelectClient(company)}
-                          className="w-full text-left p-2 hover:bg-indigo-50 text-xs border-b border-slate-100 last:border-b-0 transition-colors"
-                        >
-                          <div className="text-slate-900 text-xs">{company.company_name}</div>
-                          {company.contact_email && <div className="text-slate-500 text-xs">{company.contact_email}</div>}
-                          {company.contact_mobile && <div className="text-slate-500 text-xs">{company.contact_mobile}</div>}
-                        </button>
+                        company._source === 'master' ? (
+                          <button
+                            key={`cm-${company.id}`}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleSelectMasterCustomer(company)}
+                            className="w-full text-left p-2 hover:bg-indigo-50 text-xs border-b border-slate-100 last:border-b-0 transition-colors"
+                          >
+                            <div className="text-slate-900 text-xs font-medium">{company.customer_name}</div>
+                            <div className="text-slate-500 text-[11px]">
+                              {[company.gst_no, `${(company.contacts || []).length} contact${(company.contacts || []).length === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}
+                            </div>
+                          </button>
+                        ) : (
+                          <button
+                            key={company.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleSelectClient(company)}
+                            className="w-full text-left p-2 hover:bg-indigo-50 text-xs border-b border-slate-100 last:border-b-0 transition-colors"
+                          >
+                            <div className="text-slate-900 text-xs">{company.company_name}</div>
+                            {company.contact_email && <div className="text-slate-500 text-xs">{company.contact_email}</div>}
+                            {company.contact_mobile && <div className="text-slate-500 text-xs">{company.contact_mobile}</div>}
+                          </button>
+                        )
                       ))}
                     </div>
                   )}
@@ -3073,15 +3161,40 @@ const CustomerDrawing = () => {
 
             <div>
               <label className="block text-xs  text-slate-700 mb-1">Contact Person</label>
-              <input
-                type="text"
-                name="contact_person"
-                placeholder="Contact person name"
-                className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.contact_person && formik.errors.contact_person ? 'border-red-500' : 'border-slate-300'}`}
-                value={formik.values.contact_person}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-              />
+              {masterContacts.length > 0 ? (
+                // Contact persons of the selected Customer Master customer; choosing one fills phone and email
+                <select
+                  name="contact_person"
+                  className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors bg-white ${formik.touched.contact_person && formik.errors.contact_person ? 'border-red-500' : 'border-slate-300'}`}
+                  value={formik.values.contact_person || ''}
+                  onChange={(e) => {
+                    const contact = masterContacts.find(c => c.contact_name === e.target.value);
+                    if (contact) handleSelectMasterContact(contact);
+                    else formik.setFieldValue('contact_person', e.target.value);
+                  }}
+                  onBlur={formik.handleBlur}
+                >
+                  <option value="">Select contact person ({masterContacts.length})</option>
+                  {masterContacts.map(c => (
+                    <option key={c.id} value={c.contact_name}>
+                      {c.contact_name}{c.mobile ? ` · ${c.mobile}` : ''}
+                    </option>
+                  ))}
+                  {formik.values.contact_person && !masterContacts.some(c => c.contact_name === formik.values.contact_person) && (
+                    <option value={formik.values.contact_person}>{formik.values.contact_person}</option>
+                  )}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  name="contact_person"
+                  placeholder="Contact person name"
+                  className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.contact_person && formik.errors.contact_person ? 'border-red-500' : 'border-slate-300'}`}
+                  value={formik.values.contact_person}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                />
+              )}
               {formik.touched.contact_person && formik.errors.contact_person && (
                 <div className="text-red-500 text-xs  mt-0.5">{formik.errors.contact_person}</div>
               )}

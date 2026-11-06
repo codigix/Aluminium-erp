@@ -28,6 +28,22 @@ const cleanAddress = (addr) => {
   return uniqueParts.join(', ') || 'N/A';
 };
 
+// Customer Master contact ids from the PO form (JSON string or array) → JSON array text for
+// customer_pos.customer_master_contact_ids; null when none are selected, undefined when not sent at all
+const normalizeCustomerMasterContactIds = value => {
+  if (value === undefined) return undefined;
+  let list = value;
+  if (typeof value === 'string') {
+    try {
+      list = value.trim() ? JSON.parse(value) : [];
+    } catch {
+      list = value.split(',');
+    }
+  }
+  const ids = [...new Set((Array.isArray(list) ? list : []).map(Number).filter(n => Number.isInteger(n) && n > 0))];
+  return ids.length ? JSON.stringify(ids) : null;
+};
+
 const calculateAmounts = items => {
   let subtotal = 0;
   let taxTotal = 0;
@@ -185,6 +201,12 @@ const createCustomerPo = async payload => {
     );
 
     const customerPoId = poResult.insertId;
+
+    // Contact persons selected from Customer Master (only when the form sends them)
+    const contactIdsJson = normalizeCustomerMasterContactIds(payload.customerMasterContactIds);
+    if (contactIdsJson !== undefined) {
+      await connection.execute('UPDATE customer_pos SET customer_master_contact_ids = ? WHERE id = ?', [contactIdsJson, customerPoId]);
+    }
 
     for (const item of items) {
       let resolvedDrawingId = (item.drawingId && !isNaN(Number(item.drawingId))) ? Number(item.drawingId) : null;
@@ -696,6 +718,12 @@ const updateCustomerPo = async (id, payload) => {
         id
       ]
     );
+
+    // Contact persons selected from Customer Master (only when the form sends them)
+    const contactIdsJson = normalizeCustomerMasterContactIds(payload.customerMasterContactIds);
+    if (contactIdsJson !== undefined) {
+      await connection.execute('UPDATE customer_pos SET customer_master_contact_ids = ? WHERE id = ?', [contactIdsJson, id]);
+    }
 
     // Delete existing items and re-insert
     await connection.execute('DELETE FROM customer_po_item_subassemblies WHERE po_item_id IN (SELECT id FROM customer_po_items WHERE customer_po_id = ?)', [id]);
