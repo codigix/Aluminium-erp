@@ -28,7 +28,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DESIGN],
-    allowedModules: ['dashboard', 'customer-master', 'customer-po', 'sales-order', 'sales-invoice', 'customer-drawing', 'client-quotations', 'sales-report'],
+    allowedModules: ['dashboard', 'customer-master', 'customer-po', 'sales-order', 'sales-invoice', 'customer-drawing', 'client-quotations', 'sales-report', 'part-tracking'],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
