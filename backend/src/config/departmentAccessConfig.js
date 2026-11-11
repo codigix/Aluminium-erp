@@ -223,7 +223,8 @@ const DEPARTMENT_ACCESS_RULES = {
       'dashboard', 'active-clients', 'suppliers', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'quality-reports', 
       'payment-history', 'customer-payment-history', 'bank-accounts', 'accounts-report', 'shipment-tracking', 
       'shipment-reports', 'project-analysis', 'material-consumption', 
-      'oee-analysis', 'machine-analysis', 'admin-company-master', 'sales-invoice'
+      'oee-analysis', 'machine-analysis', 'admin-company-master', 'sales-invoice',
+      'quotation-approvals'
     ],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT', 'PO_DELETE',

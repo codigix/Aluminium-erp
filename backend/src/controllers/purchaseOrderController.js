@@ -62,9 +62,15 @@ const updatePurchaseOrder = async (req, res, next) => {
   try {
     const result = await purchaseOrderService.updatePurchaseOrder(
       req.params.poId,
-      req.body
+      req.body,
+      req.user ? req.user.id : null
     );
-    res.json({ message: 'Purchase Order updated', data: result });
+    res.json({
+      message: result && result.reapprovalRequired
+        ? 'Purchase Order updated. Commercial terms changed after approval — it is back in Draft and must be sent for Admin approval again.'
+        : 'Purchase Order updated',
+      data: result
+    });
   } catch (error) {
     next(error);
   }
@@ -106,11 +112,13 @@ const handleStoreAcceptance = async (req, res, next) => {
   }
 };
 
+// Admin only (route: PO_APPROVE). PENDING_APPROVAL → ORDERED + PA code
 const approvePurchaseOrder = async (req, res, next) => {
   try {
     const result = await purchaseOrderService.approvePurchaseOrder(
       req.params.poId,
-      req.user.id
+      req.user.id,
+      req.body?.remarks || null
     );
     res.json(result);
   } catch (error) {
@@ -124,8 +132,73 @@ const bulkApprovePurchaseOrders = async (req, res, next) => {
     if (!Array.isArray(poIds) || poIds.length === 0) {
       return res.status(400).json({ message: 'No Purchase Order IDs provided' });
     }
-    const result = await purchaseOrderService.bulkApprovePurchaseOrders(poIds, req.user.id);
+    const result = await purchaseOrderService.bulkApprovePurchaseOrders(poIds, req.user.id, req.body?.remarks || null);
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ---- PO Admin approval ----
+const poApprovalService = require('../services/poApprovalService');
+
+const submitPOForApproval = async (req, res, next) => {
+  try {
+    const result = await poApprovalService.submitForApproval(req.params.poId, req.user.id, req.body?.remarks || null);
+    res.json({ message: 'Purchase Order sent for Admin approval', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const bulkSubmitPOsForApproval = async (req, res, next) => {
+  try {
+    const { poIds } = req.body;
+    if (!Array.isArray(poIds) || poIds.length === 0) {
+      return res.status(400).json({ message: 'No Purchase Order IDs provided' });
+    }
+    res.json(await poApprovalService.bulkSubmitForApproval(poIds, req.user.id, req.body?.remarks || null));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const rejectPurchaseOrder = async (req, res, next) => {
+  try {
+    const result = await poApprovalService.rejectPurchaseOrder(req.params.poId, req.user.id, req.body?.reason);
+    res.json({ message: 'Purchase Order rejected and returned to Draft', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getPOApprovals = async (req, res, next) => {
+  try {
+    res.json(await poApprovalService.listApprovals({ status: req.query.status, search: req.query.search }));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getPOApprovalDetail = async (req, res, next) => {
+  try {
+    res.json(await poApprovalService.getApprovalDetail(req.params.poId));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getPOApprovalHistory = async (req, res, next) => {
+  try {
+    res.json(await poApprovalService.getHistory(req.params.poId));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getPOPendingApprovalCount = async (req, res, next) => {
+  try {
+    res.json(await poApprovalService.getPendingCount());
   } catch (error) {
     next(error);
   }
@@ -168,19 +241,8 @@ const uploadInvoice = async (req, res, next) => {
 
     const result = await purchaseOrderService.updatePurchaseOrderInvoice(req.params.poId, filePaths || null);
     
-    // Auto-approve the PO if it has at least one attachment, is currently DRAFT or PO_REQUEST, and has a vendor assigned
-    if (filePaths && filePaths.trim().length > 0) {
-      try {
-        const po = await purchaseOrderService.getPurchaseOrderById(req.params.poId);
-        if (['DRAFT', 'PO_REQUEST'].includes(po.status) && po.vendor_id) {
-          const userId = req.user ? req.user.id : null;
-          await purchaseOrderService.approvePurchaseOrder(req.params.poId, userId);
-        }
-      } catch (err) {
-        console.error('[AUTO-APPROVE ERROR]:', err.message);
-      }
-    }
-    
+    // Uploading attachments no longer approves a Draft PO: approval is an Admin action (PENDING_APPROVAL → ORDERED)
+
     res.json({ 
       message: 'Attachments saved successfully', 
       paths: filePaths ? filePaths.split(',') : [],
@@ -208,6 +270,8 @@ const sendToPendingPayment = async (req, res, next) => {
       error.statusCode = 404;
       throw error;
     }
+
+    poApprovalService.assertApprovedForAction(existing[0], 'Sending to payment');
 
     console.log(`[DEBUG] Current PO status: ${existing[0].status}`);
     console.log(`[DEBUG] Updating to: PENDING_PAYMENT`);
@@ -295,5 +359,12 @@ module.exports = {
   uploadInvoice,
   sendToPendingPayment,
   mergePurchaseOrders,
-  forwardToAccounts
+  forwardToAccounts,
+  submitPOForApproval,
+  bulkSubmitPOsForApproval,
+  rejectPurchaseOrder,
+  getPOApprovals,
+  getPOApprovalDetail,
+  getPOApprovalHistory,
+  getPOPendingApprovalCount
 };

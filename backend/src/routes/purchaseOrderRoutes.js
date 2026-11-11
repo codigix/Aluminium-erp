@@ -6,12 +6,20 @@ const { authorize } = require('../middleware/authMiddleware');
 const upload = require('../middleware/upload');
 
 router.get('/material-requests', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPOMaterialRequests);
-router.post('/bulk-approve', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.bulkApprovePurchaseOrders);
+// PO Admin approval (approve / reject are Admin-only: PO_APPROVE; System Admin bypasses)
+router.get('/approvals', authorize(['PO_APPROVE']), purchaseOrderController.getPOApprovals);
+router.get('/approvals/pending-count', authorize(['PO_APPROVE', 'PURCHASE_ORDER_VIEW']), purchaseOrderController.getPOPendingApprovalCount);
+router.post('/bulk-submit-approval', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.bulkSubmitPOsForApproval);
+router.post('/bulk-approve', authorize(['PO_APPROVE']), purchaseOrderController.bulkApprovePurchaseOrders);
+router.get('/:poId/approval-detail', authorize(['PO_APPROVE']), purchaseOrderController.getPOApprovalDetail);
+router.get('/:poId/approval-history', authorize(['PURCHASE_ORDER_VIEW', 'PO_APPROVE']), purchaseOrderController.getPOApprovalHistory);
+router.post('/:poId/submit-approval', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.submitPOForApproval);
+router.post('/:poId/reject', authorize(['PO_APPROVE']), purchaseOrderController.rejectPurchaseOrder);
 router.patch('/:poId/send-to-payment', authorize(['PAYMENT_PROCESS']), purchaseOrderController.sendToPendingPayment);
 router.put('/:poId/send-to-accounts', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.forwardToAccounts);
 router.post('/:poId/invoice', authorize(['PURCHASE_ORDER_EDIT']), upload.array('invoice', 10), purchaseOrderController.uploadInvoice);
 router.post('/:poId/store-acceptance', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.handleStoreAcceptance);
-router.post('/:poId/approve', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.approvePurchaseOrder);
+router.post('/:poId/approve', authorize(['PO_APPROVE']), purchaseOrderController.approvePurchaseOrder);
 router.get('/:poId/pdf', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrderPDF);
 router.post('/:poId/send-email', authorize(['PURCHASE_ORDER_EDIT', 'PURCHASE_ORDER_VIEW', 'PAYMENT_PROCESS']), purchaseOrderController.sendPurchaseOrderEmail);
 router.get('/next-number', authorize(['PURCHASE_ORDER_CREATE', 'PURCHASE_ORDER_VIEW']), purchaseOrderController.getNextPONumber);

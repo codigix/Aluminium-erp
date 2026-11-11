@@ -203,8 +203,71 @@ const parseReceivedQuotationPDF = async (req, res, next) => {
 
 const approveComparedQuotations = async (req, res, next) => {
   try {
-    const result = await quotationService.approveComparedQuotations(req.body);
-    res.json({ message: 'Compared quotations approved and POs created', data: result });
+    const result = await quotationService.approveComparedQuotations(req.body, req.user?.id);
+    res.json({ message: 'Awarded quotations sent for Admin approval', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ---- Admin approval workflow ----
+const quotationApprovalService = require('../services/quotationApprovalService');
+
+const submitQuotationForApproval = async (req, res, next) => {
+  try {
+    const result = await quotationApprovalService.submitForApproval(req.params.quotationId, req.user?.id, req.body?.remarks);
+    res.json({ message: 'Quotation sent for Admin approval', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const approveQuotation = async (req, res, next) => {
+  try {
+    const result = await quotationApprovalService.approveQuotation(req.params.quotationId, req.user?.id, req.body?.remarks);
+    res.json({ message: `Quotation approved. Reference: ${result.approval_code}`, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const rejectQuotation = async (req, res, next) => {
+  try {
+    const result = await quotationApprovalService.rejectQuotation(req.params.quotationId, req.user?.id, req.body?.reason);
+    res.json({ message: 'Quotation rejected', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getQuotationApprovals = async (req, res, next) => {
+  try {
+    const rows = await quotationApprovalService.listApprovals({ status: req.query.status, search: req.query.search });
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getQuotationApprovalDetail = async (req, res, next) => {
+  try {
+    res.json(await quotationApprovalService.getApprovalDetail(req.params.quotationId));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getQuotationApprovalHistory = async (req, res, next) => {
+  try {
+    res.json(await quotationApprovalService.getHistory(req.params.quotationId));
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getPendingApprovalCount = async (req, res, next) => {
+  try {
+    res.json(await quotationApprovalService.getPendingCount());
   } catch (error) {
     next(error);
   }
@@ -241,5 +304,12 @@ module.exports = {
   getReceivedQuotationPDF,
   parseReceivedQuotationPDF,
   approveComparedQuotations,
-  mergeQuotations
+  mergeQuotations,
+  submitQuotationForApproval,
+  approveQuotation,
+  rejectQuotation,
+  getQuotationApprovals,
+  getQuotationApprovalDetail,
+  getQuotationApprovalHistory,
+  getPendingApprovalCount
 };

@@ -178,7 +178,7 @@ const getAccountsDashboardStats = async () => {
       SUM(po.total_amount - COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = po.id AND status = 'CONFIRMED'), 0)) as amount
     FROM purchase_orders po
     JOIN vendors v ON po.vendor_id = v.id
-    WHERE po.status NOT IN ('DRAFT', 'CANCELLED', 'PAID', 'PO_REQUEST')
+    WHERE po.status NOT IN ('DRAFT', 'CANCELLED', 'PAID', 'PO_REQUEST', 'PENDING_APPROVAL')
     GROUP BY v.id
     HAVING amount > 0
     ORDER BY amount DESC
@@ -732,7 +732,7 @@ const getProcurementReportStats = async (filters = {}) => {
     SELECT 
       COUNT(*) as totalPos,
       SUM(CASE WHEN po.status IN ('COMPLETED', 'FULFILLED', 'PAID') THEN 1 ELSE 0 END) as completedOrders,
-      SUM(CASE WHEN po.status NOT IN ('COMPLETED', 'FULFILLED', 'PAID', 'DRAFT') THEN 1 ELSE 0 END) as pendingOrders
+      SUM(CASE WHEN po.status NOT IN ('COMPLETED', 'FULFILLED', 'PAID', 'DRAFT', 'PENDING_APPROVAL') THEN 1 ELSE 0 END) as pendingOrders
     FROM purchase_orders po
     JOIN vendors v ON po.vendor_id = v.id
     WHERE po.status != 'DRAFT'
@@ -1345,7 +1345,7 @@ const getAccountsReportStats = async (filters = {}) => {
       COUNT(DISTINCT po.vendor_id) as payableVendors
     FROM purchase_orders po
     JOIN vendors v ON po.vendor_id = v.id
-    WHERE po.status NOT IN ('DRAFT', 'CANCELLED', 'PAID')
+    WHERE po.status NOT IN ('DRAFT', 'CANCELLED', 'PAID', 'PENDING_APPROVAL')
     ${dateFilter.replace('created_at', 'po.created_at')}
     ${customerFilter.replace('c.company_name', 'v.vendor_name')}
   `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
@@ -1495,7 +1495,7 @@ const getAccountsReportStats = async (filters = {}) => {
       SUM(CASE WHEN po.created_at < DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY) THEN po.total_amount ELSE 0 END) as overdue
     FROM purchase_orders po
     JOIN vendors v ON po.vendor_id = v.id
-    WHERE po.status NOT IN ('DRAFT', 'CANCELLED', 'PAID')
+    WHERE po.status NOT IN ('DRAFT', 'CANCELLED', 'PAID', 'PENDING_APPROVAL')
     ${dateFilter.replace('created_at', 'po.created_at')}
     ${customerFilter.replace('c.company_name', 'v.vendor_name')}
     GROUP BY v.id

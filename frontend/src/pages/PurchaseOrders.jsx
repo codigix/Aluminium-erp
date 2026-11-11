@@ -29,7 +29,8 @@ const poStatusColors = {
   CLOSED: { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', badge: 'bg-slate-50 text-slate-700', label: 'closed', icon: 'M5 13l4 4L19 7' },
   FULFILLED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-700', label: 'fulfilled', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
   COMPLETED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-700', label: 'completed', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
-  MERGED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-50 text-purple-700', label: 'merged', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' }
+  MERGED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-50 text-purple-700', label: 'merged', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' },
+  PENDING_APPROVAL: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', badge: 'bg-amber-50 text-amber-700', label: 'pending approval', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' }
 };
 
 const formatDate = (date) => {
@@ -1202,7 +1203,12 @@ const PurchaseOrders = () => {
           throw new Error(errorData.message || `Failed to ${manualFormData.id ? 'update' : 'create'} Direct Company PO`);
         }
 
-        successToast(`Direct Company Purchase Order ${manualFormData.id ? 'updated' : 'created'} successfully`);
+        const directResult = await response.json().catch(() => ({}));
+        if (directResult?.data?.reapprovalRequired) {
+          Swal.fire({ icon: 'info', title: 'Re-approval required', text: directResult.message });
+        } else {
+          successToast(`Direct Company Purchase Order ${manualFormData.id ? 'updated' : 'created'} successfully`);
+        }
         setShowManualCreateModal(false);
         navigate(`${deptPrefix}/purchase-orders`);
         fetchPOs(false);
@@ -1290,7 +1296,12 @@ const PurchaseOrders = () => {
         throw new Error(errorData.message || `Failed to ${manualFormData.id ? 'update' : 'create'} PO`);
       }
 
-      successToast(`Purchase Order ${manualFormData.id ? 'updated' : 'created'} successfully`);
+      const saveResult = await response.json().catch(() => ({}));
+      if (saveResult?.data?.reapprovalRequired) {
+        Swal.fire({ icon: 'info', title: 'Re-approval required', text: saveResult.message });
+      } else {
+        successToast(`Purchase Order ${manualFormData.id ? 'updated' : 'created'} successfully`);
+      }
       setShowManualCreateModal(false);
       navigate(`${deptPrefix}/purchase-orders`);
       fetchPOs(false);
@@ -1828,9 +1839,14 @@ const PurchaseOrders = () => {
         })
       });
 
-      if (!response.ok) throw new Error('Failed to update PO');
+      const updateResult = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(updateResult.message || 'Failed to update PO');
 
-      successToast('Purchase Order updated successfully');
+      if (updateResult?.data?.reapprovalRequired) {
+        Swal.fire({ icon: 'info', title: 'Re-approval required', text: updateResult.message });
+      } else {
+        successToast('Purchase Order updated successfully');
+      }
       setShowEditModal(false);
       fetchPOs();
       fetchStats();
@@ -1965,42 +1981,47 @@ const PurchaseOrders = () => {
     }
   };
 
+  // Procurement: Draft / PO Request (with vendor) → Pending Admin approval. Admin approves on the Admin → Approvals page.
   const handleApprovePO = async (poId) => {
     const po = pos.find(p => p.id === poId);
     if (po && po.status === 'PO_REQUEST' && !po.vendor_id) {
-      // If it's a request without a vendor, open the edit flow instead of approving
+      // If it's a request without a vendor, open the edit flow to assign one first
       return handleEditPO(poId);
     }
+    const isResubmit = po && po.po_last_approval_action && ['REJECTED', 'REVISED'].includes(po.po_last_approval_action);
 
     try {
       const result = await Swal.fire({
-        title: 'Approve Purchase Order?',
-        text: 'This will confirm the order and allow material receipts.',
+        title: isResubmit ? 'Resubmit PO for Admin Approval?' : 'Send PO for Admin Approval?',
+        html: `<div style="font-size:13px">${po ? `<b>${po.po_number}</b> · ${po.vendor_name || ''}<br/><br/>` : ''}The PO will be locked until Admin approves or rejects it. After approval it becomes <b>Ordered</b> and can be sent to the vendor.</div>`,
         icon: 'question',
+        input: 'textarea',
+        inputPlaceholder: 'Remarks for Admin (optional)',
         showCancelButton: true,
         confirmButtonColor: '#10b981',
         cancelButtonColor: '#64748b',
-        confirmButtonText: 'Yes, Approve It!'
+        confirmButtonText: isResubmit ? 'Resubmit' : 'Send for Approval'
       });
 
       if (result.isConfirmed) {
         setLoading(true);
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/purchase-orders/${poId}/approve`, {
+        const response = await fetch(`${API_BASE}/purchase-orders/${poId}/submit-approval`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
-          }
+          },
+          body: JSON.stringify({ remarks: result.value || null })
         });
 
         if (response.ok) {
-          successToast("Purchase Order approved successfully");
+          successToast(isResubmit ? 'Purchase Order resubmitted for Admin approval' : 'Purchase Order sent for Admin approval');
           fetchPOs(false);
           fetchStats();
         } else {
-          const error = await response.json();
-          errorToast(error.message || "Failed to approve PO");
+          const error = await response.json().catch(() => ({}));
+          errorToast(error.message || 'Failed to send PO for approval');
         }
       }
     } catch (error) {
@@ -2014,25 +2035,25 @@ const PurchaseOrders = () => {
   const handleBulkApprove = async () => {
     const eligiblePOs = pos.filter(po => selectedPOIds.includes(po.id) && isPOEligibleForApproval(po));
     if (eligiblePOs.length === 0) {
-      return errorToast('No eligible Purchase Orders selected for approval');
+      return errorToast('No eligible Purchase Orders selected (Draft POs with a vendor)');
     }
 
     try {
       const result = await Swal.fire({
-        title: `Approve ${eligiblePOs.length} selected Purchase Order${eligiblePOs.length > 1 ? 's' : ''}?`,
-        text: 'This will confirm the orders and allow material receipts.',
+        title: `Send ${eligiblePOs.length} Purchase Order${eligiblePOs.length > 1 ? 's' : ''} for Admin Approval?`,
+        text: 'The selected POs will be locked until Admin approves or rejects them.',
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#10b981',
         cancelButtonColor: '#64748b',
-        confirmButtonText: 'Approve',
+        confirmButtonText: 'Send for Approval',
         cancelButtonText: 'Cancel'
       });
 
       if (result.isConfirmed) {
         setLoading(true);
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/purchase-orders/bulk-approve`, {
+        const response = await fetch(`${API_BASE}/purchase-orders/bulk-submit-approval`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -2041,22 +2062,41 @@ const PurchaseOrders = () => {
           body: JSON.stringify({ poIds: eligiblePOs.map(p => p.id) })
         });
 
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
         if (response.ok) {
-          const approvedCount = data.approved ? data.approved.length : eligiblePOs.length;
-          successToast(`${approvedCount} Purchase Order${approvedCount === 1 ? '' : 's'} approved successfully.`);
+          const sentCount = data.submitted ? data.submitted.length : eligiblePOs.length;
+          successToast(`${sentCount} Purchase Order${sentCount === 1 ? '' : 's'} sent for Admin approval.`);
+          if (data.failed && data.failed.length) errorToast(`${data.failed.length} could not be sent: ${data.failed[0].reason}`);
           setSelectedPOIds([]);
           fetchPOs(false);
           fetchStats();
         } else {
-          errorToast(data.message || 'Failed to approve selected Purchase Orders');
+          errorToast(data.message || 'Failed to send selected Purchase Orders for approval');
         }
       }
     } catch (error) {
-      console.error('Bulk Approve Error:', error);
+      console.error('Bulk Submit Error:', error);
       errorToast('Network error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Approval timeline (Submitted → Rejected → Resubmitted → Approved → Revised)
+  const [poApprovalHistory, setPoApprovalHistory] = useState(null);
+  const openPOApprovalHistory = async (po) => {
+    setPoApprovalHistory({ po, rows: [], loading: true });
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/${po.id}/approval-history`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(data.message || 'Failed to load approval history');
+      setPoApprovalHistory({ po, rows: Array.isArray(data) ? data : [], loading: false });
+    } catch (error) {
+      setPoApprovalHistory({ po, rows: [], loading: false });
+      errorToast(error.message || 'Failed to load approval history');
     }
   };
 
@@ -2341,15 +2381,29 @@ const PurchaseOrders = () => {
       label: 'Status',
       key: 'status',
       sortable: true,
-      render: (val) => (
-        <span className={`inline-flex items-center gap-1.5 p-1  text-xs  ${poStatusColors[val]?.badge} ${poStatusColors[val]?.border}`}>
-          <div className={` rounded ${poStatusColors[val]?.text.replace('text-', 'bg-')} text-white`}>
-            <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d={poStatusColors[val]?.icon || 'M5 13l4 4L19 7'} />
-            </svg>
-          </div>
-          <span className=" ">{poStatusColors[val]?.label}</span>
-        </span>
+      render: (val, row) => (
+        <div className="flex flex-col items-start gap-0.5">
+          <span className={`inline-flex items-center gap-1.5 p-1  text-xs  ${poStatusColors[val]?.badge} ${poStatusColors[val]?.border}`}>
+            <div className={` rounded ${poStatusColors[val]?.text.replace('text-', 'bg-')} text-white`}>
+              <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d={poStatusColors[val]?.icon || 'M5 13l4 4L19 7'} />
+              </svg>
+            </div>
+            <span className=" ">{poStatusColors[val]?.label}</span>
+          </span>
+          {row?.po_approval_code && (
+            <span className="text-[10px] font-mono font-semibold text-emerald-700" title={`Approved by ${row.po_approved_by_name || '—'}${row.approved_at ? ' · ' + formatDate(row.approved_at) : ''}`}>
+              {row.po_approval_code}
+            </span>
+          )}
+          {val === 'PENDING_APPROVAL' && <span className="text-[10px] italic text-amber-600">Awaiting Admin</span>}
+          {['DRAFT', 'PO_REQUEST'].includes(val) && row?.po_last_approval_action === 'REJECTED' && (
+            <span className="text-[10px] text-rose-600 max-w-[160px] truncate" title={row.po_approval_remarks || ''}>Rejected: {row.po_approval_remarks || '—'}</span>
+          )}
+          {['DRAFT', 'PO_REQUEST'].includes(val) && row?.po_last_approval_action === 'REVISED' && (
+            <span className="text-[10px] text-amber-700">Re-approval needed</span>
+          )}
+        </div>
       )
     },
     {
@@ -2357,17 +2411,31 @@ const PurchaseOrders = () => {
       key: 'id',
       className: 'text-right',
       render: (_, row) => {
-        const isSent = !['DRAFT', 'PO_REQUEST'].includes(row.status);
+        const isPendingApproval = row.status === 'PENDING_APPROVAL';
+        const isUnapproved = ['DRAFT', 'PO_REQUEST', 'PENDING_APPROVAL'].includes(row.status);
+        const isSent = !isUnapproved;
+        const isResubmit = ['REJECTED', 'REVISED'].includes(row.po_last_approval_action);
         return (
           <div className="flex justify-end gap-2" onClick={e => e.stopPropagation()}>
             {(row.status === 'DRAFT' || row.status === 'PO_REQUEST') && (
               <button
                 onClick={() => handleApprovePO(row.id)}
-                className="p-1 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 rounded transition-all border border-emerald-100 hover:border-emerald-200 active:scale-90 flex items-center justify-center"
-                title="Approve PO"
+                className={`p-1 rounded transition-all border active:scale-90 flex items-center justify-center ${isResubmit ? 'text-amber-600 hover:bg-amber-50 border-amber-100 hover:border-amber-200' : 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 border-emerald-100 hover:border-emerald-200'}`}
+                title={row.status === 'PO_REQUEST' && !row.vendor_id ? 'Assign vendor' : (isResubmit ? 'Resubmit for Admin approval' : 'Send for Admin approval')}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+              </button>
+            )}
+            {(isPendingApproval || row.po_approval_code || row.po_last_approval_action) && (
+              <button
+                onClick={() => openPOApprovalHistory(row)}
+                className={`p-1 rounded transition-all active:scale-90 ${isPendingApproval ? 'text-amber-600 bg-amber-50 border border-amber-100' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                title={isPendingApproval ? 'Pending Admin approval — view history' : 'Approval history'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </button>
             )}
@@ -2382,15 +2450,17 @@ const PurchaseOrders = () => {
               </svg>
             </button>
             <button
+              disabled={isPendingApproval}
               onClick={() => {
+                if (isPendingApproval) return;
                 if (row.status === 'PO_REQUEST') {
                   navigate(`${deptPrefix}/purchase-orders/edit-manual/${row.id}`);
                 } else {
                   handleEditPO(row.id);
                 }
               }}
-              className=" text-slate-400 hover:bg-slate-50 hover:text-slate-600   transition-all   active:scale-90"
-              title="Edit PO"
+              className=" text-slate-400 hover:bg-slate-50 hover:text-slate-600   transition-all   active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
+              title={isPendingApproval ? 'Locked while pending Admin approval' : 'Edit PO'}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -2419,7 +2489,7 @@ const PurchaseOrders = () => {
                 )}
               </button>
             )}
-            {row.vendor_id && (
+            {row.vendor_id && isSent && (
               <button
                 onClick={() => openEmailModal(row)}
                 className={`rounded transition-all active:scale-90 p-1 ${isSent ? 'text-emerald-500 hover:bg-emerald-50' : 'text-blue-600 hover:bg-blue-50'}`}
@@ -2454,9 +2524,10 @@ const PurchaseOrders = () => {
               )
             )}
             <button
-              onClick={() => handleDeletePO(row.id)}
-              className="text-rose-500 hover:bg-rose-50 transition-all active:scale-90 p-1 rounded"
-              title="Delete PO"
+              disabled={isPendingApproval}
+              onClick={() => { if (!isPendingApproval) handleDeletePO(row.id); }}
+              className="text-rose-500 hover:bg-rose-50 transition-all active:scale-90 p-1 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+              title={isPendingApproval ? 'Locked while pending Admin approval' : 'Delete PO'}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2545,7 +2616,7 @@ const PurchaseOrders = () => {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all active:scale-95 animate-in fade-in"
             >
               <CheckCircle2 size={14} />
-              Approve Selected ({selectedPOIds.length})
+              Send for Approval ({selectedPOIds.length})
             </button>
           )}
           <Button
@@ -2613,6 +2684,7 @@ const PurchaseOrders = () => {
                 { id: 'ALL', label: 'All', icon: List },
                 { id: 'PO_REQUEST', label: 'Requests', icon: Clock },
                 { id: 'DRAFT', label: 'Draft', icon: FileText },
+                { id: 'PENDING_APPROVAL', label: 'Pending Approval', icon: Clock },
                 { id: 'SENT', label: 'Sent', icon: Truck },
                 { id: 'RECEIVED', label: 'Received', icon: CheckCircle2 },
                 { id: 'FULFILLED', label: 'Fulfilled', icon: Package }
@@ -2644,7 +2716,7 @@ const PurchaseOrders = () => {
           isRowSelectable={isPOEligibleForApproval}
           bulkActions={[
             {
-              label: `Approve Selected (${selectedPOIds.length})`,
+              label: `Send for Approval (${selectedPOIds.length})`,
               icon: CheckCircle2,
               onClick: handleBulkApprove,
               className: 'text-white bg-emerald-600 hover:bg-emerald-700 border-transparent shadow-sm'
@@ -4543,6 +4615,43 @@ const PurchaseOrders = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* PO Approval History */}
+      {poApprovalHistory && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setPoApprovalHistory(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Approval History</h3>
+                <p className="text-[11px] text-slate-500">{poApprovalHistory.po.po_number} · {poApprovalHistory.po.vendor_name || '—'}</p>
+              </div>
+              <button onClick={() => setPoApprovalHistory(null)} className="text-slate-400 hover:text-slate-600 text-lg leading-none">×</button>
+            </div>
+            <div className="p-4">
+              {poApprovalHistory.loading ? (
+                <p className="text-xs text-slate-400">Loading…</p>
+              ) : poApprovalHistory.rows.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">No approval history yet.</p>
+              ) : (
+                <ol className="relative border-l border-slate-200 ml-2 space-y-3">
+                  {poApprovalHistory.rows.map(h => (
+                    <li key={h.id} className="ml-4">
+                      <span className={`absolute -left-1.5 w-3 h-3 rounded-full border-2 border-white ${h.action === 'APPROVED' ? 'bg-emerald-500' : h.action === 'REJECTED' ? 'bg-rose-500' : h.action === 'REVISED' ? 'bg-orange-500' : 'bg-amber-400'}`} />
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className={`font-semibold ${h.action === 'APPROVED' ? 'text-emerald-700' : h.action === 'REJECTED' ? 'text-rose-600' : h.action === 'REVISED' ? 'text-orange-600' : 'text-amber-700'}`}>{h.action}</span>
+                        {h.approval_code && <span className="font-mono text-[11px] text-emerald-700">{h.approval_code}</span>}
+                        {h.total_amount !== null && h.total_amount !== undefined && <span className="text-slate-500">{formatCurrency(h.total_amount)}</span>}
+                      </div>
+                      <div className="text-[11px] text-slate-500">{h.acted_by_name || '—'} · {h.acted_at ? new Date(h.acted_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</div>
+                      {h.remarks && <div className="text-[11px] text-slate-700 mt-0.5">“{h.remarks}”</div>}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           </div>
         </div>
       )}

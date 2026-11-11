@@ -30,7 +30,9 @@ import {
   Building2,
   Printer,
   GitMerge,
-  Users
+  Users,
+  FileCheck2,
+  ShoppingCart
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -47,9 +49,11 @@ const rfqStatusColors = {
   EMAIL_RECEIVED: { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-600', badge: 'bg-sky-100 text-sky-700', label: 'Email Received' },
   RECEIVED: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', badge: 'bg-cyan-100 text-cyan-700', label: 'Received' },
   REVIEWED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', label: 'Approved' },
+  PENDING_APPROVAL: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', badge: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Pending Approval' },
   CLOSED: { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', badge: 'bg-slate-100 text-slate-700', label: 'Closed' },
   PENDING: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-600', badge: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
   REJECTED: { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-600', badge: 'bg-rose-100 text-rose-700', label: 'REJECTED' },
+  PENDING_ITEMS: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-600', badge: 'bg-yellow-100 text-yellow-700', label: 'Partly Assigned' },
 };
 
 const formatDate = (date) => {
@@ -1288,13 +1292,162 @@ const Quotations = () => {
     }
   };
 
+  // Procurement: RECEIVED / REJECTED → PENDING_APPROVAL (Admin approves; no PO is created on approval)
+  const handleSendForApproval = async (quotationId, isResubmit = false) => {
+    const confirm = await Swal.fire({
+      title: isResubmit ? 'Resubmit for Admin Approval?' : 'Send for Admin Approval?',
+      text: 'The quotation will be locked until Admin approves or rejects it. Purchase Order creation is a separate step after approval.',
+      icon: 'question',
+      input: 'textarea',
+      inputPlaceholder: 'Remarks for Admin (optional)',
+      showCancelButton: true,
+      confirmButtonText: isResubmit ? 'Resubmit' : 'Send for Approval',
+      cancelButtonText: 'Cancel'
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotations/${quotationId}/submit-approval`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ remarks: confirm.value || null })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || 'Failed to send for approval');
+      successToast(isResubmit ? 'Quotation resubmitted for Admin approval' : 'Quotation sent for Admin approval');
+      setShowApprovalModal(false);
+      fetchQuotations();
+      fetchStats();
+    } catch (error) {
+      errorToast(error.message || 'Failed to send for approval');
+    }
+  };
+
+  // Procurement: Admin-approved quotation (REVIEWED) → Purchase Order, via the existing PO creation service.
+  // The backend locks the quotation, rejects non-approved quotes and blocks a second PO for the same quote.
+  const [creatingPOFor, setCreatingPOFor] = useState(null);
+  const handleCreatePOFromApproved = async (q) => {
+    if (q.status !== 'REVIEWED' || q.linked_po_number) return;
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const money = (v) => `₹${(Number(v) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const token = localStorage.getItem('authToken');
+
+    setCreatingPOFor(q.id);
+    let detail;
+    try {
+      const response = await fetch(`${API_BASE}/quotations/${q.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      detail = await response.json().catch(() => null);
+      if (!response.ok || !detail) throw new Error(detail?.message || 'Failed to load quotation');
+    } catch (error) {
+      setCreatingPOFor(null);
+      errorToast(error.message || 'Failed to load quotation');
+      return;
+    }
+
+    const allItems = Array.isArray(detail.items) ? detail.items : [];
+    const awarded = allItems.filter(i => Number(i.is_selected) === 1);
+    const rowsHtml = (awarded.length ? awarded : allItems).map((i, idx) => {
+      const gst = (Number(i.cgst_percent) || 0) + (Number(i.sgst_percent) || 0);
+      return `<tr>
+        <td style="padding:4px 6px;border-top:1px solid #f1f5f9">${idx + 1}</td>
+        <td style="padding:4px 6px;border-top:1px solid #f1f5f9">${esc(i.drawing_no || i.item_code || '—')}<div style="color:#64748b;font-size:10px">${esc(i.description || i.material_name || '')}</div></td>
+        <td style="padding:4px 6px;border-top:1px solid #f1f5f9;text-align:right">${(Number(i.quantity) || 0).toFixed(3)} ${esc(i.unit || i.uom || '')}</td>
+        <td style="padding:4px 6px;border-top:1px solid #f1f5f9;text-align:right">${money(i.unit_rate)}</td>
+        <td style="padding:4px 6px;border-top:1px solid #f1f5f9;text-align:right">${gst}%</td>
+        <td style="padding:4px 6px;border-top:1px solid #f1f5f9;text-align:right">${money(i.total_amount || i.amount)}</td>
+      </tr>`;
+    }).join('');
+
+    const confirm = await Swal.fire({
+      title: 'Approve & Create Purchase Order',
+      width: 820,
+      html: `<div style="text-align:left;font-size:12px">
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px;margin-bottom:10px">
+          <div><span style="color:#64748b">Vendor:</span> <b>${esc(detail.vendor_name || q.vendor_name || '—')}</b></div>
+          <div><span style="color:#64748b">Quotation No:</span> <b>${esc(detail.quote_number || q.quote_number)}</b></div>
+          <div><span style="color:#64748b">RFQ / MR:</span> <b>${esc(detail.mr_number || q.mr_number || detail.rfq_group_id || '—')}</b></div>
+          <div><span style="color:#64748b">Approval Ref:</span> <b style="color:#047857;font-family:monospace">${esc(detail.approval_code || q.approval_code || '—')}</b></div>
+        </div>
+        <div style="max-height:260px;overflow:auto;border:1px solid #e2e8f0;border-radius:6px">
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead><tr style="background:#f8fafc;color:#475569;text-align:left">
+              <th style="padding:5px 6px">#</th><th style="padding:5px 6px">Item / Drawing</th>
+              <th style="padding:5px 6px;text-align:right">Qty</th><th style="padding:5px 6px;text-align:right">Rate</th>
+              <th style="padding:5px 6px;text-align:right">GST</th><th style="padding:5px 6px;text-align:right">Total</th>
+            </tr></thead>
+            <tbody>${rowsHtml || '<tr><td colspan="6" style="padding:8px;text-align:center;color:#94a3b8">No items</td></tr>'}</tbody>
+          </table>
+        </div>
+        <div style="text-align:right;margin-top:8px">Grand Total: <b style="color:#4338ca;font-size:14px">${money(detail.grand_total)}</b></div>
+        <div style="margin-top:8px;color:#64748b;font-size:11px">A Purchase Order will be created with these approved rates using the standard PO workflow. Only one PO can be created per approved quotation.</div>
+      </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Create Purchase Order',
+      confirmButtonColor: '#059669',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!confirm.isConfirmed) {
+      setCreatingPOFor(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/purchase-orders`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quotationId: q.id })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || 'Failed to create Purchase Order');
+      const po = data.data || {};
+      fetchQuotations();
+      fetchStats();
+      const done = await Swal.fire({
+        icon: 'success',
+        title: 'Purchase Order Created',
+        html: `PO Number<br/><b style="font-size:18px;font-family:monospace">${esc(po.po_number || '')}</b>`,
+        showCancelButton: true,
+        confirmButtonText: 'View Purchase Order',
+        cancelButtonText: 'Close'
+      });
+      if (done.isConfirmed && po.id) navigate(`${deptPrefix}/purchase-orders/view/${po.id}`);
+    } catch (error) {
+      errorToast(error.message || 'Failed to create Purchase Order');
+      fetchQuotations();
+    } finally {
+      setCreatingPOFor(null);
+    }
+  };
+
+  // Approval timeline (Submitted → Rejected → Resubmitted → Approved)
+  const [approvalHistoryQuote, setApprovalHistoryQuote] = useState(null);
+  const [approvalHistoryRows, setApprovalHistoryRows] = useState([]);
+  const openApprovalHistory = async (q) => {
+    setApprovalHistoryQuote(q);
+    setApprovalHistoryRows([]);
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotations/${q.id}/approval-history`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(data.message || 'Failed to load approval history');
+      setApprovalHistoryRows(Array.isArray(data) ? data : []);
+    } catch (error) {
+      errorToast(error.message || 'Failed to load approval history');
+    }
+  };
+
   const handleBulkApproveCompared = async () => {
     const result = await Swal.fire({
-      title: 'Approve Selected Awards?',
-      text: 'This will approve the selected vendors for each item and automatically generate Purchase Orders.',
-      icon: 'warning',
+      title: 'Send Awards for Admin Approval?',
+      text: 'The selected vendor awards will be sent to Admin for approval. Purchase Orders are created separately after approval.',
+      icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'Approve & Create POs',
+      confirmButtonText: 'Award & Send for Approval',
       cancelButtonText: 'Cancel'
     });
 
@@ -1323,10 +1476,10 @@ const Quotations = () => {
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Failed to approve comparison');
+        throw new Error(err.message || err.error || 'Failed to send awards for approval');
       }
 
-      successToast('Comparison approved and Purchase Orders created successfully!');
+      successToast('Awarded quotations sent for Admin approval');
       setShowCompareModal(false);
       fetchQuotations();
       fetchStats();
@@ -1948,7 +2101,7 @@ const Quotations = () => {
 
       const isTabMatch = activeTab === 'sent'
         ? ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING', 'RFQ_REQUESTED', 'PENDING_ITEMS'].includes(q.status)
-        : ['RECEIVED', 'REVIEWED', 'REJECTED'].includes(q.status);
+        : ['RECEIVED', 'PENDING_APPROVAL', 'REVIEWED', 'REJECTED'].includes(q.status);
       const matchesStatus = filterStatus === 'All Quotations' || q.status === filterStatus;
       return isTabMatch && matchesStatus;
     }).map(q => {
@@ -2162,9 +2315,9 @@ const Quotations = () => {
               </>
             ) : (
               <>
-                <span className="text-slate-900 font-medium">{val ? getVendorName(val, q) : 'Unassigned'}</span>
-                {val && q.is_single_vendor && <span className="text-xs text-slate-400 mt-0.5">[Single Vendor]</span>}
-                {val && <span className="text-xs text-slate-400 mt-1 flex items-center gap-1 opacity-70">Vendor ID: #{val}</span>}
+                <span className="text-slate-900 font-semibold text-xs">{val ? getVendorName(val, q) : 'Unassigned'}</span>
+                {val && q.is_single_vendor && <span className="text-[10px] text-slate-400 mt-0.5">Single Vendor</span>}
+                {val && <span className="text-[10px] text-slate-400 flex items-center gap-1">Vendor ID #{val}</span>}
               </>
             )}
           </div>
@@ -2199,13 +2352,13 @@ const Quotations = () => {
         render: (val, q) => (
           <div className="flex flex-col gap-1 items-start">
             {q.isRFQOnly && q.is_merged === 1 ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs border bg-purple-100 text-purple-700 border-purple-200 font-bold">
+              <span className="inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[11px] border bg-purple-100 text-purple-700 border-purple-200 font-bold">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 MERGED RFQ
               </span>
             ) : !q.isRFQOnly && q.is_merged === 1 ? (
               <div className="flex flex-col gap-1 items-start">
-                <span className={`inline-flex px-2.5 py-1 rounded text-xs border ${rfqStatusColors[val]?.badge || 'bg-emerald-100 text-emerald-700 border-emerald-200'}`}>
+                <span className={`inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-[11px] font-semibold border border-transparent ${rfqStatusColors[val]?.badge || 'bg-emerald-100 text-emerald-700 border-emerald-200'}`}>
                   {rfqStatusColors[val]?.label?.toUpperCase() || val}
                 </span>
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border bg-purple-50 text-purple-700 border-purple-200 font-bold">
@@ -2214,9 +2367,27 @@ const Quotations = () => {
                 </span>
               </div>
             ) : (
-              <span className={`inline-flex px-2.5 py-1 rounded text-xs border ${rfqStatusColors[val]?.badge || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+              <span className={`inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-[11px] font-semibold border border-transparent ${rfqStatusColors[val]?.badge || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
                 {val === 'REJECTED' ? rfqStatusColors[val]?.label : (rfqStatusColors[val]?.label?.toUpperCase() || val)}
               </span>
+            )}
+            {/* Admin approval details */}
+            {!q.isRFQOnly && val === 'REVIEWED' && q.approval_code && (
+              <div className="flex flex-col gap-0.5 mt-0.5">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Approval Reference Code">
+                  <CheckCircle2 className="w-3 h-3" /> {q.approval_code}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  By {q.approved_by_name || '—'}{q.approved_at ? ` · ${formatDate(q.approved_at)}` : ''}
+                </span>
+                {q.linked_po_number && <span className="text-[10px] text-indigo-600">PO: {q.linked_po_number}</span>}
+              </div>
+            )}
+            {!q.isRFQOnly && val === 'PENDING_APPROVAL' && (
+              <span className="text-[10px] text-amber-600 italic">Awaiting Admin approval</span>
+            )}
+            {!q.isRFQOnly && val === 'REJECTED' && q.approval_remarks && (
+              <span className="text-[10px] text-rose-600 max-w-[180px] truncate" title={q.approval_remarks}>Reason: {q.approval_remarks}</span>
             )}
           </div>
         )
@@ -2226,7 +2397,7 @@ const Quotations = () => {
         label: 'Actions',
         className: 'text-right',
         render: (_, q) => (
-          <div className="flex justify-end gap-1.5">
+          <div className="flex justify-end items-center gap-0.5">
             {!q.isRFQOnly && q.status !== 'REJECTED' && (
               <>
                 <button
@@ -2234,20 +2405,20 @@ const Quotations = () => {
                     e.stopPropagation();
                     navigate(`${deptPrefix}/quotations/view/${q.id}`, { state: { autoPrint: true } });
                   }}
-                  className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all border border-transparent hover:border-indigo-100"
+                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all border border-transparent hover:border-indigo-100"
                   title="Print RFQ"
                 >
-                  <Printer className="w-4 h-4" />
+                  <Printer className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDownloadPDF(q.id, q.quote_number);
                   }}
-                  className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all border border-transparent hover:border-emerald-100"
+                  className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all border border-transparent hover:border-emerald-100"
                   title="Download PDF"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-3.5 h-3.5" />
                 </button>
               </>
             )}
@@ -2277,28 +2448,28 @@ const Quotations = () => {
                 {['DRAFT', 'SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); openEmailModal(q); }}
-                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-all border border-transparent hover:border-blue-100"
+                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-all border border-transparent hover:border-blue-100"
                     title={q.status === 'SENT' ? 'Resend RFQ' : 'Send RFQ'}
                   >
-                    <Mail className="w-4 h-4" />
+                    <Mail className="w-3.5 h-3.5" />
                   </button>
                 )}
                 {['SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
                   <button
                     onClick={(e) => { e.stopPropagation(); openRecordModal(q); }}
-                    className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded  transition-all border border-transparent hover:border-cyan-100"
+                    className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded  transition-all border border-transparent hover:border-cyan-100"
                     title="Record Vendor Response"
                   >
-                    <FilePlus className="w-4 h-4" />
+                    <FilePlus className="w-3.5 h-3.5" />
                   </button>
                 )}
                 {q.status !== 'RECEIVED' && (
                   <button
                     onClick={(e) => { e.stopPropagation(); openEditModal(q); }}
-                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
+                    className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
                     title="Edit RFQ"
                   >
-                    <Pencil className="w-4 h-4" />
+                    <Pencil className="w-3.5 h-3.5" />
                   </button>
                 )}
               </>
@@ -2308,28 +2479,47 @@ const Quotations = () => {
                 {q.status === 'RECEIVED' && (
                   <button
                     onClick={(e) => { e.stopPropagation(); handleApproveQuoteClick(q.id); }}
-                    className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded  transition-all border border-emerald-100"
-                    title="Approve / Review Quote"
+                    className="flex items-center gap-1 px-1.5 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded text-[11px] font-medium whitespace-nowrap transition-all border border-emerald-100"
+                    title="Review quote and send for Admin approval"
                   >
-                    <Check className="w-4 h-4" />
+                    <Send className="w-3.5 h-3.5" />
+                    Send for Approval
                   </button>
                 )}
-                {q.status !== 'REJECTED' && (
+                {q.status === 'REJECTED' && !q.isRFQOnly && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleSendForApproval(q.id, true); }}
+                    className="flex items-center gap-1 px-1.5 py-1 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded text-[11px] font-medium whitespace-nowrap transition-all border border-amber-100"
+                    title="Resubmit for Admin approval"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    Resubmit
+                  </button>
+                )}
+                {!q.isRFQOnly && ['PENDING_APPROVAL', 'REVIEWED', 'REJECTED'].includes(q.status) && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openApprovalHistory(q); }}
+                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all border border-transparent hover:border-indigo-100"
+                    title="Approval History"
+                  >
+                    <History className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {!['REJECTED', 'PENDING_APPROVAL'].includes(q.status) && (
                   <>
                     <button
                       onClick={(e) => { e.stopPropagation(); openUploadAttachmentsModal(q); }}
-                      className="flex items-center gap-1 px-1.5 py-1 bg-cyan-50 text-cyan-700 border border-cyan-100 rounded text-[11px] hover:bg-cyan-100 transition-all font-medium whitespace-nowrap"
+                      className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded transition-all border border-transparent hover:border-cyan-100"
                       title="Upload Attachments"
                     >
                       <Upload className="w-3.5 h-3.5" />
-                      Upload
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); openEditModal(q); }}
-                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
+                      className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
                       title="Edit Recorded Quote"
                     >
-                      <Pencil className="w-4 h-4" />
+                      <Pencil className="w-3.5 h-3.5" />
                     </button>
                   </>
                 )}
@@ -2344,14 +2534,70 @@ const Quotations = () => {
                   handleDeleteQuotation(q.id);
                 }
               }}
-              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all border border-transparent hover:border-rose-100"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all border border-transparent hover:border-rose-100"
               title="Delete"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
+            {activeTab === 'received' && (
+              <>
+                {!q.isRFQOnly && q.status === 'REVIEWED' && (
+                  q.linked_po_number ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); if (q.linked_po_id) navigate(`${deptPrefix}/purchase-orders/view/${q.linked_po_id}`); }}
+                      className="self-center flex items-center gap-1 px-1.5 py-0.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded text-[10px] font-semibold whitespace-nowrap transition-all border border-indigo-100"
+                      title={`View Purchase Order ${q.linked_po_number}`}
+                    >
+                      <FileCheck2 className="w-3 h-3" /> PO
+                    </button>
+                  ) : (
+                    <button
+                      disabled={creatingPOFor === q.id}
+                      onClick={(e) => { e.stopPropagation(); handleCreatePOFromApproved(q); }}
+                      className="self-center flex items-center gap-1 px-1.5 py-0.5 text-white bg-emerald-600 hover:bg-emerald-700 rounded text-[10px] font-semibold whitespace-nowrap transition-all disabled:opacity-50"
+                      title={`Admin approved${q.approval_code ? ` (${q.approval_code})` : ''} — Approve & Create Purchase Order`}
+                    >
+                      {creatingPOFor === q.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShoppingCart className="w-3 h-3" />} Create PO
+                    </button>
+                  )
+                )}
+              </>
+            )}
           </div>
         )
       }
+    ];
+
+    // Received Quotes and Sent Requests: Client Name + Project Name + Quote No. shown together in one column
+    const clientCol = baseCols.find(c => c.key === 'company_name');
+    const projectCol = baseCols.find(c => c.key === 'project_name');
+    const quoteCol = baseCols.find(c => c.key === 'quote_number');
+    const receivedCols = [
+      {
+        key: 'quote_number',
+        label: 'Quote No. / Client / Project',
+        sortable: true,
+        render: (val, q) => (
+          <div className="flex flex-col gap-1 min-w-[230px]">
+            {quoteCol.render(q.quote_number, { ...q, mr_number: null, sales_order_id: null })}
+            <div className="flex items-center gap-1 flex-wrap text-[10px] leading-tight">
+              {(q.mr_number || q.sales_order_id) && (
+                <span className="px-1 py-px rounded bg-slate-100 text-slate-500 font-medium">{q.mr_number || `SO-${q.sales_order_id}`}</span>
+              )}
+              {!q.isRFQOnly && q.is_merged === 1 ? (
+                clientCol.render(q.company_name, q)
+              ) : (
+                <span className="text-teal-700 font-semibold">
+                  {(q.company_name && q.company_name !== '-' && q.company_name !== '—') ? q.company_name : (q.client_name || q.customer_name || '—')}
+                </span>
+              )}
+              <span className="text-slate-300">•</span>
+              <span className="text-amber-700 italic">{q.project_name || 'General Project'}</span>
+            </div>
+          </div>
+        )
+      },
+      ...baseCols.filter(c => !['company_name', 'project_name', 'quote_number'].includes(c.key))
     ];
 
     if (activeTab === 'received') {
@@ -2398,12 +2644,13 @@ const Quotations = () => {
             />
           )
         },
-        ...baseCols
+        ...receivedCols
       ];
     }
 
-    return baseCols;
-  }, [activeTab, selectedQuotes, displayQuotations, vendors, quotations, getVendorName, handleApproveQuoteClick, handleDeleteQuotation, openEmailModal]);
+    // Sent Requests (RFQ): same combined Quote No. / Client / Project column
+    return receivedCols;
+  }, [activeTab, selectedQuotes, displayQuotations, vendors, quotations, getVendorName, handleApproveQuoteClick, handleDeleteQuotation, openEmailModal, handleSendForApproval, openApprovalHistory, creatingPOFor]);
 
   const viewPathMatch = location.pathname.match(/\/quotations\/view\/(\d+)/);
   if (viewPathMatch) {
@@ -2416,36 +2663,39 @@ const Quotations = () => {
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-2 rounded  border border-slate-200 ">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-blue-600 rounded  shadow-lg shadow-blue-200">
-            <FileText className="w-3 h-3 text-white" />
+    <div className="space-y-3">
+      <div className="relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white px-4 py-3 rounded-xl border border-slate-200 shadow-sm">
+        <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-blue-500 to-indigo-600" />
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-md shadow-blue-200">
+            <FileText className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
-            <div className="flex items-center gap-2 text-xs   text-slate-400   mb-1">
+            <div className="flex items-center gap-1 text-[11px] text-slate-400 mb-0.5">
               <span>Buying</span>
               <ChevronRight className="w-3 h-3" />
               <span>Procurement</span>
+              <ChevronRight className="w-3 h-3" />
+              <span className="text-slate-600 font-medium">{activeTab === 'sent' ? 'RFQs' : 'Received Quotes'}</span>
             </div>
-            <h1 className="text-xl  text-slate-900 ">Supplier PO</h1>
-            <p className="text-xs text-slate-500 ">Manage and compare supplier quotes</p>
+            <h1 className="text-lg font-semibold text-slate-900 leading-tight">Supplier PO</h1>
+            <p className="text-xs text-slate-500">Send RFQs, record vendor quotes, get Admin approval and create Purchase Orders</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => { fetchQuotations(); fetchRawRfqs(); }}
-            className="p-2 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
+            className="p-2 text-slate-500 hover:bg-slate-50 hover:text-blue-600 rounded-lg transition-all border border-slate-200 active:scale-95 bg-white"
             title="Refresh"
           >
-            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           {activeTab === 'sent' ? (
             <>
               <button
                 id="btn-merge-rfq"
                 onClick={() => setShowMergeRfqModal(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 rounded text-xs font-semibold transition-all active:scale-95 shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-2 bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 rounded-lg text-xs font-semibold transition-all active:scale-95 shadow-sm"
                 title="Merge multiple draft RFQs for a single supplier"
               >
                 <GitMerge className="w-4 h-4 text-purple-600" />
@@ -2454,9 +2704,9 @@ const Quotations = () => {
               <button
                 id="btn-request-quote"
                 onClick={() => navigate(`${deptPrefix}/quotations/request`)}
-                className="flex items-center gap-2 p-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-xs font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md shadow-blue-200 active:scale-95"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-4 h-4" />
                 <span>Request Quote</span>
               </button>
             </>
@@ -2465,7 +2715,7 @@ const Quotations = () => {
               <button
                 id="btn-merge-quotes-top"
                 onClick={handleOpenMergeQuotes}
-                className={`flex items-center gap-2 px-3 py-2 rounded text-xs font-semibold transition-all active:scale-95 shadow-sm ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all active:scale-95 shadow-sm ${
                   selectedQuotes.length >= 2
                     ? 'bg-purple-600 hover:bg-purple-700 text-white border border-transparent'
                     : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
@@ -2478,9 +2728,9 @@ const Quotations = () => {
               <button
                 id="btn-record-quote"
                 onClick={() => navigate(`${deptPrefix}/quotations/record`)}
-                className="flex items-center gap-2 p-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-xs font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md shadow-blue-200 active:scale-95"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-4 h-4" />
                 <span>Record Quote</span>
               </button>
             </>
@@ -2488,19 +2738,87 @@ const Quotations = () => {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-        <Tabs
-          tabs={[
+      {stats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {(() => {
+            const total = Number(stats.total_quotations) || 0;
+            const received = Number(stats.received_quotations || (stats.total_quotations - stats.pending_quotations)) || 0;
+            const pct = (v) => (total > 0 ? Math.min(100, Math.round(((Number(v) || 0) / total) * 100)) : 0);
+            return [
+              { label: 'Total Quotations', value: total, sub: formatCurrency(stats.total_value), subLabel: 'Total value', icon: FileText, tint: 'from-blue-50', ring: 'bg-blue-500', bar: 'bg-blue-500', text: 'text-blue-600' },
+              { label: 'Pending Quotes', value: stats.pending_quotations, sub: `${pct(stats.pending_quotations)}%`, subLabel: 'Awaiting vendor response', percent: pct(stats.pending_quotations), icon: Clock, tint: 'from-amber-50', ring: 'bg-amber-500', bar: 'bg-amber-500', text: 'text-amber-600' },
+              { label: 'Approved Quotes', value: stats.approved_quotations, sub: `${pct(stats.approved_quotations)}%`, subLabel: 'Ready for PO', percent: pct(stats.approved_quotations), icon: CheckCircle2, tint: 'from-emerald-50', ring: 'bg-emerald-500', bar: 'bg-emerald-500', text: 'text-emerald-600' },
+              { label: 'Received', value: received, sub: `${pct(received)}%`, subLabel: 'Vendor responses', percent: pct(received), icon: Mail, tint: 'from-sky-50', ring: 'bg-sky-500', bar: 'bg-sky-500', text: 'text-sky-600' }
+            ];
+          })().map((stat, idx) => (
+            stat.dark ? (
+              <div key={idx} className={`relative overflow-hidden rounded-2xl px-4 py-3.5 bg-gradient-to-br ${stat.card} text-white shadow-md shadow-blue-200 hover:shadow-lg transition-all`}>
+                <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-white/10" />
+                <div className="absolute -right-2 -bottom-8 w-20 h-20 rounded-full bg-white/5" />
+                <div className="relative flex items-start justify-between">
+                  <div>
+                    <p className="text-[11px] font-medium text-blue-100">{stat.label}</p>
+                    <p className="text-3xl font-bold leading-tight mt-0.5">{stat.value || 0}</p>
+                  </div>
+                  <div className="p-2 rounded-xl bg-white/15 backdrop-blur-sm">
+                    <stat.icon className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="relative mt-2 flex items-center justify-between text-[11px]">
+                  <span className="text-blue-100">{stat.subLabel}</span>
+                  <span className="font-semibold">{stat.sub}</span>
+                </div>
+              </div>
+            ) : (
+              <div key={idx} className={`relative overflow-hidden rounded-2xl px-4 py-3.5 bg-gradient-to-br ${stat.tint} to-white border border-slate-200/80 shadow-sm hover:shadow-md transition-all`}>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-[11px] font-medium text-slate-500">{stat.label}</p>
+                    <p className="text-3xl font-bold text-slate-900 leading-tight mt-0.5">{stat.value || 0}</p>
+                  </div>
+                  <div className={`p-2 rounded-xl ${stat.ring} text-white shadow-sm`}>
+                    <stat.icon className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <div className="flex items-center justify-between text-[11px] mb-1">
+                    <span className="text-slate-500">{stat.subLabel}</span>
+                    <span className={`font-semibold ${stat.text}`}>{stat.sub}</span>
+                  </div>
+                  {stat.percent !== undefined && (
+                    <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                      <div className={`h-full rounded-full ${stat.bar} transition-all duration-700`} style={{ width: `${stat.percent}%` }} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white px-3 py-2.5 rounded-xl border border-slate-200 shadow-sm">
+        <div className="inline-flex p-1 bg-slate-100 rounded-lg w-fit">
+          {[
             { label: 'Sent Requests (RFQ)', value: 'sent', icon: Send },
             { label: 'Received Quotes', value: 'received', icon: History }
-          ]}
-          activeTab={activeTab}
-          onTabChange={(value) => {
-            if (value === 'sent') navigate(`${deptPrefix}/quotations`);
-            else navigate(`${deptPrefix}/quotations/received`);
-          }}
-          className="border-none px-0"
-        />
+          ].map(tab => {
+            const isActive = activeTab === tab.value;
+            return (
+              <button
+                key={tab.value}
+                onClick={() => {
+                  if (tab.value === 'sent') navigate(`${deptPrefix}/quotations`);
+                  else navigate(`${deptPrefix}/quotations/received`);
+                }}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${isActive ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                <tab.icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
 
         {activeTab === 'received' && (
           <div className="flex items-center gap-2">
@@ -2516,7 +2834,7 @@ const Quotations = () => {
                   const mrId = e.target.value;
                   setSelectedMR(mrId);
                   if (mrId) {
-                    const related = displayQuotations.filter(q => String(q.mr_id) === String(mrId) && ['RECEIVED', 'REVIEWED', 'REJECTED'].includes(q.status));
+                    const related = displayQuotations.filter(q => String(q.mr_id) === String(mrId) && ['RECEIVED', 'PENDING_APPROVAL', 'REVIEWED', 'REJECTED'].includes(q.status));
                     setSelectedQuotes(related.map(q => q.id));
                   } else {
                     setSelectedQuotes([]);
@@ -2558,6 +2876,7 @@ const Quotations = () => {
         loading={loading}
         pageSize={5}
         searchPlaceholder="Search quote number, client, project, drawing..."
+        searchPosition="right"
         expandable={true}
         renderExpanded={(row) => {
           if (!row.items || row.items.length === 0) {
@@ -2665,12 +2984,14 @@ const Quotations = () => {
             String(row.finished_good || '').toLowerCase().includes(searchLower);
           return matchesQuoteNo || matchesVendor || matchesProject || matchesCompany || matchesItems || matchesDrawing;
         }}
-        actions={
-          <div className="flex items-center gap-2">
+        toolbarRight={
+          <div className="relative flex items-center w-full md:w-auto">
+            <Filter className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="p-2  bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+              className={`w-full md:w-48 pl-8 pr-3 py-2 border rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all cursor-pointer ${filterStatus && filterStatus !== 'All Quotations' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
+              title="Filter by status"
             >
               <option value="All Quotations">All Statuses</option>
               {activeTab === 'sent' ? (
@@ -2684,42 +3005,15 @@ const Quotations = () => {
               ) : (
                 <>
                   <option value="RECEIVED">Received</option>
+                  <option value="PENDING_APPROVAL">Pending Approval</option>
                   <option value="REVIEWED">Approved</option>
                   <option value="REJECTED">Rejected</option>
                 </>
               )}
             </select>
-            <button className="p-2 text-slate-400 hover:text-slate-600 bg-white border border-slate-200 rounded  transition-all">
-              <Download className="w-5 h-5" />
-            </button>
           </div>
         }
       />
-
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-          {[
-            { label: 'Total Quotations', value: stats.total_quotations, sub: `Total: ${formatCurrency(stats.total_value)}`, icon: FileText, bg: 'bg-blue-600', text: 'text-white', subText: 'text-blue-100', iconBg: 'bg-blue-500', iconColor: 'text-white' },
-            { label: 'Pending Quotes', value: stats.pending_quotations, sub: 'Awaiting response', icon: Clock, bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-amber-50', iconColor: 'text-amber-500' },
-            { label: 'Approved Quotes', value: stats.approved_quotations, sub: 'Ready for PO', icon: CheckCircle2, bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
-            { label: 'Received', value: stats.received_quotations || (stats.total_quotations - stats.pending_quotations), sub: 'Vendor responses', icon: Mail, bg: 'bg-white', text: 'text-slate-800', subText: 'text-slate-400', iconBg: 'bg-blue-50', iconColor: 'text-blue-500' },
-          ].map((stat, idx) => (
-            <div key={idx} className={`${stat.bg} border border-slate-200 rounded  p-2  hover: transition-all relative overflow-hidden group`}>
-              {stat.bg !== 'bg-white' && <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded  -mr-12 -mt-12 transition-transform group-hover:scale-110"></div>}
-              <div className="relative z-10">
-                <div className="flex justify-between items-start mb-2">
-                  <p className={`text-xs  ${stat.bg === 'bg-white' ? 'text-slate-400' : 'text-blue-100'}  `}>{stat.label}</p>
-                  <div className={`p-2 ${stat.iconBg} border border-slate-100/10 ${stat.iconColor} rounded  `}>
-                    <stat.icon className="w-4 h-4" />
-                  </div>
-                </div>
-                <p className={`text-xl   ${stat.text} `}>{stat.value || 0}</p>
-                <p className={`text-xs ${stat.subText} mt-1 `}>{stat.sub}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2">
@@ -3867,7 +4161,6 @@ const Quotations = () => {
                     <option value="DRAFT">DRAFT</option>
                     <option value="SENT">SENT (Issued RFQ)</option>
                     <option value="RECEIVED">RECEIVED (Quoted)</option>
-                    <option value="APPROVED">APPROVED</option>
                     <option value="REJECTED">REJECTED</option>
                   </select>
                 </div>
@@ -4654,7 +4947,7 @@ const Quotations = () => {
         <Modal
           isOpen={showApprovalModal}
           onClose={() => setShowApprovalModal(false)}
-          title="Approve Supplier PO"
+          title="Review Quotation & Send for Approval"
           size="3xl"
         >
           <div className="space-y-6 text-sm">
@@ -4731,8 +5024,8 @@ const Quotations = () => {
 
             {/* Confirmation Alert Box */}
             <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-xs text-amber-800 space-y-1">
-              <p className="font-semibold">Are you sure you want to approve this Supplier PO?</p>
-              <p className="text-amber-700/95">This action will enable Purchase Order creation for the approved items.</p>
+              <p className="font-semibold">Send this vendor quotation for Admin approval?</p>
+              <p className="text-amber-700/95">Admin approves or rejects it and an approval reference code is generated. Purchase Order creation remains a separate step after approval.</p>
             </div>
 
             {/* Footer Buttons */}
@@ -4755,12 +5048,55 @@ const Quotations = () => {
                 </button>
                 <Button
                   variant="success"
-                  onClick={() => handleApprovalAction(approvalModalQuote.id, 'REVIEWED')}
+                  onClick={() => handleSendForApproval(approvalModalQuote.id)}
                 >
-                  Approve Quote
+                  Send for Approval
                 </Button>
               </div>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {approvalHistoryQuote && (
+        <Modal
+          isOpen={!!approvalHistoryQuote}
+          onClose={() => setApprovalHistoryQuote(null)}
+          title={`Approval History — ${approvalHistoryQuote.quote_number || ''}`}
+          size="2xl"
+        >
+          <div className="space-y-3 text-xs">
+            {approvalHistoryQuote.approval_code && (
+              <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-100">
+                <span className="font-mono font-semibold text-emerald-700">{approvalHistoryQuote.approval_code}</span>
+                <span className="text-slate-600">Approved by {approvalHistoryQuote.approved_by_name || '—'}</span>
+                <span className="text-slate-500">{approvalHistoryQuote.approved_at ? new Date(approvalHistoryQuote.approved_at).toLocaleString('en-IN') : ''}</span>
+              </div>
+            )}
+            {approvalHistoryRows.length === 0 ? (
+              <p className="text-slate-400 italic py-6 text-center">No approval history yet.</p>
+            ) : (
+              <ol className="relative border-l border-slate-200 ml-2 space-y-4">
+                {approvalHistoryRows.map(h => {
+                  const tone = h.action === 'APPROVED' ? 'bg-emerald-500' : h.action === 'REJECTED' ? 'bg-rose-500' : 'bg-amber-500';
+                  return (
+                    <li key={h.id} className="ml-4">
+                      <span className={`absolute -left-1.5 mt-1 w-3 h-3 rounded-full ${tone}`}></span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-slate-800">{h.action}</span>
+                        <span className="text-slate-500">{h.quote_number}</span>
+                        {h.approval_code && <span className="font-mono text-emerald-700">{h.approval_code}</span>}
+                      </div>
+                      <div className="text-slate-500">
+                        {h.acted_by_name || '—'} · {h.acted_at ? new Date(h.acted_at).toLocaleString('en-IN') : ''}
+                        {h.grand_total !== null && h.grand_total !== undefined ? ` · ${formatCurrency(h.grand_total)}` : ''}
+                      </div>
+                      {h.remarks && <div className="text-slate-600 mt-0.5">“{h.remarks}”</div>}
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
           </div>
         </Modal>
       )}

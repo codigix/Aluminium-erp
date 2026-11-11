@@ -489,7 +489,7 @@ const POReceipts = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setPurchaseOrders(Array.isArray(data) ? data.filter(po => po.status !== 'DRAFT') : []);
+        setPurchaseOrders(Array.isArray(data) ? data.filter(po => !['DRAFT', 'PO_REQUEST', 'PENDING_APPROVAL'].includes(po.status)) : []);
       }
     } catch (error) {
       console.error('Error fetching POs:', error);

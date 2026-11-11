@@ -5,7 +5,9 @@ const CustomDataTable = ({
   columns = [], 
   data = [], 
   loading = false,
-  searchPlaceholder = "Search...", 
+  searchPlaceholder = "Search...",
+  searchPosition = 'left', // 'left' (default) | 'right'
+  toolbarRight = null, // optional node rendered right after the search box (e.g. a status filter)
   initialPageSize = 25,
   pageSize: pageSizeProp,
   onRowClick,
@@ -229,7 +231,7 @@ const CustomDataTable = ({
       {/* 1. Global Toolbar */}
       {shouldShowSearchToolbar && (
         <div className="flex flex-col md:flex-row justify-between items-center p-3 gap-4 border-b border-slate-100 bg-white">
-          <div className="relative w-full md:w-[400px]">
+          <div className={`relative w-full md:w-[400px] ${searchPosition === 'right' ? 'md:ml-auto' : ''}`}>
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-slate-400" />
             </div>
@@ -244,6 +246,9 @@ const CustomDataTable = ({
                <kbd className="hidden sm:inline-block border border-slate-200 rounded px-1.5 text-[10px] font-bold text-slate-400 bg-white shadow-sm">/</kbd>
             </div>
           </div>
+          {toolbarRight && (
+            <div className="flex items-center gap-2 w-full md:w-auto shrink-0">{toolbarRight}</div>
+          )}
           
           {/* Action buttons (Filters, Saved Views, List/Grid View toggle) hidden as requested */}
           {/* <div className="flex items-center gap-2 w-full md:w-auto justify-end">

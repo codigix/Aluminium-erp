@@ -406,6 +406,151 @@ const ensureQuotationItemColumns = async () => {
   }
 };
 
+// RFQ Vendor Quotation → Admin approval: PENDING_APPROVAL status, approval reference fields,
+// approval history and a per-month code sequence. Additive only; existing rows are not modified.
+const ensureQuotationApprovalSchema = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    const [qCols] = await connection.query('SHOW COLUMNS FROM quotations');
+    const statusCol = qCols.find(c => c.Field === 'status');
+    if (statusCol && !statusCol.Type.includes("'PENDING_APPROVAL'")) {
+      await connection.query("ALTER TABLE quotations MODIFY COLUMN status ENUM('DRAFT','SENT','RECEIVED','REVIEWED','CLOSED','PENDING','EMAIL_RECEIVED','SUPERSEDED','REJECTED','MERGED','PENDING_APPROVAL') DEFAULT 'DRAFT'");
+      console.log('Quotations status ENUM: added PENDING_APPROVAL');
+    }
+
+    const existing = new Set(qCols.map(c => c.Field));
+    const approvalCols = [
+      { name: 'approval_code', definition: 'VARCHAR(30) NULL' },
+      { name: 'approval_remarks', definition: 'TEXT NULL' },
+      { name: 'approved_by', definition: 'INT NULL' },
+      { name: 'approved_at', definition: 'DATETIME NULL' },
+      { name: 'submitted_for_approval_by', definition: 'INT NULL' },
+      { name: 'submitted_for_approval_at', definition: 'DATETIME NULL' }
+    ].filter(c => !existing.has(c.name));
+    if (approvalCols.length > 0) {
+      await connection.query(`ALTER TABLE quotations ${approvalCols.map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`).join(', ')}`);
+      console.log('Quotation approval columns synchronized');
+    }
+
+    const [idx] = await connection.query("SHOW INDEX FROM quotations WHERE Key_name = 'uq_quotations_approval_code'");
+    if (idx.length === 0) {
+      await connection.query('ALTER TABLE quotations ADD UNIQUE INDEX uq_quotations_approval_code (approval_code)');
+    }
+
+    // Admin Approval Reference Code carried onto the Purchase Order created from an approved quotation
+    const [poCols] = await connection.query("SHOW COLUMNS FROM purchase_orders LIKE 'quotation_approval_code'");
+    if (poCols.length === 0) {
+      await connection.query('ALTER TABLE purchase_orders ADD COLUMN quotation_approval_code VARCHAR(30) NULL');
+      console.log('purchase_orders.quotation_approval_code added');
+    }
+
+    await connection.query(`CREATE TABLE IF NOT EXISTS quotation_approval_history (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      quotation_id INT NOT NULL,
+      quote_number VARCHAR(100) NULL,
+      base_quote_number VARCHAR(100) NULL,
+      vendor_id INT NULL,
+      action VARCHAR(20) NOT NULL,
+      approval_code VARCHAR(30) NULL,
+      grand_total DECIMAL(14,2) NULL,
+      remarks TEXT NULL,
+      acted_by INT NULL,
+      acted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_qah_quotation (quotation_id),
+      INDEX idx_qah_base (base_quote_number),
+      INDEX idx_qah_action (action)
+    )`);
+
+    await connection.query(`CREATE TABLE IF NOT EXISTS quotation_approval_sequences (
+      period CHAR(7) NOT NULL PRIMARY KEY,
+      last_seq INT NOT NULL DEFAULT 0
+    )`);
+
+    await connection.query(
+      `INSERT IGNORE INTO permissions (name, code, description, resource, action, status)
+       VALUES ('Approve Quotations', 'QUOTATION_APPROVE', 'Approve or reject vendor quotations (Admin approval)', 'quotations', 'approve', 'ACTIVE')`
+    );
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Quotation approval schema sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+// Purchase Order → Admin approval (additive only: new enum value, nullable columns, new tables)
+const ensurePoApprovalSchema = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    const [poCols] = await connection.query('SHOW COLUMNS FROM purchase_orders');
+    const statusCol = poCols.find(c => c.Field === 'status');
+    if (statusCol && !statusCol.Type.includes("'PENDING_APPROVAL'")) {
+      // Keep every existing value (incl. MERGED) and append PENDING_APPROVAL; default unchanged
+      const values = (statusCol.Type.match(/'([^']*)'/g) || []).map(v => v.slice(1, -1));
+      values.push('PENDING_APPROVAL');
+      const defaultClause = statusCol.Default !== null && statusCol.Default !== undefined ? ` DEFAULT '${statusCol.Default}'` : '';
+      await connection.query(
+        `ALTER TABLE purchase_orders MODIFY COLUMN status ENUM(${values.map(v => `'${v}'`).join(',')})${defaultClause}`
+      );
+      console.log('purchase_orders status ENUM: added PENDING_APPROVAL');
+    }
+
+    const existing = new Set(poCols.map(c => c.Field));
+    const cols = [
+      { name: 'po_approval_code', definition: 'VARCHAR(30) NULL' },
+      { name: 'po_approval_remarks', definition: 'TEXT NULL' },
+      { name: 'submitted_for_approval_by', definition: 'INT NULL' },
+      { name: 'submitted_for_approval_at', definition: 'DATETIME NULL' }
+    ].filter(c => !existing.has(c.name));
+    if (cols.length > 0) {
+      await connection.query(`ALTER TABLE purchase_orders ${cols.map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`).join(', ')}`);
+      console.log('Purchase Order approval columns synchronized');
+    }
+
+    const [idx] = await connection.query("SHOW INDEX FROM purchase_orders WHERE Key_name = 'uq_purchase_orders_po_approval_code'");
+    if (idx.length === 0) {
+      await connection.query('ALTER TABLE purchase_orders ADD UNIQUE INDEX uq_purchase_orders_po_approval_code (po_approval_code)');
+    }
+
+    await connection.query(`CREATE TABLE IF NOT EXISTS po_approval_history (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      po_id INT NOT NULL,
+      po_number VARCHAR(100) NULL,
+      vendor_id INT NULL,
+      action VARCHAR(20) NOT NULL,
+      approval_code VARCHAR(30) NULL,
+      total_amount DECIMAL(14,2) NULL,
+      remarks TEXT NULL,
+      snapshot JSON NULL,
+      acted_by INT NULL,
+      acted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_poah_po (po_id),
+      INDEX idx_poah_action (action)
+    )`);
+
+    await connection.query(`CREATE TABLE IF NOT EXISTS po_approval_sequences (
+      period CHAR(7) NOT NULL PRIMARY KEY,
+      last_seq INT NOT NULL DEFAULT 0
+    )`);
+
+    await connection.query(
+      `INSERT IGNORE INTO permissions (name, code, description, resource, action, status)
+       VALUES ('Approve Purchase Orders', 'PO_APPROVE', 'Approve or reject Purchase Orders (Admin approval)', 'purchase_orders', 'approve', 'ACTIVE')`
+    );
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('PO approval schema sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensurePoReceiptItemTable = async () => {
   let connection;
   try {
@@ -3091,6 +3236,8 @@ const bootstrapDatabase = async () => {
   await ensurePurchaseOrderQuotationNullable();
   await ensurePurchaseOrderVendorNullable();
   await ensureQuotationItemColumns();
+  await ensureQuotationApprovalSchema();
+  await ensurePoApprovalSchema();
   await ensurePoReceiptItemTable();
   await ensurePoReceiptColumns();
   await ensureGrnColumns();

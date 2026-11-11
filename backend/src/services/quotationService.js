@@ -99,6 +99,14 @@ const createQuotation = async (payload) => {
     throw error;
   }
 
+  // A quotation cannot be created already approved / pending approval — that goes through Admin approval
+  if (['REVIEWED', 'APPROVED', 'PENDING_APPROVAL'].includes(String(status).toUpperCase())) {
+    const error = new Error('A quotation cannot be created as approved. Record it as Received and send it for Admin approval.');
+    error.statusCode = 400;
+    error.status = 400;
+    throw error;
+  }
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -238,6 +246,9 @@ const getQuotations = async (filters = {}) => {
 
   let query = `
     SELECT q.*, v.vendor_name, so.so_number,
+           (SELECT u_appr.username FROM users u_appr WHERE u_appr.id = q.approved_by) AS approved_by_name,
+           (SELECT po_l.po_number FROM purchase_orders po_l WHERE po_l.quotation_id = q.id ORDER BY po_l.id DESC LIMIT 1) AS linked_po_number,
+           (SELECT po_l.id FROM purchase_orders po_l WHERE po_l.quotation_id = q.id ORDER BY po_l.id DESC LIMIT 1) AS linked_po_id,
            COALESCE(
              (
                SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code)
@@ -713,9 +724,31 @@ const updateQuotationStatus = async (quotationId, status) => {
     throw error;
   }
 
+  // Approval goes only through Admin approval (quotationApprovalService.approveQuotation),
+  // which also generates the approval reference code. It never creates a Purchase Order.
+  if (status === 'REVIEWED') {
+    const error = new Error('Quotations can be approved only through Admin approval. Use "Send for Approval".');
+    error.statusCode = 403;
+    error.status = 403;
+    throw error;
+  }
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    const [currentRows] = await connection.query('SELECT status FROM quotations WHERE id = ? FOR UPDATE', [quotationId]);
+    if (currentRows.length === 0) {
+      const error = new Error('Quotation not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    if (currentRows[0].status === 'PENDING_APPROVAL') {
+      const error = new Error('Quotation is pending Admin approval and cannot be changed until it is approved or rejected.');
+      error.statusCode = 400;
+      error.status = 400;
+      throw error;
+    }
 
     await connection.execute(
       'UPDATE quotations SET status = ? WHERE id = ?',
@@ -724,39 +757,9 @@ const updateQuotationStatus = async (quotationId, status) => {
 
     // Auto-rejection of other quotations is disabled to allow many-to-many / individual item selection without rejecting competing quotes.
 
-    // If status is RECEIVED, check for auto-approval
+    // If status is RECEIVED, check for auto-approval (disabled; handleAutoApproval returns false)
     if (status === 'RECEIVED') {
       await handleAutoApproval(quotationId, connection);
-    } else if (status === 'REVIEWED') {
-      // Auto-select all items of this quotation upon approval so they are included in the generated PO
-      await connection.execute(
-        'UPDATE quotation_items SET is_selected = 1 WHERE quotation_id = ?',
-        [quotationId]
-      );
-
-      // Manual approval - create PO if not exists
-      // Check if PO already exists for this quotation or its base versions to avoid duplicates
-      const [qInfo] = await connection.query('SELECT base_quote_number FROM quotations WHERE id = ?', [quotationId]);
-      const baseQuoteNumber = qInfo[0]?.base_quote_number;
-
-      const [existingPO] = await connection.query(
-        `SELECT po.id FROM purchase_orders po
-         JOIN quotations q ON po.quotation_id = q.id
-         WHERE q.id = ? OR q.base_quote_number = ?`,
-        [quotationId, baseQuoteNumber]
-      );
-
-      if (existingPO.length === 0) {
-        await purchaseOrderService.createPurchaseOrder({
-          quotationId: quotationId
-        }, connection);
-      } else {
-        // Link existing PO to new quotation version
-        await connection.execute(
-          'UPDATE purchase_orders SET quotation_id = ? WHERE id = ?',
-          [quotationId, existingPO[0].id]
-        );
-      }
     }
 
     await connection.commit();
@@ -793,6 +796,22 @@ const updateQuotation = async (quotationId, payload) => {
     }
 
     const oldQuote = current[0];
+
+    // A quotation under Admin review cannot be edited
+    if (oldQuote.status === 'PENDING_APPROVAL') {
+      const error = new Error('Quotation is pending Admin approval and cannot be edited until it is approved or rejected.');
+      error.statusCode = 400;
+      error.status = 400;
+      throw error;
+    }
+
+    // Approval cannot be set or carried over by editing: an edited approved quotation becomes a new
+    // RECEIVED version that must be sent for Admin approval again.
+    const requestedStatus = status !== undefined ? status : (oldQuote.status || 'RECEIVED');
+    const newVersionStatus = ['REVIEWED', 'APPROVED', 'PENDING_APPROVAL'].includes(String(requestedStatus).toUpperCase())
+      ? 'RECEIVED'
+      : requestedStatus;
+
     const newVersion = (oldQuote.version || 1) + 1;
     const baseQuoteNumber = oldQuote.base_quote_number || oldQuote.quote_number;
 
@@ -820,7 +839,7 @@ const updateQuotation = async (quotationId, payload) => {
         oldQuote.mr_id,
         oldQuote.rfq_id,
         oldQuote.rfq_group_id,
-        status !== undefined ? status : (oldQuote.status || 'RECEIVED'),
+        newVersionStatus,
         validUntil !== undefined ? (validUntil === '' ? null : validUntil) : oldQuote.valid_until,
         notes !== undefined ? notes : oldQuote.notes,
         received_pdf_path !== undefined ? received_pdf_path : oldQuote.received_pdf_path,
@@ -934,8 +953,8 @@ const updateQuotation = async (quotationId, payload) => {
       );
     }
 
-    // If the new version is RECEIVED, check for single vendor auto-approval
-    const currentStatus = status || 'RECEIVED';
+    // If the new version is RECEIVED, check for single vendor auto-approval (disabled; returns false)
+    const currentStatus = newVersionStatus || 'RECEIVED';
     if (currentStatus === 'RECEIVED') {
       await handleAutoApproval(newQuotationId, connection);
     }
@@ -1043,8 +1062,9 @@ const sendQuotationEmail = async (quotationId, emailData) => {
 
     console.log(`[sendQuotationEmail] Email sent successfully to ${to}`);
 
+    // Emailing never resets a quotation that is under / through Admin approval
     await pool.execute(
-      'UPDATE quotations SET status = ? WHERE id = ?',
+      "UPDATE quotations SET status = ? WHERE id = ? AND status NOT IN ('PENDING_APPROVAL', 'REVIEWED')",
       ['SENT', quotationId]
     );
 
@@ -2025,82 +2045,11 @@ const parseVendorQuotationPDF = async (filePath) => {
   return items;
 };
 
-const approveComparedQuotations = async (data) => {
-  const { quotationIds, awards } = data;
-
-  if (!Array.isArray(quotationIds) || quotationIds.length === 0) {
-    const error = new Error('Quotation IDs are required');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    // 1. Reset is_selected = 0 for all items in the involved quotations
-    await connection.query(
-      'UPDATE quotation_items SET is_selected = 0 WHERE quotation_id IN (?)',
-      [quotationIds]
-    );
-
-    // 2. Mark the awarded items as is_selected = 1
-    if (Array.isArray(awards) && awards.length > 0) {
-      for (const award of awards) {
-        const { quotationId, itemCode } = award;
-        if (!quotationId || !itemCode) continue;
-
-        await connection.execute(
-          `UPDATE quotation_items 
-           SET is_selected = 1 
-           WHERE quotation_id = ? AND (item_code = ? OR drawing_no = ?)`,
-          [quotationId, itemCode, itemCode]
-        );
-      }
-    }
-
-    // 3. Update the parent quotations' statuses
-    const approvedQuotationIds = [];
-
-    for (const qId of quotationIds) {
-      const [rows] = await connection.query(
-        'SELECT COUNT(*) as count FROM quotation_items WHERE quotation_id = ? AND is_selected = 1',
-        [qId]
-      );
-      const hasSelectedItems = rows[0].count > 0;
-
-      if (hasSelectedItems) {
-        await connection.execute(
-          "UPDATE quotations SET status = 'REVIEWED' WHERE id = ?",
-          [qId]
-        );
-        approvedQuotationIds.push(qId);
-      } else {
-        // Do not auto-reject non-awarded quotations, let them remain as is (e.g. RECEIVED)
-        console.log(`Quotation ${qId} has no selected items, keeping status unchanged`);
-      }
-    }
-
-    // 4. Create Purchase Orders for each approved quotation (vendor)
-    const purchaseOrderService = require('./purchaseOrderService');
-    const createdPOs = [];
-
-    for (const qId of approvedQuotationIds) {
-      const poResult = await purchaseOrderService.createPurchaseOrder({ quotationId: qId }, connection);
-      createdPOs.push(poResult);
-    }
-
-    await connection.commit();
-    return {
-      approvedQuotationIds,
-      createdPOs
-    };
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
+// Compare & Award: saves the awarded items and sends the awarded quotations for Admin approval.
+// It no longer approves (REVIEWED) or creates Purchase Orders — both are separate steps now.
+const approveComparedQuotations = async (data, userId = null) => {
+  const quotationApprovalService = require('./quotationApprovalService');
+  return quotationApprovalService.submitComparedForApproval(data, userId);
 };
 
 const mergeQuotations = async (payload) => {
@@ -2167,7 +2116,7 @@ const mergeQuotations = async (payload) => {
         error.statusCode = 400;
         throw error;
       }
-      if (['REJECTED', 'CLOSED', 'SUPERSEDED'].includes(q.status)) {
+      if (['REJECTED', 'CLOSED', 'SUPERSEDED', 'PENDING_APPROVAL'].includes(q.status)) {
         const error = new Error(`Quotation ${q.quote_number} is in status ${q.status} and cannot be merged`);
         error.statusCode = 400;
         throw error;

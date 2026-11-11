@@ -4,6 +4,7 @@ const emailService = require('./emailService');
 const puppeteer = require('puppeteer');
 const mustache = require('mustache');
 const stockService = require('./stockService');
+const poApprovalService = require('./poApprovalService');
 const fs = require('fs');
 const path = require('path');
 
@@ -299,10 +300,12 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
     let items = [];
 
     let actualExpectedDeliveryDate = expectedDeliveryDate;
+    let quotationApprovalCode = null;
 
     if (quotationId) {
+      // Row lock: two simultaneous "Create PO" clicks for the same quotation are serialised
       const [quotation] = await connection.query(
-        'SELECT * FROM quotations WHERE id = ?',
+        'SELECT * FROM quotations WHERE id = ? FOR UPDATE',
         [quotationId]
       );
 
@@ -311,6 +314,30 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
       }
 
       const quote = quotation[0];
+
+      // Only Admin-approved quotations (REVIEWED, shown as Approved) are eligible for a Purchase Order
+      if (quote.status !== 'REVIEWED') {
+        const error = new Error(`Quotation ${quote.quote_number} is not approved (status: ${quote.status}). Only Admin-approved quotations can be converted to a Purchase Order.`);
+        error.statusCode = 400;
+        error.status = 400;
+        throw error;
+      }
+
+      // One Purchase Order per approved quotation (including its earlier versions)
+      const [existingPO] = await connection.query(
+        `SELECT po.po_number FROM purchase_orders po
+         JOIN quotations q ON po.quotation_id = q.id
+         WHERE q.id = ? OR (q.base_quote_number IS NOT NULL AND q.base_quote_number = ?)
+         LIMIT 1`,
+        [quote.id, quote.base_quote_number || quote.quote_number]
+      );
+      if (existingPO.length > 0) {
+        const error = new Error(`A Purchase Order (${existingPO[0].po_number}) already exists for quotation ${quote.quote_number}.`);
+        error.statusCode = 400;
+        error.status = 400;
+        throw error;
+      }
+      quotationApprovalCode = quote.approval_code || null;
       finalVendorId = quote.vendor_id;
       sales_order_id = quote.sales_order_id;
       actualMrId = providedMrId || quote.mr_id;
@@ -542,6 +569,14 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
     );
 
     const poId = result.insertId;
+
+    // Keep the Admin Approval Reference Code of the source quotation on the PO
+    if (quotationApprovalCode) {
+      await connection.execute(
+        'UPDATE purchase_orders SET quotation_approval_code = ? WHERE id = ?',
+        [quotationApprovalCode, poId]
+      );
+    }
 
     if (actualMrId) {
       await connection.execute(
@@ -859,11 +894,13 @@ const createDirectCompanyPurchaseOrder = async (data) => {
 
 const getPurchaseOrders = async (filters = {}) => {
   let query = `
-    SELECT 
+    SELECT
       po.*,
       v.vendor_name,
       v.email as vendor_email,
       mr.mr_number,
+      (SELECT u_pa.username FROM users u_pa WHERE u_pa.id = po.approved_by) AS po_approved_by_name,
+      (SELECT h.action FROM po_approval_history h WHERE h.po_id = po.id ORDER BY h.id DESC LIMIT 1) AS po_last_approval_action,
       (
         SELECT COUNT(DISTINCT sales_order_id)
         FROM purchase_order_items
@@ -1810,7 +1847,7 @@ const getPurchaseOrderById = async (poId) => {
   return { ...po, items: filteredItems };
 };
 
-const updatePurchaseOrder = async (poId, payload) => {
+const updatePurchaseOrder = async (poId, payload, userId = null) => {
   const { 
     status, 
     poNumber, 
@@ -1841,10 +1878,19 @@ const updatePurchaseOrder = async (poId, payload) => {
   try {
     await connection.beginTransaction();
 
-    const [existing] = await connection.query('SELECT * FROM purchase_orders WHERE id = ?', [poId]);
+    const [existing] = await connection.query('SELECT * FROM purchase_orders WHERE id = ? FOR UPDATE', [poId]);
     if (!existing.length) {
       throw new Error('Purchase Order not found');
     }
+
+    // Admin approval rules
+    if (existing[0].status === 'PENDING_APPROVAL') {
+      throw poApprovalService.httpError(`Purchase Order ${existing[0].po_number} is pending Admin approval and cannot be edited until it is approved or rejected.`, 400);
+    }
+    if (status && poApprovalService.UNAPPROVED_STATUSES.includes(existing[0].status) && !['DRAFT', 'PO_REQUEST'].includes(status)) {
+      throw poApprovalService.httpError(`Purchase Order ${existing[0].po_number} is not approved. Send it for Admin approval; it cannot be moved to ${status} directly.`, 403);
+    }
+    const commercialBefore = await poApprovalService.getCommercialSnapshot(connection, poId);
 
     const updates = [];
     const params = [];
@@ -2025,8 +2071,13 @@ const updatePurchaseOrder = async (poId, payload) => {
       );
     }
 
+    // Commercial change after approval → re-approval (or refused once received / accounted)
+    const revision = await poApprovalService.applyRevisionRules(connection, existing[0], commercialBefore, userId);
+
     await connection.commit();
-    return { id: poId, status };
+    return revision.revised
+      ? { id: poId, status: 'DRAFT', reapprovalRequired: true }
+      : { id: poId, status };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -2039,6 +2090,10 @@ const deletePurchaseOrder = async (poId) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    const [[delPo]] = await connection.query('SELECT po_number, status FROM purchase_orders WHERE id = ? FOR UPDATE', [poId]);
+    if (delPo && delPo.status === 'PENDING_APPROVAL') {
+      throw poApprovalService.httpError(`Purchase Order ${delPo.po_number} is pending Admin approval and cannot be deleted.`, 400);
+    }
     await connection.execute('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [poId]);
     await connection.execute('DELETE FROM purchase_orders WHERE id = ?', [poId]);
     await connection.commit();
@@ -2148,64 +2203,11 @@ const getPOMaterialRequests = async (filters = {}) => {
   return rows;
 };
 
-const approvePurchaseOrder = async (poId, userId) => {
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
+// Approval is Admin-only and requires the PO to be PENDING_APPROVAL (see poApprovalService).
+// Same effects as before on approval: ORDERED, approved_by / approved_at, Material Request → PO_CREATED.
+const approvePurchaseOrder = async (poId, userId, remarks = null) => poApprovalService.approvePurchaseOrder(poId, userId, remarks);
 
-    const [po] = await connection.query('SELECT mr_id, vendor_id FROM purchase_orders WHERE id = ?', [poId]);
-    if (!po.length) throw new Error('Purchase Order not found');
-
-    if (!po[0].vendor_id) {
-      throw new Error('Cannot approve PO without a vendor. Please edit the PO to assign a vendor first.');
-    }
-
-    await connection.execute(
-      `UPDATE purchase_orders 
-       SET status = 'ORDERED',
-           approved_by = ?,
-           approved_at = NOW()
-       WHERE id = ?`,
-      [userId, poId]
-    );
-
-    if (po[0].mr_id) {
-      await connection.execute(
-        "UPDATE material_requests SET status = 'PO_CREATED' WHERE id = ?",
-        [po[0].mr_id]
-      );
-    }
-
-    await connection.commit();
-    return { success: true, poId, status: 'ORDERED' };
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
-};
-
-const bulkApprovePurchaseOrders = async (poIds, userId) => {
-  const approved = [];
-  const failed = [];
-
-  for (const poId of poIds) {
-    try {
-      const res = await approvePurchaseOrder(poId, userId);
-      approved.push({ poId, ...res });
-    } catch (err) {
-      failed.push({ poId, reason: err.message });
-    }
-  }
-
-  return {
-    message: `${approved.length} Purchase Order${approved.length === 1 ? '' : 's'} approved successfully`,
-    approved,
-    failed,
-    total: poIds.length
-  };
-};
+const bulkApprovePurchaseOrders = async (poIds, userId, remarks = null) => poApprovalService.bulkApprovePurchaseOrders(poIds, userId, remarks);
 
 const handleStoreAcceptance = async (poId, payload) => {
   const { status, notes, items } = payload;
@@ -3394,6 +3396,7 @@ const sendPurchaseOrderEmail = async (poId, emailData) => {
   const { to, subject, message, attachPDF, cc, bcc } = emailData;
 
   const po = await getPurchaseOrderById(poId);
+  poApprovalService.assertApprovedForAction(po, 'Sending the PO to the vendor');
 
   if (!to || !subject || !message) {
     throw new Error('Email recipient, subject, and message are required');
@@ -3607,6 +3610,7 @@ const forwardToAccounts = async (poId, receiptId = null) => {
     if (!po) {
       throw new Error('Purchase Order not found');
     }
+    poApprovalService.assertApprovedForAction(po, 'Forwarding to Accounts');
 
     let poAmount = po.total_amount || 0.00;
     let grnNumber = null;

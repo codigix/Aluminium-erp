@@ -292,8 +292,12 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
       throw new Error('Purchase Order not found');
     }
 
-    if (po[0].status === 'DRAFT') {
-      throw new Error('Cannot create receipt for a Draft Purchase Order. Please approve it first.');
+    if (['DRAFT', 'PO_REQUEST', 'PENDING_APPROVAL'].includes(po[0].status)) {
+      throw new Error(
+        po[0].status === 'PENDING_APPROVAL'
+          ? `Purchase Order ${po[0].po_number} is pending Admin approval. Receipts can be created only after approval.`
+          : `Cannot create receipt for a ${po[0].status === 'PO_REQUEST' ? 'PO Request' : 'Draft'} Purchase Order. It must be approved by Admin first.`
+      );
     }
 
     const poNumber = po[0].po_number;

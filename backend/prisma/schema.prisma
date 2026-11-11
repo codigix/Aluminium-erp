@@ -1386,6 +1386,11 @@ model purchase_orders {
   public_id                                                               String?                                  @unique(map: "public_id") @db.VarChar(100)
   merged_into_po_id                                                       Int?
   is_merged                                                               Boolean                                  @default(false)
+  quotation_approval_code                                                 String?                                  @db.VarChar(30)
+  po_approval_code                                                        String?                                  @unique(map: "uq_purchase_orders_po_approval_code") @db.VarChar(30)
+  po_approval_remarks                                                     String?                                  @db.Text
+  submitted_for_approval_by                                               Int?
+  submitted_for_approval_at                                               DateTime?                                @db.DateTime(0)
   forwarded_to_accounts                                                   Int?                                     @default(0) @db.TinyInt
   po_type                                                                 String                                   @default("DRAWING") @db.VarChar(30)
   company_id                                                              Int?
@@ -1599,6 +1604,12 @@ model quotations {
   is_merged                Boolean?           @default(false)
   merged_into_quotation_id Int?
   project_name             String?            @db.VarChar(255)
+  approval_code             String?            @unique(map: "uq_quotations_approval_code") @db.VarChar(30)
+  approval_remarks          String?            @db.Text
+  approved_by               Int?
+  approved_at               DateTime?          @db.DateTime(0)
+  submitted_for_approval_by Int?
+  submitted_for_approval_at DateTime?          @db.DateTime(0)
   purchase_orders          purchase_orders[]
   quotation_items   quotation_items[]
   material_requests material_requests? @relation(fields: [mr_id], references: [id], onUpdate: NoAction, map: "fk_quotations_mr")
@@ -1613,6 +1624,29 @@ model quotations {
   @@index([status], map: "idx_status")
   @@index([vendor_id], map: "idx_vendor_id")
   @@index([rfq_id], map: "rfq_id")
+}
+
+model quotation_approval_history {
+  id                Int      @id @default(autoincrement())
+  quotation_id      Int
+  quote_number      String?  @db.VarChar(100)
+  base_quote_number String?  @db.VarChar(100)
+  vendor_id         Int?
+  action            String   @db.VarChar(20)
+  approval_code     String?  @db.VarChar(30)
+  grand_total       Decimal? @db.Decimal(14, 2)
+  remarks           String?  @db.Text
+  acted_by          Int?
+  acted_at          DateTime @default(now()) @db.DateTime(0)
+
+  @@index([quotation_id], map: "idx_qah_quotation")
+  @@index([base_quote_number], map: "idx_qah_base")
+  @@index([action], map: "idx_qah_action")
+}
+
+model quotation_approval_sequences {
+  period   String @id @db.Char(7)
+  last_seq Int    @default(0)
 }
 
 model role_permissions {
@@ -2525,6 +2559,7 @@ enum quotations_status {
   SUPERSEDED
   REJECTED
   MERGED
+  PENDING_APPROVAL
 }
 
 enum roles_status {
@@ -2774,6 +2809,7 @@ enum purchase_orders_status {
   PENDING_PAYMENT
   PAID
   MERGED
+  PENDING_APPROVAL
 }
 
 enum job_cards_status {
@@ -3090,4 +3126,24 @@ model payment_allocations {
   @@index([vendor_id], map: "idx_vendor_id")
 }
 
+model po_approval_history {
+  id             Int      @id @default(autoincrement())
+  po_id          Int
+  po_number      String?  @db.VarChar(100)
+  vendor_id      Int?
+  action         String   @db.VarChar(20)
+  approval_code  String?  @db.VarChar(30)
+  total_amount   Decimal? @db.Decimal(14, 2)
+  remarks        String?  @db.Text
+  snapshot       Json?
+  acted_by       Int?
+  acted_at       DateTime @default(now()) @db.DateTime(0)
 
+  @@index([po_id], map: "idx_poah_po")
+  @@index([action], map: "idx_poah_action")
+}
+
+model po_approval_sequences {
+  period   String @id @db.Char(7)
+  last_seq Int    @default(0)
+}

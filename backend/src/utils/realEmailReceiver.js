@@ -206,8 +206,9 @@ const processEmails = async () => {
                                 }
                                 
                                 updateParams.push(quotationId);
+                                // A vendor email never resets a quotation that is under / through Admin approval
                                 await pool.execute(
-                                    `UPDATE quotations SET ${updateFields.join(', ')} WHERE id = ?`,
+                                    `UPDATE quotations SET ${updateFields.join(', ')} WHERE id = ? AND status NOT IN ('PENDING_APPROVAL', 'REVIEWED')`,
                                     updateParams
                                 );
                                 console.log(`[Email Receiver] Updated Quotation ${quotationId} to EMAIL_RECEIVED status`);
