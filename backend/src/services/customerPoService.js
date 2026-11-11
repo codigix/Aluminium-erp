@@ -30,6 +30,77 @@ const cleanAddress = (addr) => {
 
 // Customer Master contact ids from the PO form (JSON string or array) → JSON array text for
 // customer_pos.customer_master_contact_ids; null when none are selected, undefined when not sent at all
+// Customer Master (customers) → companies bridge.
+// The PO dropdown lists Customer Master customers, but customer_pos.company_id (and Sales Order, Shipment, Invoice,
+// Ledger …) still reference companies. Find the matching companies row by GST No., then by name (ignoring
+// Pvt Ltd / Limited); if none exists, create one from the customer so every downstream module keeps working.
+const normCompanyKey = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const baseCompanyName = v => normCompanyKey(v).replace(/(PRIVATELIMITED|PVTLTD|PVTLIMITED|PRIVATELTD|LIMITED|LTD)$/, '');
+
+const resolveCompanyForCustomer = async (connection, customerId, preferredCompanyId = null) => {
+  const id = Number(customerId);
+  if (!id) return null;
+
+  const [custRows] = await connection.execute(
+    'SELECT id, customer_name, gst_no, address, pincode FROM customers WHERE id = ? LIMIT 1',
+    [id]
+  );
+  if (custRows.length === 0) {
+    const error = new Error('Selected customer was not found in Customer Master.');
+    error.status = 400;
+    throw error;
+  }
+  const customer = custRows[0];
+
+  const [companies] = await connection.execute('SELECT id, company_name, gstin FROM companies');
+  const gst = normCompanyKey(customer.gst_no);
+  const name = baseCompanyName(customer.customer_name);
+  const isSameCustomer = c => name && baseCompanyName(c.company_name) === name;
+
+  // Keep the PO's current company when it already belongs to this customer (Edit of an existing PO)
+  const preferred = preferredCompanyId && companies.find(c => String(c.id) === String(preferredCompanyId));
+  if (preferred && isSameCustomer(preferred)) return preferred.id;
+
+  // Same name AND GST first, then same name, then same GST (Company Master has records sharing a GSTIN)
+  const sameGst = c => gst && normCompanyKey(c.gstin) === gst;
+  const sameName = c => name && baseCompanyName(c.company_name) === name;
+  const match = companies.find(c => sameGst(c) && sameName(c))
+    || companies.find(sameName)
+    || companies.find(sameGst);
+  if (match) return match.id;
+
+  // No company record yet: create one from Customer Master
+  let code = normCompanyKey(customer.customer_name).slice(0, 8).padEnd(4, 'X');
+  const [codeTaken] = await connection.execute('SELECT id FROM companies WHERE company_code = ? LIMIT 1', [code]);
+  if (codeTaken.length > 0) code = `${code}-C${customer.id}`;
+
+  const [insertResult] = await connection.execute(
+    `INSERT INTO companies (company_name, company_code, customer_type, status, gstin, currency)
+     VALUES (?, ?, 'REGULAR', 'ACTIVE', ?, 'INR')`,
+    [customer.customer_name, code, customer.gst_no || null]
+  );
+  const companyId = insertResult.insertId;
+
+  if (customer.address) {
+    for (const addressType of ['BILLING', 'SHIPPING']) {
+      await connection.execute(
+        'INSERT INTO company_addresses (company_id, address_type, line1, pincode) VALUES (?, ?, ?, ?)',
+        [companyId, addressType, customer.address, customer.pincode || null]
+      );
+    }
+  }
+  return companyId;
+};
+
+// Customer PO Tax Type flag: accepts true/false, 1/0, 'true'/'false', 'INTER'/'INTRA'
+const toInterstateFlag = value => {
+  if (typeof value === 'string') {
+    const v = value.trim().toUpperCase();
+    return (v === 'TRUE' || v === '1' || v === 'INTER' || v === 'IGST') ? 1 : 0;
+  }
+  return value ? 1 : 0;
+};
+
 const normalizeCustomerMasterContactIds = value => {
   if (value === undefined) return undefined;
   let list = value;
@@ -108,7 +179,8 @@ const createCustomerPo = async payload => {
     await connection.beginTransaction();
 
     const {
-      companyId,
+      companyId: requestedCompanyId,
+      customerId,
       projectName,
       header = {},
       items = [],
@@ -134,6 +206,17 @@ const createCustomerPo = async payload => {
     }
 
     const trimmedPoNumber = header.poNumber.trim();
+
+    // Customer Master selection decides company_id; without it the legacy companyId is used unchanged
+    const resolvedCustomerId = Number(customerId) || null;
+    const companyId = resolvedCustomerId
+      ? await resolveCompanyForCustomer(connection, resolvedCustomerId)
+      : requestedCompanyId;
+    if (!companyId) {
+      const error = new Error('Customer is required.');
+      error.status = 400;
+      throw error;
+    }
 
     // Strict validation: a Customer PO is created only when every line item is Matched to a drawing in the
     // Drawing Master (customer_drawings) — the same lookup used below. Any Pending Design item blocks creation.
@@ -214,6 +297,16 @@ const createCustomerPo = async payload => {
     const contactIdsJson = normalizeCustomerMasterContactIds(payload.customerMasterContactIds);
     if (contactIdsJson !== undefined) {
       await connection.execute('UPDATE customer_pos SET customer_master_contact_ids = ? WHERE id = ?', [contactIdsJson, customerPoId]);
+    }
+
+    // Tax Type: Intra (CGST+SGST) = 0, Inter (IGST) = 1
+    if (header.isInterstate !== undefined) {
+      await connection.execute('UPDATE customer_pos SET is_interstate = ? WHERE id = ?', [toInterstateFlag(header.isInterstate), customerPoId]);
+    }
+
+    // Customer Master link
+    if (resolvedCustomerId) {
+      await connection.execute('UPDATE customer_pos SET customer_id = ? WHERE id = ?', [resolvedCustomerId, customerPoId]);
     }
 
     for (const item of items) {
@@ -332,7 +425,8 @@ const createCustomerPo = async payload => {
 
 const listCustomerPos = async (filters = {}) => {
   let query = `
-    SELECT cp.*, c.company_name, 
+    SELECT cp.*,
+           COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = cp.customer_id), c.company_name) as company_name,
            COALESCE(cp.project_name, (SELECT project_name FROM sales_orders WHERE customer_po_id = cp.id LIMIT 1)) as project_name,
            (SELECT SUM(quantity) FROM customer_po_items WHERE customer_po_id = cp.id) as total_qty,
            (SELECT email FROM contacts WHERE company_id = c.id ORDER BY contact_type = 'PRIMARY' DESC, id ASC LIMIT 1) as company_email
@@ -382,7 +476,9 @@ const listCustomerPos = async (filters = {}) => {
 
 const getCustomerPoById = async id => {
   const [rows] = await pool.query(
-    `SELECT cp.*, c.company_name, c.company_code, c.customer_type, c.gstin, c.cin, c.pan,
+    `SELECT cp.*,
+            COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = cp.customer_id), c.company_name) as company_name,
+            c.company_code, c.customer_type, c.gstin, c.cin, c.pan,
             (SELECT email FROM contacts WHERE company_id = c.id ORDER BY contact_type = 'PRIMARY' DESC, id ASC LIMIT 1) as company_email
      FROM customer_pos cp
      JOIN companies c ON c.id = cp.company_id
@@ -657,6 +753,7 @@ const updateCustomerPo = async (id, payload) => {
     await connection.beginTransaction();
 
     const {
+      customerId,
       projectName,
       header = {},
       items = [],
@@ -731,6 +828,18 @@ const updateCustomerPo = async (id, payload) => {
     const contactIdsJson = normalizeCustomerMasterContactIds(payload.customerMasterContactIds);
     if (contactIdsJson !== undefined) {
       await connection.execute('UPDATE customer_pos SET customer_master_contact_ids = ? WHERE id = ?', [contactIdsJson, id]);
+    }
+
+    // Tax Type: Intra (CGST+SGST) = 0, Inter (IGST) = 1
+    if (header.isInterstate !== undefined) {
+      await connection.execute('UPDATE customer_pos SET is_interstate = ? WHERE id = ?', [toInterstateFlag(header.isInterstate), id]);
+    }
+
+    // Customer Master link (only when a customer is selected; legacy POs without one are left unchanged)
+    if (Number(customerId)) {
+      const [currentRows] = await connection.execute('SELECT company_id FROM customer_pos WHERE id = ?', [id]);
+      const linkedCompanyId = await resolveCompanyForCustomer(connection, customerId, currentRows[0]?.company_id);
+      await connection.execute('UPDATE customer_pos SET customer_id = ?, company_id = ? WHERE id = ?', [Number(customerId), linkedCompanyId, id]);
     }
 
     // Delete existing items and re-insert

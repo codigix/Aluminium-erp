@@ -584,6 +584,7 @@ const CustomerPO = ({
     poVersion: '1.0',
     orderType: 'STANDARD',
     currency: 'INR',
+    isInterstate: false,
     paymentTerms: '',
     creditDays: '',
     remarks: '',
@@ -609,6 +610,45 @@ const CustomerPO = ({
     ]
   })
 
+  // ---- Tax Type (Intra: CGST 9% + SGST 9% | Inter: IGST 18%) ----
+  const GST_RATE_TOTAL = 18;
+  const getGstSplit = (inter, total = GST_RATE_TOTAL) => inter
+    ? { cgstPercent: 0, sgstPercent: 0, igstPercent: total }
+    : { cgstPercent: total / 2, sgstPercent: total / 2, igstPercent: 0 };
+
+  // Converts a line to the current Tax Type, keeping its total GST % when one was given (PDF/Excel/quotation),
+  // else applying the default 9 + 9 / 18 split.
+  const applyGstMode = (item, inter) => {
+    const total = (parseFloat(item.cgstPercent) || 0) + (parseFloat(item.sgstPercent) || 0) + (parseFloat(item.igstPercent) || 0);
+    return { ...item, ...getGstSplit(inter, total > 0 ? total : GST_RATE_TOTAL), _gstApplied: true };
+  };
+
+  // Saved PO: stored flag, or IGST on any line (older POs saved before the flag existed)
+  const deriveIsInterstate = (data) => Boolean(
+    Number(data?.is_interstate) === 1 || data?.is_interstate === true ||
+    (data?.items || []).some(i => (parseFloat(i.igst_percent) || 0) > 0)
+  );
+
+  // Toggle click: set the universal split on every line item
+  const handleTaxTypeChange = (inter) => {
+    setPoForm(prev => ({
+      ...prev,
+      isInterstate: inter,
+      items: (prev.items || []).map(item => ({ ...item, ...getGstSplit(inter), _gstApplied: true }))
+    }));
+  };
+
+  // New / re-matched / imported lines get the current Tax Type split once (user edits afterwards are kept)
+  React.useEffect(() => {
+    if (formMode === 'VIEW') return;
+    if (!(poForm.items || []).some(item => !item._gstApplied)) return;
+    setPoForm(prev => ({
+      ...prev,
+      items: (prev.items || []).map(item => (item._gstApplied ? item : applyGstMode(item, prev.isInterstate)))
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poForm.items, formMode]);
+
   const selectedCompany = useMemo(() => {
     if (!poForm.companyId) return null;
     return companies.find(c => String(c.id) === String(poForm.companyId)) || null;
@@ -616,6 +656,11 @@ const CustomerPO = ({
 
   // Customer Master record of the selected Company / Client: same GSTIN, else same name (ignoring Pvt Ltd / Limited)
   const matchedMasterCustomer = useMemo(() => {
+    // Customer selected directly from Customer Master
+    if (poForm.customerId) {
+      const direct = masterCustomers.find(m => String(m.id) === String(poForm.customerId));
+      if (direct) return direct;
+    }
     if (!poForm.companyId || masterCustomers.length === 0) return null;
     const comp = (activeCompanies || []).find(c => String(c.id) === String(poForm.companyId))
       || companies.find(c => String(c.id) === String(poForm.companyId));
@@ -626,8 +671,78 @@ const CustomerPO = ({
     return (gst && masterCustomers.find(m => norm(m.gst_no) === gst))
       || masterCustomers.find(m => baseName(m.customer_name) && baseName(m.customer_name) === baseName(comp.company_name))
       || null;
-  }, [poForm.companyId, masterCustomers, activeCompanies, companies]);
+  }, [poForm.companyId, poForm.customerId, masterCustomers, activeCompanies, companies]);
   const masterContacts = matchedMasterCustomer?.contacts || [];
+
+  // Company / Client dropdown: only ACTIVE customers saved in Customer Master (A–Z).
+  // An existing PO whose company has no Customer Master record is shown as a read-only "(legacy)" entry.
+  const LEGACY_CUSTOMER_VALUE = '__LEGACY__';
+  const customerDropdownOptions = useMemo(() => {
+    const opts = [...masterCustomers]
+      .filter(m => String(m.status || 'ACTIVE').toUpperCase() === 'ACTIVE')
+      .sort((a, b) => String(a.customer_name || '').localeCompare(String(b.customer_name || '')))
+      .map(m => ({ value: String(m.id), label: m.customer_name }));
+    if (formMode !== 'CREATE' && !poForm.customerId && poForm.companyId && !matchedMasterCustomer) {
+      const comp = (activeCompanies || []).find(c => String(c.id) === String(poForm.companyId))
+        || companies.find(c => String(c.id) === String(poForm.companyId));
+      opts.unshift({ value: LEGACY_CUSTOMER_VALUE, label: `${comp?.company_name || poForm.legacyCompanyName || 'Existing company'} (legacy)` });
+    }
+    return opts;
+  }, [masterCustomers, poForm.customerId, poForm.companyId, poForm.legacyCompanyName, matchedMasterCustomer, activeCompanies, companies, formMode]);
+
+  // Customer Master id to save: chosen directly, or the Customer Master record matching the company
+  // (set by PDF/Excel import or quotation selection)
+  const effectiveCustomerId = poForm.customerId || (matchedMasterCustomer ? String(matchedMasterCustomer.id) : '');
+
+  const customerDropdownValue = effectiveCustomerId
+    || (formMode !== 'CREATE' && poForm.companyId ? LEGACY_CUSTOMER_VALUE : '');
+
+  // Selecting a Customer Master customer: link the matching company record (same GST, else same name) when one
+  // exists — the backend creates it otherwise — and fill GSTIN / address / email / first contact from Customer Master.
+  const handleCustomerSelect = (eOrVal) => {
+    const val = (eOrVal && typeof eOrVal === 'object' && 'target' in eOrVal) ? eOrVal.target.value : eOrVal;
+    if (val === LEGACY_CUSTOMER_VALUE) return;
+    const cust = masterCustomers.find(m => String(m.id) === String(val));
+    if (!cust) {
+      setPoForm(prev => ({ ...prev, customerId: '', companyId: '', customerMasterContactIds: [] }));
+      return;
+    }
+
+    const norm = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const baseName = (v) => norm(v).replace(/(PRIVATELIMITED|PVTLTD|PVTLIMITED|PRIVATELTD|LIMITED|LTD)$/, '');
+    const allCompanies = (activeCompanies && activeCompanies.length ? activeCompanies : companies) || [];
+    const gst = norm(cust.gst_no);
+    // Same name AND GST first, then same name, then same GST (Company Master has records sharing a GSTIN)
+    const custName = baseName(cust.customer_name);
+    const sameGst = c => gst && norm(c.gstin) === gst;
+    const sameName = c => custName && baseName(c.company_name) === custName;
+    const linkedCompany = allCompanies.find(c => sameGst(c) && sameName(c))
+      || allCompanies.find(sameName)
+      || allCompanies.find(sameGst)
+      || null;
+
+    const firstContact = (cust.contacts || [])[0] || null;
+    const addressStr = [cust.address, cust.pincode].filter(Boolean).join(' - ');
+
+    // Details already read from an uploaded PO PDF keep priority over Customer Master
+    const pdfCustomer = pdfCustomerDetailsRef.current || {};
+
+    setPoForm(prev => ({
+      ...prev,
+      customerId: String(cust.id),
+      companyId: linkedCompany ? linkedCompany.id : '',
+      customerMasterContactIds: firstContact ? [firstContact.id] : [],
+      customerContactPerson: pdfCustomer.customerContactPerson || firstContact?.contact_name || '',
+      customerEmail: pdfCustomer.customerEmail || firstContact?.email || cust.email || '',
+      customerPhone: pdfCustomer.customerPhone || firstContact?.mobile || '',
+      customerGstin: pdfCustomer.customerGstin || cust.gst_no || '',
+      customerBillingAddress: pdfCustomer.customerBillingAddress || addressStr,
+      customerShippingAddress: pdfCustomer.customerShippingAddress || addressStr
+    }));
+    setSelectedQuoteId('');
+    setSelectedDrawingVal('');
+    setSelectedQuoteContact(null);
+  };
 
   // Load Customer Master when the PO form opens and again whenever the Company / Client changes,
   // so contacts added in Customer Master meanwhile are offered too
@@ -654,7 +769,7 @@ const CustomerPO = ({
   };
 
   const customerContactInfo = useMemo(() => {
-    if (!poForm.companyId) return null;
+    if (!poForm.companyId && !poForm.customerId) return null;
     return {
       contactPerson: poForm.customerContactPerson || '—',
       email: poForm.customerEmail || '—',
@@ -665,6 +780,7 @@ const CustomerPO = ({
     };
   }, [
     poForm.companyId,
+    poForm.customerId,
     poForm.customerContactPerson,
     poForm.customerEmail,
     poForm.customerPhone,
@@ -1618,6 +1734,7 @@ const CustomerPO = ({
     newItems[index][field] = value
 
     if (field === 'drawingNo') {
+      newItems[index]._gstApplied = false; // re-apply Tax Type split after the drawing match fills this line
       newItems[index].sub_assemblies = [];
       let matchedQuoteDwg = quotationDrawings.find(d =>
         String(d.drawingNo || d.drawing_no || '').trim().toUpperCase() === String(value).trim().toUpperCase()
@@ -1794,6 +1911,7 @@ const CustomerPO = ({
       poVersion: '1.0',
       orderType: 'STANDARD',
       currency: 'INR',
+      isInterstate: false,
       paymentTerms: '',
       creditDays: '',
       remarks: '',
@@ -1853,6 +1971,9 @@ const CustomerPO = ({
           poVersion: data.po_version || '1.0',
           orderType: data.order_type || 'STANDARD',
           currency: data.currency || 'INR',
+          isInterstate: deriveIsInterstate(data),
+          customerId: data.customer_id ? String(data.customer_id) : '',
+          legacyCompanyName: data.company_name || '',
           paymentTerms: data.payment_terms || '',
           creditDays: data.credit_days || '',
           remarks: data.remarks || '',
@@ -1885,6 +2006,7 @@ const CustomerPO = ({
               cgstPercent: item.cgst_percent || 0,
               sgstPercent: item.sgst_percent || 0,
               igstPercent: item.igst_percent || 0,
+              _gstApplied: true, // saved PO: keep stored GST values as-is
               dispatched_qty: item.dispatched_qty || 0,
               sub_assemblies: (() => {
               const seen = new Set();
@@ -1962,6 +2084,7 @@ const CustomerPO = ({
         poVersion: '1.0',
         orderType: 'STANDARD',
         currency: 'INR',
+        isInterstate: false,
         paymentTerms: '',
         creditDays: '',
         remarks: '',
@@ -2016,9 +2139,10 @@ const CustomerPO = ({
     isSubmittingRef.current = true;
 
     setLocalError('')
-    if (!poForm.companyId) {
+    // New PO: customer must come from Customer Master. Existing (legacy) POs may keep their company.
+    if ((formMode === 'CREATE' && !effectiveCustomerId) || (!poForm.companyId && !effectiveCustomerId)) {
       isSubmittingRef.current = false;
-      const msg = 'Please select a company';
+      const msg = 'Please select a customer from Customer Master';
       showToast(msg)
       setLocalError(msg)
       return
@@ -2090,13 +2214,15 @@ const CustomerPO = ({
       const token = localStorage.getItem('authToken');
 
       const formData = new FormData();
-      formData.append('companyId', poForm.companyId);
+      formData.append('companyId', poForm.companyId || '');
+      if (effectiveCustomerId) formData.append('customerId', effectiveCustomerId);
       formData.append('projectName', poForm.projectName || '');
       formData.append('poNumber', poForm.poNumber || '');
       formData.append('poDate', poForm.poDate || '');
       formData.append('poVersion', poForm.poVersion || '1.0');
       formData.append('orderType', poForm.orderType || 'STANDARD');
       formData.append('currency', poForm.currency || 'INR');
+      formData.append('isInterstate', poForm.isInterstate ? 'true' : 'false');
       formData.append('paymentTerms', poForm.paymentTerms || '');
       formData.append('creditDays', poForm.creditDays || '');
       formData.append('remarks', poForm.remarks || '');
@@ -2456,6 +2582,9 @@ const CustomerPO = ({
                   poVersion: '1.0',
                   orderType: data.order_type || 'STANDARD',
                   currency: data.currency || 'INR',
+                  isInterstate: deriveIsInterstate(data),
+                  customerId: data.customer_id ? String(data.customer_id) : '',
+                  legacyCompanyName: data.company_name || '',
                   paymentTerms: data.payment_terms || '',
                   creditDays: data.credit_days || '',
                   remarks: data.remarks || '',
@@ -2829,7 +2958,9 @@ const CustomerPO = ({
             type="number"
             value={val || ''}
             onChange={(e) => handleItemChange(targetIndex, 'cgstPercent', e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
+            disabled={!!poForm.isInterstate}
+            title={poForm.isInterstate ? 'Not applicable for Inter (IGST)' : undefined}
+            className={`w-full border rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all ${poForm.isInterstate ? 'bg-slate-100 border-slate-100 text-slate-300 cursor-not-allowed' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
           />
         );
       }
@@ -2848,7 +2979,9 @@ const CustomerPO = ({
             type="number"
             value={val || ''}
             onChange={(e) => handleItemChange(targetIndex, 'sgstPercent', e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
+            disabled={!!poForm.isInterstate}
+            title={poForm.isInterstate ? 'Not applicable for Inter (IGST)' : undefined}
+            className={`w-full border rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all ${poForm.isInterstate ? 'bg-slate-100 border-slate-100 text-slate-300 cursor-not-allowed' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
           />
         );
       }
@@ -2867,7 +3000,9 @@ const CustomerPO = ({
             type="number"
             value={val || ''}
             onChange={(e) => handleItemChange(targetIndex, 'igstPercent', e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-600"
+            disabled={!poForm.isInterstate}
+            title={!poForm.isInterstate ? 'Not applicable for Intra (CGST+SGST)' : undefined}
+            className={`w-full border rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all ${!poForm.isInterstate ? 'bg-slate-100 border-slate-100 text-slate-300 cursor-not-allowed' : 'bg-slate-50 border-slate-200 text-slate-600'}`}
           />
         );
       }
@@ -2912,7 +3047,7 @@ const CustomerPO = ({
         );
       }
     }
-  ], [formMode, allDrawings, formatCurrency, handleItemChange, handleRemoveItem]);
+  ], [formMode, allDrawings, formatCurrency, handleItemChange, handleRemoveItem, poForm.isInterstate]);
 
   if (isPendingView) {
     return (
@@ -3827,81 +3962,27 @@ const CustomerPO = ({
                         <label className="text-xs text-slate-400 ml-1">Company / Client *</label>
                         <button
                           type="button"
-                          onClick={fetchLatestCompanies}
+                          onClick={() => { fetchMasterCustomers(); fetchLatestCompanies(); }}
                           className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
-                          title="Refresh Company list"
+                          title="Refresh Customer Master list"
                         >
                           <RefreshCw className="w-3 h-3" />
                           <span>Refresh</span>
                         </button>
                       </div>
+                      {/* Company / Client: customers from Customer Master only */}
                       <SearchableSelect
-                        options={activeCompanies.map(c => ({
-                          value: c.id,
-                          label: c.company_name,
-                          company: c
-                        }))}
-                        value={poForm.companyId}
-                        placeholder="Search & Select Company..."
+                        options={customerDropdownOptions}
+                        value={customerDropdownValue}
+                        placeholder="Search & Select Customer..."
                         disabled={formMode === 'VIEW'}
-                        onFocus={fetchLatestCompanies}
-                        onChange={(eOrVal) => {
-                          const val = (eOrVal && typeof eOrVal === 'object' && 'target' in eOrVal) ? eOrVal.target.value : eOrVal;
-                          const comp = activeCompanies.find(c => String(c.id) === String(val));
-
-                          let customerContactPerson = '';
-                          let customerEmail = '';
-                          let customerPhone = '';
-                          let customerGstin = '';
-                          let customerBillingAddress = '';
-                          let customerShippingAddress = '';
-
-                          if (comp) {
-                            const primaryContact = comp.contacts?.find(ct => ct.contact_type === 'PRIMARY') || comp.contacts?.[0];
-                            const billing = comp.addresses?.find(address => address.address_type === 'BILLING') || {};
-                            const shipping = comp.addresses?.find(address => address.address_type === 'SHIPPING') || {};
-
-                            const billingAddressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
-                            const shippingAddressStr = [shipping.line1, shipping.line2, shipping.city, shipping.state, shipping.pincode].filter(Boolean).join(', ');
-
-                            customerContactPerson = primaryContact?.name || comp.contact_person || '';
-                            customerEmail = primaryContact?.email || comp.email || comp.contact_email || '';
-                            customerPhone = primaryContact?.phone || comp.phone || comp.contact_mobile || '';
-                            customerGstin = comp.gstin || '';
-                            customerBillingAddress = billingAddressStr || comp.billing_address || '';
-                            customerShippingAddress = shippingAddressStr || comp.shipping_address || '';
-                          }
-
-                          // Details already read from an uploaded PO PDF keep priority over Company Master
-                          const pdfCustomer = pdfCustomerDetailsRef.current || {};
-                          customerContactPerson = pdfCustomer.customerContactPerson || customerContactPerson;
-                          customerEmail = pdfCustomer.customerEmail || customerEmail;
-                          customerPhone = pdfCustomer.customerPhone || customerPhone;
-                          customerGstin = pdfCustomer.customerGstin || customerGstin;
-                          customerBillingAddress = pdfCustomer.customerBillingAddress || customerBillingAddress;
-                          customerShippingAddress = pdfCustomer.customerShippingAddress || customerShippingAddress;
-
-                          setPoForm(prev => ({
-                            ...prev,
-                            companyId: val,
-                            // A different customer: previously chosen Customer Master contacts no longer apply
-                            customerMasterContactIds: String(prev.companyId) === String(val) ? (prev.customerMasterContactIds || []) : [],
-                            customerContactPerson,
-                            customerEmail,
-                            customerPhone,
-                            customerGstin,
-                            customerBillingAddress,
-                            customerShippingAddress
-                          }));
-                          setSelectedQuoteId('');
-                          setSelectedDrawingVal('');
-                          setSelectedQuoteContact(null);
-                        }}
+                        onFocus={fetchMasterCustomers}
+                        onChange={handleCustomerSelect}
                       />
                     </div>
                   </div>
 
-                  {poForm.companyId && (
+                  {(poForm.companyId || poForm.customerId) && (
                     <div className="p-3 bg-slate-50/70 border border-slate-200/60 rounded animate-in fade-in duration-300">
                       <div className="flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/40">
                         <User className="w-3.5 h-3.5 text-indigo-500" />
@@ -4037,6 +4118,34 @@ const CustomerPO = ({
                         className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
                       />
                     </div>
+                  </div>
+
+                  {/* Tax Type: applies one GST split to every line item */}
+                  <div className="flex flex-wrap items-center gap-3 mt-4">
+                    <span className="text-xs text-slate-500 font-medium">Tax Type:</span>
+                    <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                      <button
+                        type="button"
+                        disabled={formMode === 'VIEW'}
+                        onClick={() => handleTaxTypeChange(false)}
+                        className={`px-3 py-1 rounded text-[11px] font-semibold transition-colors disabled:cursor-not-allowed ${!poForm.isInterstate ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        Intra (CGST+SGST)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={formMode === 'VIEW'}
+                        onClick={() => handleTaxTypeChange(true)}
+                        className={`px-3 py-1 rounded text-[11px] font-semibold transition-colors disabled:cursor-not-allowed ${poForm.isInterstate ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        Inter (IGST)
+                      </button>
+                    </div>
+                    <span className="text-[11px] text-slate-400">
+                      {poForm.isInterstate
+                        ? `IGST ${GST_RATE_TOTAL}% applied to all line items`
+                        : `CGST ${GST_RATE_TOTAL / 2}% + SGST ${GST_RATE_TOTAL / 2}% applied to all line items`}
+                    </span>
                   </div>
                 </div>
 

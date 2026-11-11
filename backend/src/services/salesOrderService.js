@@ -63,7 +63,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
               (SELECT current_department FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD%' ORDER BY id DESC LIMIT 1),
               so.current_department
             ) as current_department,
-            so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+            so.target_dispatch_date as delivery_date, COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = cp.customer_id), c.company_name) AS company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(cd_contact.email, "") as email_address, 
             COALESCE(cd_contact.phone, "") as contact_phone,
             COALESCE(cd_contact.contact_person, "") as contact_person,
@@ -138,7 +138,7 @@ const getSalesOrderById = async (id) => {
               (SELECT current_department FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD%' ORDER BY id DESC LIMIT 1),
               so.current_department
             ) as current_department,
-            so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+            so.target_dispatch_date as delivery_date, COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = cp.customer_id), c.company_name) AS company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(cd_contact.email, "") as email_address, 
             COALESCE(cd_contact.phone, "") as contact_phone,
             COALESCE(cd_contact.contact_person, "") as contact_person,
@@ -235,7 +235,7 @@ const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
 
   const acceptedFilter = includeAccepted ? '' : 'AND so.request_accepted = 0';
 
-  const query = `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
+  const query = `SELECT so.*, so.target_dispatch_date as delivery_date, COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = cp.customer_id), c.company_name) AS company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name,
             soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
             cd.drawing_name,
@@ -1092,7 +1092,7 @@ const bulkRejectDesigns = async (orderIds, reason) => {
 };
 
 const getApprovedDrawings = async (companyId = null) => {
-  let query = `SELECT so.*, c.company_name, c.company_code, c.id as company_id_check,
+  let query = `SELECT so.*, COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = cp.customer_id), c.company_name) AS company_name, c.company_code, c.id as company_id_check,
      COALESCE(cd_contact.email, '') as email,
      COALESCE(cd_contact.phone, '') as phone,
      COALESCE(cd_contact.contact_person, '') as contact_person,
@@ -1398,7 +1398,7 @@ const getOrderTimeline = async salesOrderId => {
 
 const generateSalesOrderPDF = async (salesOrderId) => {
   const [orderRows] = await pool.query(
-    `SELECT so.*, c.company_name, c.company_code, c.gstin, c.pan, c.cin,
+    `SELECT so.*, COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = cp.customer_id), c.company_name) AS company_name, c.company_code, c.gstin, c.pan, c.cin,
             ba.line1 as billing_line1, ba.line2 as billing_line2, ba.city as billing_city, 
             ba.state as billing_state, ba.pincode as billing_pincode,
             cp.po_number, cp.po_date, cp.currency AS po_currency, cp.project_name as cp_project_name
@@ -1979,7 +1979,7 @@ const deleteSalesOrder = async (salesOrderId) => {
 
 const getBOMApprovalHistory = async () => {
   const [rows] = await pool.query(
-    `SELECT bah.*, so.project_name, c.company_name, cp.po_number, u.username as approver_name
+    `SELECT bah.*, so.project_name, COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = cp.customer_id), c.company_name) AS company_name, cp.po_number, u.username as approver_name
      FROM bom_approval_history bah
      JOIN sales_orders so ON bah.sales_order_id = so.id
      JOIN companies c ON so.company_id = c.id
@@ -1992,7 +1992,7 @@ const getBOMApprovalHistory = async () => {
 
 const getSalesOrderItem = async itemId => {
   const [items] = await pool.query(
-    `SELECT soi.*, so.project_name, c.company_name, cp.po_number,
+    `SELECT soi.*, so.project_name, COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = cp.customer_id), c.company_name) AS company_name, cp.po_number,
             COALESCE(soi.drawing_id, cd.latest_drawing_id) as drawing_id,
             cd.drawing_name
      FROM sales_order_items soi

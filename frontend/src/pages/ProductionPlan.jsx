@@ -2514,7 +2514,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                   </div>
                   <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-xs">
-                      <thead className="text-lefttext-xs  text-slate-400   border-b border-slate-100">
+                      <thead className="text-left text-xs  text-slate-400   border-b border-slate-100">
                         <tr>
                           <th className="p-2  ">Item</th>
                           <th className="p-2   text-right">Design Qty</th>
@@ -2570,7 +2570,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         ))}
                         {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'CORE') : coreMaterials).length === 0 && (
                           <tr>
-                            <td colSpan="5" className="px-4 py-8 text-center text-slate-400 italic text-xs">No core materials required</td>
+                            <td colSpan="6" className="px-4 py-8 text-center text-slate-400 italic text-xs">No core materials required</td>
                           </tr>
                         )}
                       </tbody>
@@ -2586,7 +2586,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                   </div>
                   <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-xs">
-                      <thead className="text-lefttext-xs  text-slate-400   border-b border-slate-100">
+                      <thead className="text-left text-xs  text-slate-400   border-b border-slate-100">
                         <tr>
                           <th className="p-2  ">Component Specification</th>
                           <th className="p-2   text-right">Design Qty</th>

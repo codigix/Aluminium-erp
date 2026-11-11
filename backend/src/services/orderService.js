@@ -73,7 +73,8 @@ const generateOrderNo = async (connection) => {
 
 const listOrders = async () => {
   const [rows] = await pool.query(`
-    SELECT o.*, c.company_name AS client,
+    SELECT o.*,
+           COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = COALESCE(cp.customer_id, cp2.customer_id)), c.company_name) AS client,
            COALESCE(NULLIF(o.project_name, ''), NULLIF(cp.project_name, ''), 'General Project') as project_name,
            COALESCE(cp.po_number, cp2.po_number) as po_number,
            COALESCE(cp.po_date, cp2.po_date) as po_date
@@ -205,8 +206,9 @@ const createOrder = async (orderData) => {
 
 const getOrderById = async (id) => {
   const [rows] = await pool.query(`
-    SELECT o.*, c.company_name AS client, 
-           COALESCE(ct.email, cd_client.email, "") AS contact_email, 
+    SELECT o.*,
+           COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = COALESCE(cp.customer_id, so_cp.customer_id)), c.company_name) AS client,
+           COALESCE(ct.email, cd_client.email, "") AS contact_email,
            COALESCE(ct.phone, cd_client.phone, "") AS contact_mobile,
            COALESCE(NULLIF(o.project_name, ''), NULLIF(cp.project_name, ''), 'General Project') as project_name,
            COALESCE(cp.po_number, so_cp.po_number) as po_number,
@@ -477,7 +479,7 @@ const deleteOrder = async (id) => {
 };
 
 const getApprovedDrawings = async (companyId = null) => {
-  let query = `SELECT so.*, c.company_name, c.company_code, c.id as company_id_check,
+  let query = `SELECT so.*, COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = cp.customer_id), c.company_name) AS company_name, c.company_code, c.id as company_id_check,
      IFNULL(ct.email, '') as email,
      IFNULL(ct.phone, '') as phone,
      IFNULL(ct.name, '') as contact_person,
@@ -551,7 +553,9 @@ const getStats = async () => {
 
 const generateOrderPDF = async (orderId) => {
   const [orderRows] = await pool.query(
-    `SELECT o.*, c.company_name, c.company_code, c.gstin, c.pan, c.cin,
+    `SELECT o.*,
+            COALESCE((SELECT cu.customer_name FROM customers cu WHERE cu.id = cp.customer_id), c.company_name) AS company_name,
+            c.company_code, c.gstin, c.pan, c.cin,
             ba.line1 as billing_line1, ba.line2 as billing_line2, ba.city as billing_city, 
             ba.state as billing_state, ba.pincode as billing_pincode,
             cp.po_number, cp.po_date, cp.currency AS po_currency, cp.project_name as cp_project_name

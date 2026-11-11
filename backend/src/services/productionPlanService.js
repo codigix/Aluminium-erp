@@ -2170,6 +2170,56 @@ const getItemBOMDetails = async (salesOrderItemId, drawingNoHint = null, itemCod
   await enrichWithDimensions(finalMaterials, 'material_code');
   await enrichWithDimensions(finalComponents, 'item_code');
 
+  // Bought-Out finished good: when the planned item itself is classified BOUGHT_OUT in Item Master (stock_balance),
+  // it stays in the Assembly section and is ALSO listed in Materials (1 per unit) so it gets procured.
+  try {
+    const fgDrawing = String(drawingNoHint || item.drawing_no || '').trim();
+    const fgCode = String(itemCodeHint || item.item_code || '').trim();
+    if (fgDrawing || fgCode) {
+      const [boRows] = await pool.query(
+        `SELECT item_code, material_name, item_description, material_type, unit, hsn_code, valuation_rate, drawing_no
+         FROM stock_balance
+         WHERE UPPER(COALESCE(material_type, '')) LIKE '%BOUGHT%'
+           AND ((? <> '' AND TRIM(drawing_no) = ?) OR (? <> '' AND (TRIM(item_code) = ? OR TRIM(drawing_no) = ?)))
+         ORDER BY id DESC LIMIT 1`,
+        [fgDrawing, fgDrawing, fgCode, fgCode, fgCode]
+      );
+      if (boRows.length > 0) {
+        const bo = boRows[0];
+        const boCode = String(bo.item_code || '').trim();
+        const alreadyListed = finalMaterials.some(m =>
+          String(m.material_code || m.item_code || '').trim().toUpperCase() === boCode.toUpperCase()
+        );
+        if (boCode && !alreadyListed) {
+          const boName = bo.material_name || bo.item_description || boCode;
+          finalMaterials.push({
+            material_code: boCode,
+            item_code: boCode,
+            material_name: boName,
+            description: bo.item_description || boName,
+            material_type: bo.material_type || 'BOUGHT_OUT',
+            item_group: 'BOUGHT_OUT',
+            is_bought_out: true,
+            uom: bo.unit || 'Nos',
+            unit: bo.unit || 'Nos',
+            qty_per_pc: 1,
+            required_qty: 1, // per finished-good unit; multiplied by planned qty on the plan
+            depth: 0,
+            material_category: 'CORE',
+            is_kg_material: false,
+            rate: bo.valuation_rate || 0,
+            hsn_code: bo.hsn_code || null,
+            bom_no: bo.drawing_no || fgDrawing || boCode,
+            source_assembly: fgCode || fgDrawing,
+            is_bought_out_fg: true
+          });
+        }
+      }
+    }
+  } catch (boErr) {
+    console.error('[getItemBOMDetails] Bought-Out FG lookup failed:', boErr.message);
+  }
+
   return {
     materials: finalMaterials,
     components: finalComponents,

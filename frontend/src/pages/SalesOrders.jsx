@@ -1838,7 +1838,12 @@ const SalesOrders = () => {
               <FormControl label="Customer">
                 <input
                   className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
-                  value={companies.find(c => String(c.id) === String(formData.customerId))?.company_name || formData.clientName || ''}
+                  value={
+                    // Customer PO linked to Customer Master: show that customer name; otherwise the company record as before
+                    (allCustomerPos || []).find(po => String(po.uniqueKey) === String(formData.customerPoId))?.company_name
+                    || companies.find(c => String(c.id) === String(formData.customerId))?.company_name
+                    || formData.clientName || ''
+                  }
                   disabled
                 />
               </FormControl>

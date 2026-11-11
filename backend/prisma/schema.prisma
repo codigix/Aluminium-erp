@@ -309,6 +309,8 @@ model customer_pos {
   billing_address          String?              @db.Text
   shipping_address         String?              @db.Text
   customer_master_contact_ids String?           @db.Text
+  is_interstate            Boolean              @default(false)
+  customer_id              Int?
   customer_po_items        customer_po_items[]
   companies                companies            @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "customer_pos_ibfk_1")
   departments              departments?         @relation(fields: [requesting_department_id], references: [id], onUpdate: NoAction, map: "customer_pos_ibfk_2")

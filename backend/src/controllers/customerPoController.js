@@ -26,7 +26,7 @@ const createCustomerPo = async (req, res, next) => {
       }
     };
 
-    if (!req.body.companyId) {
+    if (!req.body.companyId && !req.body.customerId) {
       return res.status(400).json({ message: 'Company is required' });
     }
 
@@ -73,6 +73,7 @@ const createCustomerPo = async (req, res, next) => {
 
     const payload = {
       companyId: req.body.companyId,
+      customerId: req.body.customerId || null,
       header: {
         poNumber: req.body.poNumber || pdfInsights.poNumber,
         poDate: req.body.poDate || pdfInsights.poDate,
@@ -85,7 +86,8 @@ const createCustomerPo = async (req, res, next) => {
         freightTerms: req.body.freightTerms || pdfInsights.freightTerms || null,
         packingForwarding: req.body.packingForwarding || pdfInsights.packingForwarding || null,
         insuranceTerms: req.body.insuranceTerms || pdfInsights.insuranceTerms || null,
-        deliveryTerms: req.body.deliveryTerms || pdfInsights.deliveryTerms || null
+        deliveryTerms: req.body.deliveryTerms || pdfInsights.deliveryTerms || null,
+        isInterstate: req.body.isInterstate
       },
       items: sanitizedItems,
       pdfFile: pdfFileString,
@@ -295,6 +297,7 @@ const updateCustomerPo = async (req, res, next) => {
     const pdfFileString = filePaths.length > 0 ? filePaths.join(',') : null;
 
     const payload = {
+      customerId: req.body.customerId || null,
       projectName: req.body.projectName,
       header: {
         poNumber: req.body.poNumber,
@@ -308,7 +311,8 @@ const updateCustomerPo = async (req, res, next) => {
         freightTerms: req.body.freightTerms || null,
         packingForwarding: req.body.packingForwarding || null,
         insuranceTerms: req.body.insuranceTerms || null,
-        deliveryTerms: req.body.deliveryTerms || null
+        deliveryTerms: req.body.deliveryTerms || null,
+        isInterstate: req.body.isInterstate
       },
       items: sanitizedItems,
       pdfFile: pdfFileString,
