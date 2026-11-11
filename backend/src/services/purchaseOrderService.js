@@ -1514,6 +1514,23 @@ const getPurchaseOrderById = async (poId) => {
         (SELECT cp.po_number FROM material_requests mr_inner JOIN production_plans pp ON mr_inner.plan_id = pp.id JOIN sales_orders so2 ON pp.sales_order_id = so2.id JOIN customer_pos cp ON so2.customer_po_id = cp.id WHERE mr_inner.id = po.mr_id LIMIT 1),
         (SELECT cp2.po_number FROM sales_orders so2 JOIN customer_pos cp2 ON so2.customer_po_id = cp2.id WHERE so2.id = po.sales_order_id LIMIT 1),
         (SELECT cp3.po_number FROM orders o3 JOIN customer_pos cp3 ON o3.quotation_id = cp3.id WHERE o3.id = po.sales_order_id LIMIT 1),
+        -- Merged PO: Customer PO No(s) of the source POs merged into this one
+        (SELECT GROUP_CONCAT(DISTINCT TRIM(src.customer_po_no) SEPARATOR ', ')
+         FROM purchase_orders src WHERE src.merged_into_po_id = po.id AND NULLIF(TRIM(src.customer_po_no), '') IS NOT NULL),
+        (SELECT GROUP_CONCAT(DISTINCT TRIM(cpm.po_number) SEPARATOR ', ')
+         FROM purchase_orders src
+         JOIN material_requests mrm ON mrm.id = src.mr_id
+         JOIN production_plans ppm ON ppm.id = mrm.plan_id
+         JOIN orders om ON om.id = ppm.sales_order_id
+         JOIN customer_pos cpm ON cpm.id = om.quotation_id
+         WHERE src.merged_into_po_id = po.id),
+        (SELECT GROUP_CONCAT(DISTINCT TRIM(cpm.po_number) SEPARATOR ', ')
+         FROM purchase_orders src
+         JOIN material_requests mrm ON mrm.id = src.mr_id
+         JOIN production_plans ppm ON ppm.id = mrm.plan_id
+         JOIN sales_orders som ON som.id = ppm.sales_order_id
+         JOIN customer_pos cpm ON cpm.id = som.customer_po_id
+         WHERE src.merged_into_po_id = po.id),
         '—'
       ) as customer_po_no,
       COALESCE(
@@ -1540,6 +1557,16 @@ const getPurchaseOrderById = async (poId) => {
          )
          LEFT JOIN companies c2 ON so2.company_id = c2.id
          WHERE mr_inner.id = po.mr_id LIMIT 1),
+        -- Merged PO: customer of the source POs (Customer Master name when linked)
+        (SELECT COALESCE(cum.customer_name, cm.company_name)
+         FROM purchase_orders src
+         JOIN material_requests mrm ON mrm.id = src.mr_id
+         JOIN production_plans ppm ON ppm.id = mrm.plan_id
+         JOIN orders om ON om.id = ppm.sales_order_id
+         JOIN companies cm ON cm.id = om.client_id
+         LEFT JOIN customer_pos cpm ON cpm.id = om.quotation_id AND om.source_type = 'DIRECT'
+         LEFT JOIN customers cum ON cum.id = cpm.customer_id
+         WHERE src.merged_into_po_id = po.id LIMIT 1),
         'Internal'
       ) as company_name
       FROM purchase_orders po
