@@ -67,6 +67,33 @@ const SalesOrders = () => {
     }
   }, [selectedHostId, hostCompanies]);
 
+  // Issuing company lock for Sales Orders created from a Customer PO (changes need Admin approval)
+  const [companyStatus, setCompanyStatus] = useState(null);
+  // Company change requested while creating a new order: sent to Admin right after the order is saved
+  const [draftCompanyRequest, setDraftCompanyRequest] = useState(null);
+  const fetchCompanyStatus = async (orderId) => {
+    if (!orderId) { setCompanyStatus(null); return; }
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/company-change-requests/order/${orderId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!res.ok) { setCompanyStatus(null); return; }
+      const data = await res.json();
+      setCompanyStatus(data);
+      // One-time notice to the requester once Admin has decided
+      if (data.unseen_decision) {
+        const d = data.unseen_decision;
+        await Swal.fire({
+          icon: d.status === 'APPROVED' ? 'success' : 'info',
+          title: d.status === 'APPROVED' ? 'Company change approved' : 'Company change rejected',
+          html: `<div style="font-size:13px">${d.current_company_name || '—'} → <b>${d.requested_company_name || '—'}</b><br/>${d.decision_remarks ? `Admin remarks: <i>${String(d.decision_remarks).replace(/</g, '&lt;')}</i>` : ''}</div>`
+        });
+        fetch(`${API_BASE}/company-change-requests/${d.id}/seen`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } }).catch(() => {});
+      }
+    } catch {
+      setCompanyStatus(null);
+    }
+  };
+
   const initialFormState = {
     series: 'Auto-generated',
     projectName: '',
@@ -780,6 +807,8 @@ const SalesOrders = () => {
   const handleAddOrder = () => {
     setFormData(initialFormState);
     setFormMode('create');
+    setCompanyStatus(null);
+    setDraftCompanyRequest(null);
     setViewMode('form');
 
     // Reset host company to globally active company
@@ -967,6 +996,7 @@ const SalesOrders = () => {
         setFormMode('edit');
         setViewMode('form');
         window.history.pushState({}, '', '/sales/sales-order/edit-order');
+        fetchCompanyStatus(data.id);
 
         // Async Background fetch for PO details & quotations without blocking the render
         const companyId = data.client_id || data.company_id;
@@ -1011,6 +1041,85 @@ const SalesOrders = () => {
       errorToast('Failed to fetch order details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Customer PO linked Sales Orders: issuing company locked (server enforces it too)
+  const isCompanyLocked = formMode === 'create'
+    ? Boolean((formData.sourceType || 'DIRECT') === 'DIRECT' && formData.customerPoId)
+    : Boolean(companyStatus?.locked);
+  const selectedCustomerPoNumber = (quotations.find(q => q.uniqueKey === formData.customerPoId) || {}).po_number || '';
+
+  // Sends a company change request for a saved Sales Order
+  const submitCompanyChangeRequest = async (orderId, requestedCompanyId, reason) => {
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE}/company-change-requests`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, requestedCompanyId, reason })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || data.error || 'Failed to submit company change request');
+    return data;
+  };
+
+  const handleRequestCompanyChange = async () => {
+    const currentId = companyStatus?.company?.id || selectedHostId;
+    const options = hostCompanies.filter(h => String(h.id) !== String(currentId));
+    if (options.length === 0) return errorToast('No other company profile available in Company Master');
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const preview = (h) => h ? `GSTIN: <b>${esc(h.gstin || '—')}</b> · PAN: <b>${esc(h.pan || '—')}</b><br/>${esc(h.company_address || '')}<br/>Bank: ${esc(h.bank_name || '—')} ${esc(h.account_number || '')}` : '';
+    const res = await Swal.fire({
+      title: 'Request Company Change',
+      width: 620,
+      html: `<div style="text-align:left;font-size:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin-bottom:10px">
+          <div><span style="color:#64748b">Sales Order:</span> <b>${esc(formMode === 'create' ? 'New (saved with this request)' : formData.series)}</b></div>
+          <div><span style="color:#64748b">Customer PO:</span> <b>${esc(companyStatus?.customer_po?.po_number || selectedCustomerPoNumber || '—')}</b></div>
+          <div style="grid-column:span 2"><span style="color:#64748b">Current company:</span> <b>${esc(companyStatus?.company?.company_name || selectedHostCompany?.company_name || '—')}</b></div>
+        </div>
+        <label style="display:block;font-weight:600;margin-bottom:4px">Requested company *</label>
+        <select id="cc-company" class="swal2-select" style="width:100%;margin:0 0 6px;font-size:12px">
+          ${options.map(h => `<option value="${h.id}">${esc(h.company_name)}${h.status === 'ACTIVE' ? ' (ACTIVE)' : ''}</option>`).join('')}
+        </select>
+        <div id="cc-preview" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:6px 8px;color:#475569;margin-bottom:10px">${preview(options[0])}</div>
+        <label style="display:block;font-weight:600;margin-bottom:4px">Reason for the change *</label>
+        <textarea id="cc-reason" class="swal2-textarea" style="width:100%;margin:0;font-size:12px" placeholder="Why should this Sales Order be issued under another company?"></textarea>
+        <div style="margin-top:8px;color:#64748b;font-size:11px">${formMode === 'create' ? 'The Sales Order is saved now under the Customer PO company and this request is sent to Admin. ' : ''}Admin approval is required. The Customer PO company is not changed.</div>
+      </div>`,
+      didOpen: () => {
+        const sel = document.getElementById('cc-company');
+        sel.addEventListener('change', () => {
+          const h = options.find(o => String(o.id) === String(sel.value));
+          document.getElementById('cc-preview').innerHTML = preview(h);
+        });
+      },
+      preConfirm: () => {
+        const requestedCompanyId = document.getElementById('cc-company').value;
+        const reason = document.getElementById('cc-reason').value;
+        if (!reason || !reason.trim()) { Swal.showValidationMessage('Please enter the reason'); return false; }
+        return { requestedCompanyId, reason: reason.trim() };
+      },
+      showCancelButton: true,
+      confirmButtonText: formMode === 'create' ? 'Save Order & Send to Admin' : 'Send for Admin Approval',
+      confirmButtonColor: '#4f46e5'
+    });
+    if (!res.isConfirmed) return;
+
+    // New order: save it now under the Customer PO company, then send this request to Admin (one step)
+    if (formMode === 'create') {
+      const h = options.find(o => String(o.id) === String(res.value.requestedCompanyId));
+      const pendingRequest = { ...res.value, requestedCompanyName: h ? h.company_name : '' };
+      setDraftCompanyRequest(pendingRequest);
+      await handleSaveOrder(pendingRequest);
+      return;
+    }
+    try {
+      await submitCompanyChangeRequest(formData.id, res.value.requestedCompanyId, res.value.reason);
+      successToast('Company change request sent for Admin approval');
+      fetchCompanyStatus(formData.id);
+    } catch (err) {
+      errorToast(err.message);
     }
   };
 
@@ -1093,7 +1202,10 @@ const SalesOrders = () => {
     }
   };
 
-  const handleSaveOrder = async () => {
+  // overrideRequest: company change request to send right after a new order is saved
+  // (the Save button passes a click event, which is ignored here)
+  const handleSaveOrder = async (overrideRequest) => {
+    const companyRequestToSend = (overrideRequest && overrideRequest.requestedCompanyId) ? overrideRequest : draftCompanyRequest;
     try {
       const token = localStorage.getItem('authToken');
       const method = formMode === 'create' ? 'POST' : 'PUT';
@@ -1152,7 +1264,18 @@ const SalesOrders = () => {
       });
 
       if (response.ok) {
+        const saved = await response.json().catch(() => ({}));
         successToast(`Order ${formMode === 'create' ? 'created' : 'updated'} successfully`);
+        // Company change requested during creation → send it now that the order exists (saved under the Customer PO company)
+        if (formMode === 'create' && companyRequestToSend && saved?.id) {
+          try {
+            await submitCompanyChangeRequest(saved.id, companyRequestToSend.requestedCompanyId, companyRequestToSend.reason);
+            successToast(`Company change to ${companyRequestToSend.requestedCompanyName} sent for Admin approval`);
+          } catch (reqErr) {
+            errorToast(`Order saved, but the company change request failed: ${reqErr.message}`);
+          }
+        }
+        setDraftCompanyRequest(null);
         setViewMode('list');
         if (window.location.pathname !== '/sales/sales-order') {
           window.history.pushState({}, '', '/sales/sales-order');
@@ -1623,7 +1746,8 @@ const SalesOrders = () => {
                         setSelectedHostId(e.target.value);
                         setSelectedHostCompany(host || null);
                       }}
-                      disabled={formMode === 'view'}
+                      disabled={formMode === 'view' || isCompanyLocked}
+                      title={isCompanyLocked ? 'Locked to the Customer PO company. Use "Request Company Change" (Admin approval).' : undefined}
                     >
                       <option value="">Select billing profile...</option>
                       {hostCompanies.map(h => (
@@ -1634,7 +1758,7 @@ const SalesOrders = () => {
                     </select>
                   </FormControl>
                 </div>
-                {selectedHostCompany && selectedHostCompany.status !== 'ACTIVE' && formMode !== 'view' && (
+                {selectedHostCompany && selectedHostCompany.status !== 'ACTIVE' && formMode !== 'view' && !isCompanyLocked && (
                   <Button
                     variant="light"
                     size="sm"
@@ -1674,6 +1798,65 @@ const SalesOrders = () => {
                   </Button>
                 )}
               </div>
+
+              {isCompanyLocked && (
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-lg border border-indigo-100 bg-indigo-50/50">
+                  <div className="text-xs space-y-1">
+                    <div className="flex items-center gap-1.5 font-semibold text-indigo-800">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      Issuing company locked to Customer PO {companyStatus?.customer_po?.po_number || selectedCustomerPoNumber || ''}
+                    </div>
+                    <div className="text-slate-600">
+                      Customer PO company: <b>{companyStatus?.customer_po?.company_name || selectedHostCompany?.company_name || '—'}</b>
+                      {companyStatus?.company && companyStatus?.customer_po && Number(companyStatus.company.id) !== Number(companyStatus.customer_po.host_company_id) && (
+                        <> · Sales Order company (Admin approved): <b>{companyStatus.company.company_name}</b></>
+                      )}
+                    </div>
+                    {companyStatus?.pending && (
+                      <div className="text-amber-700">
+                        ⏳ Change to <b>{companyStatus.pending.requested_company_name}</b> pending Admin approval
+                        <span className="text-slate-500"> · requested by {companyStatus.pending.requested_by_name || '—'} on {new Date(companyStatus.pending.requested_at).toLocaleDateString('en-IN')}</span>
+                      </div>
+                    )}
+                    {!companyStatus?.pending && companyStatus?.latest?.status === 'REJECTED' && (
+                      <div className="text-rose-600">Last request to {companyStatus.latest.requested_company_name} was rejected: “{companyStatus.latest.decision_remarks}”</div>
+                    )}
+                    {!companyStatus?.pending && companyStatus?.latest?.status === 'APPROVED' && (
+                      <div className="text-emerald-700">Changed to {companyStatus.latest.requested_company_name} — approved by {companyStatus.latest.decided_by_name || 'Admin'} on {new Date(companyStatus.latest.decided_at).toLocaleDateString('en-IN')}</div>
+                    )}
+                    {companyStatus?.invoices?.length > 0 && (
+                      <div className="text-slate-500">Invoice {companyStatus.invoices.map(i => i.invoice_no).join(', ')} exists — company cannot be changed here.</div>
+                    )}
+                    {formMode === 'create' && !draftCompanyRequest && (
+                      <div className="text-slate-500">Need another company? Use “Request Company Change” — the order is saved under the Customer PO company and the request goes to Admin.</div>
+                    )}
+                    {formMode === 'create' && draftCompanyRequest && (
+                      <div className="text-amber-700">
+                        Change to <b>{draftCompanyRequest.requestedCompanyName}</b> will be sent to Admin when you save · “{draftCompanyRequest.reason}”
+                        <button type="button" onClick={() => setDraftCompanyRequest(null)} className="ml-2 text-rose-600 underline">Remove</button>
+                      </div>
+                    )}
+                  </div>
+                  {formMode === 'create' && !draftCompanyRequest && (
+                    <button
+                      type="button"
+                      onClick={handleRequestCompanyChange}
+                      className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50"
+                    >
+                      Request Company Change
+                    </button>
+                  )}
+                  {formMode !== 'create' && formData.id && companyStatus?.locked && !companyStatus?.pending && !(companyStatus?.invoices?.length > 0) && (
+                    <button
+                      type="button"
+                      onClick={handleRequestCompanyChange}
+                      className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50"
+                    >
+                      {companyStatus?.latest?.status === 'REJECTED' ? 'Request Again' : 'Request Company Change'}
+                    </button>
+                  )}
+                </div>
+              )}
 
               {selectedHostCompany ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in duration-300">

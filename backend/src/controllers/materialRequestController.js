@@ -797,6 +797,23 @@ const materialRequestController = {
 
       const request = requests[0];
 
+      // Issuing company of the Sales Order this MR was raised for (MR → production plan → Sales Order → Company Master)
+      try {
+        const link = await require('../services/companyChangeService').resolvePlanOrder(request.plan_id);
+        if (link && link.company_id) {
+          const [[cm]] = await pool.query('SELECT company_name, gstin FROM company_master WHERE id = ?', [link.company_id]);
+          // sales_order_id only for the current Sales Order module (company change requests apply there)
+          request.sales_order_id = link.kind === 'ORDER' ? link.order_id : null;
+          request.sales_order_no = link.order_no;
+          request.sales_order_kind = link.kind;
+          request.issuing_company_id = link.company_id;
+          request.issuing_company_name = cm ? cm.company_name : null;
+          request.issuing_company_gstin = cm ? cm.gstin : null;
+        }
+      } catch (companyErr) {
+        console.error('[MR getById] issuing company lookup failed:', companyErr.message);
+      }
+
       const [items] = await pool.query(`
         SELECT mri.id, mri.mr_id, mri.item_code, mri.planned_qty, mri.unit_rate, mri.warehouse, mri.item_source, mri.remarks,
                COALESCE(mri.shape_type, shape_lookup.shape_name) as shape_type,

@@ -33,6 +33,7 @@ import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions } from '../utils/formatters';
 import { getFileUrl } from '../utils/url';
+import CompanySourceLock, { isCompanySourceLocked } from '../components/CompanySourceLock.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -85,6 +86,8 @@ const POReceipts = () => {
   const [hostCompanies, setHostCompanies] = useState([]);
   const [selectedHostCompany, setSelectedHostCompany] = useState(null);
   const [isHostCompanyLocked, setIsHostCompanyLocked] = useState(false);
+  // Sales Order company behind the selected PO (PO → Material Request → Sales Order)
+  const [grnCompanySource, setGrnCompanySource] = useState(null);
   const [attachments, setAttachments] = useState([]);
   const [existingAttachments, setExistingAttachments] = useState([]);
   // --- View modal inline edit state ---
@@ -176,6 +179,16 @@ const POReceipts = () => {
     items: [],
     host_company_id: ''
   });
+
+  // GRN uses the Sales Order's company when the PO can be traced to one (it wins over the PO's stored company)
+  useEffect(() => {
+    if (grnCompanySource && grnCompanySource.company_id && String(formData.host_company_id) !== String(grnCompanySource.company_id)) {
+      setFormData(prev => ({ ...prev, host_company_id: String(grnCompanySource.company_id) }));
+    }
+  }, [grnCompanySource, formData.host_company_id]);
+  useEffect(() => {
+    if (!formData.poId) setGrnCompanySource(null);
+  }, [formData.poId]);
 
   const handleAddLineItem = () => {
     setFormData(prev => ({
@@ -1240,7 +1253,7 @@ const POReceipts = () => {
                       value={formData.host_company_id || ''}
                       onChange={(e) => setFormData(prev => ({ ...prev, host_company_id: e.target.value }))}
                       className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all cursor-pointer font-medium text-slate-700"
-                      disabled={isHostCompanyLocked}
+                      disabled={isHostCompanyLocked || isCompanySourceLocked(grnCompanySource)}
                     >
                       <option value="">Select billing profile...</option>
                       {hostCompanies.map(h => (
@@ -1249,10 +1262,18 @@ const POReceipts = () => {
                         </option>
                       ))}
                     </select>
-                    {isHostCompanyLocked && (
+                    {isHostCompanyLocked && !grnCompanySource && (
                       <p className="text-[8px] text-indigo-500 italic mt-0.5 ml-1">Autofetched and locked from linked Purchase Order</p>
                     )}
                   </div>
+
+                  {formData.poId && (
+                    <CompanySourceLock
+                      poId={formData.poId}
+                      hostCompanies={hostCompanies}
+                      onResolved={setGrnCompanySource}
+                    />
+                  )}
 
                   {selectedHostCompany && (
                     <div className="pt-2 border-t border-slate-200/60 flex flex-col items-center text-center animate-in fade-in duration-300">

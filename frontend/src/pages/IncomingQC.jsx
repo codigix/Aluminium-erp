@@ -5,6 +5,7 @@ import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions } from '../utils/formatters';
+import CompanySourceLock from '../components/CompanySourceLock.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -35,6 +36,19 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
   const [selectedQC, setSelectedQC] = useState(null);
+  // Sales Order company behind this GRN (GRN → PO → Material Request → Sales Order) + Company Master list for change requests
+  const [qcCompanySource, setQcCompanySource] = useState(null);
+  const [qcHostCompanies, setQcHostCompanies] = useState([]);
+  useEffect(() => {
+    setQcCompanySource(null);
+    if (!selectedQC?.grn_id || qcHostCompanies.length) return;
+    const token = localStorage.getItem('authToken');
+    fetch(`${API_BASE}/admin-company-master`, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setQcHostCompanies(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedQC?.grn_id]);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -1783,12 +1797,12 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                   <span className="text-[10px] text-slate-500 font-medium">Finished Good</span>
                   <span className="text-xs font-medium text-slate-800">{selectedQC?.finished_good || '—'}</span>
                 </div>
-                {selectedQC?.host_company_name && (
+                {(qcCompanySource?.company_name || selectedQC?.host_company_name) && (
                   <>
                     <div className="h-8 w-px bg-slate-200"></div>
                     <div className="flex flex-col">
                       <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Host Company</span>
-                      <span className="text-xs font-semibold text-slate-800">{selectedQC.host_company_name}</span>
+                      <span className="text-xs font-semibold text-slate-800">{qcCompanySource?.company_name || selectedQC.host_company_name}</span>
                     </div>
                   </>
                 )}
@@ -1804,6 +1818,9 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               </div>
             </div>
 
+            {selectedQC?.grn_id && (
+              <CompanySourceLock grnId={selectedQC.grn_id} hostCompanies={qcHostCompanies} onResolved={setQcCompanySource} className="mt-2" />
+            )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2">
               <div className="p-2 bg-white rounded border border-slate-100">
                 <p className="text-xs text-slate-400 mb-1.5">Status</p>
@@ -1945,12 +1962,12 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 <span className="text-[10px] text-slate-500 font-medium">Finished Good</span>
                 <span className="text-xs font-medium text-slate-800">{selectedQC?.finished_good || '—'}</span>
               </div>
-              {selectedQC?.host_company_name && (
+              {(qcCompanySource?.company_name || selectedQC?.host_company_name) && (
                 <>
                   <div className="h-8 w-px bg-slate-200"></div>
                   <div className="flex flex-col">
                     <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Host Company</span>
-                    <span className="text-xs font-semibold text-slate-800">{selectedQC.host_company_name}</span>
+                    <span className="text-xs font-semibold text-slate-800">{qcCompanySource?.company_name || selectedQC.host_company_name}</span>
                   </div>
                 </>
               )}
@@ -1965,6 +1982,10 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               </div>
             </div>
           </div>
+
+          {selectedQC?.grn_id && (
+            <CompanySourceLock grnId={selectedQC.grn_id} hostCompanies={qcHostCompanies} onResolved={setQcCompanySource} />
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
             <FormControl label="INSPECTION STATUS">

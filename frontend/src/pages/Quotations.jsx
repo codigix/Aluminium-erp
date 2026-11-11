@@ -309,6 +309,152 @@ const Quotations = () => {
     }
   }, [selectedHostId, hostCompanies]);
 
+  // RFQ for a Material Request: issue it under the company of the MR's Sales Order (Admin-approved company).
+  // The company is then locked here; a change goes through "Request Company Change" (Admin approval on the Sales Order).
+  const [mrCompanySource, setMrCompanySource] = useState(null); // { orderId, orderNo, companyId, companyName, status }
+  const loadMrCompanyStatus = async (orderId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/company-change-requests/order/${orderId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) {
+        const status = await res.json();
+        setMrCompanySource(prev => (prev && String(prev.orderId) === String(orderId) ? { ...prev, status } : prev));
+      }
+    } catch { /* status is informational only */ }
+  };
+  const applyMaterialRequestCompany = (mrData) => {
+    const companyId = mrData && mrData.issuing_company_id;
+    if (!companyId) { setMrCompanySource(null); return; }
+    setSelectedHostId(String(companyId));
+    setFormData(prev => ({ ...prev, hostCompanyId: String(companyId) }));
+    setMrCompanySource({
+      orderId: mrData.sales_order_id,
+      orderNo: mrData.sales_order_no,
+      companyId: String(companyId),
+      companyName: mrData.issuing_company_name,
+      mrNumber: mrData.mr_number,
+      status: null
+    });
+    if (mrData.sales_order_id) loadMrCompanyStatus(mrData.sales_order_id);
+  };
+
+  // Closing the create form clears the Material Request company lock
+  useEffect(() => {
+    if (!showCreateModal) setMrCompanySource(null);
+  }, [showCreateModal]);
+
+  // Edit Quotation: same lock + request when the quotation's Material Request belongs to a Sales Order
+  const [editCompanySource, setEditCompanySource] = useState(null);
+  const loadEditCompanyStatus = async (orderId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/company-change-requests/order/${orderId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) {
+        const status = await res.json();
+        setEditCompanySource(prev => (prev && String(prev.orderId) === String(orderId) ? { ...prev, status } : prev));
+      }
+    } catch { /* informational only */ }
+  };
+  const loadEditCompanySource = async (quotation) => {
+    setEditCompanySource(null);
+    if (!quotation || !quotation.mr_id) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/material-requests/${quotation.mr_id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!res.ok) return;
+      const mrData = await res.json();
+      if (!mrData.issuing_company_id) return;
+      setEditCompanySource({
+        orderId: mrData.sales_order_id,
+        orderNo: mrData.sales_order_no,
+        companyId: String(mrData.issuing_company_id),
+        companyName: mrData.issuing_company_name,
+        mrNumber: mrData.mr_number,
+        quoteCompanyId: quotation.host_company_id ? String(quotation.host_company_id) : '',
+        status: null
+      });
+      setEditFormData(prev => ({ ...prev, hostCompanyId: String(mrData.issuing_company_id) }));
+      if (mrData.sales_order_id) loadEditCompanyStatus(mrData.sales_order_id);
+    } catch (err) {
+      console.error('Error loading quotation Material Request company:', err);
+    }
+  };
+  useEffect(() => {
+    if (!showEditModal) setEditCompanySource(null);
+  }, [showEditModal]);
+
+  const handleRfqRequestCompanyChange = () => requestCompanyChangeFor(mrCompanySource, () => loadMrCompanyStatus(mrCompanySource.orderId));
+  const handleEditRequestCompanyChange = () => requestCompanyChangeFor(editCompanySource, () => loadEditCompanyStatus(editCompanySource.orderId));
+
+  const requestCompanyChangeFor = async (source, onSent) => {
+    if (!source?.orderId) return;
+    const mrCompanySource = source;
+    const options = hostCompanies.filter(h => String(h.id) !== String(mrCompanySource.companyId));
+    if (options.length === 0) return errorToast('No other company profile available in Company Master');
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const preview = (h) => h ? `GSTIN: <b>${esc(h.gstin || '—')}</b> · PAN: <b>${esc(h.pan || '—')}</b><br/>${esc(h.company_address || '')}<br/>Bank: ${esc(h.bank_name || '—')} ${esc(h.account_number || '')}` : '';
+    const res = await Swal.fire({
+      title: 'Request Company Change',
+      width: 620,
+      html: `<div style="text-align:left;font-size:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin-bottom:10px">
+          <div><span style="color:#64748b">Sales Order:</span> <b>${esc(mrCompanySource.orderNo || '—')}</b></div>
+          <div><span style="color:#64748b">Material Request:</span> <b>${esc(mrCompanySource.mrNumber || '—')}</b></div>
+          <div style="grid-column:span 2"><span style="color:#64748b">Current company:</span> <b>${esc(mrCompanySource.companyName || '—')}</b></div>
+        </div>
+        <label style="display:block;font-weight:600;margin-bottom:4px">Requested company *</label>
+        <select id="rfq-cc-company" class="swal2-select" style="width:100%;margin:0 0 6px;font-size:12px">
+          ${options.map(h => `<option value="${h.id}">${esc(h.company_name)}${h.status === 'ACTIVE' ? ' (ACTIVE)' : ''}</option>`).join('')}
+        </select>
+        <div id="rfq-cc-preview" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:6px 8px;color:#475569;margin-bottom:10px">${preview(options[0])}</div>
+        <label style="display:block;font-weight:600;margin-bottom:4px">Reason for the change *</label>
+        <textarea id="rfq-cc-reason" class="swal2-textarea" style="width:100%;margin:0;font-size:12px" placeholder="Why should this order be issued under another company?"></textarea>
+        <div style="margin-top:8px;color:#64748b;font-size:11px">Sent to Admin for approval. On approval the Sales Order company changes; refresh this RFQ to use it.</div>
+      </div>`,
+      didOpen: () => {
+        const sel = document.getElementById('rfq-cc-company');
+        sel.addEventListener('change', () => {
+          const h = options.find(o => String(o.id) === String(sel.value));
+          document.getElementById('rfq-cc-preview').innerHTML = preview(h);
+        });
+      },
+      preConfirm: () => {
+        const requestedCompanyId = document.getElementById('rfq-cc-company').value;
+        const reason = document.getElementById('rfq-cc-reason').value;
+        if (!reason || !reason.trim()) { Swal.showValidationMessage('Please enter the reason'); return false; }
+        return { requestedCompanyId, reason: reason.trim() };
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Send for Admin Approval',
+      confirmButtonColor: '#4f46e5'
+    });
+    if (!res.isConfirmed) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/company-change-requests`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: mrCompanySource.orderId, ...res.value })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || 'Failed to submit request');
+      successToast('Company change request sent for Admin approval');
+      if (onSent) onSent();
+    } catch (err) {
+      errorToast(err.message);
+    }
+  };
+  const loadMaterialRequestCompany = async (mrId) => {
+    if (!mrId) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/material-requests/${mrId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (res.ok) applyMaterialRequestCompany(await res.json());
+    } catch (err) {
+      console.error('Error loading Material Request company:', err);
+    }
+  };
+
   const fetchRawRfqs = async () => {
     try {
       const token = localStorage.getItem('authToken');
@@ -500,6 +646,9 @@ const Quotations = () => {
   const handleSalesOrderChange = async (e) => {
     const value = e.target.value;
 
+    // A different MR / project selection starts without the previous MR's company lock
+    setMrCompanySource(null);
+
     // Clear items if nothing selected
     if (!value) {
       setFormData(prev => ({
@@ -564,6 +713,7 @@ const Quotations = () => {
             ...prev,
             items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }]
           }));
+          applyMaterialRequestCompany(mrData);
         }
       } catch (error) {
         console.error('Error fetching material request details:', error);
@@ -1714,6 +1864,8 @@ const Quotations = () => {
       items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
     });
     setShowEditModal(true);
+    // Quotation for a Material Request with a Sales Order → company locked to that Sales Order's company
+    loadEditCompanySource(quotation);
   };
 
   const handleEditQuotation = async (e) => {
@@ -1937,8 +2089,11 @@ const Quotations = () => {
       rfq_id: rfq.id,
       validUntil: rfq.valid_until ? rfq.valid_until.split('T')[0] : '',
       notes: rfq.notes || `RFQ Ref: ${rfq.rfq_number}`,
-      items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }]
+      items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }],
+      hostCompanyId: selectedHostId || ''
     });
+    // Company of the MR's Sales Order (falls back to the current selection when the MR has no Sales Order)
+    loadMaterialRequestCompany(mrId);
 
     // 2. Open create modal
     navigate(`${deptPrefix}/quotations/request`, { state: { fromRFQ: true } });
@@ -3069,8 +3224,10 @@ const Quotations = () => {
                         <div className="w-full md:max-w-md space-y-1">
                           <label className="text-[10px] text-slate-400 ml-1">Select Issuing Billing Profile *</label>
                           <select
-                            className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 font-medium"
+                            className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 font-medium disabled:opacity-80 disabled:cursor-not-allowed"
                             value={selectedHostId}
+                            disabled={Boolean(mrCompanySource)}
+                            title={mrCompanySource ? 'Company of the Sales Order for this Material Request. Use "Request Company Change" (Admin approval).' : undefined}
                             onChange={(e) => {
                               setSelectedHostId(e.target.value);
                             }}
@@ -3083,7 +3240,37 @@ const Quotations = () => {
                             ))}
                           </select>
                         </div>
+                        {mrCompanySource && (() => {
+                          const st = mrCompanySource.status;
+                          const canRequest = st ? (st.locked && !st.pending && !(st.invoices?.length > 0)) : true;
+                          return (
+                            <button
+                              type="button"
+                              onClick={handleRfqRequestCompanyChange}
+                              disabled={!canRequest}
+                              className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={!canRequest ? (st?.pending ? 'A company change is already pending Admin approval' : st?.invoices?.length ? 'An invoice exists for the Sales Order' : 'Company change applies to Customer PO based Sales Orders') : 'Ask Admin to change the Sales Order company'}
+                            >
+                              Request Company Change
+                            </button>
+                          );
+                        })()}
                       </div>
+
+                      {mrCompanySource && (
+                        <div className="text-[11px] px-2 py-1.5 rounded bg-indigo-50/60 border border-indigo-100 text-slate-600 space-y-0.5">
+                          <div>🔒 Company from Sales Order <b>{mrCompanySource.orderNo || '—'}</b>{mrCompanySource.mrNumber ? <> (Material Request {mrCompanySource.mrNumber})</> : null}: <b className="text-indigo-700">{mrCompanySource.companyName}</b></div>
+                          {mrCompanySource.status?.pending && (
+                            <div className="text-amber-700">⏳ Change to <b>{mrCompanySource.status.pending.requested_company_name}</b> pending Admin approval</div>
+                          )}
+                          {!mrCompanySource.status?.pending && mrCompanySource.status?.latest?.status === 'REJECTED' && (
+                            <div className="text-rose-600">Last request rejected: “{mrCompanySource.status.latest.decision_remarks}”</div>
+                          )}
+                          {mrCompanySource.status?.invoices?.length > 0 && (
+                            <div className="text-slate-500">Invoice {mrCompanySource.status.invoices.map(i => i.invoice_no).join(', ')} exists — company cannot be changed.</div>
+                          )}
+                        </div>
+                      )}
 
                       {selectedHostCompany && (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs animate-in fade-in duration-300">
@@ -4050,8 +4237,10 @@ const Quotations = () => {
                     <div className="w-full md:max-w-md space-y-1">
                       <label className="text-[10px] text-slate-400 ml-1">Select Issuing Billing Profile *</label>
                       <select
-                        className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 font-medium"
+                        className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 font-medium disabled:opacity-80 disabled:cursor-not-allowed"
                         value={editFormData.hostCompanyId || ''}
+                        disabled={Boolean(editCompanySource)}
+                        title={editCompanySource ? 'Company of the Sales Order for this Material Request. Use "Request Company Change" (Admin approval).' : undefined}
                         onChange={(e) => {
                           setEditFormData({ ...editFormData, hostCompanyId: e.target.value });
                         }}
@@ -4064,7 +4253,40 @@ const Quotations = () => {
                         ))}
                       </select>
                     </div>
+                    {editCompanySource && (() => {
+                      const st = editCompanySource.status;
+                      const canRequest = st ? (st.locked && !st.pending && !(st.invoices?.length > 0)) : true;
+                      return (
+                        <button
+                          type="button"
+                          onClick={handleEditRequestCompanyChange}
+                          disabled={!canRequest}
+                          className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={!canRequest ? (st?.pending ? 'A company change is already pending Admin approval' : st?.invoices?.length ? 'An invoice exists for the Sales Order' : 'Company change applies to Customer PO based Sales Orders') : 'Ask Admin to change the Sales Order company'}
+                        >
+                          Request Company Change
+                        </button>
+                      );
+                    })()}
                   </div>
+
+                  {editCompanySource && (
+                    <div className="text-[11px] px-2 py-1.5 rounded bg-indigo-50/60 border border-indigo-100 text-slate-600 space-y-0.5">
+                      <div>🔒 Company from Sales Order <b>{editCompanySource.orderNo || '—'}</b>{editCompanySource.mrNumber ? <> (Material Request {editCompanySource.mrNumber})</> : null}: <b className="text-indigo-700">{editCompanySource.companyName}</b></div>
+                      {editCompanySource.quoteCompanyId && editCompanySource.quoteCompanyId !== editCompanySource.companyId && (
+                        <div className="text-amber-700">This quotation was saved under {(hostCompanies.find(h => String(h.id) === editCompanySource.quoteCompanyId) || {}).company_name || 'another company'}; saving updates it to the Sales Order company.</div>
+                      )}
+                      {editCompanySource.status?.pending && (
+                        <div className="text-amber-700">⏳ Change to <b>{editCompanySource.status.pending.requested_company_name}</b> pending Admin approval</div>
+                      )}
+                      {!editCompanySource.status?.pending && editCompanySource.status?.latest?.status === 'REJECTED' && (
+                        <div className="text-rose-600">Last request rejected: “{editCompanySource.status.latest.decision_remarks}”</div>
+                      )}
+                      {editCompanySource.status?.invoices?.length > 0 && (
+                        <div className="text-slate-500">Invoice {editCompanySource.status.invoices.map(i => i.invoice_no).join(', ')} exists — company cannot be changed.</div>
+                      )}
+                    </div>
+                  )}
 
                   {(() => {
                     const selectedEditHostCompany = hostCompanies.find(h => String(h.id) === String(editFormData.hostCompanyId));

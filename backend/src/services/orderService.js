@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const crypto = require('crypto');
 const bomService = require('./bomService');
+const companyChangeService = require('./companyChangeService');
 
 const numberToWords = (num) => {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -139,6 +140,9 @@ const createOrder = async (orderData) => {
 
     const orderNo = await generateOrderNo(connection);
 
+    // Sales Order from a Customer PO always starts with that PO's issuing company (changes need Admin approval)
+    const finalHostCompanyId = await companyChangeService.resolveCompanyForNewOrder(connection, { source_type, quotation_id, host_company_id });
+
     const isInterstateVal = Boolean(is_interstate) || (parseFloat(igst_rate) > 0) ? 1 : 0;
     const igstRateVal = isInterstateVal ? (parseFloat(igst_rate) || 0) : 0;
     const cgstRateVal = isInterstateVal ? 0 : (parseFloat(cgst_rate) || 0);
@@ -168,7 +172,7 @@ const createOrder = async (orderData) => {
       subtotal || 0,
       gst || 0,
       grand_total || 0,
-      host_company_id || null
+      finalHostCompanyId || null
     ]);
 
     const orderId = result.insertId;
@@ -380,6 +384,12 @@ const updateOrder = async (id, orderData) => {
   try {
     await connection.beginTransaction();
 
+    // Customer PO linked Sales Orders keep their (Admin-approved) issuing company; a different value is refused
+    const [existingRows] = await connection.query('SELECT id, source_type, quotation_id, host_company_id FROM orders WHERE id = ? FOR UPDATE', [id]);
+    const finalHostCompanyId = existingRows.length
+      ? await companyChangeService.resolveCompanyForUpdate(connection, existingRows[0], { source_type, quotation_id, host_company_id })
+      : (host_company_id || null);
+
     await connection.execute(`
       UPDATE orders SET
         quotation_id = ?,
@@ -418,7 +428,7 @@ const updateOrder = async (id, orderData) => {
       subtotal || 0,
       gst || 0,
       grand_total || 0,
-      host_company_id || null,
+      finalHostCompanyId || null,
       id
     ]);
 

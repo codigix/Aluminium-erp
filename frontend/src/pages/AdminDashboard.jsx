@@ -68,7 +68,13 @@ const AdminDashboard = () => {
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (d) setPendingPOApprovals({ count: Number(d.count) || 0, totalValue: Number(d.totalValue) || 0 }); })
       .catch(() => {});
+    fetch(`${API_BASE}/company-change-requests/pending-count`, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setPendingCompanyChanges(Number(d.count) || 0); })
+      .catch(() => {});
   }, []);
+  // Live: Sales Order issuing-company change requests waiting for Admin approval
+  const [pendingCompanyChanges, setPendingCompanyChanges] = useState(0);
   // Live: Purchase Orders waiting for Admin approval
   const [pendingPOApprovals, setPendingPOApprovals] = useState({ count: 0, totalValue: 0 });
 
@@ -190,7 +196,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Pending approvals (live): vendor quotations + Purchase Orders */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <button
         onClick={() => navigate('/admin/quotation-approvals')}
         className={`w-full flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border text-left transition-colors ${pendingQuoteApprovals.count > 0 ? 'bg-amber-50 border-amber-200 hover:bg-amber-100/70' : 'bg-white border-slate-100 hover:bg-slate-50'}`}
@@ -224,6 +230,25 @@ const AdminDashboard = () => {
               {pendingPOApprovals.count > 0
                 ? `${pendingPOApprovals.count} Purchase Order${pendingPOApprovals.count === 1 ? '' : 's'} · ₹${pendingPOApprovals.totalValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })} waiting for your approval`
                 : 'No Purchase Orders waiting for approval'}
+            </div>
+          </div>
+        </div>
+        <span className="flex items-center gap-1 text-xs font-semibold text-indigo-600">Review <ChevronRight className="w-4 h-4" /></span>
+      </button>
+      <button
+        onClick={() => navigate('/admin/quotation-approvals?type=company')}
+        className={`w-full flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border text-left transition-colors ${pendingCompanyChanges > 0 ? 'bg-amber-50 border-amber-200 hover:bg-amber-100/70' : 'bg-white border-slate-100 hover:bg-slate-50'}`}
+      >
+        <div className="flex items-center gap-3">
+          <div className={`p-2.5 rounded-lg ${pendingCompanyChanges > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-600'}`}>
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-slate-800">Pending Company Changes</div>
+            <div className="text-xs text-slate-500">
+              {pendingCompanyChanges > 0
+                ? `${pendingCompanyChanges} Sales Order company change${pendingCompanyChanges === 1 ? '' : 's'} waiting for your approval`
+                : 'No company change requests waiting'}
             </div>
           </div>
         </div>

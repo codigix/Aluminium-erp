@@ -1463,9 +1463,23 @@ const POMaterialRequest = () => {
       >
         <div className="p-6 bg-slate-50/30">
           {/* Project / Drawing Context Banner */}
-          {selectedRequest && (selectedRequest.project_name || selectedRequest.drawing_no) && (
+          {selectedRequest && (selectedRequest.project_name || selectedRequest.drawing_no || selectedRequest.issuing_company_name) && (
             <div className="bg-indigo-50/60 border border-indigo-100 rounded p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+                {selectedRequest.issuing_company_name && (
+                  <>
+                    <div title={selectedRequest.issuing_company_gstin ? `GSTIN: ${selectedRequest.issuing_company_gstin}` : undefined}>
+                      <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Company</span>
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                        {selectedRequest.issuing_company_name}
+                        {selectedRequest.sales_order_no && (
+                          <span className="px-1.5 py-px rounded bg-white border border-slate-200 text-[10px] font-medium text-slate-500">{selectedRequest.sales_order_no}</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="h-8 w-px bg-slate-200 hidden md:block" />
+                  </>
+                )}
                 <div>
                   <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Customer / Project</span>
                   <span className="text-xs font-semibold text-slate-700">{selectedRequest.company_name && selectedRequest.company_name !== '—' ? selectedRequest.company_name : (selectedRequest.project_name || '—')}</span>

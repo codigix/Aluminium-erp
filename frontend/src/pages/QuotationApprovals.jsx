@@ -5,6 +5,7 @@ import { Modal } from '../components/ui.jsx';
 import { successToast, errorToast } from '../utils/toast';
 import { getFileUrl } from '../utils/url';
 import POApprovals from './POApprovals.jsx';
+import CompanyChangeApprovals from './CompanyChangeApprovals.jsx';
 
 // Admin: RFQ Vendor Quotation approval queue.
 // Approve → status REVIEWED (shown as Approved) + approval reference code. Approval does NOT create a PO;
@@ -40,21 +41,32 @@ const itemKey = (i) => String(i.drawing_no || i.item_code || i.description || ''
 
 const QuotationApprovals = () => {
   // Opens on the Purchase Orders queue when linked with ?type=po (Admin Dashboard banner)
+  // ?type=po | ?type=company opens that queue directly (Admin Dashboard banners)
   const [kind, setKind] = useState(() => {
-    try { return new URLSearchParams(window.location.search).get('type') === 'po' ? 'PO' : 'QUOTATION'; } catch { return 'QUOTATION'; }
+    try {
+      const t = new URLSearchParams(window.location.search).get('type');
+      return t === 'po' ? 'PO' : t === 'company' ? 'COMPANY' : 'QUOTATION';
+    } catch { return 'QUOTATION'; }
   });
   const [poPendingCount, setPoPendingCount] = useState(0);
+  const [companyPendingCount, setCompanyPendingCount] = useState(0);
   useEffect(() => {
     let explicitType = null;
     try { explicitType = new URLSearchParams(window.location.search).get('type'); } catch { /* ignore */ }
     Promise.all([
       authFetch('/purchase-orders/approvals/pending-count').catch(() => null),
-      authFetch('/quotations/approvals/pending-count').catch(() => null)
-    ]).then(([poCount, quoteCount]) => {
+      authFetch('/quotations/approvals/pending-count').catch(() => null),
+      authFetch('/company-change-requests/pending-count').catch(() => null)
+    ]).then(([poCount, quoteCount, companyCount]) => {
       const poPending = poCount?.count || 0;
+      const companyPending = companyCount?.count || 0;
       setPoPendingCount(poPending);
-      // No explicit tab requested: open the queue that has work waiting (POs when no quotation is pending)
-      if (!explicitType && poPending > 0 && !(quoteCount?.count > 0)) setKind('PO');
+      setCompanyPendingCount(companyPending);
+      // No explicit tab requested: open the first queue that has work waiting
+      if (!explicitType && !(quoteCount?.count > 0)) {
+        if (poPending > 0) setKind('PO');
+        else if (companyPending > 0) setKind('COMPANY');
+      }
     });
   }, []);
   const [tab, setTab] = useState('PENDING_APPROVAL');
@@ -201,14 +213,17 @@ const QuotationApprovals = () => {
         <p className="text-xs text-slate-500 mt-0.5">
           {kind === 'QUOTATION'
             ? 'Review vendor quotations sent by Procurement. Approval generates a QA reference code; Purchase Orders are created separately by Procurement.'
-            : 'Review Purchase Orders sent by Procurement. Approval generates a PA reference code and the PO becomes Ordered; Procurement then sends it to the vendor.'}
+            : kind === 'PO'
+              ? 'Review Purchase Orders sent by Procurement. Approval generates a PA reference code and the PO becomes Ordered; Procurement then sends it to the vendor.'
+              : 'Review requests from Sales to issue a Customer PO based Sales Order under a different company. The Customer PO company is never changed.'}
         </p>
       </div>
       <div className="flex items-center gap-2">
         <div className="inline-flex p-1 bg-slate-100 rounded-lg">
           {[
             { id: 'QUOTATION', label: 'Quotations', count: pendingCount },
-            { id: 'PO', label: 'Purchase Orders', count: poPendingCount }
+            { id: 'PO', label: 'Purchase Orders', count: poPendingCount },
+            { id: 'COMPANY', label: 'Company Changes', count: companyPendingCount }
           ].map(k => (
             <button
               key={k.id}
@@ -234,6 +249,15 @@ const QuotationApprovals = () => {
       <div className="space-y-4">
         {kindSwitch}
         <POApprovals onCountChange={setPoPendingCount} />
+      </div>
+    );
+  }
+
+  if (kind === 'COMPANY') {
+    return (
+      <div className="space-y-4">
+        {kindSwitch}
+        <CompanyChangeApprovals onCountChange={setCompanyPendingCount} />
       </div>
     );
   }

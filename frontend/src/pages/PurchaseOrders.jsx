@@ -8,6 +8,7 @@ import {
 import { Card, SearchableSelect, Button, Tabs } from '../components/ui.jsx';
 import DataTable from '../components/DataTable.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
+import CompanySourceLock, { isCompanySourceLocked } from '../components/CompanySourceLock.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { getFileUrl } from '../utils/url';
@@ -201,6 +202,8 @@ const PurchaseOrders = () => {
 
   // Company Master billing profiles for the Edit PO "Select Issuing Billing Profile" field
   const [hostCompanies, setHostCompanies] = useState([]);
+  // Sales Order company behind this PO (PO → Material Request → Sales Order); locked for current Sales Orders
+  const [poCompanySource, setPoCompanySource] = useState(null);
   useEffect(() => {
     const fetchHostCompanies = async () => {
       try {
@@ -2828,8 +2831,10 @@ const PurchaseOrders = () => {
                   <div className="w-full md:max-w-md space-y-1">
                     <label className="text-[10px] text-slate-400 ml-1">Select Issuing Billing Profile *</label>
                     <select
-                      className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 font-medium"
+                      className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 font-medium disabled:opacity-80 disabled:cursor-not-allowed"
                       value={manualFormData.hostCompanyId || ''}
+                      disabled={isCompanySourceLocked(poCompanySource)}
+                      title={isCompanySourceLocked(poCompanySource) ? 'Company of the Sales Order for this PO. Use "Request Company Change" (Admin approval).' : undefined}
                       onChange={(e) => setManualFormData(prev => ({ ...prev, hostCompanyId: e.target.value }))}
                     >
                       <option value="">Select billing profile...</option>
@@ -2840,6 +2845,15 @@ const PurchaseOrders = () => {
                       ))}
                     </select>
                   </div>
+
+                  <CompanySourceLock
+                    poId={manualFormData.id}
+                    hostCompanies={hostCompanies}
+                    onResolved={(src) => {
+                      setPoCompanySource(src);
+                      if (src && src.company_id) setManualFormData(prev => ({ ...prev, hostCompanyId: String(src.company_id) }));
+                    }}
+                  />
 
                   {(() => {
                     const host = hostCompanies.find(h => String(h.id) === String(manualFormData.hostCompanyId));
