@@ -147,6 +147,14 @@ const createCustomerPo = async payload => {
          LIMIT 1`,
         [drawingId, drawingId, drawingNo, drawingNo]
       );
+      if (found.length === 0 && drawingNo) {
+        // Fallback: Drawing No registered in Item Master (stock_balance), e.g. BOUGHT_OUT items
+        const [foundItem] = await connection.execute(
+          `SELECT id FROM stock_balance WHERE TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) LIMIT 1`,
+          [drawingNo]
+        );
+        if (foundItem.length > 0) continue;
+      }
       if (found.length === 0) pendingDesignDrawingNos.push(drawingNo || '(no drawing no)');
     }
     if (pendingDesignDrawingNos.length > 0) {

@@ -873,8 +873,27 @@ const CustomerPO = ({
   React.useEffect(() => {
     const fetchAllDrawings = async () => {
       try {
-        const data = await apiRequest('/drawings/approved');
-        if (data) setAllDrawings(data);
+        const [data, itemMasterData] = await Promise.all([
+          apiRequest('/drawings/approved'),
+          apiRequest('/customer-pos/drawings/item-master').catch(() => [])
+        ]);
+        const drawings = Array.isArray(data) ? data : [];
+        // Add Item Master drawing nos (e.g. BOUGHT_OUT items) not already present in Drawing Master
+        const existingNos = new Set(drawings.map(d => String(d.drawing_no || '').trim().toUpperCase()));
+        const itemMasterDrawings = (Array.isArray(itemMasterData) ? itemMasterData : [])
+          .filter(it => it.drawing_no && !existingNos.has(String(it.drawing_no).trim().toUpperCase()))
+          .map(it => ({
+            drawing_no: String(it.drawing_no).trim(),
+            drawing_description: it.drawing_description || '',
+            hsn_code: it.hsn_code || '',
+            unit: it.unit || 'NOS',
+            item_code: it.item_code || '',
+            material_type: it.material_type || '',
+            valuation_rate: Number(it.valuation_rate) > 0 ? Number(it.valuation_rate) : '',
+            source: 'ITEM_MASTER',
+            sub_assemblies: []
+          }));
+        if (data || itemMasterDrawings.length) setAllDrawings([...drawings, ...itemMasterDrawings]);
       } catch (error) {
         console.error('Error fetching drawings:', error);
       }
@@ -909,6 +928,21 @@ const CustomerPO = ({
         }
         if (!item.deliveryDate && matchedDwg.delivery_date) {
           newItem.deliveryDate = new Date(matchedDwg.delivery_date).toISOString().split('T')[0];
+          itemChanged = true;
+        }
+        // Item Master (BOUGHT_OUT) drawing: fill empty Description / Unit / Qty / Rate once per drawing no
+        // (covers rows whose Drawing No was entered before the Item Master list finished loading)
+        const cleanNo = String(item.drawingNo || '').trim().toUpperCase();
+        if (matchedDwg.source === 'ITEM_MASTER' && item._itemMasterFilledFor !== cleanNo) {
+          if (!item.description && matchedDwg.drawing_description) newItem.description = matchedDwg.drawing_description;
+          if ((!item.unit || String(item.unit).toUpperCase() === 'NOS') && matchedDwg.unit) newItem.unit = matchedDwg.unit;
+          if (item.quantity === '' || item.quantity === undefined || item.quantity === null) newItem.quantity = 1;
+          if (!(Number(item.rate) > 0) && matchedDwg.valuation_rate) newItem.rate = matchedDwg.valuation_rate;
+          newItem.isUnmatched = false;
+          newItem.needsReview = false;
+          newItem.status = 'MATCHED';
+          newItem.design_status = null;
+          newItem._itemMasterFilledFor = cleanNo;
           itemChanged = true;
         }
       }
@@ -1678,7 +1712,8 @@ const CustomerPO = ({
             : (matchedDwg.qty || matchedDwg.quantity || 1);
           newItems[index].rate = (newItems[index].rate !== '' && newItems[index].rate !== undefined && newItems[index].rate !== null && Number(newItems[index].rate) > 0)
             ? newItems[index].rate
-            : (matchedDwg.bom_cost || '');
+            : (matchedDwg.bom_cost || matchedDwg.valuation_rate || '');
+          if (matchedDwg.source === 'ITEM_MASTER') newItems[index]._itemMasterFilledFor = String(value).trim().toUpperCase();
           newItems[index].deliveryDate = newItems[index].deliveryDate || (matchedDwg.delivery_date ? new Date(matchedDwg.delivery_date).toISOString().split('T')[0] : '');
           // Sync sub-assemblies if they exist on the drawing
           if (matchedDwg.sub_assemblies && matchedDwg.sub_assemblies.length > 0) {

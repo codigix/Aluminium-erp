@@ -1240,19 +1240,20 @@ const ItemsMaster = () => {
                 const groupNameLower = String(itemFormData.itemGroup || '').toLowerCase().trim();
                 const selectedGroupObj = itemGroups.find(g => String(g.name).trim().toLowerCase() === groupNameLower);
                 const isPart = groupNameLower.includes('part') || (selectedGroupObj && selectedGroupObj.group_type === 'PART');
+                const isBoughtOut = groupNameLower.includes('bought') || groupNameLower === 'bo' || (selectedGroupObj && (selectedGroupObj.group_type === 'BO' || String(selectedGroupObj.group_type).toUpperCase().includes('BOUGHT'))) || String(itemFormData.itemCode || '').toUpperCase().startsWith('BO-');
                 
-                if (!isPart) return null;
+                if (!isPart && !isBoughtOut) return null;
                 
                 return (
                   <div className="space-y-2">
-                    <label className="text-xs text-slate-500 font-semibold">Drawing No *</label>
+                    <label className="text-xs text-slate-500 font-semibold">Drawing No {isPart ? '*' : ''}</label>
                     <input 
                       type="text"
                       className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                       placeholder="Enter Drawing No"
                       value={itemFormData.drawingNo || ''}
                       onChange={(e) => setItemFormData({...itemFormData, drawingNo: e.target.value})}
-                      required
+                      required={isPart}
                     />
                   </div>
                 );
