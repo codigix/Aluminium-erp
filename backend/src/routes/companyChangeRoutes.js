@@ -10,6 +10,8 @@ const VIEWERS = ['ORDER_VIEW', 'ORDER_EDIT', 'QUOTATION_VIEW', 'PURCHASE_ORDER_V
 const REQUESTERS = ['ORDER_EDIT', 'QUOTATION_EDIT', 'PURCHASE_ORDER_EDIT', 'GRN_CREATE', 'GRN_EDIT', 'QC_EDIT'];
 router.get('/pending-count', authorize(['COMPANY_CHANGE_APPROVE']), controller.getPendingCount);
 router.get('/source', authorize(VIEWERS), controller.resolveSource);
+// Company id per MR / quotation / PO / receipt / GRN for list filters (read-only, any signed-in user)
+router.get('/company-map', controller.getCompanyMap);
 router.get('/order/:orderId', authorize(VIEWERS), controller.getOrderStatus);
 router.get('/', authorize(['COMPANY_CHANGE_APPROVE']), controller.listRequests);
 router.post('/', authorize(REQUESTERS), controller.submitRequest);

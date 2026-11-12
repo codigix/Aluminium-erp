@@ -554,9 +554,12 @@ const updateSalesOrder = async (id, orderData) => {
   try {
     await connection.beginTransaction();
 
+    // Customer PO based Sales Orders keep their (Admin-approved) issuing company; a different value is refused
+    const finalHostCompanyId = await require('./companyChangeService').resolveLegacyCompanyForUpdate(connection, id, host_company_id);
+
     await connection.execute(
-      `UPDATE sales_orders SET 
-        company_id = ?, 
+      `UPDATE sales_orders SET
+        company_id = ?,
         customer_po_id = ?,
         project_name = ?, 
         drawing_required = ?, 
@@ -592,7 +595,7 @@ const updateSalesOrder = async (id, orderData) => {
         warehouse || null,
         finalQuotationId,
         source_type,
-        host_company_id || null,
+        finalHostCompanyId || null,
         id
       ]
     );

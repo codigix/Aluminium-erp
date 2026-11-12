@@ -22,7 +22,8 @@ import {
   Check,
   GitBranch,
   MapPin,
-  Search
+  Search,
+  Building2
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -53,6 +54,7 @@ const SalesOrders = () => {
   const [user, setUser] = useState(null);
   const [previewDrawing, setPreviewDrawing] = useState(null);
   const [hostCompanies, setHostCompanies] = useState([]);
+  const [companyFilter, setCompanyFilter] = useState('ALL'); // list filter: 'ALL' | 'NONE' | company_master.id
   const [selectedHostId, setSelectedHostId] = useState('');
   const [selectedHostCompany, setSelectedHostCompany] = useState(null);
   const [allCustomerPos, setAllCustomerPos] = useState([]);
@@ -1575,6 +1577,11 @@ const SalesOrders = () => {
     const completedOrders = orders.filter(o => ['COMPLETED', 'FULFILLED', 'DELIVERED'].includes(o.status?.toUpperCase())).length;
 
     const filteredOrders = orders.filter(order => {
+      // Company filter: issuing company (Company Master) of the Sales Order
+      if (companyFilter !== 'ALL') {
+        const orderCompanyId = order.host_company_id || '';
+        if (companyFilter === 'NONE' ? orderCompanyId : String(orderCompanyId) !== String(companyFilter)) return false;
+      }
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase().trim();
 
@@ -1647,6 +1654,26 @@ const SalesOrders = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg w-full md:w-auto">
+            <Building2 className="w-4 h-4 text-slate-400" />
+            <span className="text-xs text-slate-400">Company:</span>
+            <select
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
+              className="text-xs text-rose-600 font-medium outline-none bg-transparent cursor-pointer min-w-[160px] max-w-[260px]"
+              title="Filter by issuing company (Company Master)"
+            >
+              <option value="ALL">All Companies</option>
+              {hostCompanies.map(h => (
+                <option key={h.id} value={h.id}>
+                  {h.company_name}{h.status === 'ACTIVE' ? ' (Active)' : ''} ({orders.filter(o => String(o.host_company_id || '') === String(h.id)).length})
+                </option>
+              ))}
+              {orders.some(o => !o.host_company_id) && (
+                <option value="NONE">No company ({orders.filter(o => !o.host_company_id).length})</option>
+              )}
+            </select>
           </div>
         </div>
 

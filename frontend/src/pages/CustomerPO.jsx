@@ -456,6 +456,7 @@ const CustomerPO = ({
   const [poFormLoading, setPoFormLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [companyFilter, setCompanyFilter] = useState('ALL') // 'ALL' | 'NONE' | company_master.id
   const [selectedQuoteId, setSelectedQuoteId] = useState('')
   const [selectedQuoteContact, setSelectedQuoteContact] = useState(null)
   const [showEmailModal, setShowEmailModal] = useState(false)
@@ -963,6 +964,14 @@ const CustomerPO = ({
     }
   };
 
+  // Company Master list for the list-page Company filter (no form defaults touched)
+  React.useEffect(() => {
+    apiRequest('/admin-company-master')
+      .then(data => { if (Array.isArray(data)) setHostCompanies(prev => (prev.length ? prev : data)); })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   React.useEffect(() => {
     if (showPoForm) {
       fetchHostCompanies();
@@ -1348,9 +1357,14 @@ const CustomerPO = ({
 
       const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
 
-      return matchesSearch && matchesStatus;
+      // Company filter: issuing company (Company Master) saved on the Customer PO
+      const poCompanyId = po.host_company_id || po.hostCompanyId || '';
+      const matchesCompany = companyFilter === 'ALL'
+        || (companyFilter === 'NONE' ? !poCompanyId : String(poCompanyId) === String(companyFilter));
+
+      return matchesSearch && matchesStatus && matchesCompany;
     });
-  }, [customerPos, searchTerm, statusFilter]);
+  }, [customerPos, searchTerm, statusFilter, companyFilter]);
 
   const handleAddItem = () => {
     setPoForm(prev => ({
@@ -3637,6 +3651,26 @@ const CustomerPO = ({
             <option value="PENDING">Pending</option>
             <option value="APPROVED">Approved</option>
             <option value="COMPLETED">Completed</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded w-full md:w-auto">
+          <Building2 className="w-4 h-4 text-slate-400" />
+          <span className="text-xs text-slate-400">Company:</span>
+          <select
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            className="text-xs text-indigo-600 outline-none bg-transparent cursor-pointer min-w-[160px] max-w-[260px]"
+            title="Filter by issuing company (Company Master)"
+          >
+            <option value="ALL">All Companies</option>
+            {hostCompanies.map(h => (
+              <option key={h.id} value={h.id}>
+                {h.company_name}{h.status === 'ACTIVE' ? ' (Active)' : ''} ({customerPos.filter(po => String(po.host_company_id || po.hostCompanyId || '') === String(h.id)).length})
+              </option>
+            ))}
+            {customerPos.some(po => !(po.host_company_id || po.hostCompanyId)) && (
+              <option value="NONE">No company ({customerPos.filter(po => !(po.host_company_id || po.hostCompanyId)).length})</option>
+            )}
           </select>
         </div>
       </div>

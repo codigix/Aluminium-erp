@@ -3150,6 +3150,7 @@ model po_approval_sequences {
 
 model company_change_requests {
   id                     Int       @id @default(autoincrement())
+  order_source           String    @default("ORDER") @db.VarChar(20)
   order_id               Int
   order_no               String?   @db.VarChar(50)
   customer_po_id         Int?
@@ -3166,8 +3167,10 @@ model company_change_requests {
   decided_at             DateTime? @db.DateTime(0)
   decision_remarks       String?   @db.Text
   requester_notified_at  DateTime? @db.DateTime(0)
-  /// Generated column: order_id while status = 'PENDING' (enforces one pending request per Sales Order)
-  pending_order_id       Int?      @unique(map: "uq_ccr_one_pending_per_order")
+  /// Generated column (legacy, no longer unique): order_id while status = 'PENDING'
+  pending_order_id       Int?
+  /// Generated column: 'SOURCE:order_id' while status = 'PENDING' (one pending request per Sales Order)
+  pending_key            String?   @unique(map: "uq_ccr_one_pending_per_order_source") @db.VarChar(40)
 
   @@index([order_id], map: "idx_ccr_order")
   @@index([status], map: "idx_ccr_status")
@@ -3176,6 +3179,7 @@ model company_change_requests {
 model company_change_history {
   id                   Int      @id @default(autoincrement())
   request_id           Int?
+  order_source         String   @default("ORDER") @db.VarChar(20)
   order_id             Int
   order_no             String?  @db.VarChar(50)
   customer_po_id       Int?

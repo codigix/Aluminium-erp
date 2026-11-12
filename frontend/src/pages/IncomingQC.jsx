@@ -6,6 +6,7 @@ import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions } from '../utils/formatters';
 import CompanySourceLock from '../components/CompanySourceLock.jsx';
+import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -38,6 +39,9 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   const [selectedQC, setSelectedQC] = useState(null);
   // Sales Order company behind this GRN (GRN → PO → Material Request → Sales Order) + Company Master list for change requests
   const [qcCompanySource, setQcCompanySource] = useState(null);
+  // List Company filter (Company Master), shared by all QC tabs
+  const qcListCompanyFilter = useCompanyFilter();
+  const qcCompanyOf = (q) => qcListCompanyFilter.companyOf({ grn: q.grn_id, fallback: q.host_company_id, fallbackName: q.host_company_name });
   const [qcHostCompanies, setQcHostCompanies] = useState([]);
   useEffect(() => {
     setQcCompanySource(null);
@@ -1604,9 +1608,20 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   ];
 
   const renderContent = () => {
-    const pendingInspections = qcInspections.filter(q => q.status === 'PENDING');
-    const inProgressInspections = qcInspections.filter(q => ['IN_PROGRESS', 'SHORTAGE', 'OVERAGE'].includes(q.status));
-    const finalInspections = qcInspections.filter(q => ['PASSED', 'FAILED', 'ACCEPTED'].includes(q.status));
+    // Company filter (all tabs): company of the GRN's Sales Order (Company Master), else the inspection's host company
+    const companyScoped = qcInspections.filter(q => qcListCompanyFilter.matches(qcCompanyOf(q)));
+    const pendingInspections = companyScoped.filter(q => q.status === 'PENDING');
+    const inProgressInspections = companyScoped.filter(q => ['IN_PROGRESS', 'SHORTAGE', 'OVERAGE'].includes(q.status));
+    const finalInspections = companyScoped.filter(q => ['PASSED', 'FAILED', 'ACCEPTED'].includes(q.status));
+    // Shown beside each table's search box
+    const companyFilterEl = (
+      <CompanyFilterSelect
+        cf={qcListCompanyFilter}
+        rows={qcInspections}
+        getCompanyId={qcCompanyOf}
+        className="py-1.5"
+      />
+    );
 
     switch (activeTab) {
       case 'incoming':
@@ -1646,7 +1661,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 columns={columns}
                 data={pendingInspections}
                 loading={loading}
-                searchPlaceholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., or Supplier..."
+                searchPlaceholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., or Supplier..." filterComponent={companyFilterEl}
                 customFilter={(row, searchLower) => {
                   const grnCode = `GRN-${String(row.grn_id).padStart(4, '0')}`;
                   const matchesGrn = grnCode.toLowerCase().includes(searchLower) || String(row.grn_id || '').toLowerCase().includes(searchLower);
@@ -1684,7 +1699,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 columns={columns}
                 data={inProgressInspections}
                 loading={loading}
-                searchPlaceholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., or Supplier..."
+                searchPlaceholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., or Supplier..." filterComponent={companyFilterEl}
                 customFilter={(row, searchLower) => {
                   const grnCode = `GRN-${String(row.grn_id).padStart(4, '0')}`;
                   const matchesGrn = grnCode.toLowerCase().includes(searchLower) || String(row.grn_id || '').toLowerCase().includes(searchLower);
@@ -1726,7 +1741,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                   columns={columns}
                   data={finalInspections}
                   loading={loading}
-                  searchPlaceholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., or Supplier..."
+                  searchPlaceholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., or Supplier..." filterComponent={companyFilterEl}
                   customFilter={(row, searchLower) => {
                     const grnCode = `GRN-${String(row.grn_id).padStart(4, '0')}`;
                     const matchesGrn = grnCode.toLowerCase().includes(searchLower) || String(row.grn_id || '').toLowerCase().includes(searchLower);

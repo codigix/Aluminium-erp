@@ -43,5 +43,27 @@ CREATE TABLE IF NOT EXISTS `company_change_history` (
   INDEX `idx_cch_request` (`request_id`)
 );
 
+-- Both Sales Order tables: order_source = 'ORDER' (orders) | 'SALES_ORDER' (sales_orders). Guarded so re-runs are no-ops.
+SET @c = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'company_change_requests' AND COLUMN_NAME = 'order_source');
+SET @ddl = IF(@c = 0, 'ALTER TABLE `company_change_requests` ADD COLUMN `order_source` VARCHAR(20) NOT NULL DEFAULT ''ORDER'' AFTER `id`', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'company_change_history' AND COLUMN_NAME = 'order_source');
+SET @ddl = IF(@c = 0, 'ALTER TABLE `company_change_history` ADD COLUMN `order_source` VARCHAR(20) NOT NULL DEFAULT ''ORDER'' AFTER `request_id`', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- One PENDING request per (order_source, order_id): the two tables' ids overlap, so order_id alone is not unique
+SET @c = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'company_change_requests' AND COLUMN_NAME = 'pending_key');
+SET @ddl = IF(@c = 0, 'ALTER TABLE `company_change_requests` ADD COLUMN `pending_key` VARCHAR(40) GENERATED ALWAYS AS (CASE WHEN `status` = ''PENDING'' THEN CONCAT(`order_source`, '':'', `order_id`) ELSE NULL END) STORED', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @i = (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'company_change_requests' AND INDEX_NAME = 'uq_ccr_one_pending_per_order_source');
+SET @ddl = IF(@i = 0, 'ALTER TABLE `company_change_requests` ADD UNIQUE INDEX `uq_ccr_one_pending_per_order_source` (`pending_key`)', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @i = (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'company_change_requests' AND INDEX_NAME = 'uq_ccr_one_pending_per_order');
+SET @ddl = IF(@i > 0, 'ALTER TABLE `company_change_requests` DROP INDEX `uq_ccr_one_pending_per_order`', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 INSERT IGNORE INTO `permissions` (`name`, `code`, `description`, `resource`, `action`, `status`)
 VALUES ('Approve Company Changes', 'COMPANY_CHANGE_APPROVE', 'Approve or reject Sales Order issuing-company change requests (Admin)', 'orders', 'approve_company_change', 'ACTIVE');

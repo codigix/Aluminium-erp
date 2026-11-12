@@ -106,7 +106,11 @@ const getQuotationRequests = async (req, res, next) => {
         const existingCost = Number(existing.bom_cost || existing.latest_bom_cost || existing.total_amount || 0);
         const rCost = Number(r.bom_cost || r.latest_bom_cost || r.total_amount || 0);
 
-        if (rCost > existingCost || (rCost === existingCost && r.id > existing.id)) {
+        // Newer revision of the same batch always wins (a live BOM cost on the old version must not hide it);
+        // cost comparison only decides between rows of the same version.
+        const rVer = Number(r.version || 1);
+        const existingVer = Number(existing.version || 1);
+        if (rVer > existingVer || (rVer === existingVer && (rCost > existingCost || (rCost === existingCost && r.id > existing.id)))) {
           const idx = rows.indexOf(existing);
           if (idx !== -1) {
             rows[idx] = r;
@@ -1416,7 +1420,62 @@ const exportQuotationCostBreakdown = async (req, res, next) => {
   }
 };
 
+// Cost Breakdown PDF — company-branded A4: summary + BOM detail (raw materials, operations, components) per item.
+// Uses exactly the rows of getQuotationCostBreakdownDetails, so the PDF always matches the screen.
 const exportQuotationCostBreakdownPDF = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [quotes] = await pool.query(
+      `SELECT qr.id, qr.version, qr.status, qr.project_name, qr.created_at, qr.host_company_id, c.company_name
+       FROM quotation_requests qr JOIN companies c ON qr.company_id = c.id WHERE qr.id = ?`,
+      [id]
+    );
+    if (quotes.length === 0) return res.status(404).json({ error: 'Quotation not found' });
+    const q = quotes[0];
+
+    // Breakdown rows (same data as the on-screen Cost Breakdown)
+    let rows = null;
+    let failure = null;
+    await getQuotationCostBreakdownDetails(
+      { params: { id }, query: {} },
+      { status() { return this; }, json(d) { rows = d; } },
+      (err) => { failure = err; }
+    );
+    if (failure) throw failure;
+    if (!Array.isArray(rows)) return res.status(404).json({ error: 'Cost breakdown not available' });
+
+    // Issuing company: the quotation's billing profile, else the active Company Master profile
+    const [[company]] = await pool.query(
+      `SELECT * FROM company_master WHERE id = ?
+       UNION ALL
+       (SELECT * FROM company_master WHERE status = 'ACTIVE' ORDER BY id LIMIT 1)
+       LIMIT 1`,
+      [q.host_company_id || 0]
+    );
+
+    const { generateCostBreakdownPdf } = require('../utils/generateCostBreakdownPdf');
+    const pdfBuffer = await generateCostBreakdownPdf({
+      company: company || null,
+      clientName: q.company_name,
+      quoteNumber: `QRT-${String(q.id).padStart(4, '0')}`,
+      version: q.version,
+      projectName: q.project_name,
+      quoteDate: q.created_at ? new Date(q.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null,
+      status: q.status,
+      rows
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Cost_Breakdown_QRT_${id}.pdf`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('[Quotation Controller] Cost breakdown PDF download failed:', error);
+    next(error);
+  }
+};
+
+// Previous wide-table Cost Breakdown PDF (kept for reference; no longer routed)
+const exportQuotationCostBreakdownPDFLegacy = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -1783,9 +1842,52 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
       let rawMatCost = 0;
       let rawOps = { cnc: 0, milling: 0, vmc: 0, drilling: 0, tapping: 0, grinding: 0, laser: 0, sparking: 0, finish: 0, qc: 0, packing: 0 };
 
+      // Line-level BOM detail for the screen: raw materials and operations (per finished unit)
+      const bomMaterials = [];
+      const bomOperations = [];
+      const bomComponents = [];
+      const mapMaterial = (m, multiplier = 1, componentCode = null) => {
+        const qty = parseFloat(m.qty_per_pc || m.quantity || 0);
+        const weightPerUnit = parseFloat(m.weight_per_unit || 0);
+        const scrap = parseFloat(m.scrap_percent || 0);
+        return {
+          component: componentCode,
+          item_code: m.actual_item_code || m.item_code || null,
+          name: m.material_name || m.actual_item_name || m.item_name || m.description || m.item_code || '—',
+          material_type: m.material_type || m.latest_material_type || null,
+          shape: m.shape_type || m.shape_name || null,
+          // ERP standard size text, e.g. "PL 40 × 195 × 16 mm", "SQT 30 × 3 × 1672 mm" (same as Material Requests)
+          dimensions: require('../utils/formatDimensions').formatDimensions(m) || null,
+          qty: qty * multiplier,
+          uom: m.uom || m.unit || (weightPerUnit > 0 ? 'KG' : 'NOS'),
+          weight_per_unit: weightPerUnit,
+          scrap_percent: scrap,
+          rate: parseFloat(m.rate || 0),
+          cost: calculateMaterialCost(m) * multiplier
+        };
+      };
+      const mapOperation = (op, multiplier = 1, componentCode = null) => {
+        const hourlyRate = parseFloat(op.hourly_rate || 0);
+        const setup = parseFloat(op.setup_time_min || 0);
+        const cycle = parseFloat(op.cycle_time_min || 0);
+        return {
+          component: componentCode,
+          name: op.operation_name || '—',
+          workstation: op.workstation || op.workstation_name || null,
+          setup_time_min: setup,
+          cycle_time_min: cycle,
+          hourly_rate: hourlyRate,
+          cost: ((cycle + setup) / 60) * hourlyRate * multiplier
+        };
+      };
+      const pushMaterials = (list, multiplier = 1, componentCode = null) => (list || []).forEach(m => bomMaterials.push(mapMaterial(m, multiplier, componentCode)));
+      const pushOperations = (list, multiplier = 1, componentCode = null) => (list || []).forEach(op => bomOperations.push(mapOperation(op, multiplier, componentCode)));
+
       if (!isAssembly) {
         rawMatCost = parentBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0);
         rawOps = parseOperations(parentBOM.operations);
+        pushMaterials(parentBOM.materials);
+        pushOperations(parentBOM.operations);
       } else {
         // Assembly: aggregate child BOM costs
         const childBOMs = await Promise.all(
@@ -1808,14 +1910,63 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
         parentBOM.components.forEach((c, idx) => {
           const childBOM = childBOMs[idx];
           const cQty = parseFloat(c.quantity || 0);
+          const code = c.component_code || c.drawing_no || '—';
           if (childBOM) {
-            rawMatCost += childBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0) * cQty;
+            const childMat = childBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0) * cQty;
+            rawMatCost += childMat;
             const childOps = parseOperations(childBOM.operations);
             Object.keys(rawOps).forEach(k => { rawOps[k] += (childOps[k] || 0) * cQty; });
+            pushMaterials(childBOM.materials, cQty, code);
+            pushOperations(childBOM.operations, cQty, code);
+            bomComponents.push({ code, description: c.description || c.component_description || '', qty: cQty, source: 'BOM', cost: childMat + Object.values(childOps).reduce((a, b) => a + b, 0) * cQty });
           } else {
             rawMatCost += parseFloat(c.rate || 0) * cQty;
+            bomComponents.push({ code, description: c.description || c.component_description || '', qty: cQty, source: 'RATE', rate: parseFloat(c.rate || 0), cost: parseFloat(c.rate || 0) * cQty });
           }
         });
+
+        // Assembly-level work: the assembly's own raw materials and operations (e.g. ASSEMBLY, WELDING, QC)
+        // are part of its BOM cost (Components + Raw Materials + Operations) — include them here too.
+        const ASM_LEVEL = 'Assembly level';
+        if ((parentBOM.materials || []).length) {
+          rawMatCost += parentBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0);
+          pushMaterials(parentBOM.materials, 1, ASM_LEVEL);
+        }
+        if ((parentBOM.operations || []).length) {
+          const asmOps = parseOperations(parentBOM.operations);
+          Object.keys(rawOps).forEach(k => { rawOps[k] += (asmOps[k] || 0); });
+          pushOperations(parentBOM.operations, 1, ASM_LEVEL);
+        }
+
+        // Display only: each component part's own BOM (raw materials + operations per part).
+        // Costing above is unchanged (component rate); this just shows what the part is made of.
+        for (const comp of bomComponents) {
+          if (comp.source !== 'RATE' || !comp.code || comp.code === '—') continue;
+          try {
+            // Latest BOM record of the part (by item code) that actually holds materials or operations
+            const [[partRow]] = await pool.query(
+              `SELECT soi.id FROM sales_order_items soi
+               WHERE soi.item_code = ?
+                 AND (EXISTS (SELECT 1 FROM sales_order_item_materials m WHERE m.sales_order_item_id = soi.id)
+                      OR EXISTS (SELECT 1 FROM sales_order_item_operations o WHERE o.sales_order_item_id = soi.id))
+               ORDER BY soi.id DESC LIMIT 1`,
+              [comp.code]
+            );
+            const partItemId = partRow ? partRow.id : null;
+            const partMaterials = partItemId
+              ? await bomService.getItemMaterials(partItemId, comp.code, null, null)
+              : await bomService.getItemMaterials(null, comp.code, null, null);
+            const partOperations = partItemId
+              ? await bomService.getItemOperations(partItemId, comp.code, null, null)
+              : await bomService.getItemOperations(null, comp.code, null, null);
+            comp.part_materials = (partMaterials || []).map(m => mapMaterial(m, 1, comp.code));
+            comp.part_operations = (partOperations || []).map(op => mapOperation(op, 1, comp.code));
+            comp.part_material_cost = comp.part_materials.reduce((s, m) => s + (m.cost || 0), 0);
+            comp.part_operation_cost = comp.part_operations.reduce((s, o) => s + (o.cost || 0), 0);
+          } catch (e) {
+            console.error('[cost breakdown] component BOM lookup failed:', comp.code, e.message);
+          }
+        }
       }
 
       // ── Use raw BOM values directly (no scaling/distribution) ─────────
@@ -1846,7 +1997,12 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
         profit: profit,
         qty: qQty,
         unitRate: qRate,
-        total: qTotal
+        total: qTotal,
+        // Detail (per finished unit) for the expandable view
+        bom_materials: bomMaterials,
+        bom_operations: bomOperations,
+        bom_components: bomComponents,
+        operation_cost: rawOpsSum
       });
     }
 
@@ -2087,7 +2243,7 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
     if (qrs.length === 0) {
       console.log(`[requestQuotationUpdateFromBOM] No direct quotations for ${item_code}. Checking parents...`);
       const [parentQrs] = await pool.query(
-        `SELECT DISTINCT qr.id, c.company_name, qr.batch_id, qr.description as parent_desc, qr.sales_order_item_id, qr.drawing_no, qr.drawing_id
+        `SELECT DISTINCT qr.id, c.company_name, qr.batch_id, qr.description as parent_desc, qr.sales_order_item_id, qr.drawing_no, qr.drawing_id, qr.item_code
          FROM quotation_requests qr
          JOIN companies c ON qr.company_id = c.id
          JOIN sales_order_items soi ON (
@@ -2126,10 +2282,25 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
 
       let targetPendingCost = bomCost;
       if (isParentNotification) {
-        const [parentItemRow] = await pool.query(
-          'SELECT bom_cost FROM sales_order_items WHERE (drawing_no = ? OR drawing_id = ?) AND bom_cost > 0 ORDER BY id DESC LIMIT 1',
-          [qr.drawing_no, qr.drawing_id]
-        );
+        // The parent assembly's latest BOM cost. Its child parts share the parent's drawing_no / drawing_id,
+        // so a drawing-only lookup could return a child part's BOM (e.g. the part just saved). Look the parent
+        // up by its own item code; the drawing fallback excludes the child that triggered this update.
+        let parentItemRow = [];
+        if (qr.item_code) {
+          [parentItemRow] = await pool.query(
+            'SELECT bom_cost FROM sales_order_items WHERE item_code = ? AND bom_cost > 0 ORDER BY id DESC LIMIT 1',
+            [qr.item_code]
+          );
+        }
+        if (parentItemRow.length === 0) {
+          [parentItemRow] = await pool.query(
+            `SELECT bom_cost FROM sales_order_items
+             WHERE (drawing_no = ? OR drawing_id = ?) AND bom_cost > 0
+               AND (item_code IS NULL OR LOWER(TRIM(item_code)) <> LOWER(TRIM(?)))
+             ORDER BY id DESC LIMIT 1`,
+            [qr.drawing_no, qr.drawing_id, item_code || '']
+          );
+        }
         if (parentItemRow.length > 0 && parseFloat(parentItemRow[0].bom_cost) > 0) {
           targetPendingCost = parseFloat(parentItemRow[0].bom_cost);
         }
@@ -2142,14 +2313,22 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
       );
 
       // Also, update the pending_bom_cost of the component row inside quotation_requests
-      // where status = 'COMPONENT' and rejection_reason = String(qr.id)
-      await pool.execute(
-        `UPDATE quotation_requests 
-         SET pending_bom_cost = ?, updated_at = NOW() 
-         WHERE status = 'COMPONENT' AND rejection_reason = ?
-         AND (LOWER(TRIM(item_code)) = LOWER(TRIM(?)) OR LOWER(TRIM(drawing_no) ) = LOWER(TRIM(?)))`,
-        [bomCost, String(qr.id), item_code, drawing_no]
-      );
+      // where status = 'COMPONENT' and rejection_reason = String(qr.id).
+      // Only when the BOM update is for a CHILD part (isParentNotification). A part row stores its parent's
+      // drawing_no, so matching on drawing_no overwrote every part with one value (incl. the whole assembly
+      // cost). Match the part by item_code; use drawing_no only for a component row that has no item_code.
+      if (isParentNotification) {
+        await pool.execute(
+          `UPDATE quotation_requests
+           SET pending_bom_cost = ?, updated_at = NOW()
+           WHERE status = 'COMPONENT' AND rejection_reason = ?
+           AND (
+             (item_code IS NOT NULL AND TRIM(item_code) <> '' AND LOWER(TRIM(item_code)) = LOWER(TRIM(?)))
+             OR ((item_code IS NULL OR TRIM(item_code) = '') AND LOWER(TRIM(drawing_no)) = LOWER(TRIM(?)))
+           )`,
+          [bomCost, String(qr.id), item_code || '', drawing_no || '']
+        );
+      }
     }
 
     res.json({

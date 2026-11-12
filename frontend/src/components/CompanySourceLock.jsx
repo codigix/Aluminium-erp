@@ -5,14 +5,14 @@ import { successToast, errorToast } from '../utils/toast';
 // Shows which Sales Order a procurement / inventory / QC document belongs to and that Sales Order's issuing company.
 // Current Sales Orders (Customer PO based) are locked: the company can only change through
 // "Request Company Change" → Admin → Approvals → Company Changes.
-// Older Sales Orders (previous module) only pre-select their Customer PO company (no lock, no request).
+// Works for both Sales Order tables (current orders and older sales_orders).
 //
 // Props: mrId | poId | receiptId | grnId, hostCompanies (Company Master list), onResolved(source|null)
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
-export const isCompanySourceLocked = (source) => Boolean(source && source.found && source.kind === 'ORDER');
+export const isCompanySourceLocked = (source) => Boolean(source && source.found && source.status && source.status.locked);
 
 const CompanySourceLock = ({ mrId, poId, receiptId, grnId, hostCompanies = [], onResolved, className = '' }) => {
   const [source, setSource] = useState(null);
@@ -43,7 +43,7 @@ const CompanySourceLock = ({ mrId, poId, receiptId, grnId, hostCompanies = [], o
   if (!source) return null;
   const locked = isCompanySourceLocked(source);
   const st = source.status;
-  const canRequest = locked && st && st.locked && !st.pending && !(st.invoices && st.invoices.length);
+  const canRequest = locked && !st.pending && !(st.invoices && st.invoices.length);
 
   const handleRequest = async () => {
     const options = hostCompanies.filter(h => String(h.id) !== String(source.company_id));
@@ -90,7 +90,7 @@ const CompanySourceLock = ({ mrId, poId, receiptId, grnId, hostCompanies = [], o
       const response = await fetch(`${API_BASE}/company-change-requests`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: source.order_id, ...res.value })
+        body: JSON.stringify({ orderId: source.order_id, orderSource: source.order_source || 'ORDER', ...res.value })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || data.error || 'Failed to submit request');
@@ -112,7 +112,7 @@ const CompanySourceLock = ({ mrId, poId, receiptId, grnId, hostCompanies = [], o
         {st?.pending && <div className="text-amber-700">⏳ Change to <b>{st.pending.requested_company_name}</b> pending Admin approval</div>}
         {!st?.pending && st?.latest?.status === 'REJECTED' && <div className="text-rose-600">Last request rejected: “{st.latest.decision_remarks}”</div>}
         {st?.invoices?.length > 0 && <div className="text-slate-500">Invoice {st.invoices.map(i => i.invoice_no).join(', ')} exists — company cannot be changed.</div>}
-        {!locked && <div className="text-slate-400">Older Sales Order — company taken from its Customer PO.</div>}
+        {!locked && <div className="text-slate-400">Sales Order not created from a Customer PO — company can be selected here.</div>}
       </div>
       {locked && (
         <button
@@ -120,7 +120,7 @@ const CompanySourceLock = ({ mrId, poId, receiptId, grnId, hostCompanies = [], o
           onClick={handleRequest}
           disabled={!canRequest}
           className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          title={!canRequest ? (st?.pending ? 'A company change is already pending Admin approval' : st?.invoices?.length ? 'An invoice exists for the Sales Order' : 'Company change applies to Customer PO based Sales Orders') : 'Ask Admin to change the Sales Order company'}
+          title={!canRequest ? (st?.pending ? 'A company change is already pending Admin approval' : 'An invoice exists for the Sales Order') : 'Ask Admin to change the Sales Order company'}
         >
           Request Company Change
         </button>

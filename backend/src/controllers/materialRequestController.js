@@ -802,8 +802,9 @@ const materialRequestController = {
         const link = await require('../services/companyChangeService').resolvePlanOrder(request.plan_id);
         if (link && link.company_id) {
           const [[cm]] = await pool.query('SELECT company_name, gstin FROM company_master WHERE id = ?', [link.company_id]);
-          // sales_order_id only for the current Sales Order module (company change requests apply there)
-          request.sales_order_id = link.kind === 'ORDER' ? link.order_id : null;
+          // sales_order_source tells which table sales_order_id belongs to ('ORDER' = orders, 'SALES_ORDER' = sales_orders)
+          request.sales_order_id = link.order_id;
+          request.sales_order_source = link.kind === 'LEGACY' ? 'SALES_ORDER' : 'ORDER';
           request.sales_order_no = link.order_no;
           request.sales_order_kind = link.kind;
           request.issuing_company_id = link.company_id;

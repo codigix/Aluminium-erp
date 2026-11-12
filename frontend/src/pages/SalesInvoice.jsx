@@ -3,7 +3,7 @@ import {
   FileText, Plus, Search, Calendar, CheckCircle2, Eye, Printer, Trash2,
   ArrowLeft, ArrowRight, Building, Hash, Layers, ShieldCheck, AlertCircle, ShoppingBag,
   Download, Clock, X, ChevronRight, Check, RefreshCw, AlertTriangle,
-  Receipt, DollarSign, User, MapPin, Package, Send, Pencil, Filter, BarChart3, TrendingUp
+  Receipt, DollarSign, User, MapPin, Package, Send, Pencil, Filter, BarChart3, TrendingUp, Building2
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { SearchableSelect, Card } from '../components/ui.jsx';
@@ -67,6 +67,7 @@ export default function SalesInvoice() {
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [companyFilter, setCompanyFilter] = useState('ALL'); // 'ALL' | 'NONE' | company_master.id
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [removedItems, setRemovedItems] = useState([]);
   const [sendingId, setSendingId] = useState(null);
@@ -989,9 +990,13 @@ export default function SalesInvoice() {
         (inv.customer_po_no && inv.customer_po_no.toLowerCase().includes(searchTerm.toLowerCase()));
 
       const matchStatus = statusFilter === 'ALL' || inv.status === statusFilter;
-      return matchSearch && matchStatus;
+      // Company filter: invoice company, else its Sales Order company (same rule as the list's company name)
+      const invCompanyId = inv.effective_host_company_id || inv.host_company_id || '';
+      const matchCompany = companyFilter === 'ALL'
+        || (companyFilter === 'NONE' ? !invCompanyId : String(invCompanyId) === String(companyFilter));
+      return matchSearch && matchStatus && matchCompany;
     });
-  }, [invoices, searchTerm, statusFilter]);
+  }, [invoices, searchTerm, statusFilter, companyFilter]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -1108,6 +1113,26 @@ export default function SalesInvoice() {
             </div>
 
             <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-lg mr-1">
+                <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-xs text-slate-400">Company:</span>
+                <select
+                  value={companyFilter}
+                  onChange={(e) => setCompanyFilter(e.target.value)}
+                  className="text-xs text-emerald-700 font-medium outline-none bg-transparent cursor-pointer min-w-[150px] max-w-[240px]"
+                  title="Filter by issuing company (Company Master)"
+                >
+                  <option value="ALL">All Companies</option>
+                  {hostCompanies.map(h => (
+                    <option key={h.id} value={h.id}>
+                      {h.company_name}{h.status === 'ACTIVE' ? ' (Active)' : ''} ({invoices.filter(i => String(i.effective_host_company_id || i.host_company_id || '') === String(h.id)).length})
+                    </option>
+                  ))}
+                  {invoices.some(i => !(i.effective_host_company_id || i.host_company_id)) && (
+                    <option value="NONE">No company ({invoices.filter(i => !(i.effective_host_company_id || i.host_company_id)).length})</option>
+                  )}
+                </select>
+              </div>
               {['ALL', 'Created', 'Sent to Accounts'].map(st => (
                 <button
                   key={st}

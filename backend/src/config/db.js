@@ -597,6 +597,29 @@ const ensureCompanyChangeSchema = async () => {
       INDEX idx_cch_request (request_id)
     )`);
 
+    // Requests / history for both Sales Order tables: order_source = 'ORDER' (orders) | 'SALES_ORDER' (sales_orders)
+    for (const table of ['company_change_requests', 'company_change_history']) {
+      const [srcCol] = await connection.query(`SHOW COLUMNS FROM ${table} LIKE 'order_source'`);
+      if (!srcCol.length) {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN order_source VARCHAR(20) NOT NULL DEFAULT 'ORDER' AFTER ${table === 'company_change_requests' ? 'id' : 'request_id'}`);
+      }
+    }
+    // One PENDING request per (order_source, order_id); replaces the order_id-only key (ids overlap between the two tables)
+    const [pkCol] = await connection.query("SHOW COLUMNS FROM company_change_requests LIKE 'pending_key'");
+    if (!pkCol.length) {
+      await connection.query(
+        "ALTER TABLE company_change_requests ADD COLUMN pending_key VARCHAR(40) GENERATED ALWAYS AS (CASE WHEN status = 'PENDING' THEN CONCAT(order_source, ':', order_id) ELSE NULL END) STORED"
+      );
+    }
+    const [pkIdx] = await connection.query("SHOW INDEX FROM company_change_requests WHERE Key_name = 'uq_ccr_one_pending_per_order_source'");
+    if (!pkIdx.length) {
+      await connection.query('ALTER TABLE company_change_requests ADD UNIQUE INDEX uq_ccr_one_pending_per_order_source (pending_key)');
+    }
+    const [oldIdx] = await connection.query("SHOW INDEX FROM company_change_requests WHERE Key_name = 'uq_ccr_one_pending_per_order'");
+    if (oldIdx.length) {
+      await connection.query('ALTER TABLE company_change_requests DROP INDEX uq_ccr_one_pending_per_order');
+    }
+
     await connection.query(
       `INSERT IGNORE INTO permissions (name, code, description, resource, action, status)
        VALUES ('Approve Company Changes', 'COMPANY_CHANGE_APPROVE', 'Approve or reject Sales Order issuing-company change requests (Admin)', 'orders', 'approve_company_change', 'ACTIVE')`

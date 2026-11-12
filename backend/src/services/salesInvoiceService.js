@@ -791,6 +791,7 @@ const listSalesInvoices = async (filters = {}) => {
       o.order_no,
       c.company_name AS client_name,
       cm.company_name AS host_company_name,
+      COALESCE(si.host_company_id, o.host_company_id) AS effective_host_company_id,
       (SELECT COUNT(*) FROM sales_invoice_items WHERE sales_invoice_id = si.id) as item_count,
       (SELECT COALESCE(SUM(invoice_qty), 0) FROM sales_invoice_items WHERE sales_invoice_id = si.id) as total_qty
     FROM sales_invoices si

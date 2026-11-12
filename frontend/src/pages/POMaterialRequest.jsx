@@ -5,6 +5,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { successToast, errorToast } from '../utils/toast';
 import { Plus } from 'lucide-react';
 import { formatDimensions } from '../utils/formatters';
+import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -22,6 +23,7 @@ const POMaterialRequest = () => {
   const deptPrefix = getDeptPrefix();
 
   const [requests, setRequests] = useState([]);
+  const mrCompanyFilter = useCompanyFilter();
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -653,14 +655,15 @@ const POMaterialRequest = () => {
   }, [statusFilteredRequests]);
 
   const filteredRequests = useMemo(() => {
-    if (!selectedAvailability || selectedAvailability === 'ALL') return statusFilteredRequests;
-    return statusFilteredRequests.filter(req => {
+    const byAvailability = (!selectedAvailability || selectedAvailability === 'ALL') ? statusFilteredRequests : statusFilteredRequests.filter(req => {
       const avail = (req.availability || 'unavailable').toLowerCase().trim();
       if (selectedAvailability === 'AVAILABLE') return avail === 'available';
       if (selectedAvailability === 'UNAVAILABLE') return avail === 'unavailable';
       return true;
     });
-  }, [statusFilteredRequests, selectedAvailability]);
+    // Company filter: company of the MR's Sales Order (Company Master)
+    return byAvailability.filter(req => mrCompanyFilter.matches(mrCompanyFilter.companyOf({ mr: req.id })));
+  }, [statusFilteredRequests, selectedAvailability, mrCompanyFilter]);
 
   const handleOpenBulkRfqModal = async () => {
     const mrIdsArray = Array.from(selectedMrIds);
@@ -1129,11 +1132,19 @@ const POMaterialRequest = () => {
                 </select>
               </div>
 
-              {(selectedStatus !== 'ALL' || selectedAvailability !== 'ALL') && (
+              <CompanyFilterSelect
+                cf={mrCompanyFilter}
+                rows={requests}
+                getCompanyId={(r) => mrCompanyFilter.companyOf({ mr: r.id })}
+                className="py-1"
+              />
+
+              {(selectedStatus !== 'ALL' || selectedAvailability !== 'ALL' || mrCompanyFilter.companyFilter !== 'ALL') && (
                 <button
                   onClick={() => {
                     setSelectedStatus('ALL');
                     setSelectedAvailability('ALL');
+                    mrCompanyFilter.setCompanyFilter('ALL');
                   }}
                   className="px-2.5 py-1 text-xs font-medium text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors"
                 >

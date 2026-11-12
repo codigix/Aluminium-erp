@@ -34,6 +34,7 @@ import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions } from '../utils/formatters';
 import { getFileUrl } from '../utils/url';
 import CompanySourceLock, { isCompanySourceLocked } from '../components/CompanySourceLock.jsx';
+import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -88,6 +89,9 @@ const POReceipts = () => {
   const [isHostCompanyLocked, setIsHostCompanyLocked] = useState(false);
   // Sales Order company behind the selected PO (PO → Material Request → Sales Order)
   const [grnCompanySource, setGrnCompanySource] = useState(null);
+  // List Company filter (Company Master)
+  const grnListCompanyFilter = useCompanyFilter();
+  const receiptCompanyOf = (r) => grnListCompanyFilter.companyOf({ receipt: r.id, po: r.po_id, fallback: r.host_company_id });
   const [attachments, setAttachments] = useState([]);
   const [existingAttachments, setExistingAttachments] = useState([]);
   // --- View modal inline edit state ---
@@ -1769,6 +1773,16 @@ const POReceipts = () => {
           </select>
         </div>
 
+        {activeTab === 'grn' && (
+          <CompanyFilterSelect
+            cf={grnListCompanyFilter}
+            rows={receipts}
+            getCompanyId={receiptCompanyOf}
+            className="py-2"
+            accent="text-blue-600"
+          />
+        )}
+
         <button className="p-2 bg-emerald-500 text-white rounded  hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-all active:scale-95">
           <Filter className="w-3 h-3" />
         </button>
@@ -1790,7 +1804,8 @@ const POReceipts = () => {
                 r.finished_good?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 r.project_name?.toLowerCase().includes(searchTerm.toLowerCase());
               const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
-              return matchesSearch && matchesStatus;
+              const matchesCompany = grnListCompanyFilter.matches(receiptCompanyOf(r));
+              return matchesSearch && matchesStatus && matchesCompany;
             })}
             loading={loading}
             pageSize={5}

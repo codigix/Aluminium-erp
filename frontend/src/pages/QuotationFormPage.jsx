@@ -80,14 +80,21 @@ const QuotationFormPage = () => {
   const [globalBreakdownData, setGlobalBreakdownData] = useState({ loading: false, rows: [], error: null });
 
   const fetchBreakdownData = async (targetItems = items) => {
-    // Accept any saved item — not just those with drawing_no (some items use item_code only)
-    const savedItem = targetItems.find(i => i.id && typeof i.id === 'number');
-    const itemId = savedItem?.id || null;
+    // Accept any saved item — not just those with drawing_no (some items use item_code only).
+    // Unsaved rows get a temporary id (Date.now() + Math.random(), not an integer), so only integer ids are
+    // real quotation_requests ids; otherwise fall back to the loaded quotation / version id.
+    const savedItem = targetItems.find(i => Number.isInteger(Number(i.id)) && Number(i.id) > 0 && Number(i.id) < 1e9);
+    // Unsaved revision (e.g. V2 draft opened from an approved V1): show the latest saved version's breakdown
+    const latestSaved = [...(versionHistory || [])].filter(v => v && v.id).sort((a, b) => (b.version || 0) - (a.version || 0))[0] || null;
+    const itemId = savedItem?.id || selectedVersionId || latestSaved?.id || initialData?.id || null;
+    const note = (!savedItem && !selectedVersionId && latestSaved)
+      ? `This revision is not saved yet — showing the cost breakdown of saved Version ${latestSaved.version}${latestSaved.status ? ` (${String(latestSaved.status).toLowerCase()})` : ''}. Save to see this revision's breakdown.`
+      : null;
     if (!itemId) {
       setGlobalBreakdownData({ loading: false, rows: [], error: 'Please save the quotation first to view Cost Breakdown.' });
       return;
     }
-    setGlobalBreakdownData({ loading: true, rows: [], error: null });
+    setGlobalBreakdownData({ loading: true, rows: [], error: null, note });
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/quotation-requests/cost-breakdown-details/${itemId}`, {
@@ -95,7 +102,7 @@ const QuotationFormPage = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch Cost Breakdown');
       const rows = await response.json();
-      setGlobalBreakdownData({ loading: false, rows, error: null });
+      setGlobalBreakdownData({ loading: false, rows, error: null, note, sourceId: itemId });
     } catch (err) {
       console.error('Error loading breakdown:', err);
       setGlobalBreakdownData({ loading: false, rows: [], error: err.message });
@@ -450,6 +457,16 @@ const QuotationFormPage = () => {
             let bomCost = parseFloat(item.bom_cost || 0);
             let drwRate = parseFloat(item.quotedPrice || item.rate || bomCost || 0);
 
+            // Editable revision: use the item's latest BOM cost sent from the BOM screen ("Update Quotation"),
+            // the same way part rows use theirs. Keeps the existing markup (rate ÷ BOM cost) on top of it.
+            const pendingCost = parseFloat(item.pending_bom_cost || 0);
+            const editableMode = ['revise', 'edit'].includes(initialData.mode) || initialData.isBOMUpdateRequest;
+            if (editableMode && !isLocked && pendingCost > 0 && Math.abs(pendingCost - bomCost) > 0.01) {
+              const markup = bomCost > 0 && drwRate > 0 ? drwRate / bomCost : 1;
+              bomCost = pendingCost;
+              drwRate = Number((pendingCost * markup).toFixed(2));
+            }
+
             return {
               ...item,
               id: item.id || Date.now() + Math.random(),
@@ -518,8 +535,16 @@ const QuotationFormPage = () => {
                   if (Math.abs(actualCost - parentBOMCost) < 0.01) {
                     actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
                   }
-                  if (!isLocked && sa.pending_bom_cost > 0) {
-                    actualCost = parseFloat(sa.pending_bom_cost);
+                  // A part's pending cost equal to the whole assembly's pending/BOM cost is a bad propagated value
+                  // (old update bug) — never use it as the part's cost.
+                  const parentPending = parseFloat(item.pending_bom_cost || 0);
+                  const partPending = parseFloat(sa.pending_bom_cost || 0);
+                  const isParentValue = partPending > 0 && (
+                    (parentPending > 0 && Math.abs(partPending - parentPending) < 0.01) ||
+                    Math.abs(partPending - parentBOMCost) < 0.01
+                  );
+                  if (!isLocked && partPending > 0 && !isParentValue) {
+                    actualCost = partPending;
                   }
                   return {
                     ...sa,
@@ -2448,7 +2473,7 @@ const QuotationFormPage = () => {
                         <span className="text-xs font-bold text-slate-800">Complete Quotation Cost Breakdown</span>
                       </div>
                       <button
-                        onClick={() => handleDownloadCostBreakdownPDF(items.find(i => i.id && typeof i.id === 'number')?.id)}
+                        onClick={() => handleDownloadCostBreakdownPDF(items.find(i => Number.isInteger(Number(i.id)) && Number(i.id) > 0 && Number(i.id) < 1e9)?.id || globalBreakdownData.sourceId)}
                         disabled={loading}
                         className="px-2 py-1 text-[10px] text-rose-600 bg-rose-50 border border-rose-100 rounded hover:bg-rose-100 transition-all flex items-center gap-1 disabled:opacity-50"
                       >
@@ -2456,7 +2481,31 @@ const QuotationFormPage = () => {
                         Download PDF Cost Breakdown
                       </button>
                     </div>
-                    <div className="overflow-x-auto border border-slate-150 rounded-lg max-w-full">
+                    {globalBreakdownData.note && (
+                      <div className="text-[11px] px-2 py-1.5 rounded border border-amber-200 bg-amber-50 text-amber-800">
+                        {globalBreakdownData.note}
+                      </div>
+                    )}
+                    {/* Quotation total (the wide per-operation table is kept for the PDF only, hidden on screen) */}
+                    {(() => {
+                      const parentRows = (globalBreakdownData.rows || []).filter(r => !String(r.sr || '').includes('↳'));
+                      const totalSum = parentRows.reduce((s, r) => s + (parseFloat(r.total) || 0), 0);
+                      const totalQty = parentRows.reduce((s, r) => s + (parseFloat(r.qty) || 0), 0);
+                      const matSum = parentRows.reduce((s, r) => s + (r.materialCost || 0) * (r.qty || 0), 0);
+                      const opSum = parentRows.reduce((s, r) => s + (r.operation_cost || 0) * (r.qty || 0), 0);
+                      const profitSum = parentRows.reduce((s, r) => s + (r.profit || 0) * (r.qty || 0), 0);
+                      return (
+                        <div className="flex flex-wrap items-center justify-end gap-4 px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 text-[11px] text-slate-600">
+                          <span>Items <b className="text-slate-800">{parentRows.length}</b> · Qty <b className="text-slate-800">{totalQty}</b></span>
+                          <span>Material <b className="text-slate-800">{formatCurrency(matSum)}</b></span>
+                          <span>Operations <b className="text-slate-800">{formatCurrency(opSum)}</b></span>
+                          <span>Profit <b className={profitSum < 0 ? 'text-rose-600' : 'text-emerald-700'}>{formatCurrency(profitSum)}</b></span>
+                          <span className="text-xs">Quotation Grand Total <b className="text-indigo-700">{formatCurrency(totalSum)}</b></span>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="hidden">
                       <table className="w-full text-left border-collapse text-[10px] min-w-[1850px] table-auto">
                         <thead>
                           <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-semibold">
@@ -2544,6 +2593,241 @@ const QuotationFormPage = () => {
                         </tfoot>
                       </table>
                     </div>
+
+                    {/* ── BOM detail per item: raw materials, operations, components (per finished unit) ── */}
+                    {(globalBreakdownData.rows || []).some(r => (r.bom_materials || []).length || (r.bom_operations || []).length || (r.bom_components || []).length) && (
+                      <div className="pt-2 space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-3 bg-emerald-600 rounded-sm"></span>
+                          <span className="text-xs font-bold text-slate-800">BOM Detail — Raw Materials & Operations (per unit)</span>
+                        </div>
+                        {(globalBreakdownData.rows || []).map((row, idx) => {
+                          const mats = row.bom_materials || [];
+                          const ops = row.bom_operations || [];
+                          const comps = row.bom_components || [];
+                          const matTotal = mats.reduce((s, m) => s + (Number(m.cost) || 0), 0);
+                          const opTotal = ops.reduce((s, o) => s + (Number(o.cost) || 0), 0);
+                          return (
+                            <details key={`bom-${idx}`} open className="group border border-slate-200 rounded-lg overflow-hidden">
+                              <summary className="cursor-pointer list-none flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100">
+                                <div className="flex items-center gap-2 text-xs">
+                                  <span className="text-slate-400 group-open:rotate-90 transition-transform">▶</span>
+                                  <span className="font-semibold text-slate-800">{row.sr}. {row.drawing_no}</span>
+                                  <span className="text-slate-500 truncate max-w-[320px]" title={row.description}>{row.description}</span>
+                                  <span className={`px-1.5 py-px rounded text-[10px] font-bold ${row.type === 'ASM' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{row.type}</span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
+                                  <span>Material <b className="text-slate-800">{formatCurrency(row.materialCost)}</b></span>
+                                  <span>+ Operations <b className="text-slate-800">{formatCurrency(row.operation_cost || 0)}</b></span>
+                                  <span>+ Profit <b className={Number(row.profit) < 0 ? 'text-rose-600' : 'text-emerald-700'}>{formatCurrency(row.profit)}</b></span>
+                                  <span>= Unit Price <b className="text-indigo-700">{formatCurrency(row.unitRate)}</b></span>
+                                  {Number(row.profit) < 0 && (
+                                    <span className="px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-semibold" title="The quoted unit price is lower than the current BOM cost (material + operations). Create a revision to re-price.">
+                                      Below BOM cost by {formatCurrency(Math.abs(Number(row.profit)))}
+                                    </span>
+                                  )}
+                                </div>
+                              </summary>
+
+                              <div className="p-3 grid grid-cols-1 xl:grid-cols-2 gap-3 bg-white">
+                                {/* Raw materials */}
+                                <div>
+                                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Raw Materials ({mats.length})</div>
+                                  {mats.length === 0 ? (
+                                    <p className="text-[11px] text-slate-400 italic">No raw materials in BOM</p>
+                                  ) : (
+                                    <div className="overflow-x-auto border border-slate-100 rounded">
+                                      <table className="w-full text-[10px]">
+                                        <thead>
+                                          <tr className="bg-slate-50 text-slate-500 text-left">
+                                            {comps.length > 0 && <th className="p-1.5">Component</th>}
+                                            <th className="p-1.5">Material</th>
+                                            <th className="p-1.5">Size</th>
+                                            <th className="p-1.5 text-right">Qty</th>
+                                            <th className="p-1.5 text-right">Wt/Unit</th>
+                                            <th className="p-1.5 text-right">Scrap</th>
+                                            <th className="p-1.5 text-right">Rate</th>
+                                            <th className="p-1.5 text-right">Cost</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50 text-slate-700">
+                                          {mats.map((m, i) => (
+                                            <tr key={i}>
+                                              {comps.length > 0 && <td className="p-1.5 font-mono text-slate-500">{m.component || '—'}</td>}
+                                              <td className="p-1.5">
+                                                <div className="font-medium">{m.name}</div>
+                                                {m.item_code && <div className="text-[9px] text-slate-400 font-mono">{m.item_code}</div>}
+                                              </td>
+                                              <td className="p-1.5 text-slate-500">{(m.dimensions || m.shape) || '—'}</td>
+                                              <td className="p-1.5 text-right">{Number(m.qty || 0).toFixed(3)} {m.uom || ''}</td>
+                                              <td className="p-1.5 text-right">{Number(m.weight_per_unit) > 0 ? `${Number(m.weight_per_unit).toFixed(3)} kg` : '—'}</td>
+                                              <td className="p-1.5 text-right">{Number(m.scrap_percent) > 0 ? `${m.scrap_percent}%` : '—'}</td>
+                                              <td className="p-1.5 text-right">{formatCurrency(m.rate)}</td>
+                                              <td className="p-1.5 text-right font-semibold">{formatCurrency(m.cost)}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                        <tfoot>
+                                          <tr className="bg-slate-50 font-semibold text-slate-700">
+                                            <td colSpan={comps.length > 0 ? 7 : 6} className="p-1.5 text-right">Material total</td>
+                                            <td className="p-1.5 text-right">{formatCurrency(matTotal)}</td>
+                                          </tr>
+                                        </tfoot>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Operations */}
+                                <div>
+                                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Operations ({ops.length})</div>
+                                  {ops.length === 0 ? (
+                                    <p className="text-[11px] text-slate-400 italic">No operations in BOM</p>
+                                  ) : (
+                                    <div className="overflow-x-auto border border-slate-100 rounded">
+                                      <table className="w-full text-[10px]">
+                                        <thead>
+                                          <tr className="bg-slate-50 text-slate-500 text-left">
+                                            {comps.length > 0 && <th className="p-1.5">Component</th>}
+                                            <th className="p-1.5">Operation</th>
+                                            <th className="p-1.5">Workstation</th>
+                                            <th className="p-1.5 text-right">Setup (min)</th>
+                                            <th className="p-1.5 text-right">Cycle (min)</th>
+                                            <th className="p-1.5 text-right">Rate / hr</th>
+                                            <th className="p-1.5 text-right">Cost</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50 text-slate-700">
+                                          {ops.map((o, i) => (
+                                            <tr key={i}>
+                                              {comps.length > 0 && <td className="p-1.5 font-mono text-slate-500">{o.component || '—'}</td>}
+                                              <td className="p-1.5 font-medium">{o.name}</td>
+                                              <td className="p-1.5 text-slate-500">{o.workstation || '—'}</td>
+                                              <td className="p-1.5 text-right">{Number(o.setup_time_min || 0)}</td>
+                                              <td className="p-1.5 text-right">{Number(o.cycle_time_min || 0)}</td>
+                                              <td className="p-1.5 text-right">{formatCurrency(o.hourly_rate)}</td>
+                                              <td className="p-1.5 text-right font-semibold">{formatCurrency(o.cost)}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                        <tfoot>
+                                          <tr className="bg-slate-50 font-semibold text-slate-700">
+                                            <td colSpan={comps.length > 0 ? 6 : 5} className="p-1.5 text-right">Operation total</td>
+                                            <td className="p-1.5 text-right">{formatCurrency(opTotal)}</td>
+                                          </tr>
+                                        </tfoot>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Assembly components */}
+                                {comps.length > 0 && (
+                                  <div className="xl:col-span-2">
+                                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Components ({comps.length})</div>
+                                    <div className="overflow-x-auto border border-slate-100 rounded">
+                                      <table className="w-full text-[10px]">
+                                        <thead>
+                                          <tr className="bg-slate-50 text-slate-500 text-left">
+                                            <th className="p-1.5">Component</th>
+                                            <th className="p-1.5">Description</th>
+                                            <th className="p-1.5 text-right">Qty</th>
+                                            <th className="p-1.5">Costed from</th>
+                                            <th className="p-1.5 text-right">Cost</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50 text-slate-700">
+                                          {comps.map((c, i) => {
+                                            const pm = c.part_materials || [];
+                                            const po = c.part_operations || [];
+                                            const hasPartBom = pm.length > 0 || po.length > 0;
+                                            const partCost = (Number(c.part_material_cost) || 0) + (Number(c.part_operation_cost) || 0);
+                                            return (
+                                              <React.Fragment key={i}>
+                                                <tr className={hasPartBom ? 'bg-slate-50/60' : ''}>
+                                                  <td className="p-1.5 font-mono font-semibold">{c.code}</td>
+                                                  <td className="p-1.5">{c.description || '—'}</td>
+                                                  <td className="p-1.5 text-right">{Number(c.qty || 0)}</td>
+                                                  <td className="p-1.5 text-slate-500">{c.source === 'BOM' ? 'Component BOM' : `Rate ${formatCurrency(c.rate)}`}{hasPartBom ? <span className="text-slate-400"> · part BOM {formatCurrency(partCost)}</span> : null}</td>
+                                                  <td className="p-1.5 text-right font-semibold">{formatCurrency(c.cost)}</td>
+                                                </tr>
+                                                {hasPartBom && (
+                                                  <tr>
+                                                    <td colSpan={5} className="p-0">
+                                                      <div className="pl-6 pr-2 py-1.5 border-l-2 border-indigo-200 ml-2 my-1 space-y-1">
+                                                        {pm.length > 0 && (
+                                                          <table className="w-full text-[10px]">
+                                                            <thead>
+                                                              <tr className="text-slate-400 text-left">
+                                                                <th className="px-1.5 py-0.5 font-medium">Raw material (per part)</th>
+                                                                <th className="px-1.5 py-0.5 font-medium">Size</th>
+                                                                <th className="px-1.5 py-0.5 font-medium text-right">Qty</th>
+                                                                <th className="px-1.5 py-0.5 font-medium text-right">Wt/Unit</th>
+                                                                <th className="px-1.5 py-0.5 font-medium text-right">Rate</th>
+                                                                <th className="px-1.5 py-0.5 font-medium text-right">Cost</th>
+                                                              </tr>
+                                                            </thead>
+                                                            <tbody className="text-slate-600">
+                                                              {pm.map((m, mi) => (
+                                                                <tr key={mi}>
+                                                                  <td className="px-1.5 py-0.5">{m.name}{m.item_code ? <span className="text-slate-400 font-mono"> · {m.item_code}</span> : null}</td>
+                                                                  <td className="px-1.5 py-0.5">{(m.dimensions || m.shape) || '—'}</td>
+                                                                  <td className="px-1.5 py-0.5 text-right">{Number(m.qty || 0).toFixed(3)} {m.uom || ''}</td>
+                                                                  <td className="px-1.5 py-0.5 text-right">{Number(m.weight_per_unit) > 0 ? `${Number(m.weight_per_unit).toFixed(3)} kg` : '—'}</td>
+                                                                  <td className="px-1.5 py-0.5 text-right">{formatCurrency(m.rate)}</td>
+                                                                  <td className="px-1.5 py-0.5 text-right">{formatCurrency(m.cost)}</td>
+                                                                </tr>
+                                                              ))}
+                                                            </tbody>
+                                                          </table>
+                                                        )}
+                                                        {po.length > 0 && (
+                                                          <table className="w-full text-[10px]">
+                                                            <thead>
+                                                              <tr className="text-slate-400 text-left">
+                                                                <th className="px-1.5 py-0.5 font-medium">Operation (per part)</th>
+                                                                <th className="px-1.5 py-0.5 font-medium">Workstation</th>
+                                                                <th className="px-1.5 py-0.5 font-medium text-right">Setup</th>
+                                                                <th className="px-1.5 py-0.5 font-medium text-right">Cycle</th>
+                                                                <th className="px-1.5 py-0.5 font-medium text-right">Rate/hr</th>
+                                                                <th className="px-1.5 py-0.5 font-medium text-right">Cost</th>
+                                                              </tr>
+                                                            </thead>
+                                                            <tbody className="text-slate-600">
+                                                              {po.map((o, oi) => (
+                                                                <tr key={oi}>
+                                                                  <td className="px-1.5 py-0.5">{o.name}</td>
+                                                                  <td className="px-1.5 py-0.5">{o.workstation || '—'}</td>
+                                                                  <td className="px-1.5 py-0.5 text-right">{Number(o.setup_time_min || 0)} min</td>
+                                                                  <td className="px-1.5 py-0.5 text-right">{Number(o.cycle_time_min || 0)} min</td>
+                                                                  <td className="px-1.5 py-0.5 text-right">{formatCurrency(o.hourly_rate)}</td>
+                                                                  <td className="px-1.5 py-0.5 text-right">{formatCurrency(o.cost)}</td>
+                                                                </tr>
+                                                              ))}
+                                                            </tbody>
+                                                          </table>
+                                                        )}
+                                                        <div className="text-[10px] text-slate-500 text-right pr-1.5">
+                                                          Per part: material {formatCurrency(c.part_material_cost)} + operations {formatCurrency(c.part_operation_cost)} = <b className="text-slate-700">{formatCurrency(partCost)}</b> × {Number(c.qty || 0)} = <b className="text-slate-700">{formatCurrency(partCost * (Number(c.qty) || 0))}</b>
+                                                        </div>
+                                                      </div>
+                                                    </td>
+                                                  </tr>
+                                                )}
+                                              </React.Fragment>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </details>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

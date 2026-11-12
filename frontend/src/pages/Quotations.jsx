@@ -5,6 +5,7 @@ import DataTable from '../components/DataTable.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import MergeRfqModal from '../components/MergeRfqModal.jsx';
 import MergeReceivedQuotesModal from '../components/MergeReceivedQuotesModal.jsx';
+import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
 import { getFileUrl } from '../utils/url';
 import {
   Eye,
@@ -312,10 +313,10 @@ const Quotations = () => {
   // RFQ for a Material Request: issue it under the company of the MR's Sales Order (Admin-approved company).
   // The company is then locked here; a change goes through "Request Company Change" (Admin approval on the Sales Order).
   const [mrCompanySource, setMrCompanySource] = useState(null); // { orderId, orderNo, companyId, companyName, status }
-  const loadMrCompanyStatus = async (orderId) => {
+  const loadMrCompanyStatus = async (orderId, orderSource = 'ORDER') => {
     try {
       const token = localStorage.getItem('authToken');
-      const res = await fetch(`${API_BASE}/company-change-requests/order/${orderId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE}/company-change-requests/order/${orderId}?source=${orderSource || 'ORDER'}`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) {
         const status = await res.json();
         setMrCompanySource(prev => (prev && String(prev.orderId) === String(orderId) ? { ...prev, status } : prev));
@@ -329,13 +330,14 @@ const Quotations = () => {
     setFormData(prev => ({ ...prev, hostCompanyId: String(companyId) }));
     setMrCompanySource({
       orderId: mrData.sales_order_id,
+      orderSource: mrData.sales_order_source || 'ORDER',
       orderNo: mrData.sales_order_no,
       companyId: String(companyId),
       companyName: mrData.issuing_company_name,
       mrNumber: mrData.mr_number,
       status: null
     });
-    if (mrData.sales_order_id) loadMrCompanyStatus(mrData.sales_order_id);
+    if (mrData.sales_order_id) loadMrCompanyStatus(mrData.sales_order_id, mrData.sales_order_source || 'ORDER');
   };
 
   // Closing the create form clears the Material Request company lock
@@ -345,10 +347,10 @@ const Quotations = () => {
 
   // Edit Quotation: same lock + request when the quotation's Material Request belongs to a Sales Order
   const [editCompanySource, setEditCompanySource] = useState(null);
-  const loadEditCompanyStatus = async (orderId) => {
+  const loadEditCompanyStatus = async (orderId, orderSource = 'ORDER') => {
     try {
       const token = localStorage.getItem('authToken');
-      const res = await fetch(`${API_BASE}/company-change-requests/order/${orderId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE}/company-change-requests/order/${orderId}?source=${orderSource || 'ORDER'}`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) {
         const status = await res.json();
         setEditCompanySource(prev => (prev && String(prev.orderId) === String(orderId) ? { ...prev, status } : prev));
@@ -366,6 +368,7 @@ const Quotations = () => {
       if (!mrData.issuing_company_id) return;
       setEditCompanySource({
         orderId: mrData.sales_order_id,
+        orderSource: mrData.sales_order_source || 'ORDER',
         orderNo: mrData.sales_order_no,
         companyId: String(mrData.issuing_company_id),
         companyName: mrData.issuing_company_name,
@@ -374,7 +377,7 @@ const Quotations = () => {
         status: null
       });
       setEditFormData(prev => ({ ...prev, hostCompanyId: String(mrData.issuing_company_id) }));
-      if (mrData.sales_order_id) loadEditCompanyStatus(mrData.sales_order_id);
+      if (mrData.sales_order_id) loadEditCompanyStatus(mrData.sales_order_id, mrData.sales_order_source || 'ORDER');
     } catch (err) {
       console.error('Error loading quotation Material Request company:', err);
     }
@@ -383,8 +386,8 @@ const Quotations = () => {
     if (!showEditModal) setEditCompanySource(null);
   }, [showEditModal]);
 
-  const handleRfqRequestCompanyChange = () => requestCompanyChangeFor(mrCompanySource, () => loadMrCompanyStatus(mrCompanySource.orderId));
-  const handleEditRequestCompanyChange = () => requestCompanyChangeFor(editCompanySource, () => loadEditCompanyStatus(editCompanySource.orderId));
+  const handleRfqRequestCompanyChange = () => requestCompanyChangeFor(mrCompanySource, () => loadMrCompanyStatus(mrCompanySource.orderId, mrCompanySource.orderSource));
+  const handleEditRequestCompanyChange = () => requestCompanyChangeFor(editCompanySource, () => loadEditCompanyStatus(editCompanySource.orderId, editCompanySource.orderSource));
 
   const requestCompanyChangeFor = async (source, onSent) => {
     if (!source?.orderId) return;
@@ -434,7 +437,7 @@ const Quotations = () => {
       const response = await fetch(`${API_BASE}/company-change-requests`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: mrCompanySource.orderId, ...res.value })
+        body: JSON.stringify({ orderId: mrCompanySource.orderId, orderSource: mrCompanySource.orderSource || 'ORDER', ...res.value })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || data.error || 'Failed to submit request');
@@ -2221,7 +2224,15 @@ const Quotations = () => {
     }
   };
 
-  const displayQuotations = useMemo(() => {
+  // Company filter (Company Master): company of the quotation's / RFQ's Sales Order, else its own billing company
+  const quoteCompanyFilter = useCompanyFilter();
+  const quoteCompanyOf = useCallback((q) => (
+    q.isRFQOnly
+      ? quoteCompanyFilter.companyOf({ mr: q.mr_id, fallback: q.host_company_id })
+      : quoteCompanyFilter.companyOf({ quotation: q.id, mr: q.mr_id, fallback: q.host_company_id })
+  ), [quoteCompanyFilter]);
+
+  const tabQuotations = useMemo(() => {
     let combined = [...quotations];
 
     // In 'sent' tab, also show RFQs that don't have linked quotations yet, or have partial assignments
@@ -2286,6 +2297,11 @@ const Quotations = () => {
       return true;
     });
   }, [quotations, rawRfqs, activeTab, filterStatus]);
+
+  const displayQuotations = useMemo(
+    () => tabQuotations.filter(q => quoteCompanyFilter.matches(quoteCompanyOf(q))),
+    [tabQuotations, quoteCompanyFilter, quoteCompanyOf]
+  );
 
   const getVendorName = useCallback((vendorId, row = null) => {
     if (row && row.vendor_name) return row.vendor_name;
@@ -3140,6 +3156,13 @@ const Quotations = () => {
           return matchesQuoteNo || matchesVendor || matchesProject || matchesCompany || matchesItems || matchesDrawing;
         }}
         toolbarRight={
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto">
+          <CompanyFilterSelect
+            cf={quoteCompanyFilter}
+            rows={tabQuotations}
+            getCompanyId={quoteCompanyOf}
+            className="py-2"
+          />
           <div className="relative flex items-center w-full md:w-auto">
             <Filter className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
             <select
@@ -3166,6 +3189,7 @@ const Quotations = () => {
                 </>
               )}
             </select>
+          </div>
           </div>
         }
       />
@@ -3226,7 +3250,7 @@ const Quotations = () => {
                           <select
                             className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 font-medium disabled:opacity-80 disabled:cursor-not-allowed"
                             value={selectedHostId}
-                            disabled={Boolean(mrCompanySource)}
+                            disabled={Boolean(mrCompanySource) && (!mrCompanySource.status || mrCompanySource.status.locked)}
                             title={mrCompanySource ? 'Company of the Sales Order for this Material Request. Use "Request Company Change" (Admin approval).' : undefined}
                             onChange={(e) => {
                               setSelectedHostId(e.target.value);
@@ -4239,7 +4263,7 @@ const Quotations = () => {
                       <select
                         className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 font-medium disabled:opacity-80 disabled:cursor-not-allowed"
                         value={editFormData.hostCompanyId || ''}
-                        disabled={Boolean(editCompanySource)}
+                        disabled={Boolean(editCompanySource) && (!editCompanySource.status || editCompanySource.status.locked)}
                         title={editCompanySource ? 'Company of the Sales Order for this Material Request. Use "Request Company Change" (Admin approval).' : undefined}
                         onChange={(e) => {
                           setEditFormData({ ...editFormData, hostCompanyId: e.target.value });

@@ -9,6 +9,7 @@ import { Card, SearchableSelect, Button, Tabs } from '../components/ui.jsx';
 import DataTable from '../components/DataTable.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import CompanySourceLock, { isCompanySourceLocked } from '../components/CompanySourceLock.jsx';
+import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { getFileUrl } from '../utils/url';
@@ -204,6 +205,9 @@ const PurchaseOrders = () => {
   const [hostCompanies, setHostCompanies] = useState([]);
   // Sales Order company behind this PO (PO → Material Request → Sales Order); locked for current Sales Orders
   const [poCompanySource, setPoCompanySource] = useState(null);
+  // List Company filter (Company Master)
+  const poCompanyFilter = useCompanyFilter();
+  const poCompanyOf = (po) => poCompanyFilter.companyOf({ po: po.id, mr: po.mr_id, fallback: po.host_company_id });
   useEffect(() => {
     const fetchHostCompanies = async () => {
       try {
@@ -2558,8 +2562,10 @@ const PurchaseOrders = () => {
       clientName.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
+    // Company filter: company of the PO's Sales Order (Company Master), else the PO's own billing company
+    const matchesCompany = poCompanyFilter.matches(poCompanyOf(po));
 
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesCompany;
   });
 
   if (viewMode === 'detail' && selectedPO) {
@@ -2680,6 +2686,14 @@ const PurchaseOrders = () => {
               className="w-full pl-11 pr-4 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
             />
           </div>
+
+          <CompanyFilterSelect
+            cf={poCompanyFilter}
+            rows={pos}
+            getCompanyId={poCompanyOf}
+            className="py-2 w-full md:w-auto"
+            accent="text-rose-600"
+          />
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 no-scrollbar">
             <Tabs
