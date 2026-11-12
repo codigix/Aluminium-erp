@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { getHollowPipeId, resolveDiameterlessShape } = require('../utils/formatDimensions');
 const crypto = require('crypto');
 const emailService = require('./emailService');
 const puppeteer = require('puppeteer');
@@ -411,7 +412,13 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
       const [mrItems] = await connection.query(`
         SELECT mri.*, sb.valuation_rate,
                mri.length, mri.width, mri.thickness, mri.diameter, mri.outer_diameter, mri.density, mri.weight_per_unit,
-               COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type,
+               COALESCE(NULLIF(TRIM(mri.shape_type), ''), shape_lookup.shape_name,
+                 (SELECT MAX(s2.name) FROM stock_balance sb2 JOIN shapes s2 ON s2.id = sb2.shape_id
+                   WHERE sb2.item_code = mri.item_code
+                     AND ABS(COALESCE(sb2.length, 0) - COALESCE(mri.length, 0)) < 0.0001 AND ABS(COALESCE(sb2.width, 0) - COALESCE(mri.width, 0)) < 0.0001
+                     AND ABS(COALESCE(sb2.thickness, 0) - COALESCE(mri.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb2.diameter, 0) - COALESCE(mri.diameter, 0)) < 0.0001
+                     AND ABS(COALESCE(sb2.outer_diameter, 0) - COALESCE(mri.outer_diameter, 0)) < 0.0001
+                   HAVING COUNT(DISTINCT sb2.shape_id) = 1)) as shape_type,
                COALESCE(
                  (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE (soi.item_code = mri.item_code OR soi.drawing_no = mri.item_code) AND soi.bom_cost > 0),
                  (SELECT MAX(rate) FROM production_plan_materials ppm WHERE ppm.plan_id = ? AND ppm.item_code = mri.item_code AND ppm.rate > 0),
@@ -1752,8 +1759,22 @@ const getPurchaseOrderById = async (poId) => {
        WHERE (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) 
        AND soi.sales_order_id = ? 
        LIMIT 1) as sales_order_item_status,
-      COALESCE(poi.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name,
-      COALESCE(poi.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type
+      -- Shape: the line's own (from RFQ/quotation/MR) → BOM match by name + sizes → Item Master only when that
+      -- item code has ONE shape in stock (never guess from the highest shape id; empty lets the sizes speak)
+      COALESCE(poi.shape_type, shape_lookup.shape_name,
+        (SELECT MAX(s2.name) FROM stock_balance sb2 JOIN shapes s2 ON s2.id = sb2.shape_id
+          WHERE sb2.item_code = poi.item_code
+            AND ABS(COALESCE(sb2.length, 0) - COALESCE(poi.length, 0)) < 0.0001 AND ABS(COALESCE(sb2.width, 0) - COALESCE(poi.width, 0)) < 0.0001
+            AND ABS(COALESCE(sb2.thickness, 0) - COALESCE(poi.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb2.diameter, 0) - COALESCE(poi.diameter, 0)) < 0.0001
+            AND ABS(COALESCE(sb2.outer_diameter, 0) - COALESCE(poi.outer_diameter, 0)) < 0.0001
+          HAVING COUNT(DISTINCT sb2.shape_id) = 1)) as shape_name,
+      COALESCE(poi.shape_type, shape_lookup.shape_name,
+        (SELECT MAX(s2.name) FROM stock_balance sb2 JOIN shapes s2 ON s2.id = sb2.shape_id
+          WHERE sb2.item_code = poi.item_code
+            AND ABS(COALESCE(sb2.length, 0) - COALESCE(poi.length, 0)) < 0.0001 AND ABS(COALESCE(sb2.width, 0) - COALESCE(poi.width, 0)) < 0.0001
+            AND ABS(COALESCE(sb2.thickness, 0) - COALESCE(poi.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb2.diameter, 0) - COALESCE(poi.diameter, 0)) < 0.0001
+            AND ABS(COALESCE(sb2.outer_diameter, 0) - COALESCE(poi.outer_diameter, 0)) < 0.0001
+          HAVING COUNT(DISTINCT sb2.shape_id) = 1)) as shape_type
      FROM purchase_order_items poi
      LEFT JOIN (
        SELECT 
@@ -1983,6 +2004,29 @@ const updatePurchaseOrder = async (poId, payload, userId = null) => {
         sales_order_id: existing[0].sales_order_id
       });
 
+      // Material type for lines added in Edit PO: same value as lines created from MR/quotation —
+      // the item group, normalised (e.g. "raw Material" → RAW_MATERIAL). Existing lines are not touched.
+      const normGroup = (g) => {
+        const s = String(g || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+        return s || null;
+      };
+      const [groupRows] = await connection.query('SELECT name FROM item_groups');
+      const knownGroups = new Set(groupRows.map(g => normGroup(g.name)).filter(Boolean));
+      const resolveNewLineMaterialType = async (item) => {
+        const fromGroup = normGroup(item.item_group);
+        if (fromGroup) return fromGroup;
+        const fromType = normGroup(item.material_type);
+        if (fromType && knownGroups.has(fromType)) return fromType; // caller already sent the group
+        if (item.item_code) {
+          const [[sb]] = await connection.query(
+            "SELECT material_type FROM stock_balance WHERE item_code = ? AND material_type IS NOT NULL AND TRIM(material_type) <> '' ORDER BY id DESC LIMIT 1",
+            [item.item_code]
+          );
+          if (sb && sb.material_type) return sb.material_type;
+        }
+        return null;
+      };
+
       for (const item of items) {
         const qty = parseFloat(item.quantity) || 0;
         const designQty = parseFloat(item.design_qty !== undefined && item.design_qty !== null ? item.design_qty : qty);
@@ -2026,17 +2070,19 @@ const updatePurchaseOrder = async (poId, payload, userId = null) => {
             ]
           );
         } else {
+          const newLineMaterialType = await resolveNewLineMaterialType(item);
           await connection.execute(
-            `INSERT INTO purchase_order_items 
+            `INSERT INTO purchase_order_items
              (purchase_order_id, item_code, description, quantity, design_qty, planned_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-              length, width, thickness, diameter, outer_diameter, density, weight_per_unit, drawing_no, shape_type, material_name)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              length, width, thickness, diameter, outer_diameter, density, weight_per_unit, drawing_no, shape_type, material_name, material_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               poId, item.item_code, desc, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount,
               item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0,
               targetDrawingNo || null,
               item.shape_type || item.shape_name || item.shape || null,
-              matName
+              matName,
+              newLineMaterialType
             ]
           );
         }
@@ -2280,7 +2326,9 @@ const formatItemDimensions = (item) => {
   ).toLowerCase();
 
   let matchedShape = '';
-  if (shape.includes('threaded') || shape.includes('thread')) {
+  if (shape.includes('flange')) {
+    matchedShape = 'flange';
+  } else if (shape.includes('threaded') || shape.includes('thread')) {
     matchedShape = 'threaded rod';
   } else if (shape.includes('square tube') || (shape.includes('square') && shape.includes('tube'))) {
     matchedShape = 'square tube';
@@ -2312,7 +2360,9 @@ const formatItemDimensions = (item) => {
     }
   } else {
     // Fallback detection by dimension values
-    if (dia > 0) {
+    if (getHollowPipeId(item, od, thk, dia) > 0) {
+      matchedShape = 'pipe';
+    } else if (dia > 0) {
       matchedShape = 'round bar';
     } else if (od > 0 && thk > 0) {
       matchedShape = 'pipe';
@@ -2333,10 +2383,18 @@ const formatItemDimensions = (item) => {
     return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1);
   };
 
+  matchedShape = resolveDiameterlessShape(matchedShape, dia, od, wid, thk);
   let prefix = '';
   let dimStr = '';
+  const hollowId = matchedShape === 'pipe' ? getHollowPipeId(item, od, thk, dia) : 0;
 
-  if (matchedShape === 'plate') {
+  if (matchedShape === 'flange') {
+    prefix = 'FLG';
+    dimStr = [od > 0 ? `OD${n(od)}` : null, dia > 0 ? `ID${n(dia)}` : null, n(thk)].filter(Boolean).join(' × ');
+  } else if (matchedShape === 'pipe' && hollowId > 0) {
+    prefix = 'PIPE';
+    dimStr = [`OD${n(od)}`, `ID${n(hollowId)}`, n(len)].filter(Boolean).join(' × ');
+  } else if (matchedShape === 'plate') {
     prefix = 'PL';
     const parts = [n(wid), n(len), n(thk)].filter(Boolean);
     dimStr = parts.join(' × ');

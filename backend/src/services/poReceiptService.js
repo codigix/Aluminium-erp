@@ -243,22 +243,29 @@ const getPOReceiptById = async (receiptId) => {
             COALESCE(NULLIF(pri.outer_diameter, 0), poi.outer_diameter, 0) as outer_diameter,
             COALESCE(NULLIF(pri.density, 0), poi.density, 0) as density,
             COALESCE(NULLIF(pri.weight_per_unit, 0), poi.weight_per_unit, 0) as weight_per_unit,
+            -- Line's own shape; else the shape of the stock row with the SAME item + sizes (only if one shape) — no guessing
             COALESCE(
               poi.shape_type,
               (
-                SELECT s.name FROM shapes s 
-                JOIN stock_balance sb ON s.id = sb.shape_id 
-                WHERE sb.item_code = COALESCE(poi.item_code, pri.item_code) 
-                LIMIT 1
+                SELECT MAX(s.name) FROM shapes s
+                JOIN stock_balance sb ON s.id = sb.shape_id
+                WHERE sb.item_code = COALESCE(poi.item_code, pri.item_code)
+                  AND ABS(COALESCE(sb.length, 0) - COALESCE(pri.length, 0)) < 0.0001 AND ABS(COALESCE(sb.width, 0) - COALESCE(pri.width, 0)) < 0.0001
+                  AND ABS(COALESCE(sb.thickness, 0) - COALESCE(pri.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb.diameter, 0) - COALESCE(pri.diameter, 0)) < 0.0001
+                  AND ABS(COALESCE(sb.outer_diameter, 0) - COALESCE(pri.outer_diameter, 0)) < 0.0001
+                HAVING COUNT(DISTINCT sb.shape_id) = 1
               )
             ) as shape_name,
             COALESCE(
               poi.shape_type,
               (
-                SELECT s.name FROM shapes s 
-                JOIN stock_balance sb ON s.id = sb.shape_id 
-                WHERE sb.item_code = COALESCE(poi.item_code, pri.item_code) 
-                LIMIT 1
+                SELECT MAX(s.name) FROM shapes s
+                JOIN stock_balance sb ON s.id = sb.shape_id
+                WHERE sb.item_code = COALESCE(poi.item_code, pri.item_code)
+                  AND ABS(COALESCE(sb.length, 0) - COALESCE(pri.length, 0)) < 0.0001 AND ABS(COALESCE(sb.width, 0) - COALESCE(pri.width, 0)) < 0.0001
+                  AND ABS(COALESCE(sb.thickness, 0) - COALESCE(pri.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb.diameter, 0) - COALESCE(pri.diameter, 0)) < 0.0001
+                  AND ABS(COALESCE(sb.outer_diameter, 0) - COALESCE(pri.outer_diameter, 0)) < 0.0001
+                HAVING COUNT(DISTINCT sb.shape_id) = 1
               )
             ) as shape_type
      FROM po_receipt_items pri
@@ -298,6 +305,19 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
           ? `Purchase Order ${po[0].po_number} is pending Admin approval. Receipts can be created only after approval.`
           : `Cannot create receipt for a ${po[0].status === 'PO_REQUEST' ? 'PO Request' : 'Draft'} Purchase Order. It must be approved by Admin first.`
       );
+    }
+
+    // A GRN must receive something: no line with a receiving qty / weight → refuse (prevents empty GRNs)
+    const hasReceivingLine = (items || []).some(item => {
+      const rawQty = item.current_receiving_qty !== undefined && item.current_receiving_qty !== '' ? item.current_receiving_qty : item.received_qty;
+      const rawWeight = item.current_receiving_weight !== undefined && item.current_receiving_weight !== '' ? item.current_receiving_weight : item.received_weight;
+      return (parseFloat(rawQty) || 0) > 0 || (parseFloat(rawWeight) || 0) > 0;
+    });
+    if (!hasReceivingLine) {
+      const err = new Error(`Nothing to receive on Purchase Order ${po[0].po_number}: enter a receiving quantity for at least one item (all items may already be received).`);
+      err.statusCode = 400;
+      err.status = 400;
+      throw err;
     }
 
     const poNumber = po[0].po_number;
@@ -581,9 +601,74 @@ const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, 
   return { id: receiptId };
 };
 
+// Deleting a GRN reverses what creating it did: the receipt + its lines, the GRN record + its lines and the
+// auto-created QC record (FK cascades), then the PO status is recalculated (FULFILLED → ORDERED / PARTIALLY_RECEIVED).
+// Refused once the GRN has moved on (QC done, stock posted, allocated, stock entry) or the PO is in accounts.
+const GRN_LOCKED_PO_STATUSES = ['PENDING_PAYMENT', 'PAID', 'COMPLETED', 'CLOSED', 'MERGED'];
 const deletePOReceipt = async (receiptId) => {
-  await getPOReceiptById(receiptId);
-  await pool.execute('DELETE FROM po_receipts WHERE id = ?', [receiptId]);
+  const receipt = await getPOReceiptById(receiptId);
+  const connection = await pool.getConnection();
+  let poId = receipt.po_id;
+  try {
+    await connection.beginTransaction();
+
+    const [[rec]] = await connection.query('SELECT id, po_id FROM po_receipts WHERE id = ? FOR UPDATE', [receiptId]);
+    if (!rec) {
+      const err = new Error('GRN not found'); err.statusCode = 404; err.status = 404; throw err;
+    }
+    poId = rec.po_id;
+    const block = (msg) => { const err = new Error(msg); err.statusCode = 400; err.status = 400; throw err; };
+
+    const [[po]] = await connection.query('SELECT po_number, status FROM purchase_orders WHERE id = ?', [poId]);
+    if (po && GRN_LOCKED_PO_STATUSES.includes(String(po.status || '').toUpperCase())) {
+      block(`Cannot delete this GRN: Purchase Order ${po.po_number} is already ${po.status}.`);
+    }
+
+    const [grnRows] = await connection.query('SELECT id FROM grns WHERE po_receipt_id = ?', [receiptId]);
+    const grnIds = grnRows.map(g => g.id);
+    if (grnIds.length > 0) {
+      const [[qc]] = await connection.query(
+        "SELECT COUNT(*) AS n FROM qc_inspections WHERE grn_id IN (?) AND (UPPER(COALESCE(status, '')) NOT IN ('', 'PENDING') OR COALESCE(stock_updated, 0) = 1)",
+        [grnIds]
+      );
+      if (qc.n > 0) block('Cannot delete this GRN: Quality inspection is already done for it.');
+
+      const [[ledger]] = await connection.query(
+        `SELECT COUNT(*) AS n FROM stock_ledger
+         WHERE grn_item_id IN (SELECT id FROM grn_items WHERE grn_id IN (?))
+            OR qc_id IN (SELECT id FROM qc_inspections WHERE grn_id IN (?))`,
+        [grnIds, grnIds]
+      );
+      if (ledger.n > 0) block('Cannot delete this GRN: stock has already been posted from it.');
+
+      const [[alloc]] = await connection.query(
+        'SELECT COUNT(*) AS n FROM warehouse_allocations WHERE grn_item_id IN (SELECT id FROM grn_items WHERE grn_id IN (?))',
+        [grnIds]
+      );
+      if (alloc.n > 0) block('Cannot delete this GRN: its material is already allocated to a warehouse.');
+
+      const [[entries]] = await connection.query('SELECT COUNT(*) AS n FROM stock_entries WHERE grn_id IN (?)', [grnIds]);
+      if (entries.n > 0) block('Cannot delete this GRN: a stock entry has already been created from it.');
+
+      // GRN record → grn_items, qc_inspections (+ items / attachments), excess approvals cascade
+      await connection.query('DELETE FROM grns WHERE id IN (?)', [grnIds]);
+    }
+
+    // Receipt → po_receipt_items cascade
+    await connection.execute('DELETE FROM po_receipts WHERE id = ?', [receiptId]);
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  // Received quantities are gone → PO back to ORDERED / PARTIALLY_RECEIVED (same calculation as on create)
+  if (poId) {
+    const poBalanceService = require('./poBalanceService');
+    await poBalanceService.updatePOStatus(poId);
+  }
 };
 
 const getPOReceiptStats = async () => {

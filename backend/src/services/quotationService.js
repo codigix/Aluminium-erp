@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { getHollowPipeId, resolveDiameterlessShape } = require('../utils/formatDimensions');
 const emailService = require('./emailService');
 const purchaseOrderService = require('./purchaseOrderService');
 const puppeteer = require('puppeteer');
@@ -588,12 +589,22 @@ const getQuotationById = async (quotationId) => {
             COALESCE(
               qi.shape_type,
               shape_lookup.shape_name,
-              (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)
+              (SELECT MAX(s2.name) FROM stock_balance sb2 JOIN shapes s2 ON s2.id = sb2.shape_id
+                WHERE sb2.item_code = qi.item_code
+                  AND ABS(COALESCE(sb2.length, 0) - COALESCE(qi.length, 0)) < 0.0001 AND ABS(COALESCE(sb2.width, 0) - COALESCE(qi.width, 0)) < 0.0001
+                  AND ABS(COALESCE(sb2.thickness, 0) - COALESCE(qi.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb2.diameter, 0) - COALESCE(qi.diameter, 0)) < 0.0001
+                  AND ABS(COALESCE(sb2.outer_diameter, 0) - COALESCE(qi.outer_diameter, 0)) < 0.0001
+                HAVING COUNT(DISTINCT sb2.shape_id) = 1)
             ) as shape_name,
             COALESCE(
               qi.shape_type,
               shape_lookup.shape_name,
-              (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)
+              (SELECT MAX(s2.name) FROM stock_balance sb2 JOIN shapes s2 ON s2.id = sb2.shape_id
+                WHERE sb2.item_code = qi.item_code
+                  AND ABS(COALESCE(sb2.length, 0) - COALESCE(qi.length, 0)) < 0.0001 AND ABS(COALESCE(sb2.width, 0) - COALESCE(qi.width, 0)) < 0.0001
+                  AND ABS(COALESCE(sb2.thickness, 0) - COALESCE(qi.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb2.diameter, 0) - COALESCE(qi.diameter, 0)) < 0.0001
+                  AND ABS(COALESCE(sb2.outer_diameter, 0) - COALESCE(qi.outer_diameter, 0)) < 0.0001
+                HAVING COUNT(DISTINCT sb2.shape_id) = 1)
             ) as shape_type
      FROM quotation_items qi
      LEFT JOIN quotations q ON qi.quotation_id = q.id
@@ -1769,7 +1780,8 @@ const generateQuotationPDF = async (quotationId) => {
         const nf = (v) => { if (!v || isNaN(parseFloat(v)) || parseFloat(v) === 0) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
 
         let ms = '';
-        if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) ms = 'threaded rod';
+        if (shapeRaw.includes('flange')) ms = 'flange';
+        else if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) ms = 'threaded rod';
         else if (shapeRaw.includes('square tube') || (shapeRaw.includes('square') && shapeRaw.includes('tube'))) ms = 'square tube';
         else if (shapeRaw.includes('rectangular tube') || shapeRaw.includes('rect tube') || (shapeRaw.includes('rect') && shapeRaw.includes('tube'))) ms = 'rectangular tube';
         else if (shapeRaw.includes('square bar') || (shapeRaw.includes('square') && shapeRaw.includes('bar'))) ms = 'square bar';
@@ -1785,6 +1797,7 @@ const generateQuotationPDF = async (quotationId) => {
           if (thk > 0) ms = 'threaded rod';
           else ms = 'round bar';
         }
+        else if (getHollowPipeId(i, od, thk, dia) > 0) ms = 'pipe';
         else if (dia > 0) {
           if (thk > 0) ms = 'threaded rod';
           else ms = 'round bar';
@@ -1793,8 +1806,12 @@ const generateQuotationPDF = async (quotationId) => {
         else if (wid > 0 && thk > 0 && len > 0) ms = 'plate';
         else ms = 'plate';
 
+        ms = resolveDiameterlessShape(ms, dia, od, wid, thk);
         let pfx = '', dp = [];
-        if (ms === 'plate')              { pfx = 'PL';   dp = [nf(wid), nf(len), nf(thk)]; }
+        const hollowId = ms === 'pipe' ? getHollowPipeId(i, od, thk, dia) : 0;
+        if (ms === 'flange')             { pfx = 'FLG';  dp = [od > 0 ? `OD${nf(od)}` : null, dia > 0 ? `ID${nf(dia)}` : null, nf(thk)]; }
+        else if (ms === 'pipe' && hollowId > 0) { pfx = 'PIPE'; dp = [`OD${nf(od)}`, `ID${nf(hollowId)}`, nf(len)]; }
+        else if (ms === 'plate')         { pfx = 'PL';   dp = [nf(wid), nf(len), nf(thk)]; }
         else if (ms === 'flat bar')      { pfx = 'FL';   dp = [nf(wid), nf(thk), nf(len)]; }
         else if (ms === 'round bar')     { pfx = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dp = [`Ø${nf(dv)}`, nf(len)]; }
         else if (ms === 'hexagonal bar') { pfx = 'HEX';  dp = [`AF${nf(wid)}`, nf(len)]; }

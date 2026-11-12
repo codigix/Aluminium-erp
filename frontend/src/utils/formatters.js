@@ -18,6 +18,37 @@ export const cleanProjectName = (name, clientName = '') => {
 };
 
 /**
+ * Pipe Calculation 2 (Hollow Pipe) is saved as OD, ID (in diameter) and wall = (OD − ID) / 2.
+ * Returns the ID only when the row matches that exactly (or carries calc_method PIPE_HOLLOW), else 0,
+ * so older pipe rows (diameter empty, equal to OD, or unrelated) keep their existing OD × T × L display.
+ */
+export const getHollowPipeId = (item, od, thk, dia) => {
+  if (!(od > 0 && thk > 0)) return 0;
+  const id = od - 2 * thk;
+  if (!(id > 0)) return 0;
+  if (dia > 0 && Math.abs(id - dia) < 0.01) return dia;
+  const method = String(item?.calc_method || item?.calcMethod || '').toUpperCase();
+  return method === 'PIPE_HOLLOW' ? parseFloat(id.toFixed(4)) : 0;
+};
+
+/**
+ * A round bar / threaded rod needs a diameter. When the row has none (bad or missing shape data), describe it by
+ * its sizes instead of printing "TR Mnull" / "RB Ønull": width + thickness → plate; otherwise plain sizes.
+ * A round bar that only has a width keeps using it as the diameter (existing behaviour).
+ * Keep in sync with backend/src/utils/formatDimensions.js.
+ */
+export const resolveDiameterlessShape = (matchedShape, dia, od, wid, thk) => {
+  // Pipe / flange need an OD (a pipe may carry it in diameter): without one, describe by sizes too
+  if ((matchedShape === 'pipe' && !(od > 0) && !(dia > 0)) || (matchedShape === 'flange' && !(od > 0))) {
+    return (wid > 0 && thk > 0) ? 'plate' : '';
+  }
+  if ((matchedShape !== 'round bar' && matchedShape !== 'threaded rod') || dia > 0 || od > 0) return matchedShape;
+  if (wid > 0 && thk > 0) return 'plate';
+  if (matchedShape === 'round bar' && wid > 0) return 'round bar';
+  return '';
+};
+
+/**
  * Standardized function to format dimensions of different material shapes
  * Uses engineering standard prefix format: e.g. "RB Ø20 × 1000 mm", "PL 300 × 200 × 10 mm"
  * @param {object} item - The item containing dimension fields
@@ -48,7 +79,9 @@ export const formatDimensions = (item) => {
   ).toLowerCase();
 
   let matchedShape = '';
-  if (shape.includes('threaded') || shape.includes('thread')) {
+  if (shape.includes('flange')) {
+    matchedShape = 'flange';
+  } else if (shape.includes('threaded') || shape.includes('thread')) {
     matchedShape = 'threaded rod';
   } else if (shape.includes('square tube') || (shape.includes('square') && shape.includes('tube'))) {
     matchedShape = 'square tube';
@@ -83,6 +116,8 @@ export const formatDimensions = (item) => {
     // A threaded rod is never inferred here: it needs an explicit shape.
     if (wid > 0 && thk > 0 && len > 0 && dia === 0 && od === 0) {
       matchedShape = 'plate';
+    } else if (getHollowPipeId(item, od, thk, dia) > 0) {
+      matchedShape = 'pipe';
     } else if (dia > 0) {
       matchedShape = 'round bar';
     } else if (od > 0 && thk > 0) {
@@ -97,6 +132,7 @@ export const formatDimensions = (item) => {
       matchedShape = 'plate';
     }
   }
+  matchedShape = resolveDiameterlessShape(matchedShape, dia, od, wid, thk);
 
   // Format a numeric value (omit decimal if whole number, omit if 0)
   const n = (val) => {
@@ -108,7 +144,12 @@ export const formatDimensions = (item) => {
   let prefix = '';
   let dimStr = '';
 
-  if (matchedShape === 'plate') {
+  if (matchedShape === 'flange') {
+    // Flange: OD (outer_diameter) × ID (diameter) × T (thickness)
+    prefix = 'FLG';
+    const parts = [od > 0 ? `OD${n(od)}` : null, dia > 0 ? `ID${n(dia)}` : null, n(thk)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'plate') {
     prefix = 'PL';
     const parts = [n(wid), n(len), n(thk)].filter(Boolean);
     dimStr = parts.join(' × ');
@@ -136,9 +177,15 @@ export const formatDimensions = (item) => {
     dimStr = parts.join(' × ');
   } else if (matchedShape === 'pipe') {
     prefix = 'PIPE';
-    const odVal = od > 0 ? od : dia;
-    const parts = [`OD${n(odVal)}`, n(thk), n(len)].filter(Boolean);
-    dimStr = parts.join(' × ');
+    const hollowId = getHollowPipeId(item, od, thk, dia);
+    if (hollowId > 0) {
+      // Pipe Calculation 2 (Hollow): OD × ID × L
+      dimStr = [`OD${n(od)}`, `ID${n(hollowId)}`, n(len)].filter(Boolean).join(' × ');
+    } else {
+      const odVal = od > 0 ? od : dia;
+      const parts = [`OD${n(odVal)}`, n(thk), n(len)].filter(Boolean);
+      dimStr = parts.join(' × ');
+    }
   } else if (matchedShape === 'square tube') {
     prefix = 'SQT';
     const parts = [n(wid), n(thk), n(len)].filter(Boolean);
@@ -197,7 +244,11 @@ export const validateShapeDimensions = ({
   const od = parseFloat(outerDiameter || outer_diameter) || 0;
   const p = parseFloat(threadPitch || thread_pitch) || 0;
 
-  if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
+  if (shapeStr.includes('flange')) {
+    if (od > 0 && dia > 0 && dia >= od) {
+      return { isValid: false, error: 'Inner Diameter must be less than the Outer Diameter.' };
+    }
+  } else if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
     const dVal = dia > 0 ? dia : od;
     if (dVal > 0 && p > 0 && p >= dVal) {
       return { isValid: false, error: 'Thread Pitch must be less than the Outer Diameter.' };
@@ -277,7 +328,12 @@ export const calculateWeight = ({
 
   let calculatedWeight = 0;
 
-  if (shapeStr === 'flat' || shapeStr.includes('flat')) {
+  if (shapeStr.includes('flange')) {
+    // Flange: V = π/4 × (OD² − ID²) × T  (ID stored in diameter, no bolt-hole deduction)
+    if (od > 0 && t > 0 && od > dia) {
+      calculatedWeight = (Math.PI * (Math.pow(od, 2) - Math.pow(dia, 2)) / 4 * t * dDensity) / 1000000;
+    }
+  } else if (shapeStr === 'flat' || shapeStr.includes('flat')) {
     calculatedWeight = (w * t * l * dDensity) / 1000000;
   } else if (shapeStr === 'square bar' || shapeStr.includes('square bar') || (shapeStr.includes('square') && shapeStr.includes('bar'))) {
     calculatedWeight = (w * w * l * dDensity) / 1000000;

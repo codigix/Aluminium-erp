@@ -32,6 +32,7 @@ import {
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions, calculateWeight, validateShapeDimensions } from '../utils/formatters';
+import { PipeCalcFields, FlangeFields, isFlangeShape } from '../components/ShapeCalcFields.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -3721,20 +3722,27 @@ const BOMFormPage = () => {
                                     </>
                                   )}
                                   {(selectedShape.toLowerCase() === 'pipe' || (selectedShape.toLowerCase().includes('pipe') || selectedShape.toLowerCase().includes('tube')) && !selectedShape.toLowerCase().includes('square') && !selectedShape.toLowerCase().includes('rect')) && (
-                                    <>
-                                      <div className="space-y-1">
-                                        <label className="text-xs text-slate-400 font-medium">Outer Diameter (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.outer_diameter || ''} onChange={(e) => setMaterialForm(prev => ({ ...prev, outer_diameter: e.target.value }))} required />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-xs text-slate-400 font-medium">Thickness (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.thickness || ''} onChange={(e) => setMaterialForm(prev => ({ ...prev, thickness: e.target.value }))} required />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-xs text-slate-400 font-medium">Length (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm(prev => ({ ...prev, length: e.target.value }))} required />
-                                      </div>
-                                    </>
+                                    <PipeCalcFields
+                                      od={materialForm.outer_diameter}
+                                      thickness={materialForm.thickness}
+                                      length={materialForm.length}
+                                      diameter={materialForm.diameter}
+                                      setOd={(v) => setMaterialForm(prev => ({ ...prev, outer_diameter: v }))}
+                                      setThickness={(v) => setMaterialForm(prev => ({ ...prev, thickness: v }))}
+                                      setLength={(v) => setMaterialForm(prev => ({ ...prev, length: v }))}
+                                      setDiameter={(v) => setMaterialForm(prev => ({ ...prev, diameter: v }))}
+                                      defaultMethod={currentMaterialVariants.find(v => v.item_code === materialForm.itemCode)?.calc_method || ''}
+                                    />
+                                  )}
+                                  {isFlangeShape(selectedShape) && (
+                                    <FlangeFields
+                                      od={materialForm.outer_diameter}
+                                      diameter={materialForm.diameter}
+                                      thickness={materialForm.thickness}
+                                      setOd={(v) => setMaterialForm(prev => ({ ...prev, outer_diameter: v }))}
+                                      setDiameter={(v) => setMaterialForm(prev => ({ ...prev, diameter: v }))}
+                                      setThickness={(v) => setMaterialForm(prev => ({ ...prev, thickness: v }))}
+                                    />
                                   )}
                                   {selectedShape.toLowerCase().includes('square') && (
                                     <>

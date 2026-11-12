@@ -12,6 +12,7 @@ import {
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions, validateShapeDimensions, calculateWeight } from '../utils/formatters';
+import { PipeCalcFields, FlangeFields, isFlangeShape } from '../components/ShapeCalcFields.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -4225,38 +4226,34 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         </>
                       )}
                       {newItemShapeType.toLowerCase() === 'pipe' && (
-                        <>
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-medium">Outer Diameter (mm)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-                              value={newItemOuterDiameter}
-                              onChange={(e) => setNewItemOuterDiameter(e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-medium">Thickness (mm)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-                              value={newItemThickness}
-                              onChange={(e) => setNewItemThickness(e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-medium">Length (mm)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-                              value={newItemLength}
-                              onChange={(e) => setNewItemLength(e.target.value)}
-                            />
-                          </div>
-                        </>
+                        <PipeCalcFields
+                          od={newItemOuterDiameter}
+                          thickness={newItemThickness}
+                          length={newItemLength}
+                          diameter={newItemDiameter}
+                          setOd={setNewItemOuterDiameter}
+                          setThickness={setNewItemThickness}
+                          setLength={setNewItemLength}
+                          setDiameter={setNewItemDiameter}
+                          inputClass="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                          labelClass="text-[10px] text-slate-400 font-medium"
+                          selectWrapClass="md:col-span-4 space-y-1"
+                          required={false}
+                        />
+                      )}
+                      {isFlangeShape(newItemShapeType) && (
+                        <FlangeFields
+                          od={newItemOuterDiameter}
+                          diameter={newItemDiameter}
+                          thickness={newItemThickness}
+                          setOd={setNewItemOuterDiameter}
+                          setDiameter={setNewItemDiameter}
+                          setThickness={setNewItemThickness}
+                          inputClass="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                          labelClass="text-[10px] text-slate-400 font-medium"
+                          noteClass="md:col-span-4"
+                          required={false}
+                        />
                       )}
                       {newItemShapeType.toLowerCase().includes('square tube') && (
                         <>

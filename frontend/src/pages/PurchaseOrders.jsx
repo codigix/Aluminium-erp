@@ -10,6 +10,7 @@ import DataTable from '../components/DataTable.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import CompanySourceLock, { isCompanySourceLocked } from '../components/CompanySourceLock.jsx';
 import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
+import { PipeCalcFields, FlangeFields, isFlangeShape } from '../components/ShapeCalcFields.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { getFileUrl } from '../utils/url';
@@ -804,9 +805,14 @@ const PurchaseOrders = () => {
     const billingQty = isWeightBasis && totWeight > 0 ? totWeight : qty;
     const rate = parseFloat(newPoItem.rate) || 0;
     const amt = Number((billingQty * rate).toFixed(2));
-    const finalQty = (newPoItem.unit || '').toUpperCase() === 'KG' && totWeight > 0 ? totWeight : qty;
-
     const existingId = (editingPoItemIndex !== null && manualFormData.items[editingPoItemIndex]) ? manualFormData.items[editingPoItemIndex].id : undefined;
+
+    // A NEW line billed by weight (raw-material shape with weight/unit) is stored like MR/quotation lines:
+    // unit Kg and quantity = total weight, so PO View / GRN / stock read the real weight (design_qty keeps the NOS count).
+    // Existing lines keep their current storage.
+    const storeAsWeightLine = !existingId && isWeightBasis && totWeight > 0;
+    const finalQty = ((newPoItem.unit || '').toUpperCase() === 'KG' || storeAsWeightLine) && totWeight > 0 ? totWeight : qty;
+    const finalUnit = storeAsWeightLine ? 'Kg' : (newPoItem.unit || 'NOS');
 
     const committedItem = {
       ...(existingId ? { id: existingId } : {}),
@@ -818,12 +824,13 @@ const PurchaseOrders = () => {
       design_qty: qty,
       weight_per_unit: parseFloat(newPoItem.weight_per_unit) || 0,
       total_weight: parseFloat(newPoItem.total_weight) || 0,
-      unit: newPoItem.unit || 'NOS',
+      unit: finalUnit,
       rate: rate,
       amount: amt,
       remarks: newPoItem.remarks || '',
       shape_type: newPoItem.shape_type || '',
       material_type: newPoItem.material_type || '',
+      item_group: newPoItem.item_group || '', // item group (e.g. Raw Material) → saved as the PO line's material type
       density: parseFloat(newPoItem.density) || 0,
       length: parseFloat(newPoItem.length) || 0,
       width: parseFloat(newPoItem.width) || 0,
@@ -3617,41 +3624,34 @@ const PurchaseOrders = () => {
                                 )}
 
                                 {(selectedShape.toLowerCase() === 'pipe' || (selectedShape.toLowerCase().includes('pipe') || selectedShape.toLowerCase().includes('tube')) && !selectedShape.toLowerCase().includes('square') && !selectedShape.toLowerCase().includes('rect')) && (
-                                  <>
-                                    <div className="space-y-1">
-                                      <label className="text-xs text-slate-500 font-medium">Outer Diameter (mm) *</label>
-                                      <input
-                                        type="number"
-                                        step="0.01"
-                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                                        placeholder="0.00"
-                                        value={newPoItem.outer_diameter || ''}
-                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, outer_diameter: e.target.value }))}
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-xs text-slate-500 font-medium">Thickness (mm) *</label>
-                                      <input
-                                        type="number"
-                                        step="0.01"
-                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                                        placeholder="0.00"
-                                        value={newPoItem.thickness || ''}
-                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, thickness: e.target.value }))}
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-xs text-slate-500 font-medium">Length (mm) *</label>
-                                      <input
-                                        type="number"
-                                        step="0.01"
-                                        className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                                        placeholder="0.00"
-                                        value={newPoItem.length || ''}
-                                        onChange={(e) => setNewPoItem(prev => ({ ...prev, length: e.target.value }))}
-                                      />
-                                    </div>
-                                  </>
+                                  <PipeCalcFields
+                                    od={newPoItem.outer_diameter}
+                                    thickness={newPoItem.thickness}
+                                    length={newPoItem.length}
+                                    diameter={newPoItem.diameter}
+                                    setOd={(v) => setNewPoItem(prev => ({ ...prev, outer_diameter: v }))}
+                                    setThickness={(v) => setNewPoItem(prev => ({ ...prev, thickness: v }))}
+                                    setLength={(v) => setNewPoItem(prev => ({ ...prev, length: v }))}
+                                    setDiameter={(v) => setNewPoItem(prev => ({ ...prev, diameter: v }))}
+                                    defaultMethod={newPoItem.calc_method || ''}
+                                    inputClass="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                    labelClass="text-xs text-slate-500 font-medium"
+                                    required={false}
+                                  />
+                                )}
+
+                                {isFlangeShape(selectedShape) && (
+                                  <FlangeFields
+                                    od={newPoItem.outer_diameter}
+                                    diameter={newPoItem.diameter}
+                                    thickness={newPoItem.thickness}
+                                    setOd={(v) => setNewPoItem(prev => ({ ...prev, outer_diameter: v }))}
+                                    setDiameter={(v) => setNewPoItem(prev => ({ ...prev, diameter: v }))}
+                                    setThickness={(v) => setNewPoItem(prev => ({ ...prev, thickness: v }))}
+                                    inputClass="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                                    labelClass="text-xs text-slate-500 font-medium"
+                                    required={false}
+                                  />
                                 )}
 
                                 {selectedShape.toLowerCase().includes('square') && (

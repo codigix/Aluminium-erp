@@ -211,8 +211,20 @@ const _enrichRfqs = async (rfqs) => {
     const [items] = await pool.query(`
         SELECT i.*, 
                COALESCE(i.material_name, sb.material_name, sb.item_description, i.item_code) as material_name,
-               COALESCE(i.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type,
-               COALESCE(i.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name,
+               COALESCE(i.shape_type, shape_lookup.shape_name,
+                 (SELECT MAX(s2.name) FROM stock_balance sb2 JOIN shapes s2 ON s2.id = sb2.shape_id
+                   WHERE sb2.item_code = i.item_code
+                     AND ABS(COALESCE(sb2.length, 0) - COALESCE(i.length, 0)) < 0.0001 AND ABS(COALESCE(sb2.width, 0) - COALESCE(i.width, 0)) < 0.0001
+                     AND ABS(COALESCE(sb2.thickness, 0) - COALESCE(i.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb2.diameter, 0) - COALESCE(i.diameter, 0)) < 0.0001
+                     AND ABS(COALESCE(sb2.outer_diameter, 0) - COALESCE(i.outer_diameter, 0)) < 0.0001
+                   HAVING COUNT(DISTINCT sb2.shape_id) = 1)) as shape_type,
+               COALESCE(i.shape_type, shape_lookup.shape_name,
+                 (SELECT MAX(s2.name) FROM stock_balance sb2 JOIN shapes s2 ON s2.id = sb2.shape_id
+                   WHERE sb2.item_code = i.item_code
+                     AND ABS(COALESCE(sb2.length, 0) - COALESCE(i.length, 0)) < 0.0001 AND ABS(COALESCE(sb2.width, 0) - COALESCE(i.width, 0)) < 0.0001
+                     AND ABS(COALESCE(sb2.thickness, 0) - COALESCE(i.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb2.diameter, 0) - COALESCE(i.diameter, 0)) < 0.0001
+                     AND ABS(COALESCE(sb2.outer_diameter, 0) - COALESCE(i.outer_diameter, 0)) < 0.0001
+                   HAVING COUNT(DISTINCT sb2.shape_id) = 1)) as shape_name,
                COALESCE(
                  shape_lookup.operation,
                  (

@@ -361,8 +361,21 @@ const getGRNItemsByGrnId = async (grnId) => {
       COALESCE(NULLIF(gi.outer_diameter, 0), NULLIF(poi.outer_diameter, 0), 0) as outer_diameter,
       COALESCE(NULLIF(gi.density, 0), NULLIF(poi.density, 0), 0) as density,
       COALESCE(NULLIF(gi.weight_per_unit, 0), NULLIF(poi.weight_per_unit, 0), 0) as weight_per_unit,
-      COALESCE(gi.shape_type, poi.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type,
-      COALESCE(gi.shape_type, poi.shape_type, shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name,
+      -- Item Master shape only when that item code has ONE shape in stock (no guessing from MAX(shape_id))
+      COALESCE(gi.shape_type, poi.shape_type, shape_lookup.shape_name,
+        (SELECT MAX(s2.name) FROM stock_balance sb2 JOIN shapes s2 ON s2.id = sb2.shape_id
+          WHERE sb2.item_code = poi.item_code
+            AND ABS(COALESCE(sb2.length, 0) - COALESCE(poi.length, 0)) < 0.0001 AND ABS(COALESCE(sb2.width, 0) - COALESCE(poi.width, 0)) < 0.0001
+            AND ABS(COALESCE(sb2.thickness, 0) - COALESCE(poi.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb2.diameter, 0) - COALESCE(poi.diameter, 0)) < 0.0001
+            AND ABS(COALESCE(sb2.outer_diameter, 0) - COALESCE(poi.outer_diameter, 0)) < 0.0001
+          HAVING COUNT(DISTINCT sb2.shape_id) = 1)) as shape_type,
+      COALESCE(gi.shape_type, poi.shape_type, shape_lookup.shape_name,
+        (SELECT MAX(s2.name) FROM stock_balance sb2 JOIN shapes s2 ON s2.id = sb2.shape_id
+          WHERE sb2.item_code = poi.item_code
+            AND ABS(COALESCE(sb2.length, 0) - COALESCE(poi.length, 0)) < 0.0001 AND ABS(COALESCE(sb2.width, 0) - COALESCE(poi.width, 0)) < 0.0001
+            AND ABS(COALESCE(sb2.thickness, 0) - COALESCE(poi.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb2.diameter, 0) - COALESCE(poi.diameter, 0)) < 0.0001
+            AND ABS(COALESCE(sb2.outer_diameter, 0) - COALESCE(poi.outer_diameter, 0)) < 0.0001
+          HAVING COUNT(DISTINCT sb2.shape_id) = 1)) as shape_name,
       gea.id as excess_approval_id,
       gea.status as excess_approval_status,
       gea.excess_qty

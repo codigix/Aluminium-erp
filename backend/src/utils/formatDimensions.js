@@ -1,5 +1,31 @@
 // Backend copy of frontend/src/utils/formatters.js → formatDimensions (keep both in sync).
 // Engineering prefix format used across the ERP, e.g. "PL 300 × 200 × 10 mm", "RB Ø20 × 1000 mm", "SQT 30 × 3 × 1672 mm".
+
+// Pipe Calculation 2 (Hollow Pipe): saved as OD, ID (in diameter) and wall = (OD − ID) / 2. Returns the ID only
+// when the row matches exactly (or has calc_method PIPE_HOLLOW); older pipe rows keep the OD × T × L display.
+const getHollowPipeId = (item, od, thk, dia) => {
+  if (!(od > 0 && thk > 0)) return 0;
+  const id = od - 2 * thk;
+  if (!(id > 0)) return 0;
+  if (dia > 0 && Math.abs(id - dia) < 0.01) return dia;
+  const method = String(item?.calc_method || item?.calcMethod || '').toUpperCase();
+  return method === 'PIPE_HOLLOW' ? parseFloat(id.toFixed(4)) : 0;
+};
+
+// A round bar / threaded rod needs a diameter. Without one (bad or missing shape data) describe the row by its sizes
+// instead of printing "TR Mnull" / "RB Ønull": width + thickness → plate; otherwise plain sizes.
+// A round bar that only has a width keeps using it as the diameter. Keep in sync with frontend formatters.js.
+const resolveDiameterlessShape = (matchedShape, dia, od, wid, thk) => {
+  // Pipe / flange need an OD (a pipe may carry it in diameter): without one, describe by sizes too
+  if ((matchedShape === 'pipe' && !(od > 0) && !(dia > 0)) || (matchedShape === 'flange' && !(od > 0))) {
+    return (wid > 0 && thk > 0) ? 'plate' : '';
+  }
+  if ((matchedShape !== 'round bar' && matchedShape !== 'threaded rod') || dia > 0 || od > 0) return matchedShape;
+  if (wid > 0 && thk > 0) return 'plate';
+  if (matchedShape === 'round bar' && wid > 0) return 'round bar';
+  return '';
+};
+
 const formatDimensions = (item) => {
   if (!item) return '';
 
@@ -24,7 +50,9 @@ const formatDimensions = (item) => {
   ).toLowerCase();
 
   let matchedShape = '';
-  if (shape.includes('threaded') || shape.includes('thread')) {
+  if (shape.includes('flange')) {
+    matchedShape = 'flange';
+  } else if (shape.includes('threaded') || shape.includes('thread')) {
     matchedShape = 'threaded rod';
   } else if (shape.includes('square tube') || (shape.includes('square') && shape.includes('tube'))) {
     matchedShape = 'square tube';
@@ -53,6 +81,8 @@ const formatDimensions = (item) => {
   } else {
     if (wid > 0 && thk > 0 && len > 0 && dia === 0 && od === 0) {
       matchedShape = 'plate';
+    } else if (getHollowPipeId(item, od, thk, dia) > 0) {
+      matchedShape = 'pipe';
     } else if (dia > 0) {
       matchedShape = 'round bar';
     } else if (od > 0 && thk > 0) {
@@ -67,6 +97,7 @@ const formatDimensions = (item) => {
       matchedShape = 'plate';
     }
   }
+  matchedShape = resolveDiameterlessShape(matchedShape, dia, od, wid, thk);
 
   const n = (val) => {
     if (val === undefined || val === null || val === '' || isNaN(parseFloat(val)) || parseFloat(val) === 0) return null;
@@ -77,7 +108,11 @@ const formatDimensions = (item) => {
   let prefix = '';
   let dimStr = '';
 
-  if (matchedShape === 'plate') {
+  if (matchedShape === 'flange') {
+    // Flange: OD (outer_diameter) × ID (diameter) × T (thickness)
+    prefix = 'FLG';
+    dimStr = [od > 0 ? `OD${n(od)}` : null, dia > 0 ? `ID${n(dia)}` : null, n(thk)].filter(Boolean).join(' × ');
+  } else if (matchedShape === 'plate') {
     prefix = 'PL';
     dimStr = [n(wid), n(len), n(thk)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'flat bar') {
@@ -99,8 +134,14 @@ const formatDimensions = (item) => {
     dimStr = [n(wid), n(od), n(len)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'pipe') {
     prefix = 'PIPE';
-    const odVal = od > 0 ? od : dia;
-    dimStr = [`OD${n(odVal)}`, n(thk), n(len)].filter(Boolean).join(' × ');
+    const hollowId = getHollowPipeId(item, od, thk, dia);
+    if (hollowId > 0) {
+      // Pipe Calculation 2 (Hollow): OD × ID × L
+      dimStr = [`OD${n(od)}`, `ID${n(hollowId)}`, n(len)].filter(Boolean).join(' × ');
+    } else {
+      const odVal = od > 0 ? od : dia;
+      dimStr = [`OD${n(odVal)}`, n(thk), n(len)].filter(Boolean).join(' × ');
+    }
   } else if (matchedShape === 'square tube') {
     prefix = 'SQT';
     dimStr = [n(wid), n(thk), n(len)].filter(Boolean).join(' × ');
@@ -129,4 +170,4 @@ const formatDimensions = (item) => {
   return `${prefix} ${dimStr} mm`.trim();
 };
 
-module.exports = { formatDimensions };
+module.exports = { formatDimensions, getHollowPipeId, resolveDiameterlessShape };

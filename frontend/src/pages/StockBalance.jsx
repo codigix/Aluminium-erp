@@ -18,6 +18,7 @@ import {
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions } from '../utils/formatters';
+import { PipeCalcFields, FlangeFields, isFlangeShape } from '../components/ShapeCalcFields.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -160,7 +161,13 @@ const StockBalance = () => {
     if (density <= 0 || !shape) return;
 
     let calculatedWeight = 0;
-    if (shape === 'plate') {
+    if (shape.includes('flange')) {
+      // Flange: π/4 × (OD² − ID²) × T (ID in diameter)
+      const od = parseFloat(newItem.outerDiameter) || 0;
+      const id = parseFloat(newItem.diameter) || 0;
+      const t = parseFloat(newItem.thickness) || 0;
+      if (od > id && t > 0) calculatedWeight = (Math.PI * (Math.pow(od, 2) - Math.pow(id, 2)) / 4 * t * density) / 1000000;
+    } else if (shape === 'plate') {
       const l = parseFloat(newItem.length) || 0;
       const w = parseFloat(newItem.width) || 0;
       const t = parseFloat(newItem.thickness) || 0;
@@ -211,7 +218,13 @@ const StockBalance = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(newItem)
+        // Calculation method saved separately from the shape: Flange / Pipe Calculation 2; anything else = standard
+        body: JSON.stringify({
+          ...newItem,
+          calcMethod: isFlangeShape(selectedNewShapeName)
+            ? 'FLANGE'
+            : (selectedNewShapeName === 'pipe' && newItem.calcMethod === 'PIPE_HOLLOW' ? 'PIPE_HOLLOW' : '')
+        })
       });
 
       if (!response.ok) {
@@ -730,11 +743,38 @@ const StockBalance = () => {
                     <div className="space-y-1"><label className="text-xs text-slate-500">Diameter (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.diameter} onChange={e => setNewItem(p => ({ ...p, diameter: e.target.value }))} /></div>
                     <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.length} onChange={e => setNewItem(p => ({ ...p, length: e.target.value }))} /></div>
                   </>)}
-                  {selectedNewShapeName === 'pipe' && (<>
-                    <div className="space-y-1"><label className="text-xs text-slate-500">Outer Dia (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.outerDiameter} onChange={e => setNewItem(p => ({ ...p, outerDiameter: e.target.value }))} /></div>
-                    <div className="space-y-1"><label className="text-xs text-slate-500">Thickness (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.thickness} onChange={e => setNewItem(p => ({ ...p, thickness: e.target.value }))} /></div>
-                    <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.length} onChange={e => setNewItem(p => ({ ...p, length: e.target.value }))} /></div>
-                  </>)}
+                  {selectedNewShapeName === 'pipe' && (
+                    <PipeCalcFields
+                      od={newItem.outerDiameter}
+                      thickness={newItem.thickness}
+                      length={newItem.length}
+                      diameter={newItem.diameter}
+                      setOd={(v) => setNewItem(p => ({ ...p, outerDiameter: v }))}
+                      setThickness={(v) => setNewItem(p => ({ ...p, thickness: v }))}
+                      setLength={(v) => setNewItem(p => ({ ...p, length: v }))}
+                      setDiameter={(v) => setNewItem(p => ({ ...p, diameter: v }))}
+                      defaultMethod={newItem.calcMethod || ''}
+                      onMethodChange={(m) => setNewItem(p => ({ ...p, calcMethod: m }))}
+                      inputClass="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none"
+                      labelClass="text-xs text-slate-500"
+                      selectWrapClass="col-span-3 space-y-1"
+                      required={false}
+                    />
+                  )}
+                  {isFlangeShape(selectedNewShapeName) && (
+                    <FlangeFields
+                      od={newItem.outerDiameter}
+                      diameter={newItem.diameter}
+                      thickness={newItem.thickness}
+                      setOd={(v) => setNewItem(p => ({ ...p, outerDiameter: v }))}
+                      setDiameter={(v) => setNewItem(p => ({ ...p, diameter: v }))}
+                      setThickness={(v) => setNewItem(p => ({ ...p, thickness: v }))}
+                      inputClass="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none"
+                      labelClass="text-xs text-slate-500"
+                      noteClass="col-span-3"
+                      required={false}
+                    />
+                  )}
                   {selectedNewShapeName.includes('square tube') && (<>
                     <div className="space-y-1"><label className="text-xs text-slate-500">Side A (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.width} onChange={e => setNewItem(p => ({ ...p, width: e.target.value }))} /></div>
                     <div className="space-y-1"><label className="text-xs text-slate-500">Thickness (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.thickness} onChange={e => setNewItem(p => ({ ...p, thickness: e.target.value }))} /></div>

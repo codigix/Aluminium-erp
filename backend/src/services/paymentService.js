@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { getHollowPipeId, resolveDiameterlessShape } = require('../utils/formatDimensions');
 const puppeteer = require('puppeteer');
 const mustache = require('mustache');
 const path = require('path');
@@ -1215,7 +1216,8 @@ const formatDimensions = (item) => {
   ).toLowerCase();
 
   let matchedShape = '';
-  if (shape.includes('threaded') || shape.includes('thread')) matchedShape = 'threaded rod';
+  if (shape.includes('flange')) matchedShape = 'flange';
+  else if (shape.includes('threaded') || shape.includes('thread')) matchedShape = 'threaded rod';
   else if (shape.includes('square tube') || (shape.includes('square') && shape.includes('tube'))) matchedShape = 'square tube';
   else if (shape.includes('rectangular tube') || shape.includes('rect tube') || (shape.includes('rect') && shape.includes('tube'))) matchedShape = 'rectangular tube';
   else if (shape.includes('square bar') || (shape.includes('square') && shape.includes('bar'))) matchedShape = 'square bar';
@@ -1228,6 +1230,7 @@ const formatDimensions = (item) => {
   else if (shape.includes('flat')) matchedShape = 'flat bar';
   else if (shape.includes('pipe') || shape.includes('tube')) matchedShape = 'pipe';
   else if (shape.includes('round') || shape.includes('rod') || shape.includes('bar')) matchedShape = 'round bar';
+  else if (getHollowPipeId(item, od, thk, dia) > 0) matchedShape = 'pipe';
   else if (dia > 0) matchedShape = 'round bar';
   else if (od > 0 && thk > 0) matchedShape = 'pipe';
   else if (wid > 0 && thk > 0 && len > 0) matchedShape = 'plate';
@@ -1239,8 +1242,12 @@ const formatDimensions = (item) => {
     return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1);
   };
 
+  matchedShape = resolveDiameterlessShape(matchedShape, dia, od, wid, thk);
   let prefix = '', dimParts = [];
-  if (matchedShape === 'plate')              { prefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
+  const hollowId = matchedShape === 'pipe' ? getHollowPipeId(item, od, thk, dia) : 0;
+  if (matchedShape === 'flange')             { prefix = 'FLG';  dimParts = [od > 0 ? `OD${nf(od)}` : null, dia > 0 ? `ID${nf(dia)}` : null, nf(thk)]; }
+  else if (matchedShape === 'pipe' && hollowId > 0) { prefix = 'PIPE'; dimParts = [`OD${nf(od)}`, `ID${nf(hollowId)}`, nf(len)]; }
+  else if (matchedShape === 'plate')         { prefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
   else if (matchedShape === 'flat bar')      { prefix = 'FL';   dimParts = [nf(wid), nf(thk), nf(len)]; }
   else if (matchedShape === 'round bar')     { prefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
   else if (matchedShape === 'hexagonal bar') { prefix = 'HEX';  dimParts = [`AF${nf(wid)}`, nf(len)]; }
@@ -1420,7 +1427,8 @@ const generateVendorInvoicePDF = async (id, type) => {
           const nf = (v) => { if (!v || isNaN(parseFloat(v))) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
 
           let matchedShape = '';
-          if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) matchedShape = 'threaded rod';
+          if (shapeRaw.includes('flange')) matchedShape = 'flange';
+          else if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) matchedShape = 'threaded rod';
           else if (shapeRaw.includes('square tube')) matchedShape = 'square tube';
           else if (shapeRaw.includes('rectangular tube')) matchedShape = 'rectangular tube';
           else if (shapeRaw.includes('square bar')) matchedShape = 'square bar';
@@ -1434,13 +1442,19 @@ const generateVendorInvoicePDF = async (id, type) => {
           else if (shapeRaw.includes('pipe') || shapeRaw.includes('tube')) matchedShape = 'pipe';
           else if (shapeRaw.includes('round') || shapeRaw.includes('rod') || shapeRaw.includes('bar')) {
             if (thk > 0) matchedShape = 'threaded rod'; else matchedShape = 'round bar';
+          } else if (getHollowPipeId(item, od, thk, dia) > 0) {
+            matchedShape = 'pipe';
           } else if (dia > 0) {
             if (thk > 0) matchedShape = 'threaded rod'; else matchedShape = 'round bar';
           } else if (od > 0 && thk > 0) matchedShape = 'pipe';
           else if (wid > 0 && thk > 0 && len > 0) matchedShape = 'plate';
 
           let dimPrefix = '', dimParts = [];
-          if (matchedShape === 'plate')           { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
+          matchedShape = resolveDiameterlessShape(matchedShape, dia, od, wid, thk);
+          const hollowId = matchedShape === 'pipe' ? getHollowPipeId(item, od, thk, dia) : 0;
+          if (matchedShape === 'flange')          { dimPrefix = 'FLG';  dimParts = [od > 0 ? `OD${nf(od)}` : null, dia > 0 ? `ID${nf(dia)}` : null, nf(thk)]; }
+          else if (matchedShape === 'pipe' && hollowId > 0) { dimPrefix = 'PIPE'; dimParts = [`OD${nf(od)}`, `ID${nf(hollowId)}`, nf(len)]; }
+          else if (matchedShape === 'plate')      { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
           else if (matchedShape === 'flat bar')   { dimPrefix = 'FL';   dimParts = [nf(wid), nf(thk), nf(len)]; }
           else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
           else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [`AF${nf(wid)}`, nf(len)]; }
@@ -1535,7 +1549,10 @@ const generateVendorInvoicePDF = async (id, type) => {
           const density = parseFloat(item.density || 7.85);
           const shapeStr = String(item.shape_type || item.shape_name || item.shape || item.material_name || '').trim().toLowerCase();
 
-          if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
+          if (shapeStr.includes('pipe') && od > 0 && thk > 0 && dia > 0 && Math.abs((od - 2 * thk) - dia) < 0.01) { /* Pipe Calculation 2 (Hollow): π/4 × (OD² − ID²) × L */ weightVal = (Math.PI * (Math.pow(od, 2) - Math.pow(dia, 2)) / 4 * len * density) / 1000000; } else if (shapeStr.includes('flange')) {
+            // Flange: π/4 × (OD² − ID²) × T (ID stored in diameter)
+            if (od > 0 && thk > 0 && od > dia) weightVal = (Math.PI * (Math.pow(od, 2) - Math.pow(dia, 2)) / 4 * thk * density) / 1000000;
+          } else if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
             const dVal = dia > 0 ? dia : od;
             const pVal = parseFloat(item.thread_pitch || item.threadPitch || item.dimensions?.thread_pitch || item.dimensions?.threadPitch || 0);
             if (dVal > 0 && pVal > 0 && pVal < dVal && len > 0) {
@@ -1575,7 +1592,8 @@ const generateVendorInvoicePDF = async (id, type) => {
         const nf = (v) => { if (!v || isNaN(parseFloat(v))) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
 
         let matchedShape = '';
-        if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) matchedShape = 'threaded rod';
+        if (shapeRaw.includes('flange')) matchedShape = 'flange';
+          else if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) matchedShape = 'threaded rod';
         else if (shapeRaw.includes('square tube') || (shapeRaw.includes('square') && shapeRaw.includes('tube'))) matchedShape = 'square tube';
         else if (shapeRaw.includes('rectangular tube') || shapeRaw.includes('rect tube') || (shapeRaw.includes('rect') && shapeRaw.includes('tube'))) matchedShape = 'rectangular tube';
         else if (shapeRaw.includes('square bar') || (shapeRaw.includes('square') && shapeRaw.includes('bar'))) matchedShape = 'square bar';
@@ -1591,6 +1609,7 @@ const generateVendorInvoicePDF = async (id, type) => {
           if (thk > 0) matchedShape = 'threaded rod';
           else matchedShape = 'round bar';
         }
+        else if (getHollowPipeId(item, od, thk, dia) > 0) matchedShape = 'pipe';
         else if (dia > 0) {
           if (thk > 0) matchedShape = 'threaded rod';
           else matchedShape = 'round bar';
@@ -1599,7 +1618,11 @@ const generateVendorInvoicePDF = async (id, type) => {
         else if (wid > 0 && thk > 0 && len > 0) matchedShape = 'plate';
 
         let dimPrefix = '', dimParts = [];
-        if (matchedShape === 'plate')           { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
+        matchedShape = resolveDiameterlessShape(matchedShape, dia, od, wid, thk);
+          const hollowId = matchedShape === 'pipe' ? getHollowPipeId(item, od, thk, dia) : 0;
+          if (matchedShape === 'flange')          { dimPrefix = 'FLG';  dimParts = [od > 0 ? `OD${nf(od)}` : null, dia > 0 ? `ID${nf(dia)}` : null, nf(thk)]; }
+          else if (matchedShape === 'pipe' && hollowId > 0) { dimPrefix = 'PIPE'; dimParts = [`OD${nf(od)}`, `ID${nf(hollowId)}`, nf(len)]; }
+          else if (matchedShape === 'plate')      { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
         else if (matchedShape === 'flat bar')   { dimPrefix = 'FL';   dimParts = [nf(wid), nf(thk), nf(len)]; }
         else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
         else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [`AF${nf(wid)}`, nf(len)]; }

@@ -1697,7 +1697,10 @@ const getItemBOMDetails = async (salesOrderItemId, drawingNoHint = null, itemCod
           const density = parseFloat(item.density || 7.85);
           const shapeStr = String(item.shape_type || item.shape_name || item.shape || item.material_name || '').trim().toLowerCase();
 
-          if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
+          if (shapeStr.includes('pipe') && od > 0 && thk > 0 && dia > 0 && Math.abs((od - 2 * thk) - dia) < 0.01) { /* Pipe Calculation 2 (Hollow): π/4 × (OD² − ID²) × L */ weightVal = (Math.PI * (Math.pow(od, 2) - Math.pow(dia, 2)) / 4 * len * density) / 1000000; } else if (shapeStr.includes('flange')) {
+            // Flange: π/4 × (OD² − ID²) × T (ID stored in diameter)
+            if (od > 0 && thk > 0 && od > dia) weightVal = (Math.PI * (Math.pow(od, 2) - Math.pow(dia, 2)) / 4 * thk * density) / 1000000;
+          } else if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
             const dVal = dia > 0 ? dia : od;
             const pVal = parseFloat(item.thread_pitch || item.threadPitch || 0);
             if (dVal > 0 && pVal > 0 && pVal < dVal && len > 0) {
@@ -2060,7 +2063,10 @@ const getItemBOMDetails = async (salesOrderItemId, drawingNoHint = null, itemCod
             const density = parseFloat(item.density || 7.85);
             const shapeStr = String(item.shape_type || item.shape_name || item.shape || item.material_name || '').trim().toLowerCase();
 
-            if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
+            if (shapeStr.includes('pipe') && od > 0 && thk > 0 && dia > 0 && Math.abs((od - 2 * thk) - dia) < 0.01) { /* Pipe Calculation 2 (Hollow): π/4 × (OD² − ID²) × L */ weightVal = (Math.PI * (Math.pow(od, 2) - Math.pow(dia, 2)) / 4 * len * density) / 1000000; } else if (shapeStr.includes('flange')) {
+              // Flange: π/4 × (OD² − ID²) × T (ID stored in diameter)
+              if (od > 0 && thk > 0 && od > dia) weightVal = (Math.PI * (Math.pow(od, 2) - Math.pow(dia, 2)) / 4 * thk * density) / 1000000;
+            } else if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
               const dVal = dia > 0 ? dia : od;
               const pVal = parseFloat(item.thread_pitch || item.threadPitch || 0);
               if (dVal > 0 && pVal > 0 && pVal < dVal && len > 0) {
@@ -2801,9 +2807,28 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
                COALESCE(NULLIF(ppm.outer_diameter, 0), actual_sb.outer_diameter, 0) as outer_diameter,
                COALESCE(NULLIF(ppm.density, 0), actual_sb.density, 0) as density,
                COALESCE(NULLIF(ppm.weight_per_unit, 0), actual_sb.weight_per_unit, 0) as weight_per_unit,
+               -- BOM match by name + sizes → BOM row of the same part / drawing with the same sizes (names may differ,
+               -- read-only) → Item Master shape only when the material has ONE shape in stock
                COALESCE(
                  shape_lookup.shape_name,
-                 (SELECT name FROM shapes WHERE id = actual_sb.shape_id LIMIT 1)
+                 (SELECT MAX(s3.name)
+                    FROM sales_order_item_materials som3
+                    JOIN sales_order_items soi3 ON soi3.id = som3.sales_order_item_id
+                    JOIN shapes s3 ON s3.id = som3.shape_id
+                   WHERE (soi3.item_code = ppm.item_code OR (ppm.bom_ref IS NOT NULL AND ppm.bom_ref <> '' AND soi3.drawing_no = ppm.bom_ref))
+                     AND ABS(COALESCE(som3.length, 0) - COALESCE(ppm.length, 0)) < 0.0001
+                     AND ABS(COALESCE(som3.width, 0) - COALESCE(ppm.width, 0)) < 0.0001
+                     AND ABS(COALESCE(som3.thickness, 0) - COALESCE(ppm.thickness, 0)) < 0.0001
+                     AND ABS(COALESCE(som3.diameter, 0) - COALESCE(ppm.diameter, 0)) < 0.0001
+                     AND ABS(COALESCE(som3.outer_diameter, 0) - COALESCE(ppm.outer_diameter, 0)) < 0.0001
+                     AND (COALESCE(ppm.length, 0) + COALESCE(ppm.width, 0) + COALESCE(ppm.thickness, 0) + COALESCE(ppm.diameter, 0) + COALESCE(ppm.outer_diameter, 0)) > 0
+                  HAVING COUNT(DISTINCT som3.shape_id) = 1),
+                 (SELECT MAX(s2.name) FROM stock_balance sb2 JOIN shapes s2 ON s2.id = sb2.shape_id
+                   WHERE (sb2.material_name = ppm.material_name OR sb2.item_code = ppm.item_code)
+                     AND ABS(COALESCE(sb2.length, 0) - COALESCE(ppm.length, 0)) < 0.0001 AND ABS(COALESCE(sb2.width, 0) - COALESCE(ppm.width, 0)) < 0.0001
+                     AND ABS(COALESCE(sb2.thickness, 0) - COALESCE(ppm.thickness, 0)) < 0.0001 AND ABS(COALESCE(sb2.diameter, 0) - COALESCE(ppm.diameter, 0)) < 0.0001
+                     AND ABS(COALESCE(sb2.outer_diameter, 0) - COALESCE(ppm.outer_diameter, 0)) < 0.0001
+                   HAVING COUNT(DISTINCT sb2.shape_id) = 1)
                ) as shape_type
         FROM production_plan_materials ppm
         LEFT JOIN (

@@ -3,6 +3,7 @@ import Swal from 'sweetalert2';
 import { CheckCircle2, XCircle, Clock, Search, RefreshCw, Eye, Download } from 'lucide-react';
 import { Modal } from '../components/ui.jsx';
 import { successToast, errorToast } from '../utils/toast';
+import { formatDimensions } from '../utils/formatters';
 
 // Admin: Purchase Order approval queue.
 // Approve → PO status ORDERED + PO approval code (PA-YYYY-MM-####). Reject → back to Draft with remarks.
@@ -331,7 +332,12 @@ const POApprovals = ({ onCountChange }) => {
                       <tr key={i.id || idx} className="border-t border-slate-50">
                         <td className="p-2 text-slate-400">{idx + 1}</td>
                         <td className="p-2 font-medium text-slate-800">{i.drawing_no || i.item_code || '—'}</td>
-                        <td className="p-2 text-slate-600">{i.description || i.material_name || '—'}</td>
+                        <td className="p-2 text-slate-600">
+                          {i.description || i.material_name || '—'}
+                          {formatDimensions(i) && (
+                            <div className="text-[11px] font-mono text-indigo-600 mt-0.5">{formatDimensions(i)}</div>
+                          )}
+                        </td>
                         <td className="p-2 text-right">{Number(i.quantity || 0).toFixed(3)} {i.unit || ''}</td>
                         <td className="p-2 text-right">{formatCurrency(i.unit_rate)}</td>
                         <td className="p-2 text-right">{(Number(i.cgst_percent) || 0) + (Number(i.sgst_percent) || 0) + (Number(i.igst_percent) || 0)}%</td>

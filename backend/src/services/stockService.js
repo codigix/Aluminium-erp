@@ -340,6 +340,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       diameter: balance.diameter,
       outer_diameter: balance.outer_diameter,
       density: balance.density,
+      calc_method: balance.calc_method || null,
       warehouse: balance.warehouse,
       hsn_code: balance.hsn_code,
       min_stock: parseFloat(balance.min_stock || 0),
@@ -378,6 +379,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
         MAX(sb.diameter) as diameter,
         MAX(sb.outer_diameter) as outer_diameter,
         MAX(sb.density) as density,
+        MAX(sb.calc_method) as calc_method,
         MAX(sb.warehouse) as warehouse,
         COALESCE(MAX(sb.hsn_code), MAX(d.hsn_code)) as hsn_code,
         MAX(sb.last_updated) as last_updated,
@@ -468,6 +470,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       diameter: balance.diameter,
       outer_diameter: balance.outer_diameter,
       density: balance.density,
+      calc_method: balance.calc_method || null,
       warehouse: balance.warehouse,
       hsn_code: balance.hsn_code,
       min_stock: parseFloat(balance.min_stock || 0),
@@ -720,8 +723,29 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     }
 
     if (existingBalance) {
-      if (!shapeId && existingBalance.shape_id) shapeId = existingBalance.shape_id;
-      if (!shapeType && existingBalance.shape_type) shapeType = existingBalance.shape_type;
+      if (!shapeId && !shapeType) {
+        // Line came without a shape: take the stock row's shape only when it fits the sizes
+        // (round / threaded rod need a diameter, pipe / flange an OD, plate / flat a width + thickness),
+        // so one wrongly-labelled stock row can't pass its shape on to new receipts.
+        let existingShapeName = existingBalance.shape_type || null;
+        if (!existingShapeName && existingBalance.shape_id) {
+          const [[sRow]] = await useConnection.query('SELECT name FROM shapes WHERE id = ? LIMIT 1', [existingBalance.shape_id]);
+          existingShapeName = sRow ? sRow.name : null;
+        }
+        const s = String(existingShapeName || '').toLowerCase();
+        const fitsSizes = !s ? false
+          : (s.includes('round') || s.includes('thread')) ? (diaV > 0 || odV > 0)
+          : (s.includes('pipe') || s.includes('flange')) ? odV > 0
+          : (s.includes('plate') || s.includes('sheet') || s.includes('flat')) ? (widV > 0 && thkV > 0)
+          : true;
+        if (fitsSizes) {
+          if (existingBalance.shape_id) shapeId = existingBalance.shape_id;
+          if (existingShapeName) shapeType = existingShapeName;
+        }
+      } else {
+        if (!shapeId && existingBalance.shape_id) shapeId = existingBalance.shape_id;
+        if (!shapeType && existingBalance.shape_type) shapeType = existingBalance.shape_type;
+      }
     }
 
     let currentBalance = existingBalance ? parseFloat(existingBalance.current_balance) || 0 : 0;
@@ -1240,8 +1264,8 @@ const createItem = async (itemData) => {
         weight_per_unit, weight_uom, drawing_no, 
         revision, material_grade,
         material_id, shape_id, length, width, thickness, 
-        diameter, outer_diameter, density, hsn_code
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        diameter, outer_diameter, density, hsn_code, calc_method
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       itemCode,
       itemData.itemName,
@@ -1263,7 +1287,8 @@ const createItem = async (itemData) => {
       itemData.diameter || null,
       itemData.outerDiameter || null,
       itemData.density || null,
-      itemData.hsnCode || null
+      itemData.hsnCode || null,
+      itemData.calcMethod || null
     ]);
 
     await connection.commit();
@@ -1304,7 +1329,7 @@ const updateItem = async (id, itemData) => {
         weight_per_unit = ?, weight_uom = ?, drawing_no = ?, 
         revision = ?, material_grade = ?,
         material_id = ?, shape_id = ?, length = ?, width = ?, thickness = ?, 
-        diameter = ?, outer_diameter = ?, density = ?, hsn_code = ?,
+        diameter = ?, outer_diameter = ?, density = ?, hsn_code = ?, calc_method = ?,
         last_updated = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
@@ -1329,6 +1354,7 @@ const updateItem = async (id, itemData) => {
       itemData.outerDiameter || null,
       itemData.density || null,
       itemData.hsnCode || null,
+      itemData.calcMethod || null,
       id
     ]);
 

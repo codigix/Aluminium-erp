@@ -967,6 +967,20 @@ const ensureStockColumns = async () => {
       console.log('Stock Balance material columns synchronized');
     }
 
+    // Item Master calculation method, kept separate from the shape (NULL = existing/standard calculation)
+    if (!existingBalanceCols.has('calc_method')) {
+      await connection.query('ALTER TABLE stock_balance ADD COLUMN `calc_method` VARCHAR(30) NULL');
+      console.log('Stock Balance calc_method column added');
+    }
+    // Flange shape (additive; existing shapes untouched)
+    try {
+      await connection.query(
+        "INSERT INTO shapes (name, status) SELECT 'Flange', 'ACTIVE' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM shapes WHERE LOWER(TRIM(name)) = 'flange')"
+      );
+    } catch (e) {
+      if (e.code !== 'ER_NO_SUCH_TABLE') console.error('Flange shape seed failed:', e.message);
+    }
+
     // Drop unique_item_warehouse unique index if it exists, and replace with non-unique index
     const [indexes] = await connection.query('SHOW INDEX FROM stock_balance');
     const oldUniqueIndex = indexes.find(idx => idx.Key_name === 'unique_item_warehouse' && idx.Non_unique === 0);

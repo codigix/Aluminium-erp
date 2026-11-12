@@ -6,6 +6,7 @@ import { Plus, Search, RefreshCw, Package, Layers, Trash2, Edit2, Copy, AlertTri
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
 import { formatDimensions, calculateWeight, validateShapeDimensions } from '../utils/formatters';
+import { isHollowPipeRow } from '../components/ShapeCalcFields.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -60,7 +61,9 @@ const ItemsMaster = () => {
     diameter: '',
     outerDiameter: '',
     threadPitch: '',
-    hsnCode: ''
+    hsnCode: '',
+    calcMethod: '',     // '' = standard (Pipe Calculation 1), 'PIPE_HOLLOW', 'FLANGE'
+    innerDiameter: ''   // Pipe Calculation 2 input only (saved as thickness = (OD − ID) / 2)
   });
   const [isSubmittingItem, setIsSubmittingItem] = useState(false);
 
@@ -112,7 +115,12 @@ const ItemsMaster = () => {
       thickness: item.thickness || '',
       diameter: item.diameter || '',
       outerDiameter: item.outer_diameter || '',
-      hsnCode: item.hsn_code || ''
+      hsnCode: item.hsn_code || '',
+      calcMethod: item.calc_method || (isHollowPipeRow(item.outer_diameter, item.thickness, item.diameter) ? 'PIPE_HOLLOW' : ''),
+      // Pipe Calculation 2 stores the wall as (OD − ID) / 2, so ID = OD − 2T
+      innerDiameter: ((item.calc_method === 'PIPE_HOLLOW' || isHollowPipeRow(item.outer_diameter, item.thickness, item.diameter)) && parseFloat(item.outer_diameter) > 0)
+        ? String(parseFloat((parseFloat(item.outer_diameter) - 2 * (parseFloat(item.thickness) || 0)).toFixed(4)))
+        : ''
     });
   };
 
@@ -420,6 +428,38 @@ const ItemsMaster = () => {
         payload.thickness = payload.threadPitch || payload.thread_pitch || payload.thickness || 0;
       }
 
+      // Calculation method is stored separately from the shape. Only Pipe (Calc 2) and Flange set it;
+      // every other shape (and Pipe Calculation 1) keeps it empty = existing calculation.
+      if (shapeName === 'pipe' && payload.calcMethod === 'PIPE_HOLLOW') {
+        const od = parseFloat(payload.outerDiameter) || 0;
+        const id = parseFloat(payload.innerDiameter) || 0;
+        if (!(od > 0 && id > 0 && id < od)) {
+          errorToast('Pipe Calculation 2: Inner Diameter must be greater than 0 and less than the Outer Diameter.');
+          setIsSubmittingItem(false);
+          return;
+        }
+        // Wall = (OD − ID) / 2 → existing pipe formula gives exactly π/4 × (OD² − ID²) × L everywhere downstream
+        payload.thickness = parseFloat(((od - id) / 2).toFixed(4));
+        payload.diameter = id; // ID kept for display "PIPE OD × ID × L" across all modules
+      } else if (shapeName.includes('flange')) {
+        const od = parseFloat(payload.outerDiameter) || 0;
+        const id = parseFloat(payload.diameter) || 0;
+        if (!(od > 0 && (parseFloat(payload.thickness) || 0) > 0) || id >= od) {
+          errorToast('Flange: enter OD and T, and the Inner Diameter must be less than the Outer Diameter.');
+          setIsSubmittingItem(false);
+          return;
+        }
+        payload.calcMethod = 'FLANGE';
+        payload.length = '';
+      } else {
+        payload.calcMethod = '';
+        // Switched back to Pipe Calculation 1: drop the Pipe 2 ID so it shows as OD × T × L again
+        if (shapeName === 'pipe' && isHollowPipeRow(payload.outerDiameter, payload.thickness, payload.diameter)) {
+          payload.diameter = '';
+        }
+      }
+      delete payload.innerDiameter;
+
       const response = await fetch(url, {
         method: method,
         headers: {
@@ -466,7 +506,9 @@ const ItemsMaster = () => {
       thickness: '',
       diameter: '',
       outerDiameter: '',
-      hsnCode: ''
+      hsnCode: '',
+      calcMethod: '',
+      innerDiameter: ''
     });
     setIsEditingItem(false);
     setEditingItemId(null);
@@ -906,6 +948,12 @@ const ItemsMaster = () => {
 
   const selectedShapeObj = shapes.find(s => String(s.id) === String(itemFormData.shapeId) || String(s.name).trim().toLowerCase() === String(itemFormData.shapeId || '').trim().toLowerCase());
   const selectedShape = String(selectedShapeObj?.name || itemFormData.shapeId || '').trim();
+  const isPipeShape = selectedShape.toLowerCase() === 'pipe';
+  const isFlangeShape = selectedShape.toLowerCase().includes('flange');
+  const isHollowPipe = isPipeShape && itemFormData.calcMethod === 'PIPE_HOLLOW';
+  const hollowOd = parseFloat(itemFormData.outerDiameter) || 0;
+  const hollowId = parseFloat(itemFormData.innerDiameter) || 0;
+  const hollowThickness = (hollowOd > 0 && hollowId > 0 && hollowId < hollowOd) ? parseFloat(((hollowOd - hollowId) / 2).toFixed(4)) : 0;
 
   // Auto-calculate Weight per Unit
   useEffect(() => {
@@ -914,7 +962,8 @@ const ItemsMaster = () => {
       density: itemFormData.density,
       length: itemFormData.length,
       width: itemFormData.width,
-      thickness: itemFormData.thickness,
+      // Pipe Calculation 2: wall = (OD − ID) / 2 → π/4 × (OD² − ID²) × L
+      thickness: isHollowPipe ? hollowThickness : itemFormData.thickness,
       diameter: itemFormData.diameter,
       outerDiameter: itemFormData.outerDiameter,
       threadPitch: itemFormData.threadPitch
@@ -934,7 +983,9 @@ const ItemsMaster = () => {
     itemFormData.diameter, 
     itemFormData.outerDiameter, 
     itemFormData.threadPitch,
-    itemFormData.density, 
+    itemFormData.density,
+    itemFormData.calcMethod,
+    itemFormData.innerDiameter,
     selectedShape
   ]);
 
@@ -1361,7 +1412,62 @@ const ItemsMaster = () => {
                                 </div>
                               </>
                             )}
-                            {selectedShape.toLowerCase() === 'pipe' && (
+                            {isPipeShape && (
+                              <div className="space-y-1.5 md:col-span-4">
+                                <label className="text-xs font-semibold text-slate-400">Select Pipe Calculation *</label>
+                                <select
+                                  className="w-full md:w-1/2 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                                  value={itemFormData.calcMethod === 'PIPE_HOLLOW' ? 'PIPE_HOLLOW' : ''}
+                                  onChange={(e) => setItemFormData({ ...itemFormData, calcMethod: e.target.value })}
+                                >
+                                  <option value="">Pipe Calculation 1 – OD × Thickness × Length</option>
+                                  <option value="PIPE_HOLLOW">Pipe Calculation 2 – Hollow Pipe (OD × ID × Length)</option>
+                                </select>
+                              </div>
+                            )}
+                            {isHollowPipe && (
+                              <>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Outer Diameter (OD) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.outerDiameter} onChange={(e) => setItemFormData({...itemFormData, outerDiameter: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Inner Diameter (ID) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.innerDiameter} onChange={(e) => setItemFormData({...itemFormData, innerDiameter: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Length (L) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5 md:col-span-4 text-[11px] text-indigo-700">
+                                  V = π/4 × (OD² − ID²) × L
+                                  {hollowThickness > 0 && <span className="text-slate-500"> · Wall thickness = {hollowThickness} mm</span>}
+                                  {hollowOd > 0 && hollowId > 0 && hollowId >= hollowOd && (
+                                    <span className="ml-2 text-amber-700 font-semibold">⚠️ Inner Diameter must be less than the Outer Diameter.</span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                            {isFlangeShape && (
+                              <>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Outer Diameter (OD) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.outerDiameter} onChange={(e) => setItemFormData({...itemFormData, outerDiameter: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Inner Diameter (ID) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.diameter} onChange={(e) => setItemFormData({...itemFormData, diameter: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Thickness (T) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5 md:col-span-4 text-[11px] text-indigo-700">
+                                  V = π/4 × (OD² − ID²) × T <span className="text-slate-500">(without bolt-hole deduction)</span>
+                                </div>
+                              </>
+                            )}
+                            {isPipeShape && !isHollowPipe && (
                               <>
                                 <div className="space-y-1.5">
                                   <label className="text-xs    font-semibold text-slate-400">Outer Diameter (mm) *</label>
@@ -1457,7 +1563,7 @@ const ItemsMaster = () => {
                               const valResult = validateShapeDimensions({
                                 shape: selectedShape,
                                 width: itemFormData.width,
-                                thickness: itemFormData.thickness,
+                                thickness: isHollowPipe ? hollowThickness : itemFormData.thickness,
                                 diameter: itemFormData.diameter,
                                 outerDiameter: itemFormData.outerDiameter,
                                 outer_diameter: itemFormData.outerDiameter,
@@ -1523,6 +1629,17 @@ const ItemsMaster = () => {
                   value={itemFormData.valuationRate === undefined || itemFormData.valuationRate === null ? '' : itemFormData.valuationRate}
                   onChange={(e) => setItemFormData({...itemFormData, valuationRate: e.target.value})}
                 />
+                {(() => {
+                  // Material valuation (display only): calculated weight × valuation rate
+                  const wt = parseFloat(itemFormData.weightPerUnit) || 0;
+                  const rate = parseFloat(itemFormData.valuationRate) || 0;
+                  if (!selectedShape || wt <= 0 || rate <= 0 || String(itemFormData.weightUom || '').toLowerCase() !== 'kg') return null;
+                  return (
+                    <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-2 py-1">
+                      Material Value: {wt} kg × ₹{rate} = <span className="font-semibold">₹{(wt * rate).toFixed(2)}</span>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="space-y-2">
                 <label className="text-xs  text-slate-500  ">HSN Code</label>

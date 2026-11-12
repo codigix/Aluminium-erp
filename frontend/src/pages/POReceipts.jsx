@@ -513,6 +513,45 @@ const POReceipts = () => {
     }
   };
 
+  // ── GRN "Select Drawing" list (UI only) ─────────────────────────────────────
+  // Same pending rule as handlePoChange below: a PO is listed only while at least one line still has
+  // quantity (or, for weight lines, weight) left to receive. Closed / merged POs are never listed.
+  const GRN_HIDDEN_PO_STATUSES = ['MERGED', 'FULFILLED', 'COMPLETED', 'CLOSED'];
+  const getPoPendingLineCount = (po) => {
+    const lines = (po.items || []).filter(item => {
+      const type = (item.material_type || '').toUpperCase();
+      return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+    });
+    let pending = 0;
+    for (const item of lines) {
+      const dQty = parseFloat(item.planned_qty || item.design_qty || 0);
+      const reqWeight = parseFloat(item.required_weight || item.quantity || 0);
+      const rawPrevRecQty = parseFloat(item.received_qty);
+      const rawPrevRecWt = parseFloat(item.received_weight);
+      const prevRecWeight = (!isNaN(rawPrevRecWt) && rawPrevRecWt > 0) ? rawPrevRecWt : (!isNaN(rawPrevRecQty) ? rawPrevRecQty : 0);
+      const prevRecQty = (!isNaN(rawPrevRecQty) && rawPrevRecQty > 0 && Math.abs(rawPrevRecQty - prevRecWeight) > 0.001)
+        ? rawPrevRecQty
+        : (dQty > 0 && prevRecWeight >= reqWeight ? dQty : (prevRecWeight > 0 ? 1 : 0));
+      const isBoughtOut = (item.material_type || item.item_type || '').toUpperCase().trim().includes('BOUGHT') || (item.item_code && String(item.item_code).toUpperCase().startsWith('BO-'));
+      const lcStr = String(item.laser_cutting || '').trim().toUpperCase();
+      const isLaser = lcStr.includes('WITH MATERIAL') || lcStr.includes('WITHOUT MATERIAL') || lcStr === 'WITH_MATERIAL' || lcStr === 'WITHOUT_MATERIAL';
+      const pendingQty = dQty - prevRecQty;
+      const pendingWeight = reqWeight - prevRecWeight;
+      if (pendingQty > 0.0001 || (!isBoughtOut && !isLaser && pendingWeight > 0.001)) pending += 1;
+    }
+    return pending;
+  };
+  const grnDrawingOptions = purchaseOrders
+    .filter(po => po.drawing_no)
+    .map(po => ({ po, pendingLines: getPoPendingLineCount(po) }))
+    .filter(({ po, pendingLines }) =>
+      String(po.id) === String(formData.poId) || // keep the PO already chosen in this form
+      (!GRN_HIDDEN_PO_STATUSES.includes(String(po.status || '').toUpperCase()) && pendingLines > 0))
+    .map(({ po, pendingLines }) => ({
+      label: `${po.drawing_no} · ${po.po_number || `PO #${po.id}`} - ${po.finished_good || 'No description'}${pendingLines > 0 ? ` (${pendingLines} item${pendingLines > 1 ? 's' : ''} pending)` : ''}`,
+      value: String(po.id)
+    }));
+
   const handlePoChange = async (poId) => {
     const selectedPO = purchaseOrders.find(po => String(po.id) === String(poId));
     if (selectedPO) {
@@ -784,11 +823,15 @@ const POReceipts = () => {
         }
       });
 
-      if (!response.ok) throw new Error('Failed to delete receipt');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || 'Failed to delete receipt');
+      }
 
       successToast('PO Receipt deleted successfully');
       fetchReceipts();
       fetchStats();
+      fetchPurchaseOrders(); // PO is back to pending → shows again in "Select Drawing"
     } catch (error) {
       errorToast(error.message || 'Failed to delete receipt');
     }
@@ -1151,10 +1194,7 @@ const POReceipts = () => {
 
                 <FormControl label="Select Drawing *">
                   <SearchableSelect
-                    options={purchaseOrders.filter(po => po.drawing_no).map(po => ({
-                      label: `${po.drawing_no} - ${po.finished_good || 'No description'}`,
-                      value: String(po.id)
-                    }))}
+                    options={grnDrawingOptions}
                     value={formData.poId || ''}
                     onChange={(e) => handlePoChange(e.target.value)}
                     placeholder="Search & Select Drawing No..."
