@@ -1002,6 +1002,19 @@ const ensureStockColumns = async () => {
       if (e.code !== 'ER_NO_SUCH_TABLE') console.error('Stock Entries company column sync failed:', e.message);
     }
 
+    // Quotation line description / note per drawing (shown in brackets in the quotation PDF)
+    try {
+      const [qiCols] = await connection.query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'quotation_items' AND COLUMN_NAME = 'item_note'"
+      );
+      if (qiCols.length === 0) {
+        await connection.query('ALTER TABLE quotation_items ADD COLUMN `item_note` VARCHAR(500) NULL');
+        console.log('Quotation Items item_note column added');
+      }
+    } catch (e) {
+      if (e.code !== 'ER_NO_SUCH_TABLE') console.error('Quotation Items item_note column sync failed:', e.message);
+    }
+
     // Drop unique_item_warehouse unique index if it exists, and replace with non-unique index
     const [indexes] = await connection.query('SHOW INDEX FROM stock_balance');
     const oldUniqueIndex = indexes.find(idx => idx.Key_name === 'unique_item_warehouse' && idx.Non_unique === 0);

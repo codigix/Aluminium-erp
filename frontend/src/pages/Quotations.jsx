@@ -1834,6 +1834,7 @@ const Quotations = () => {
 
     // Map backend item fields to frontend BOM fields
     const mappedItems = (quotation.items || []).map(item => ({
+      id: item.id, // line id: used only to load this line's saved description below
       drawing_no: item.drawing_no || item.item_code || '',
       material_name: item.material_name || '',
       material_type: getCorrectMaterialType(item.drawing_no || item.item_code, item.material_type),
@@ -1844,6 +1845,7 @@ const Quotations = () => {
       uom: item.unit || item.uom || 'NOS',
       unit_rate: item.unit_rate || 0,
       laser_cutting: item.laser_cutting || '',
+      item_note: item.item_note || '',
       length: item.length || 0,
       width: item.width || 0,
       thickness: item.thickness || 0,
@@ -1864,11 +1866,35 @@ const Quotations = () => {
       validUntil: quotation.valid_until ? new Date(quotation.valid_until).toISOString().split('T')[0] : '',
       hostCompanyId: String(defaultHostId),
       gstPercentage: quotation.gst_percentage !== undefined && quotation.gst_percentage !== null ? parseFloat(quotation.gst_percentage) : 18,
+      notes: quotation.notes || '',
       items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
     });
     setShowEditModal(true);
     // Quotation for a Material Request with a Sales Order → company locked to that Sales Order's company
     loadEditCompanySource(quotation);
+    // Each drawing's saved Description (item_note) straight from the saved quotation, so it always shows on edit
+    loadEditItemNotes(quotation.id);
+  };
+
+  const loadEditItemNotes = async (quotationId) => {
+    if (!quotationId) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/quotations/${quotationId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!res.ok) return;
+      const detail = await res.json();
+      const noteById = new Map((detail.items || []).map(i => [String(i.id), i.item_note || '']));
+      setEditFormData(prev => ({
+        ...prev,
+        items: (prev.items || []).map(it => (
+          it.id !== undefined && noteById.has(String(it.id)) && !it.item_note
+            ? { ...it, item_note: noteById.get(String(it.id)) }
+            : it
+        ))
+      }));
+    } catch (e) {
+      // keep the list values
+    }
   };
 
   const handleEditQuotation = async (e) => {
@@ -1918,6 +1944,7 @@ const Quotations = () => {
           hostCompanyId: editFormData.hostCompanyId ? parseInt(editFormData.hostCompanyId) : null,
           gst_percentage: editFormData.gstPercentage !== undefined ? editFormData.gstPercentage : 18,
           items: editFormData.items,
+          notes: editFormData.notes !== undefined ? editFormData.notes : (selectedQuotation.notes || ''),
           received_pdf_path: finalPaths.join(','),
           status: editFormData.status || selectedQuotation.status
         })
@@ -2007,7 +2034,8 @@ const Quotations = () => {
               density: item.density || 0,
               weight_per_unit: item.weight_per_unit || 0,
               shape_type: item.shape_type || item.shape_name || item.shape || '',
-              shape_name: item.shape_name || item.shape_type || item.shape || ''
+              shape_name: item.shape_name || item.shape_type || item.shape || '',
+              item_note: item.item_note || '' // keep each drawing's description when only attachments change
             })),
             received_pdf_path: finalPaths.join(','),
             status: selectedQuotation.status
@@ -3870,13 +3898,14 @@ const Quotations = () => {
                               {recordData.items.some(i => i.laser_cutting === "With Material" || i.laser_cutting === "Without Material" || i.laser_cutting === "WITH_MATERIAL" || i.laser_cutting === "WITHOUT_MATERIAL") ? 'UNIT RATE (₹/Nos)' : 'UNIT RATE (₹/Kg)'}
                             </th>
                             <th className="p-2 text-right  text-slate-600" style={{ width: '100px' }}>AMOUNT</th>
+                            <th className="p-2  text-slate-600" style={{ width: '170px' }}>DESCRIPTION</th>
                             <th className="p-2 text-center" style={{ width: '40px' }}></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {recordData.items.length === 0 ? (
                             <tr>
-                              <td colSpan="9" className="px-3 py-8 text-center text-slate-400">
+                              <td colSpan="10" className="px-3 py-8 text-center text-slate-400">
                                 Select a project and vendor to load items, or add manually.
                               </td>
                             </tr>
@@ -4032,6 +4061,18 @@ const Quotations = () => {
                                   </td>
                                   <td className="p-2 text-right text-slate-700 font-medium">
                                     {itemAmount > 0 ? formatCurrency(itemAmount) : '—'}
+                                  </td>
+                                  <td className="p-2">
+                                    {/* Description for this drawing (carried over from the RFQ if one was added) — shown in brackets in the PDF */}
+                                    <textarea
+                                      rows={2}
+                                      maxLength={500}
+                                      placeholder="( Description )"
+                                      title={`Description / note for ${item.drawing_no || item.item_code || 'this drawing'} — shown in brackets in the PDF`}
+                                      value={item.item_note || ''}
+                                      onChange={(e) => handleRecordItemChange(idx, 'item_note', e.target.value)}
+                                      className="w-full px-2 py-1 border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-blue-500 resize-none leading-snug"
+                                    />
                                   </td>
                                   <td className="p-2 text-center">
                                     <button
@@ -4470,15 +4511,16 @@ const Quotations = () => {
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-xs   text-slate-500  ">
+                    <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-xs   text-slate-500  " style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}>
                       {activeTab === 'sent' ? (
                         <>
                           <div className="col-span-2">Drawing No</div>
-                          <div className="col-span-3">Material Name</div>
+                          <div className="col-span-2">Material Name</div>
                           <div className="col-span-1">Type</div>
                           <div className="col-span-2">Laser Cutting</div>
-                          <div className="col-span-1 text-center">Design Qty</div>
+                          <div className="col-span-2 text-center">Design Qty</div>
                           <div className="col-span-2 text-center">Required</div>
+                          <div className="col-span-2">Description</div>
                           <div className="col-span-1"></div>
                         </>
                       ) : (
@@ -4493,6 +4535,7 @@ const Quotations = () => {
                             {editFormData.items.some(i => i.laser_cutting === "With Material" || i.laser_cutting === "Without Material" || i.laser_cutting === "WITH_MATERIAL" || i.laser_cutting === "WITHOUT_MATERIAL") ? 'UNIT RATE (₹/Nos)' : 'UNIT RATE (₹/Kg)'}
                           </div>
                           <div className="col-span-1 text-right">Amount</div>
+                          <div className="col-span-2">Description</div>
                           <div className="col-span-1"></div>
                         </>
                       )}
@@ -4505,7 +4548,7 @@ const Quotations = () => {
                       const itemAmount = effectiveQty * (parseFloat(item.unit_rate) || 0);
 
                       return (
-                      <div key={idx} className="grid grid-cols-12 gap-2 items-start py-1">
+                      <div key={idx} className="grid grid-cols-12 gap-2 items-start py-1" style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}>
                         {activeTab === 'sent' ? (
                           <>
                             <input
@@ -4520,7 +4563,7 @@ const Quotations = () => {
                               }}
                               className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <div className="col-span-3 flex flex-col">
+                            <div className="col-span-2 flex flex-col">
                               <SearchableSelect
                                 options={stockItems}
                                 value={item.item_code || ''}
@@ -4785,6 +4828,22 @@ const Quotations = () => {
                             </div>
                           </>
                         )}
+                        {/* Description for this drawing — printed in brackets ( ) in the Description column of the quotation PDF */}
+                        <div className="col-span-2 flex flex-col">
+                          <textarea
+                            rows={2}
+                            maxLength={500}
+                            placeholder="( Description )"
+                            title={`Description / note for ${item.drawing_no || 'this drawing'} — shown in brackets in the PDF`}
+                            value={item.item_note || ''}
+                            onChange={(e) => {
+                              const newItems = [...editFormData.items];
+                              newItems[idx] = { ...newItems[idx], item_note: e.target.value };
+                              setEditFormData({ ...editFormData, items: newItems });
+                            }}
+                            className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none leading-snug"
+                          />
+                        </div>
                         <div className="col-span-1 flex justify-center">
                           <button
                             type="button"
@@ -4836,6 +4895,18 @@ const Quotations = () => {
               </div>
 
               {/* Attachments Section inside Edit Modal */}
+              {/* Quotation notes (same as Record Quotation); saved with the quotation and shown as "Note:" in the PDF */}
+              <div>
+                <label className="block text-xs text-slate-700 my-2">Notes (Optional)</label>
+                <textarea
+                  value={editFormData.notes || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                  placeholder="Add any notes from vendor response"
+                  className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows="3"
+                />
+              </div>
+
               {activeTab === 'received' && (
                 <div className="space-y-2 border-t border-slate-200 pt-4 mt-4">
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -5249,6 +5320,9 @@ const Quotations = () => {
                               {formatDimensions(item)}
                             </div>
                           )}
+                          {item.item_note && (
+                            <div className="text-[11px] text-slate-700 font-medium mt-0.5 whitespace-normal break-words">({item.item_note})</div>
+                          )}
                         </td>
                         <td className="p-2 text-center text-slate-700">{Number(item.quantity || 0).toFixed(3)}</td>
                         <td className="p-2 text-right text-slate-700">{formatCurrency(item.unit_rate)}</td>
@@ -5266,6 +5340,11 @@ const Quotations = () => {
                   {formatCurrency(approvalModalQuote.grand_total || approvalModalQuote.total_amount)}
                 </span>
               </div>
+              {approvalModalQuote.notes && (
+                <div className="mt-3 p-2 bg-slate-50 border border-slate-100 rounded text-xs text-slate-700 whitespace-pre-wrap">
+                  <span className="font-semibold text-slate-500">Notes: </span>{approvalModalQuote.notes}
+                </div>
+              )}
             </div>
 
             {/* Confirmation Alert Box */}

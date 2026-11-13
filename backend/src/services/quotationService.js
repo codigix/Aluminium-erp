@@ -9,6 +9,14 @@ const PDFParseClass = pdfModule.PDFParse || (pdfModule.default && pdfModule.defa
 const fs = require('fs');
 const path = require('path');
 
+// Per-drawing description / note on a quotation line (printed in brackets in the PDF Description column).
+// Stored without surrounding brackets; empty → NULL.
+const cleanItemNote = (v) => {
+  let s = String(v ?? '').replace(/\s+/g, ' ').trim();
+  while (s.startsWith('(') && s.endsWith(')')) s = s.slice(1, -1).trim();
+  return s ? s.slice(0, 500) : null;
+};
+
 const generateQuoteNumber = async () => {
   const timestamp = Date.now();
   return `QT-${timestamp}`;
@@ -185,8 +193,8 @@ const createQuotation = async (payload) => {
             quotation_id, item_code, description, material_name, material_type, drawing_no, 
             quantity, design_qty, planned_qty, unit, unit_rate, amount, 
             cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, laser_cutting
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, laser_cutting, item_note
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
@@ -214,7 +222,8 @@ const createQuotation = async (payload) => {
             parseFloat(item.density || (item.dimensions && item.dimensions.density)) || 0,
             parseFloat(item.weight_per_unit || (item.dimensions && item.dimensions.weight_per_unit)) || 0,
             item.shape_type || item.shape_name || item.shape || null,
-            item.laser_cutting || null
+            item.laser_cutting || null,
+            cleanItemNote(item.item_note)
           ]
         );
       }
@@ -904,8 +913,8 @@ const updateQuotation = async (quotationId, payload) => {
             quotation_id, item_code, description, material_name, material_type, 
             drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, 
             amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, laser_cutting
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, laser_cutting, item_note
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             newQuotationId,
             correctedItemCode,
@@ -932,7 +941,8 @@ const updateQuotation = async (quotationId, payload) => {
             parseFloat(item.density || (item.dimensions && item.dimensions.density)) || 0,
             parseFloat(item.weight_per_unit || (item.dimensions && item.dimensions.weight_per_unit)) || 0,
             item.shape_type || item.shape_name || item.shape || null,
-            item.laser_cutting || null
+            item.laser_cutting || null,
+            cleanItemNote(item.item_note)
           ]
         );
       }
@@ -1364,6 +1374,37 @@ const generateQuotationPDF = async (quotationId) => {
           text-overflow: ellipsis;
         }
 
+        /* Description with a note: the usual 3 lines on the left, the (note) on the right wrapping over up to 3 lines.
+           Same row height and fonts; a longer note gets a slightly smaller font so it fits in 3 lines. */
+        .desc-split {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+          width: 100%;
+        }
+        .desc-split .desc-left {
+          flex: 0 0 auto;
+          max-width: 78%;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+        }
+        .desc-split .desc-note {
+          flex: 1 1 0;
+          min-width: 0;
+          font-weight: 700;
+          color: #111827;
+          line-height: 1.15;
+          white-space: normal;
+          overflow-wrap: anywhere;
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 3;
+          overflow: hidden;
+        }
+
         .amount-col {
           text-align: right !important;
           white-space: nowrap;
@@ -1579,11 +1620,25 @@ const generateQuotationPDF = async (quotationId) => {
                 <td class="center-col"><div class="cell">{{sr}}</div></td>
                 <td><div class="cell"><span class="one-line" style="font-weight: 700;">{{drawing_no}}</span></div></td>
                 <td>
+                  {{^has_note}}
                   <div class="cell">
                     <span class="one-line" style="font-weight: 700;">{{desc_line1}}</span>
                     {{#desc_line2}}<span class="one-line sub-text" style="font-weight: 700; color: #111827;">{{desc_line2}}</span>{{/desc_line2}}
                     {{#desc_line3}}<span class="one-line sub-text" style="font-weight: 700; color: #111827; white-space: pre;">{{desc_line3}}</span>{{/desc_line3}}
                   </div>
+                  {{/has_note}}
+                  {{#has_note}}
+                  <div class="cell">
+                    <div class="desc-split">
+                      <div class="desc-left">
+                        <span class="one-line" style="font-weight: 700;">{{desc_line1}}</span>
+                        {{#desc_line2}}<span class="one-line sub-text" style="font-weight: 700; color: #111827;">{{desc_line2}}</span>{{/desc_line2}}
+                        {{#desc_line3}}<span class="one-line sub-text" style="font-weight: 700; color: #111827; white-space: pre;">{{desc_line3}}</span>{{/desc_line3}}
+                      </div>
+                      <div class="desc-note" style="font-size: {{note_font_px}}px;">{{desc_note}}</div>
+                    </div>
+                  </div>
+                  {{/has_note}}
                 </td>
                 <td class="center-col">
                   <div class="cell">
@@ -1891,10 +1946,30 @@ const generateQuotationPDF = async (quotationId) => {
         required_weight_str,
         material_type: i.material_type || '—',
         has_required_weight: required_weight_str !== '—',
+        // Description entered for this drawing goes in brackets right after the drawing name on the first line
         desc_line1: i.drawing_name || i.description || i.material_name || '—',
+        // Description entered for this drawing: in brackets, right-aligned on the same line as the drawing name
+        has_note: !!cleanItemNote(i.item_note),
+        // the note sits right-aligned on the material line (2nd line); on the 1st line only when there is no 2nd line
+        // note block font: normal 8px; longer notes step down so they fit in 3 lines of the right-hand block
+        // (size from the note length and the width left after the 3 description lines, ~300px cell)
+        note_font_px: (() => {
+          const note = cleanItemNote(i.item_note) || '';
+          const len = note.length + 2;
+          const line1 = String(i.drawing_name || i.description || i.material_name || '');
+          const line2 = (i.drawing_name || i.description) ? String(i.material_name || '') : '';
+          const line3 = [dimsSpec || '', laser_cutting_label || ''].filter(Boolean).join('  ');
+          const leftPx = Math.min(300 * 0.78, Math.max(line1.length * 5.7, line2.length * 5.0, line3.length * 5.0));
+          const availPx = Math.max(40, 300 - leftPx - 8);
+          for (const f of [8, 7.5, 7, 6.5, 6, 5.5, 5]) {
+            const perLine = Math.floor(availPx / (f * 0.6));
+            if (perLine * 3 >= len * 1.08) return f; // ~8% slack for word wrapping
+          }
+          return 5;
+        })(),
+        desc_note: cleanItemNote(i.item_note) ? `(${cleanItemNote(i.item_note)})` : null,
         desc_line2: (i.drawing_name || i.description) ? (i.material_name || null) : null,
-        desc_line3: [dimsSpec || null, laser_cutting_label].filter(Boolean).join('  ') || null,
-        quantity: qty.toFixed(3),
+        desc_line3: [dimsSpec || null, laser_cutting_label].filter(Boolean).join('  ') || null,        quantity: qty.toFixed(3),
         unit: i.unit || 'NOS',
         gst_percent: `${totalGst}%`,
         unit_rate: rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),        amount: amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -2290,14 +2365,14 @@ const mergeQuotations = async (payload) => {
           cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
           length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, laser_cutting,
           source_quotation_id, source_quotation_item_id, source_quotation_number,
-          source_rfq_id, source_rfq_number, project_name, client_name
+          source_rfq_id, source_rfq_number, project_name, client_name, item_note
         ) VALUES (
           ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?,
-          ?, ?, ?, ?
+          ?, ?, ?, ?, ?
         )`,
         [
           newQuotationId,
@@ -2334,7 +2409,8 @@ const mergeQuotations = async (payload) => {
           item.src_rfq_id || null,
           item.src_rfq_number || null,
           itemProjectName,
-          itemClientName
+          itemClientName,
+          cleanItemNote(item.item_note) // merged quote keeps each drawing's description
         ]
       );
 

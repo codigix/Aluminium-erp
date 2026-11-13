@@ -431,6 +431,9 @@ const QuotationApprovals = () => {
                             {formatDimensions(i) && (
                               <div className="text-[11px] font-mono text-indigo-600 mt-0.5">{formatDimensions(i)}</div>
                             )}
+                            {i.item_note && (
+                              <div className="text-[11px] text-slate-800 font-medium mt-0.5 break-words">({i.item_note})</div>
+                            )}
                           </td>
                           <td className="p-2 text-right">{Number(i.quantity || 0).toFixed(3)}</td>
                           <td className={`p-2 text-right ${isLowest ? 'text-emerald-700 font-semibold' : ''}`}>{formatCurrency(i.unit_rate)}</td>
@@ -454,6 +457,11 @@ const QuotationApprovals = () => {
                 <span className="text-slate-500">Tax: <b className="text-slate-800">{formatCurrency(detail.tax_amount)}</b></span>
                 <span className="text-slate-500">Grand Total: <b className="text-indigo-700 text-sm">{formatCurrency(detail.grand_total)}</b></span>
               </div>
+              {detail.notes && (
+                <div className="mt-3 p-2 bg-slate-50 border border-slate-100 rounded text-slate-700 whitespace-pre-wrap">
+                  <span className="font-semibold text-slate-500">Notes: </span>{detail.notes}
+                </div>
+              )}
             </div>
 
             {(detail.competitors || []).length > 0 && (
