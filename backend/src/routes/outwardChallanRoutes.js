@@ -756,6 +756,70 @@ router.get('/:id/pdf', authenticate, async (req, res) => {
   }
 });
 
+// Delivery Challan (paper-form layout) PDF for an outward challan — read-only print.
+// ?inline=1 opens it in the browser, otherwise it downloads.
+router.get('/:id/delivery-challan-pdf', authenticate, async (req, res) => {
+  try {
+    const generateDeliveryChallanPdf = require('../utils/generateDeliveryChallanPdf');
+    const result = await generateDeliveryChallanPdf(req.params.id);
+    if (!result) {
+      return res.status(404).json({ message: 'Outward challan not found' });
+    }
+    const { pdfPath, fileName } = result;
+    if (req.query.inline === '1') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+      return res.sendFile(pdfPath);
+    }
+    res.download(pdfPath, fileName, (err) => { if (err) console.error('Download error:', err); });
+  } catch (error) {
+    console.error('Delivery Challan PDF Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delivery Challan print fields (system values + saved edits) — for the Edit popup
+router.get('/:id/delivery-challan', authenticate, async (req, res) => {
+  try {
+    const { getDeliveryChallan } = require('../utils/generateDeliveryChallanPdf');
+    const info = await getDeliveryChallan(req.params.id);
+    if (!info) return res.status(404).json({ message: 'Outward challan not found' });
+    const { challan, ...rest } = info;
+    res.json(rest);
+  } catch (error) {
+    console.error('Delivery Challan fetch error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Save Delivery Challan edits (print only — outward challan / job card / stock unchanged)
+router.put('/:id/delivery-challan', authenticate, authorize(['PROD_MANAGE']), async (req, res) => {
+  try {
+    const { saveDeliveryChallan } = require('../utils/generateDeliveryChallanPdf');
+    const info = await saveDeliveryChallan(req.params.id, req.body || {});
+    if (!info) return res.status(404).json({ message: 'Outward challan not found' });
+    const { challan, ...rest } = info;
+    res.json({ message: 'Delivery Challan updated', ...rest });
+  } catch (error) {
+    console.error('Delivery Challan save error:', error);
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+// Reset Delivery Challan to the system values
+router.delete('/:id/delivery-challan', authenticate, authorize(['PROD_MANAGE']), async (req, res) => {
+  try {
+    const { resetDeliveryChallan } = require('../utils/generateDeliveryChallanPdf');
+    const info = await resetDeliveryChallan(req.params.id);
+    if (!info) return res.status(404).json({ message: 'Outward challan not found' });
+    const { challan, ...rest } = info;
+    res.json({ message: 'Delivery Challan reset to system values', ...rest });
+  } catch (error) {
+    console.error('Delivery Challan reset error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Get outward challan by ID
 router.get('/:id', authenticate, async (req, res) => {
   try {

@@ -7,6 +7,9 @@ import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
+// Same number the backend prints on the Delivery Challan (derived from the outward challan id)
+const deliveryChallanNo = (row) => `SPTPL-${String(row?.id ?? '').padStart(4, '0')}`;
+
 const Challans = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -87,6 +90,7 @@ const Challans = () => {
   useEffect(() => {
     const isOutward = location.pathname.includes('/outward');
     const isInward = location.pathname.includes('/inward');
+    const isDelivery = location.pathname.includes('/delivery-challan');
     const id = searchParams.get('id');
     const action = location.pathname.split('/').pop();
 
@@ -94,6 +98,8 @@ const Challans = () => {
       setActiveTab('outward');
     } else if (isInward) {
       setActiveTab('inward');
+    } else if (isDelivery) {
+      setActiveTab('delivery-challan');
     }
 
     if (action === 'details' && id) {
@@ -285,16 +291,49 @@ const Challans = () => {
     }
   };
 
+  // Delivery Challan (paper-form print) — open in a browser tab or download
+  const handleDeliveryChallan = async (row, mode = 'view') => {
+    const win = mode === 'view' ? window.open('', '_blank') : null;
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/outward-challans/${row.id}/delivery-challan-pdf${mode === 'view' ? '?inline=1' : ''}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        if (win) win.close();
+        errorToast('Failed to generate Delivery Challan');
+        return;
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      if (win) {
+        win.location.href = url;
+      } else {
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `Delivery_Challan_${deliveryChallanNo(row)}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+        successToast('Delivery Challan download started');
+      }
+    } catch (error) {
+      if (win) win.close();
+      console.error('Error generating Delivery Challan:', error);
+      errorToast('Error generating Delivery Challan');
+    }
+  };
+
   const fetchChallans = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const endpoint = activeTab === 'outward' ? '/outward-challans' : '/outward-challans/inward';
+      const endpoint = activeTab === 'inward' ? '/outward-challans/inward' : '/outward-challans';
       const response = await fetch(`${API_BASE}${endpoint}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
-      if (activeTab === 'outward') {
+      if (activeTab !== 'inward') {
         setOutwardChallans(Array.isArray(data) ? data : []);
       } else {
         setInwardChallans(Array.isArray(data) ? data : []);
@@ -366,8 +405,31 @@ const Challans = () => {
     )}
   ];
 
-  const filteredData = activeTab === 'outward' 
-    ? outwardChallans.filter(c => c.challan_number.toLowerCase().includes(searchTerm.toLowerCase()) || c.vendor_name.toLowerCase().includes(searchTerm.toLowerCase()))
+  const deliveryColumns = [
+    { label: 'D. Ch. No.', key: 'id', className: ' text-indigo-600', render: (_, row) => deliveryChallanNo(row) },
+    { label: 'Date', key: 'dispatch_date', render: (val, row) => formatDate(val || row.created_at) },
+    { label: 'Outward Challan', key: 'challan_number' },
+    { label: 'Vendor', key: 'vendor_name' },
+    { label: 'Job Card', key: 'job_card_no' },
+    { label: 'Operation', key: 'operation_name' },
+    { label: 'Quantity', key: 'dispatch_qty', render: (val) => `${parseFloat(val || 0).toFixed(2)} units` },
+    { label: 'Actions', key: 'id', className: 'text-right', render: (_, row) => (
+      <div className="flex items-center justify-end gap-1">
+        <button onClick={() => handleDeliveryChallan(row, 'view')} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="View / Print Delivery Challan">
+          <Eye className="w-4 h-4" />
+        </button>
+        <button onClick={() => handleDeliveryChallan(row, 'download')} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="Download Delivery Challan">
+          <Download className="w-4 h-4" />
+        </button>
+      </div>
+    )}
+  ];
+
+  const filteredData = activeTab !== 'inward'
+    ? outwardChallans.filter(c => {
+        const s = searchTerm.toLowerCase();
+        return (c.challan_number || '').toLowerCase().includes(s) || (c.vendor_name || '').toLowerCase().includes(s) || deliveryChallanNo(c).toLowerCase().includes(s);
+      })
     : inwardChallans.filter(c => c.inward_number.toLowerCase().includes(searchTerm.toLowerCase()) || c.vendor_name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
@@ -382,7 +444,8 @@ const Challans = () => {
           <Tabs
             tabs={[
               { label: 'Outward Challans', value: 'outward', icon: Send },
-              { label: 'Inward Receipts', value: 'inward', icon: History }
+              { label: 'Inward Receipts', value: 'inward', icon: History },
+              { label: 'Delivery Challan', value: 'delivery-challan', icon: FileText }
             ]}
             activeTab={activeTab}
             onTabChange={handleTabChange}
@@ -395,10 +458,10 @@ const Challans = () => {
 
       <Card className="overflow-hidden border-slate-200">
         <DataTable 
-          columns={activeTab === 'outward' ? outwardColumns : inwardColumns}
+          columns={activeTab === 'outward' ? outwardColumns : (activeTab === 'delivery-challan' ? deliveryColumns : inwardColumns)}
           data={filteredData}
           loading={loading}
-          emptyMessage={`No ${activeTab} challans found`}
+          emptyMessage={activeTab === 'delivery-challan' ? 'No delivery challans found' : `No ${activeTab} challans found`}
         />
       </Card>
 

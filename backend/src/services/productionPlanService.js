@@ -9,6 +9,104 @@ const bomService = require('./bomService');
  * - Never creates duplicate Shipment operations.
  * - Re-indexes step_no / step sequentially.
  */
+// ── Plan-level operation edits / additions (Configure Work Order) ─────────────────────────────────────────────
+// production_plan_op_overrides: op_ref = 'BOM:<id>' / 'PPO:<id>' edits that operation for this plan only;
+// op_ref NULL = an operation added to this plan. The BOM itself is never changed.
+const OP_OVERRIDE_FIELDS = ['operation_name', 'workstation', 'process_type', 'cycle_time_min', 'setup_time_min', 'hourly_rate'];
+
+const applyPlanOperationOverrides = async (planId, operations, context = {}) => {
+  let rows = [];
+  try {
+    [rows] = await pool.query('SELECT * FROM production_plan_op_overrides WHERE plan_id = ? ORDER BY sort_order ASC, id ASC', [planId]);
+  } catch (e) {
+    if (e.code === 'ER_NO_SUCH_TABLE') return operations;
+    throw e;
+  }
+  if (!rows.length) return operations;
+  const edits = new Map(rows.filter(r => r.op_ref).map(r => [r.op_ref, r]));
+  const result = operations.map(op => {
+    const ov = op.op_ref ? edits.get(op.op_ref) : null;
+    if (!ov) return op;
+    const out = { ...op, plan_override_id: ov.id, plan_edited: true };
+    OP_OVERRIDE_FIELDS.forEach(f => { if (ov[f] !== null && ov[f] !== undefined) out[f] = ov[f]; });
+    if (ov.process_type) out.operation_type = ov.process_type;
+    return out;
+  });
+  rows.filter(r => !r.op_ref).forEach(r => {
+    const isPart = context.isPartPlan || String(r.source_item || '').toUpperCase().startsWith('PART-');
+    result.push({
+      id: 900000000 + r.id,
+      op_ref: `ADD:${r.id}`,
+      plan_override_id: r.id,
+      plan_added: true,
+      plan_id: planId,
+      operation_name: r.operation_name,
+      workstation: r.workstation || null,
+      process_type: r.process_type || 'In-House',
+      operation_type: r.process_type || 'In-House',
+      cycle_time_min: parseFloat(r.cycle_time_min) || 0,
+      setup_time_min: parseFloat(r.setup_time_min) || 0,
+      hourly_rate: parseFloat(r.hourly_rate) || 0,
+      base_time: 0,
+      net_time: 0,
+      source_item: r.source_item || context.sourceItem || 'Main Item',
+      item_group: isPart ? 'Part' : 'Assembly',
+      item_type: isPart ? 'PART' : 'FG'
+    });
+  });
+  return result.map((op, idx) => ({ ...op, step_no: idx + 1 }));
+};
+
+const assertPlanHasNoWorkOrders = async (planId) => {
+  const [[row]] = await pool.query('SELECT COUNT(*) n FROM work_orders WHERE plan_id = ?', [planId]);
+  if (Number(row.n) > 0) {
+    const err = new Error('Work orders already exist for this plan — operations can only be changed before work orders are created.');
+    err.statusCode = 400;
+    throw err;
+  }
+};
+
+// Save an edit (data.op_ref = 'BOM:..' / 'PPO:..') or add an operation (no op_ref) for this plan only
+const savePlanOperation = async (planId, data = {}) => {
+  await assertPlanHasNoWorkOrders(planId);
+  const name = String(data.operation_name || '').trim();
+  if (!name) { const e = new Error('Operation name is required'); e.statusCode = 400; throw e; }
+  const num = (v) => (v === '' || v === null || v === undefined || !Number.isFinite(parseFloat(v)) ? 0 : Math.max(0, parseFloat(v)));
+  const values = [
+    name, data.workstation || null, data.process_type || 'In-House',
+    num(data.cycle_time_min), num(data.setup_time_min), num(data.hourly_rate)
+  ];
+  const opRef = data.op_ref && !String(data.op_ref).startsWith('ADD:') ? String(data.op_ref) : null;
+  const addedId = data.op_ref && String(data.op_ref).startsWith('ADD:') ? parseInt(String(data.op_ref).slice(4)) : null;
+  if (opRef || addedId) {
+    const [[existing]] = opRef
+      ? await pool.query('SELECT id FROM production_plan_op_overrides WHERE plan_id = ? AND op_ref = ?', [planId, opRef])
+      : await pool.query('SELECT id FROM production_plan_op_overrides WHERE plan_id = ? AND id = ? AND op_ref IS NULL', [planId, addedId]);
+    if (existing) {
+      await pool.query(
+        `UPDATE production_plan_op_overrides SET operation_name = ?, workstation = ?, process_type = ?, cycle_time_min = ?, setup_time_min = ?, hourly_rate = ?
+         ${addedId ? ', source_item = COALESCE(?, source_item)' : ''} WHERE id = ?`,
+        addedId ? [...values, data.source_item || null, existing.id] : [...values, existing.id]
+      );
+      return { id: existing.id };
+    }
+    if (addedId) { const e = new Error('Added operation not found'); e.statusCode = 404; throw e; }
+  }
+  const [[mx]] = await pool.query('SELECT COALESCE(MAX(sort_order), 0) m FROM production_plan_op_overrides WHERE plan_id = ?', [planId]);
+  const [res] = await pool.query(
+    `INSERT INTO production_plan_op_overrides (plan_id, op_ref, operation_name, workstation, process_type, cycle_time_min, setup_time_min, hourly_rate, source_item, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [planId, opRef, ...values, opRef ? null : (data.source_item || null), Number(mx.m) + 1]
+  );
+  return { id: res.insertId };
+};
+
+// Remove an added operation, or undo an edit (back to the BOM values)
+const removePlanOperationOverride = async (planId, overrideId) => {
+  await assertPlanHasNoWorkOrders(planId);
+  await pool.query('DELETE FROM production_plan_op_overrides WHERE plan_id = ? AND id = ?', [planId, overrideId]);
+};
+
 const ensureShipmentAsFinalOperation = (opsList, context = {}) => {
   if (!Array.isArray(opsList)) return [];
 
@@ -340,6 +438,7 @@ const getProductionPlanById = async (id) => {
       seenOpIds.add(op.id);
       bomOpsList.push({
         id: op.id,
+        op_ref: `BOM:${op.id}`, // stable key for plan-level edits (production_plan_op_overrides)
         plan_id: id,
         step_no: bomOpsList.length + 1,
         operation_name: op.operation_name,
@@ -376,11 +475,17 @@ const getProductionPlanById = async (id) => {
          ppo.step_no ASC`,
       [id]
     );
-    operations = storedOps;
+    operations = storedOps.map(op => ({ ...op, op_ref: `PPO:${op.id}` }));
   }
 
-  // Ensure every Part and Assembly Production Plan always contains Shipment as the final default operation
+  // Plan-level edits / additions made in Configure Work Order (this plan only; the BOM is not changed)
   const planItem = allPlanItems[0] || null;
+  operations = await applyPlanOperationOverrides(id, operations, {
+    sourceItem: (planItem && planItem.item_code) || plan.description || plan.plan_code || 'Main Item',
+    isPartPlan
+  });
+
+  // Ensure every Part and Assembly Production Plan always contains Shipment as the final default operation
   plan.operations = ensureShipmentAsFinalOperation(operations, {
     planId: id,
     sourceItem: (planItem && planItem.item_code) || plan.description || plan.plan_code || 'Main Item',
@@ -3751,6 +3856,8 @@ module.exports = {
   createMaterialRequestFromPlan,
   getMaterialRequestItemsForPlan,
   addManualMaterialToPlan,
+  savePlanOperation,
+  removePlanOperationOverride,
   removeManualMaterialFromPlan,
   getBulkCreationPreview,
   bulkCreateProductionPlans,

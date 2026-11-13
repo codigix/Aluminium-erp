@@ -115,6 +115,26 @@ const getMaterialRequestItemsForPlan = async (req, res, next) => {
   }
 };
 
+// Configure Work Order: add / edit an operation for this plan only (BOM unchanged; only before work orders exist)
+const savePlanOperation = async (req, res, next) => {
+  try {
+    res.json(await productionPlanService.savePlanOperation(req.params.id, req.body || {}));
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message, message: error.message });
+    next(error);
+  }
+};
+
+const removePlanOperation = async (req, res, next) => {
+  try {
+    await productionPlanService.removePlanOperationOverride(req.params.id, req.params.overrideId);
+    res.json({ message: 'Operation change removed' });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message, message: error.message });
+    next(error);
+  }
+};
+
 const addManualMaterial = async (req, res, next) => {
   try {
     const result = await productionPlanService.addManualMaterialToPlan(req.params.id, req.body);
@@ -185,6 +205,8 @@ module.exports = {
   createMaterialRequestFromPlan,
   getMaterialRequestItemsForPlan,
   addManualMaterial,
+  savePlanOperation,
+  removePlanOperation,
   removeManualMaterial,
   getBulkCreationPreview,
   bulkCreateProductionPlans,

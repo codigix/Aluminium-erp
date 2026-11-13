@@ -433,6 +433,93 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     }
   };
 
+  // ── Configure Work Order: add / edit operations for THIS plan only (BOM unchanged; before work orders exist) ──
+  const [opEditor, setOpEditor] = useState(null); // { op_ref?, operation_name, workstation, process_type, cycle_time_min, setup_time_min, hourly_rate, source_item }
+  const [savingOp, setSavingOp] = useState(false);
+  const [operationsMaster, setOperationsMaster] = useState([]);
+  useEffect(() => {
+    if (!configModalOpen || operationsMaster.length) return;
+    const token = localStorage.getItem('authToken');
+    fetch(`${API_BASE}/operations`, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setOperationsMaster(Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : [])))
+      .catch(() => {});
+  }, [configModalOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!configModalOpen) setOpEditor(null); }, [configModalOpen]);
+
+  const reloadPlanConfig = async () => {
+    if (!selectedPlanConfig?.id) return;
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE}/production-plans/${selectedPlanConfig.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (response.ok) {
+      const data = await response.json();
+      setSelectedPlanConfig(prev => ({ ...data, wo_count: prev?.wo_count || 0 }));
+    }
+  };
+
+  const planSourceItems = () => {
+    const set = new Set();
+    (selectedPlanConfig?.operations || []).forEach(o => { if (o.source_item) set.add(o.source_item); });
+    if (selectedPlanConfig?.item_code) set.add(selectedPlanConfig.item_code);
+    return Array.from(set);
+  };
+
+  const startAddOperation = () => setOpEditor({
+    op_ref: null, operation_name: '', workstation: '', process_type: 'In-House',
+    cycle_time_min: '', setup_time_min: '', hourly_rate: '', source_item: planSourceItems()[0] || ''
+  });
+  const startEditOperation = (op) => setOpEditor({
+    op_ref: op.op_ref, operation_name: op.operation_name || '', workstation: op.workstation || '',
+    process_type: op.process_type || op.operation_type || 'In-House',
+    cycle_time_min: parseFloat(op.cycle_time_min) || Math.round(parseFloat(op.net_time || op.base_time || 0) * 60) || '',
+    setup_time_min: parseFloat(op.setup_time_min) || '', hourly_rate: parseFloat(op.hourly_rate) || '',
+    source_item: op.source_item || ''
+  });
+
+  const saveOperation = async () => {
+    if (!opEditor?.operation_name?.trim()) { errorToast('Enter the operation name'); return; }
+    try {
+      setSavingOp(true);
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/production-plans/${selectedPlanConfig.id}/operations`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(opEditor)
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || body.message || 'Failed to save operation');
+      successToast(opEditor.op_ref && !String(opEditor.op_ref).startsWith('ADD:') ? 'Operation updated for this plan' : 'Operation saved for this plan');
+      setOpEditor(null);
+      await reloadPlanConfig();
+    } catch (e) {
+      errorToast(e.message);
+    } finally {
+      setSavingOp(false);
+    }
+  };
+
+  const removeOperationChange = async (op) => {
+    const isAdded = !!op.plan_added;
+    const confirm = await Swal.fire({
+      title: isAdded ? 'Remove this added operation?' : 'Undo the change to this operation?',
+      text: isAdded ? `${op.operation_name} will be removed from this plan.` : `${op.operation_name} goes back to the BOM values.`,
+      icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: isAdded ? 'Remove' : 'Undo'
+    });
+    if (!confirm.isConfirmed) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/production-plans/${selectedPlanConfig.id}/operations/${op.plan_override_id}`, {
+        method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || body.message || 'Failed');
+      successToast(isAdded ? 'Operation removed' : 'Change undone');
+      await reloadPlanConfig();
+    } catch (e) {
+      errorToast(e.message);
+    }
+  };
+
   const handleRefreshPlanConfig = async () => {
     if (!selectedPlanConfig?.id) return;
     const currentPlanId = selectedPlanConfig.id;
@@ -4725,6 +4812,122 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
             <div className="min-h-[300px] max-h-[450px] overflow-y-auto custom-scrollbar">
               {activeConfigTab === 'ops' ? (
+                <>
+                {selectedPlanConfig?.wo_count === 0 && (
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] text-slate-400">Changes here apply to this production plan only — the BOM is not changed.</span>
+                    <button
+                      type="button"
+                      onClick={startAddOperation}
+                      disabled={!!opEditor}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Operation
+                    </button>
+                  </div>
+                )}
+                {(() => {
+                  // Inline editor (add / edit) — shared datalists for operation names and workstations
+                  const editorRow = opEditor && (
+                    <tr className="bg-indigo-50/50">
+                      <td colSpan="7" className="p-2">
+                        <div className="grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
+                          <div className="md:col-span-2">
+                            <label className="text-[10px] text-slate-500">Operation * <span className="text-slate-400">(Operation Master)</span></label>
+                            <select
+                              value={opEditor.operation_name}
+                              onChange={(e) => {
+                                const name = e.target.value;
+                                const m = operationsMaster.find(o => String(o.operation_name || '').toLowerCase() === name.toLowerCase());
+                                // Picking from the Operation Master fills its workstation, type, rate and standard time
+                                const ws = m?.workstation_id ? workstations.find(w => String(w.id) === String(m.workstation_id)) : null;
+                                const stdMin = m ? (String(m.time_uom || 'Hr').toLowerCase().startsWith('min') ? parseFloat(m.std_time) || 0 : (parseFloat(m.std_time) || 0) * 60) : 0;
+                                setOpEditor(prev => ({
+                                  ...prev,
+                                  operation_name: name,
+                                  workstation: ws ? (ws.workstation_code || ws.workstation_name) : prev.workstation,
+                                  // master types: In-House / Outsourced → this screen's In-House / Sub-Contract
+                                  process_type: m?.operation_type
+                                    ? (/out|sub/i.test(m.operation_type) ? 'Sub-Contract' : 'In-House')
+                                    : prev.process_type,
+                                  hourly_rate: m && parseFloat(m.hourly_rate) > 0 ? parseFloat(m.hourly_rate) : prev.hourly_rate,
+                                  cycle_time_min: (prev.cycle_time_min === '' || prev.cycle_time_min === 0) && stdMin > 0 ? parseFloat(stdMin.toFixed(2)) : prev.cycle_time_min
+                                }));
+                              }}
+                              className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white cursor-pointer"
+                            >
+                              <option value="">-- Select Operation --</option>
+                              {opEditor.operation_name && !operationsMaster.some(o => String(o.operation_name || '').toLowerCase() === String(opEditor.operation_name).toLowerCase()) && (
+                                <option value={opEditor.operation_name}>{opEditor.operation_name} (from BOM)</option>
+                              )}
+                              {operationsMaster
+                                .filter(o => o.is_active === undefined || o.is_active === null || Number(o.is_active) === 1 || o.is_active === true)
+                                .map(o => (
+                                  <option key={o.id || o.operation_name} value={o.operation_name}>
+                                    {o.operation_name}{o.operation_code ? ` (${o.operation_code})` : ''}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-500">Workstation</label>
+                            <select value={opEditor.workstation} onChange={(e) => setOpEditor(prev => ({ ...prev, workstation: e.target.value }))}
+                              className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white cursor-pointer">
+                              <option value="">-- Select --</option>
+                              {opEditor.workstation && !workstations.some(w => (w.workstation_code || w.workstation_name) === opEditor.workstation) && (
+                                <option value={opEditor.workstation}>{opEditor.workstation}</option>
+                              )}
+                              {workstations.map(w => (
+                                <option key={w.id} value={w.workstation_code || w.workstation_name}>
+                                  {w.workstation_code || w.workstation_name}{w.workstation_name && w.workstation_code ? ` – ${w.workstation_name}` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-500">Process Type</label>
+                            <select value={opEditor.process_type} onChange={(e) => setOpEditor(prev => ({ ...prev, process_type: e.target.value }))}
+                              className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white">
+                              <option value="In-House">In-House</option>
+                              <option value="Sub-Contract">Sub-Contract</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-500">Net Time (min/unit)</label>
+                            <input type="number" min="0" step="0.1" value={opEditor.cycle_time_min} onChange={(e) => setOpEditor(prev => ({ ...prev, cycle_time_min: e.target.value }))}
+                              className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white text-right" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-500">Setup (min)</label>
+                            <input type="number" min="0" step="0.1" value={opEditor.setup_time_min} onChange={(e) => setOpEditor(prev => ({ ...prev, setup_time_min: e.target.value }))}
+                              className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white text-right" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-500">Rate/Hr (₹)</label>
+                            <input type="number" min="0" step="0.01" value={opEditor.hourly_rate} onChange={(e) => setOpEditor(prev => ({ ...prev, hourly_rate: e.target.value }))}
+                              className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white text-right" />
+                          </div>
+                          {!opEditor.op_ref || String(opEditor.op_ref).startsWith('ADD:') ? (
+                            <div className="md:col-span-2">
+                              <label className="text-[10px] text-slate-500">For item</label>
+                              <select value={opEditor.source_item} onChange={(e) => setOpEditor(prev => ({ ...prev, source_item: e.target.value }))}
+                                className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white">
+                                {planSourceItems().map(s => <option key={s} value={s}>{s}</option>)}
+                              </select>
+                            </div>
+                          ) : <div className="md:col-span-2" />}
+                          <div className="md:col-span-5 flex justify-end gap-2">
+                            <button type="button" onClick={() => setOpEditor(null)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700">Cancel</button>
+                            <button type="button" onClick={saveOperation} disabled={savingOp} className="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50">
+                              {savingOp ? 'Saving…' : 'Save Operation'}
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                  const canEdit = selectedPlanConfig?.wo_count === 0;
+                  return (
                 <table className="w-full text-left text-xs">
                   <thead className="sticky top-0 bg-white z-10 border-b border-slate-100">
                     <tr>
@@ -4734,12 +4937,15 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       <th className="py-3 px-2  text-slate-400   text-right">Net Time (M/U)</th>
                       <th className="py-3 px-2  text-slate-400   text-right text-indigo-500">Execution Time</th>
                       <th className="py-3 px-2  text-slate-400   text-right">Rate/Hr</th>
+                      {canEdit && <th className="py-3 px-2  text-slate-400   text-center">Action</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 ">
+                    {opEditor && !opEditor.op_ref && editorRow}
                     {selectedPlanConfig?.operations?.length > 0 ? (
                       selectedPlanConfig.operations.map((op, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                        <React.Fragment key={idx}>
+                        <tr className={`hover:bg-slate-50/50 transition-colors ${op.plan_added ? 'bg-emerald-50/40' : op.plan_edited ? 'bg-amber-50/40' : ''}`}>
                           <td className="py-4 px-2">
                             <div className="flex items-center gap-2">
                               <div className="w-1.5 h-1.5 bg-indigo-400 " />
@@ -4796,15 +5002,41 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                             )} min
                           </td>
                           <td className="py-4 px-2 text-right text-slate-400">₹{op.hourly_rate || 0}</td>
+                          {canEdit && (
+                            <td className="py-4 px-2 text-center whitespace-nowrap">
+                              {op.op_ref ? (
+                                <div className="flex items-center justify-center gap-1">
+                                  {op.plan_added && <span className="text-[9px] px-1 rounded bg-emerald-100 text-emerald-700">Added</span>}
+                                  {op.plan_edited && <span className="text-[9px] px-1 rounded bg-amber-100 text-amber-700">Edited</span>}
+                                  <button type="button" onClick={() => startEditOperation(op)} disabled={!!opEditor}
+                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-40" title="Edit for this plan">
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  {(op.plan_added || op.plan_edited) && (
+                                    <button type="button" onClick={() => removeOperationChange(op)} disabled={!!opEditor}
+                                      className="p-1 text-rose-500 hover:bg-rose-50 rounded disabled:opacity-40"
+                                      title={op.plan_added ? 'Remove added operation' : 'Undo change (back to BOM)'}>
+                                      {op.plan_added ? <Trash2 className="w-3.5 h-3.5" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                    </button>
+                                  )}
+                                </div>
+                              ) : <span className="text-[10px] text-slate-300">—</span>}
+                            </td>
+                          )}
                         </tr>
+                        {opEditor && opEditor.op_ref && opEditor.op_ref === op.op_ref && editorRow}
+                        </React.Fragment>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="6" className="py-12 text-center text-slate-400 italic">No manufacturing operations defined</td>
+                        <td colSpan="7" className="py-12 text-center text-slate-400 italic">No manufacturing operations defined</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
+                  );
+                })()}
+                </>
               ) : (
                 <table className="w-full text-left text-xs">
                   <thead className="sticky top-0 bg-white z-10 border-b border-slate-100">

@@ -1020,6 +1020,56 @@ const ensureStockColumns = async () => {
       }
     }
 
+    // Configure Work Order: plan-level operation edits / additions (BOM unchanged)
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS production_plan_op_overrides (
+          id INT NOT NULL AUTO_INCREMENT,
+          plan_id INT NOT NULL,
+          op_ref VARCHAR(50) NULL,
+          operation_name VARCHAR(255) NOT NULL,
+          workstation VARCHAR(255) NULL,
+          process_type VARCHAR(50) NULL,
+          cycle_time_min DECIMAL(12,3) NULL,
+          setup_time_min DECIMAL(12,3) NULL,
+          hourly_rate DECIMAL(12,2) NULL,
+          source_item VARCHAR(255) NULL,
+          sort_order INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          KEY idx_ppoo_plan (plan_id),
+          UNIQUE KEY uq_ppoo_plan_ref (plan_id, op_ref)
+        )
+      `);
+    } catch (e) {
+      console.error('production_plan_op_overrides table sync failed:', e.message);
+    }
+
+    // Delivery Challan print: user edits per outward challan (print only)
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS delivery_challan_details (
+          id INT NOT NULL AUTO_INCREMENT,
+          outward_challan_id INT NOT NULL,
+          dc_date DATE NULL,
+          your_ch_no VARCHAR(100) NULL,
+          your_ch_date DATE NULL,
+          po_no VARCHAR(100) NULL,
+          po_date DATE NULL,
+          vehicle_no VARCHAR(50) NULL,
+          notes TEXT NULL,
+          lines_json LONGTEXT NULL,
+          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY uq_dcd_outward_challan (outward_challan_id)
+        )
+      `);
+    } catch (e) {
+      console.error('delivery_challan_details table sync failed:', e.message);
+    }
+
     // QC Inspection Dimension measured by QC (record only; NULL = not entered)
     for (const col of ['qc_length', 'qc_width', 'qc_thickness', 'qc_diameter', 'qc_outer_diameter']) {
       try {
