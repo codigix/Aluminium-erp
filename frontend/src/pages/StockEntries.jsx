@@ -187,7 +187,7 @@ const StockEntries = () => {
         remarks: detail.remarks || '',
         items: (detail.items || []).map(item => {
           // Look up density from material type name using freshly-fetched materials
-          const mat = localMaterials.find(m => m.name === item.material_type);
+          const mat = localMaterials.find(m => m.name === (item.material_grade || item.material_type));
           const sbItem = (stockBalances || []).find(s => s.item_code === item.item_code);
           const wPerUnit = parseFloat(item.weight_per_unit || item.weightPerUnit || sbItem?.weight_per_unit || sbItem?.current_weight || 0);
           return {
@@ -195,6 +195,7 @@ const StockEntries = () => {
             itemCode: item.item_code,
             materialName: item.material_name,
             materialType: item.material_type,
+            materialGrade: item.material_grade || mat?.name || '',
             quantity: item.quantity,
             uom: item.uom,
             batchNo: item.batch_no || '',
@@ -265,7 +266,8 @@ const StockEntries = () => {
   const [currentItem, setCurrentItem] = useState({
     itemCode: '',
     materialName: '',
-    materialType: '',
+    materialType: '', // item group (RAW_MATERIAL / BOUGHT_OUT …)
+    materialGrade: '', // grade from the Materials master (EN 8, SS 304 …) — density only
     quantity: 1,
     uom: 'Kg',
     batchNo: '',
@@ -431,7 +433,7 @@ const StockEntries = () => {
 
     let densityVal = parseFloat(currentItem.density) || 0;
     if (densityVal <= 0) {
-      const mat = materials.find(m => String(m.id) === String(currentItem.materialId) || m.name.toLowerCase() === (currentItem.materialType || '').toLowerCase());
+      const mat = materials.find(m => String(m.id) === String(currentItem.materialId) || m.name.toLowerCase() === (currentItem.materialGrade || currentItem.materialType || '').toLowerCase());
       densityVal = parseFloat(mat?.density) || 2.70;
     }
 
@@ -474,6 +476,7 @@ const StockEntries = () => {
       itemCode: '',
       materialName: '',
       materialType: '',
+      materialGrade: '',
       quantity: 1,
       uom: 'Kg',
       batchNo: '',
@@ -1096,10 +1099,11 @@ const StockEntries = () => {
                         onChange={(e) => {
                           const code = e.target.value;
                           const selected = stockBalances.find(i => i.item_code === code);
-                          const matchedMaterial = materials.find(m => 
-                            String(m.id) === String(selected?.material_id) || 
-                            m.name.toLowerCase() === (selected?.material_type || '').toLowerCase()
-                          );
+                          // Grade (Materials master, for density): item's material id / grade / name, e.g. "EN 8", "SS 304"
+                          const lc = (v) => String(v || '').trim().toLowerCase();
+                          const matchedMaterial = materials.find(m => String(m.id) === String(selected?.material_id))
+                            || materials.find(m => lc(m.name) === lc(selected?.material_grade))
+                            || materials.find(m => lc(m.name) === lc(selected?.material_name));
                           const matchedShape = shapes.find(s =>
                             String(s.id) === String(selected?.shape_id) ||
                             s.name.toLowerCase() === (selected?.shape_type || '').toLowerCase()
@@ -1109,7 +1113,9 @@ const StockEntries = () => {
                             ...prev,
                             itemCode: code,
                             materialName: selected?.material_name || selected?.item_name || '',
-                            materialType: selected?.material_type || matchedMaterial?.name || '',
+                            // Material type = Item Master group (RAW_MATERIAL / BOUGHT_OUT …), never the grade
+                            materialType: selected?.material_type || '',
+                            materialGrade: selected?.material_grade || matchedMaterial?.name || '',
                             uom: selected?.unit || selected?.uom || prev.uom,
                             valuationRate: selected?.valuation_rate || selected?.rate || prev.valuationRate,
                             materialId: selected?.material_id || matchedMaterial?.id || prev.materialId,
@@ -1163,22 +1169,26 @@ const StockEntries = () => {
                       <div className="grid grid-cols-2 gap-2">
                         {/* Material Type */}
                         <div className="space-y-1">
-                          <label className="text-xs text-slate-500 font-medium">Material Type</label>
+                          <label className="text-xs text-slate-500 font-medium">
+                            Material Grade
+                            {currentItem.materialType && <span className="ml-1 text-[10px] text-slate-400">(Type: {currentItem.materialType})</span>}
+                          </label>
                           <select
                             className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500/20"
                             value={currentItem.materialId}
                             onChange={e => {
                               const mId = e.target.value;
                               const mat = materials.find(m => String(m.id) === String(mId));
+                              // Grade only sets density / weight; the material type (item group) is kept
                               setCurrentItem(prev => ({
                                 ...prev,
                                 materialId: mId,
-                                materialType: mat?.name || '',
+                                materialGrade: mat?.name || '',
                                 density: mat?.density || 2.70
                               }));
                             }}
                           >
-                            <option value="">Select Material</option>
+                            <option value="">Select Grade</option>
                             {materials.map(m => (
                               <option key={m.id} value={m.id}>{m.name}</option>
                             ))}
@@ -1383,6 +1393,7 @@ const StockEntries = () => {
                                       itemCode: item.itemCode,
                                       materialName: item.materialName || '',
                                       materialType: item.materialType || '',
+                                      materialGrade: item.materialGrade || '',
                                       quantity: item.quantity,
                                       uom: item.uom,
                                       batchNo: item.batchNo || '',
@@ -1390,7 +1401,7 @@ const StockEntries = () => {
                                       materialId: item.materialId || '',
                                       density: item.density || (() => {
                                         // Fallback: look up density from materials by materialType name
-                                        const mat = materials.find(m => m.name === item.materialType);
+                                        const mat = materials.find(m => m.name === (item.materialGrade || item.materialType));
                                         return mat?.density || '';
                                       })(),
                                       shapeId: item.shapeId || '',

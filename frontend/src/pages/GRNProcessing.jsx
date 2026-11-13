@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, DataTable, Badge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
@@ -67,6 +68,9 @@ const GRNProcessing = () => {
   const [user, setUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  // Company filter (Company Master): GRN → PO → Sales Order company, same rule as the other lists
+  const cf = useCompanyFilter();
+  const grnCompanyId = useCallback((grn) => cf.companyOf({ grn: grn.id }), [cf]);
   const [viewMode, setViewMode] = useState('list');
 
   const [formData, setFormData] = useState({
@@ -499,7 +503,7 @@ const GRNProcessing = () => {
     
     const matchesStatus = statusFilter === 'all' || grn.status === statusFilter;
     
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && cf.matches(grnCompanyId(grn));
   });
 
   const columns = [
@@ -752,6 +756,7 @@ const GRNProcessing = () => {
         </div>
         
         <div className="flex items-center gap-2  w-full md:w-auto">
+          <CompanyFilterSelect cf={cf} rows={grns} getCompanyId={grnCompanyId} className="!py-2" />
           <div className="flex items-center gap-2  bg-slate-50 border border-slate-200 rounded  p-2 .5 flex-1 md:flex-none">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
             <select 

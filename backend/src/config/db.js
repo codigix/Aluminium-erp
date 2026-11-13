@@ -990,6 +990,14 @@ const ensureStockColumns = async () => {
         await connection.query('ALTER TABLE stock_entries ADD COLUMN `host_company_id` INT NULL');
         console.log('Stock Entries host_company_id column added');
       }
+      // Stock entry line material grade (EN 8, SS 304 …); material_type keeps the item group
+      const [seiCols] = await connection.query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'stock_entry_items' AND COLUMN_NAME = 'material_grade'"
+      );
+      if (seiCols.length === 0) {
+        await connection.query('ALTER TABLE stock_entry_items ADD COLUMN `material_grade` VARCHAR(100) NULL');
+        console.log('Stock Entry Items material_grade column added');
+      }
     } catch (e) {
       if (e.code !== 'ER_NO_SUCH_TABLE') console.error('Stock Entries company column sync failed:', e.message);
     }

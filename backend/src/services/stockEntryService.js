@@ -15,6 +15,44 @@ const resolveEntryCompany = async (data, keepCompanyId = null) => {
   return keepCompanyId || null;
 };
 
+// material_type on stock lines = ITEM GROUP (RAW_MATERIAL / BOUGHT_OUT / CONSUMBLES …), as on GRN / PO / Item Master.
+// The Stock Entry form's material dropdown is the GRADE (EN 8, SS 304 … from the Materials master, used for density);
+// a grade sent as material_type is moved to material_grade and the type becomes the item's group:
+// Item Master group of the same item code → BO- code → RAW_MATERIAL.
+const normGroup = (v) => String(v || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+const BASE_GROUPS = ['RAW_MATERIAL', 'BOUGHT_OUT', 'CONSUMBLES', 'CONSUMABLES', 'FG', 'FINISHED_GOOD', 'FINISHED_GOODS', 'SUB_ASSEMBLY', 'ASSEMBLY', 'PART', 'SA'];
+const loadGroupSet = async (connection) => {
+  const set = new Set(BASE_GROUPS);
+  try {
+    const [rows] = await connection.query('SELECT name FROM item_groups');
+    rows.forEach(r => { const g = normGroup(r.name); if (g) set.add(g); });
+  } catch (e) { /* item_groups missing → base list */ }
+  return set;
+};
+const resolveLineMaterial = async (item, connection, groupSet) => {
+  const groups = groupSet || await loadGroupSet(connection);
+  const itemCode = item.itemCode || item.item_code || '';
+  const rawType = item.materialType ?? item.material_type ?? '';
+  let grade = String(item.materialGrade ?? item.material_grade ?? '').trim() || null;
+  const typeNorm = normGroup(rawType);
+
+  if (typeNorm && groups.has(typeNorm)) return { materialType: typeNorm, materialGrade: grade };
+  if (typeNorm && !grade) grade = String(rawType).trim(); // a grade (EN 8, HT …) was sent as the type
+
+  let group = null;
+  if (itemCode) {
+    const [rows] = await connection.query(
+      "SELECT DISTINCT UPPER(REPLACE(REPLACE(TRIM(material_type), ' ', '_'), '-', '_')) AS g FROM stock_balance WHERE item_code = ? AND material_type IS NOT NULL AND TRIM(material_type) <> ''",
+      [itemCode]
+    );
+    const known = rows.map(r => r.g).filter(g => groups.has(g));
+    if (known.length === 1) group = known[0];
+  }
+  if (!group && String(itemCode).toUpperCase().startsWith('BO-')) group = 'BOUGHT_OUT';
+  if (!group && typeNorm) group = 'RAW_MATERIAL'; // a material grade means raw material
+  return { materialType: group, materialGrade: grade };
+};
+
 // Posting a manual entry (no GRN) needs a company so it shows under the right company in Stock Ledger / Balance.
 const assertCompanyForPosting = (grnId, companyId) => {
   if (!grnId && !companyId) {
@@ -430,18 +468,21 @@ const createStockEntry = async (data, userId) => {
     const entryId = result.insertId;
 
     if (data.items && data.items.length > 0) {
+      const groupSet = await loadGroupSet(connection);
       for (const item of data.items) {
-        const correctedItemCode = await getCorrectItemCode(item, connection);
+        const lineMat = await resolveLineMaterial(item, connection, groupSet);
+        const correctedItemCode = await getCorrectItemCode({ ...item, materialType: lineMat.materialType }, connection);
         await connection.execute(
-          `INSERT INTO stock_entry_items 
-           (stock_entry_id, item_code, material_name, material_type, quantity, uom, batch_no, valuation_rate, amount,
+          `INSERT INTO stock_entry_items
+           (stock_entry_id, item_code, material_name, material_type, material_grade, quantity, uom, batch_no, valuation_rate, amount,
             shape_id, length, width, thickness, diameter, outer_diameter, weight_per_unit)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             entryId,
             correctedItemCode,
             item.materialName || null,
-            item.materialType || null,
+            lineMat.materialType || null,
+            lineMat.materialGrade || null,
             item.quantity,
             item.uom || null,
             item.batchNo || null,
@@ -517,8 +558,17 @@ const processStockMovement = async (entryId, connection, userId) => {
   const toWarehouseName = toWh[0]?.warehouse_name;
   console.log(`[StockMovement] From: ${fromWarehouseName}, To: ${toWarehouseName}`);
 
+  const groupSet = await loadGroupSet(connection);
   for (const item of items) {
     console.log(`[StockMovement] Item: ${item.item_code}, Qty: ${item.quantity}, Type: ${entry.entry_type}`);
+    // Lines saved before the material-type fix may still carry a grade as their type: correct them before posting
+    const lineMat = await resolveLineMaterial(item, connection, groupSet);
+    if ((lineMat.materialType || null) !== (item.material_type || null) || (lineMat.materialGrade || null) !== (item.material_grade || null)) {
+      await connection.execute('UPDATE stock_entry_items SET material_type = ?, material_grade = ? WHERE id = ?',
+        [lineMat.materialType || null, lineMat.materialGrade || null, item.id]);
+      item.material_type = lineMat.materialType || null;
+      item.material_grade = lineMat.materialGrade || null;
+    }
     const weightPerUnit = parseFloat(item.weight_per_unit || 0);
     const isKg = (item.uom || '').toLowerCase() === 'kg' || (item.uom || '').toLowerCase() === 'kgs' || (item.uom || '').toLowerCase() === 'kilogram';
     let totalWeight = 0;
@@ -640,6 +690,23 @@ const processStockMovement = async (entryId, connection, userId) => {
         `Adjustment in ${fromWarehouseName || toWarehouseName || 'Warehouse'}. ${entry.remarks || ''}`,
         userId,
         ledgerOptions
+      );
+    }
+
+    // Keep the grade (EN 8, SS 304 …) on the ledger rows of this line and on the matching Item Master row(s)
+    if (item.material_grade) {
+      await connection.execute(
+        `UPDATE stock_ledger SET material_grade = ?
+         WHERE reference_doc_type = 'STOCK_ENTRY' AND reference_doc_id = ? AND item_code = ? AND (material_grade IS NULL OR TRIM(material_grade) = '')`,
+        [item.material_grade, entry.id, item.item_code]
+      );
+      const dimEq = (col) => `ABS(COALESCE(${col}, 0) - COALESCE(?, 0)) < 0.0001`;
+      await connection.execute(
+        `UPDATE stock_balance SET material_grade = ?
+         WHERE item_code = ? AND (material_grade IS NULL OR TRIM(material_grade) = '')
+           AND ${dimEq('length')} AND ${dimEq('width')} AND ${dimEq('thickness')} AND ${dimEq('diameter')} AND ${dimEq('outer_diameter')}`,
+        [item.material_grade, item.item_code,
+         ledgerOptions.length ?? null, ledgerOptions.width ?? null, ledgerOptions.thickness ?? null, ledgerOptions.diameter ?? null, ledgerOptions.outer_diameter ?? null]
       );
     }
   }
@@ -1000,18 +1067,21 @@ const updateStockEntry = async (id, data, userId) => {
 
     // 4. Insert new items
     if (data.items && data.items.length > 0) {
+      const groupSet = await loadGroupSet(connection);
       for (const item of data.items) {
-        const correctedItemCode = await getCorrectItemCode(item, connection);
+        const lineMat = await resolveLineMaterial(item, connection, groupSet);
+        const correctedItemCode = await getCorrectItemCode({ ...item, materialType: lineMat.materialType }, connection);
         await connection.execute(
-          `INSERT INTO stock_entry_items 
-           (stock_entry_id, item_code, material_name, material_type, quantity, uom, batch_no, valuation_rate, amount,
+          `INSERT INTO stock_entry_items
+           (stock_entry_id, item_code, material_name, material_type, material_grade, quantity, uom, batch_no, valuation_rate, amount,
             shape_id, length, width, thickness, diameter, outer_diameter, weight_per_unit)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             correctedItemCode,
             item.materialName || item.material_name || null,
-            item.materialType || item.material_type || null,
+            lineMat.materialType || null,
+            lineMat.materialGrade || null,
             item.quantity,
             item.uom || null,
             item.batchNo || item.batch_no || null,
