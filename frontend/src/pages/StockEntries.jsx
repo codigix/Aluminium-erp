@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { formatDimensions, calculateWeight } from '../utils/formatters';
 import { PipeCalcFields, FlangeFields, isFlangeShape } from '../components/ShapeCalcFields.jsx';
+import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -146,6 +147,11 @@ const StockEntries = () => {
   // Dimension-related state
   const [shapes, setShapes] = useState([]);
   const [materials, setMaterials] = useState([]);
+  // Company (Company Master): list filter + the entry's issuing company. A GRN-linked entry uses its GRN's company.
+  const cf = useCompanyFilter();
+  const [legacyNoCompany, setLegacyNoCompany] = useState(false); // older posted entry saved without a company
+  const entryCompanyId = useCallback((entry) => cf.companyOf({ fallback: entry.host_company_id || undefined, grn: entry.host_company_id ? undefined : entry.grn_id }), [cf]);
+  const companyName = useCallback((id) => (cf.companies.find(c => String(c.id) === String(id)) || {}).company_name || '', [cf.companies]);
 
   const loadEditingDetails = async (id) => {
     try {
@@ -169,12 +175,14 @@ const StockEntries = () => {
 
 
       setEditingId(parseInt(id));
+      setLegacyNoCompany(detail.status === 'submitted' && !detail.host_company_id && !detail.grn_id);
       setFormData({
         entryType: detail.entry_type,
         entryDate: detail.entry_date ? new Date(detail.entry_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         fromWarehouseId: detail.from_warehouse_id || '',
         toWarehouseId: detail.to_warehouse_id || '',
         grnId: detail.grn_id || '',
+        hostCompanyId: detail.host_company_id ? String(detail.host_company_id) : '',
         purpose: detail.purpose || '',
         remarks: detail.remarks || '',
         items: (detail.items || []).map(item => {
@@ -240,10 +248,19 @@ const StockEntries = () => {
     fromWarehouseId: '',
     toWarehouseId: '',
     grnId: '',
+    hostCompanyId: '',
     purpose: '',
     remarks: '',
     items: []
   });
+
+  // New entry: preselect the active company (Manual Entry etc.); a GRN entry takes the GRN's company instead
+  useEffect(() => {
+    if (!showModal || editingId || formData.grnId || formData.hostCompanyId) return;
+    const active = cf.companies.find(c => c.status === 'ACTIVE');
+    if (active) setFormData(prev => (prev.hostCompanyId || prev.grnId ? prev : { ...prev, hostCompanyId: String(active.id) }));
+  }, [showModal, editingId, formData.grnId, formData.hostCompanyId, cf.companies]);
+  useEffect(() => { if (!editingId) setLegacyNoCompany(false); }, [editingId]);
 
   const [currentItem, setCurrentItem] = useState({
     itemCode: '',
@@ -361,7 +378,9 @@ const StockEntries = () => {
   };
 
   const handleGRNSelect = async (grnId) => {
-    setFormData(prev => ({ ...prev, grnId }));
+    // GRN entry: company comes from the GRN (locked); back to manual: start from the active company again
+    const grnCompany = grnId ? cf.companyOf({ grn: grnId }) : '';
+    setFormData(prev => ({ ...prev, grnId, hostCompanyId: grnId ? grnCompany : '' }));
     if (!grnId) {
       setFormData(prev => ({ ...prev, items: [] }));
       return;
@@ -530,6 +549,10 @@ const StockEntries = () => {
       errorToast('At least one item is required');
       return;
     }
+    if (status === 'submitted' && !formData.grnId && !formData.hostCompanyId && !legacyNoCompany) {
+      errorToast('Please select the Company before creating the stock entry');
+      return;
+    }
 
     let finalPurpose = formData.purpose;
     if (!finalPurpose) {
@@ -561,8 +584,11 @@ const StockEntries = () => {
         body: JSON.stringify({ ...formData, purpose: finalPurpose, status })
       });
 
-      if (!response.ok) throw new Error(editingId ? 'Failed to update stock entry' : 'Failed to create stock entry');
-      
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.message || (editingId ? 'Failed to update stock entry' : 'Failed to create stock entry'));
+      }
+
       successToast(`Stock entry ${status === 'submitted' ? 'submitted' : 'saved'} successfully`);
       setShowModal(false);
       setEditingId(null);
@@ -572,6 +598,7 @@ const StockEntries = () => {
         fromWarehouseId: '',
         toWarehouseId: '',
         grnId: '',
+        hostCompanyId: '',
         purpose: '',
         remarks: '',
         items: []
@@ -603,7 +630,10 @@ const StockEntries = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      if (!response.ok) throw new Error('Failed to submit stock entry');
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody.message || 'Failed to submit stock entry');
+      }
       
       successToast('Stock entry submitted successfully');
       fetchEntries();
@@ -664,7 +694,7 @@ const StockEntries = () => {
       entry.from_warehouse_id === parseInt(warehouseFilter) || 
       entry.to_warehouse_id === parseInt(warehouseFilter);
 
-    return matchesSearch && matchesType && matchesWarehouse;
+    return matchesSearch && matchesType && matchesWarehouse && cf.matches(entryCompanyId(entry));
   });
 
   const totalMovements = entries.length;
@@ -719,7 +749,8 @@ const StockEntries = () => {
           </div>
           
           <div className="flex flex-wrap items-center gap-2">
-            <select 
+            <CompanyFilterSelect cf={cf} rows={entries} getCompanyId={entryCompanyId} className="!py-2" />
+            <select
               className="bg-slate-50 border border-slate-200 rounded  p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
               value={typeFilter}
               onChange={e => setTypeFilter(e.target.value)}
@@ -787,6 +818,11 @@ const StockEntries = () => {
                   <td className="p-2 ">
                     <div className=" text-slate-900 font-semibold">{entry.entry_no}</div>
                     <div className="text-xs text-slate-400  er">ID: {entry.id}</div>
+                    {companyName(entryCompanyId(entry)) && (
+                      <div className="text-[10px] text-indigo-500 truncate max-w-[180px]" title={companyName(entryCompanyId(entry))}>
+                        {companyName(entryCompanyId(entry))}
+                      </div>
+                    )}
                   </td>
                   <td className="p-2 ">
                     <div className="flex flex-col">
@@ -956,7 +992,30 @@ const StockEntries = () => {
                   </div>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-600  ">Company *</label>
+                    {(() => {
+                      const lockedByGrn = !!formData.grnId;
+                      const locked = lockedByGrn || legacyNoCompany;
+                      return (
+                        <>
+                          <select
+                            className="w-full bg-slate-50 border border-slate-200 rounded  p-2  text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none disabled:opacity-60"
+                            value={formData.hostCompanyId || ''}
+                            onChange={e => setFormData({ ...formData, hostCompanyId: e.target.value })}
+                            disabled={locked}
+                          >
+                            <option value="">{legacyNoCompany ? 'No company (older entry)' : lockedByGrn ? 'No company on this GRN' : 'Select Company'}</option>
+                            {cf.companies.map(c => (
+                              <option key={c.id} value={c.id}>{c.company_name}{c.status === 'ACTIVE' ? ' (Active)' : ''}</option>
+                            ))}
+                          </select>
+                          {lockedByGrn && <p className="text-[10px] text-slate-400 px-1">Taken from the selected GRN</p>}
+                        </>
+                      );
+                    })()}
+                  </div>
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-slate-600  ">From Warehouse</label>
                     <select 

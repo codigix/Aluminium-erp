@@ -523,6 +523,29 @@ const getCompanyMap = async () => {
   return { mr, quotation, po, receipt, grn };
 };
 
+// Company of one GRN, same rule as getCompanyMap().grn: PO → MR → Sales Order company, else the PO's / quotation's /
+// receipt's own company. Returns null when it can't be traced.
+const getGrnCompanyId = async (grnId) => {
+  if (!grnId) return null;
+  const [[g]] = await pool.query(
+    `SELECT COALESCE(po.mr_id, q.mr_id) AS mr_id, po.host_company_id AS po_company_id, q.host_company_id AS quote_company_id,
+            pr.host_company_id AS receipt_company_id
+     FROM grns g
+     LEFT JOIN purchase_orders po ON po.po_number = g.po_number
+     LEFT JOIN quotations q ON q.id = po.quotation_id
+     LEFT JOIN po_receipts pr ON pr.id = g.po_receipt_id
+     WHERE g.id = ? LIMIT 1`,
+    [grnId]
+  );
+  if (!g) return null;
+  let mrCompany = null;
+  if (g.mr_id) {
+    const [[m]] = await pool.query(`SELECT ${MR_COMPANY_SQL} AS company_id FROM material_requests mr WHERE mr.id = ?`, [g.mr_id]);
+    mrCompany = m ? m.company_id : null;
+  }
+  return mrCompany || g.po_company_id || g.quote_company_id || g.receipt_company_id || null;
+};
+
 // Read-only company view of stock (Stock Ledger / Stock Balance filters). Stock itself stays one shared pool;
 // each ledger row is attributed to the company of its source document:
 //   GRN receipt → GRN (→ PO → Sales Order company), Material Request issue → MR, Stock Entry → its GRN.
@@ -534,7 +557,7 @@ const getStockCompanyMap = async () => {
     `SELECT sl.id, sl.item_code, sl.transaction_type, sl.reference_doc_type, sl.reference_doc_id,
             sl.quantity, sl.weight_in, sl.weight_out,
             sl.length, sl.width, sl.thickness, sl.diameter, sl.outer_diameter,
-            gi.grn_id AS grn_item_grn_id, se.grn_id AS entry_grn_id,
+            gi.grn_id AS grn_item_grn_id, se.grn_id AS entry_grn_id, se.host_company_id AS entry_company_id,
             (SELECT m.id FROM material_requests m WHERE m.mr_number = sl.reference_doc_number LIMIT 1) AS mr_by_number
      FROM stock_ledger sl
      LEFT JOIN grn_items gi ON gi.id = sl.grn_item_id
@@ -547,7 +570,8 @@ const getStockCompanyMap = async () => {
     const type = String(r.reference_doc_type || '').toUpperCase();
     let companyId = null;
     if (type === 'GRN') companyId = map.grn[r.grn_item_grn_id || r.reference_doc_id];
-    else if (type === 'STOCK_ENTRY') companyId = r.entry_grn_id ? map.grn[r.entry_grn_id] : null;
+    // Stock Entry: its saved company, else its GRN's company
+    else if (type === 'STOCK_ENTRY') companyId = r.entry_company_id || (r.entry_grn_id ? map.grn[r.entry_grn_id] : null);
     else if (type === 'MATERIAL REQUEST') companyId = map.mr[r.reference_doc_id] || (r.mr_by_number && map.mr[r.mr_by_number]);
     if (companyId) ledger[r.id] = companyId;
 
@@ -592,6 +616,7 @@ module.exports = {
   resolvePlanOrder,
   getCompanyMap,
   getStockCompanyMap,
+  getGrnCompanyId,
   markDecisionSeen,
   getPendingCount
 };

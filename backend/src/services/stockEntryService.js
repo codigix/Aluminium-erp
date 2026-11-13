@@ -1,6 +1,29 @@
 const pool = require('../config/db');
 const stockService = require('./stockService');
 
+// Issuing company of a stock entry (Company Master id). A GRN-linked entry always takes its GRN's company;
+// otherwise the company picked on the form, else `keepCompanyId` (the entry's existing company on edit).
+const resolveEntryCompany = async (data, keepCompanyId = null) => {
+  const grnId = data.grnId || data.grn_id;
+  if (grnId) {
+    const { getGrnCompanyId } = require('./companyChangeService');
+    const grnCompany = await getGrnCompanyId(grnId);
+    if (grnCompany) return Number(grnCompany);
+  }
+  const picked = data.hostCompanyId ?? data.host_company_id;
+  if (picked) return Number(picked);
+  return keepCompanyId || null;
+};
+
+// Posting a manual entry (no GRN) needs a company so it shows under the right company in Stock Ledger / Balance.
+const assertCompanyForPosting = (grnId, companyId) => {
+  if (!grnId && !companyId) {
+    const err = new Error('Please select the Company before creating the stock entry.');
+    err.statusCode = 400;
+    throw err;
+  }
+};
+
 
 const getCorrectItemCode = async (item, connection) => {
   let itemCode = item.itemCode || item.item_code;
@@ -380,12 +403,15 @@ const createStockEntry = async (data, userId) => {
   try {
     await connection.beginTransaction();
 
+    const hostCompanyId = await resolveEntryCompany(data);
+    if (data.status === 'submitted') assertCompanyForPosting(data.grnId, hostCompanyId);
+
     const entryNo = await generateEntryNo(data.entryType);
 
     const [result] = await connection.execute(
-      `INSERT INTO stock_entries 
-       (entry_no, entry_type, purpose, from_warehouse_id, to_warehouse_id, entry_date, grn_id, remarks, created_by, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO stock_entries
+       (entry_no, entry_type, purpose, from_warehouse_id, to_warehouse_id, entry_date, grn_id, remarks, created_by, status, host_company_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entryNo,
         data.entryType,
@@ -396,7 +422,8 @@ const createStockEntry = async (data, userId) => {
         data.grnId || null,
         data.remarks || null,
         userId,
-        data.status || 'draft'
+        data.status || 'draft',
+        hostCompanyId
       ]
     );
 
@@ -456,6 +483,7 @@ const submitStockEntry = async (id, userId) => {
     const entry = entries[0];
 
     if (entry.status !== 'draft') throw new Error('Only draft entries can be submitted');
+    assertCompanyForPosting(entry.grn_id, entry.host_company_id);
 
     await processStockMovement(id, connection, userId);
 
@@ -839,13 +867,21 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
       return { success: false, message: 'No items with positive quantity in GRN' };
     }
 
-    // 4. Create Stock Entry
+    // 4. Create Stock Entry (company = the GRN's company; best effort, never blocks the GRN flow —
+    //    the Stock Ledger / Balance filters fall back to the GRN's company anyway)
+    let autoCompanyId = null;
+    try {
+      const { getGrnCompanyId } = require('./companyChangeService');
+      autoCompanyId = await getGrnCompanyId(grnId);
+    } catch (e) {
+      console.warn('[StockEntry] Could not resolve GRN company:', e.message);
+    }
     const entryNo = await generateEntryNo('Material Receipt');
 
     const [result] = await connection.execute(
-      `INSERT INTO stock_entries 
-       (entry_no, entry_type, purpose, to_warehouse_id, entry_date, grn_id, remarks, created_by, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO stock_entries
+       (entry_no, entry_type, purpose, to_warehouse_id, entry_date, grn_id, remarks, created_by, status, host_company_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entryNo,
         'Material Receipt',
@@ -855,7 +891,8 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
         grnId,
         `Auto-created from GRN ${grn.po_number || ''}`,
         userId,
-        'submitted'
+        'submitted',
+        autoCompanyId || null
       ]
     );
 
@@ -922,6 +959,12 @@ const updateStockEntry = async (id, data, userId) => {
     if (entries.length === 0) throw new Error('Stock Entry not found');
     const oldEntry = entries[0];
 
+    // Company: GRN's company if linked, else the one picked, else keep the existing one. An older entry that was
+    // already posted without a company may stay without one; anything else needs a company to post.
+    const hostCompanyId = await resolveEntryCompany(data, oldEntry.host_company_id);
+    const legacyPostedWithoutCompany = oldEntry.status === 'submitted' && !oldEntry.host_company_id;
+    if ((data.status || 'draft') === 'submitted' && !legacyPostedWithoutCompany) assertCompanyForPosting(data.grnId, hostCompanyId);
+
     // 1. If old entry was submitted, reverse the stock ledger entries first
     if (oldEntry.status === 'submitted') {
       const [ledgerEntries] = await connection.query(
@@ -936,7 +979,7 @@ const updateStockEntry = async (id, data, userId) => {
     // 2. Update stock entry details
     await connection.execute(
       `UPDATE stock_entries 
-       SET entry_type = ?, purpose = ?, from_warehouse_id = ?, to_warehouse_id = ?, entry_date = ?, grn_id = ?, remarks = ?, status = ?
+       SET entry_type = ?, purpose = ?, from_warehouse_id = ?, to_warehouse_id = ?, entry_date = ?, grn_id = ?, remarks = ?, status = ?, host_company_id = ?
        WHERE id = ?`,
       [
         data.entryType || oldEntry.entry_type,
@@ -947,6 +990,7 @@ const updateStockEntry = async (id, data, userId) => {
         data.grnId || null,
         data.remarks || null,
         data.status || 'draft',
+        hostCompanyId,
         id
       ]
     );

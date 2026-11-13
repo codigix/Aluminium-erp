@@ -2052,6 +2052,7 @@ model stock_entries {
   created_at                                             DateTime?                @default(now()) @db.Timestamp(0)
   updated_at                                             DateTime?                @default(now()) @db.Timestamp(0)
   created_by                                             Int?
+  host_company_id                                        Int?
   warehouses_stock_entries_from_warehouse_idTowarehouses warehouses?              @relation("stock_entries_from_warehouse_idTowarehouses", fields: [from_warehouse_id], references: [id], onUpdate: NoAction, map: "stock_entries_ibfk_1")
   warehouses_stock_entries_to_warehouse_idTowarehouses   warehouses?              @relation("stock_entries_to_warehouse_idTowarehouses", fields: [to_warehouse_id], references: [id], onUpdate: NoAction, map: "stock_entries_ibfk_2")
   grns                                                   grns?                    @relation(fields: [grn_id], references: [id], onUpdate: NoAction, map: "stock_entries_ibfk_3")

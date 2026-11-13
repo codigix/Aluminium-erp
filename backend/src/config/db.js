@@ -981,6 +981,19 @@ const ensureStockColumns = async () => {
       if (e.code !== 'ER_NO_SUCH_TABLE') console.error('Flange shape seed failed:', e.message);
     }
 
+    // Stock Entry issuing company (Company Master id; additive, NULL for older entries)
+    try {
+      const [seCols] = await connection.query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'stock_entries' AND COLUMN_NAME = 'host_company_id'"
+      );
+      if (seCols.length === 0) {
+        await connection.query('ALTER TABLE stock_entries ADD COLUMN `host_company_id` INT NULL');
+        console.log('Stock Entries host_company_id column added');
+      }
+    } catch (e) {
+      if (e.code !== 'ER_NO_SUCH_TABLE') console.error('Stock Entries company column sync failed:', e.message);
+    }
+
     // Drop unique_item_warehouse unique index if it exists, and replace with non-unique index
     const [indexes] = await connection.query('SHOW INDEX FROM stock_balance');
     const oldUniqueIndex = indexes.find(idx => idx.Key_name === 'unique_item_warehouse' && idx.Non_unique === 0);
