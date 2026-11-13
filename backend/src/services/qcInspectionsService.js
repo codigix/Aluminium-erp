@@ -210,6 +210,9 @@ const getQCWithDetails = async (qcId) => {
         CASE WHEN gi.outer_diameter > 0 THEN gi.outer_diameter ELSE COALESCE(poi.outer_diameter, 0) END as outer_diameter,
         CASE WHEN gi.density > 0 THEN gi.density ELSE COALESCE(poi.density, 0) END as density,
         CASE WHEN gi.weight_per_unit > 0 THEN gi.weight_per_unit ELSE COALESCE(poi.weight_per_unit, 0) END as weight_per_unit,
+        gi.received_length, gi.received_width, gi.received_thickness, gi.received_diameter, gi.received_outer_diameter,
+        gi.deviation_override, gi.deviation_reason,
+        qci.qc_length, qci.qc_width, qci.qc_thickness, qci.qc_diameter, qci.qc_outer_diameter,
         w.warehouse_name
        FROM qc_inspection_items qci
        LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
@@ -247,6 +250,13 @@ const getQCWithDetails = async (qcId) => {
       outer_diameter: item.outer_diameter,
       density: item.density,
       weight_per_unit: item.weight_per_unit,
+      // Receiving Size + Tolerance Override recorded on the GRN (display only)
+      received_length: item.received_length, received_width: item.received_width, received_thickness: item.received_thickness,
+      received_diameter: item.received_diameter, received_outer_diameter: item.received_outer_diameter,
+      deviation_override: item.deviation_override, deviation_reason: item.deviation_reason,
+      // QC Inspection Dimension measured by QC (record only; NULL = not entered)
+      qc_length: item.qc_length, qc_width: item.qc_width, qc_thickness: item.qc_thickness,
+      qc_diameter: item.qc_diameter, qc_outer_diameter: item.qc_outer_diameter,
       rate: parseFloat(item.unit_rate) || 0,
       design_qty: parseFloat(item.planned_qty || item.design_qty || 0),
       planned_qty: parseFloat(item.planned_qty || 0),
@@ -447,6 +457,9 @@ const getAllQCs = async () => {
         CASE WHEN gi.outer_diameter > 0 THEN gi.outer_diameter ELSE COALESCE(poi.outer_diameter, 0) END as outer_diameter,
         CASE WHEN gi.density > 0 THEN gi.density ELSE COALESCE(poi.density, 0) END as density,
         CASE WHEN gi.weight_per_unit > 0 THEN gi.weight_per_unit ELSE COALESCE(poi.weight_per_unit, 0) END as weight_per_unit,
+        gi.received_length, gi.received_width, gi.received_thickness, gi.received_diameter, gi.received_outer_diameter,
+        gi.deviation_override, gi.deviation_reason,
+        qci.qc_length, qci.qc_width, qci.qc_thickness, qci.qc_diameter, qci.qc_outer_diameter,
         w.warehouse_name
        FROM qc_inspection_items qci 
        LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
@@ -492,6 +505,13 @@ const getAllQCs = async () => {
             weight_per_unit: item.weight_per_unit,
             shape_type: item.shape_type,
             shape_name: item.shape_name,
+            // Receiving Size + Tolerance Override recorded on the GRN (display only)
+            received_length: item.received_length, received_width: item.received_width, received_thickness: item.received_thickness,
+            received_diameter: item.received_diameter, received_outer_diameter: item.received_outer_diameter,
+            deviation_override: item.deviation_override, deviation_reason: item.deviation_reason,
+            // QC Inspection Dimension measured by QC (record only; NULL = not entered)
+            qc_length: item.qc_length, qc_width: item.qc_width, qc_thickness: item.qc_thickness,
+            qc_diameter: item.qc_diameter, qc_outer_diameter: item.qc_outer_diameter,
             rate: parseFloat(item.unit_rate) || 0,
             design_qty: parseFloat(item.planned_qty || item.design_qty || 0),
             planned_qty: parseFloat(item.planned_qty || 0),
@@ -681,6 +701,18 @@ const updateQC = async (qcId, updates) => {
               item.id
             ]
           );
+
+          // QC Inspection Dimension (record only) — only when the screen sends it; cleared = back to "not entered"
+          if (item.qc_size_edited !== undefined) {
+            const dn = (v) => (v === undefined || v === null || v === '' || !Number.isFinite(parseFloat(v)) ? null : parseFloat(v));
+            const dims = item.qc_size_edited
+              ? [dn(item.qc_length), dn(item.qc_width), dn(item.qc_thickness), dn(item.qc_diameter), dn(item.qc_outer_diameter)]
+              : [null, null, null, null, null];
+            await connection.execute(
+              'UPDATE qc_inspection_items SET qc_length = ?, qc_width = ?, qc_thickness = ?, qc_diameter = ?, qc_outer_diameter = ? WHERE id = ?',
+              [...dims, item.id]
+            );
+          }
 
           // Also update grn_items
           const [qcItem] = await connection.query(
@@ -935,6 +967,8 @@ const getQCItems = async (qcId) => {
       COALESCE(gi.thickness, poi.thickness, 0) as thickness,
       COALESCE(gi.diameter, poi.diameter, 0) as diameter,
       COALESCE(gi.outer_diameter, poi.outer_diameter, 0) as outer_diameter,
+      gi.received_length, gi.received_width, gi.received_thickness, gi.received_diameter, gi.received_outer_diameter,
+      gi.deviation_override, gi.deviation_reason,
       COALESCE(gi.density, poi.density, 0) as density,
       COALESCE(gi.weight_per_unit, poi.weight_per_unit, 0) as weight_per_unit,
       COALESCE(gi.shape_type, poi.shape_type) as shape_type,

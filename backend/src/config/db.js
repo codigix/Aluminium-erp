@@ -1002,6 +1002,58 @@ const ensureStockColumns = async () => {
       if (e.code !== 'ER_NO_SUCH_TABLE') console.error('Stock Entries company column sync failed:', e.message);
     }
 
+    // GRN Receiving Dimension (record only; NULL = same as ordered)
+    for (const tbl of ['po_receipt_items', 'grn_items']) {
+      for (const col of ['received_length', 'received_width', 'received_thickness', 'received_diameter', 'received_outer_diameter']) {
+        try {
+          const [rc] = await connection.query(
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            [tbl, col]
+          );
+          if (rc.length === 0) {
+            await connection.query(`ALTER TABLE \`${tbl}\` ADD COLUMN \`${col}\` DECIMAL(12,4) NULL`);
+            console.log(`${tbl}.${col} column added`);
+          }
+        } catch (e) {
+          if (e.code !== 'ER_NO_SUCH_TABLE') console.error(`${tbl}.${col} column sync failed:`, e.message);
+        }
+      }
+    }
+
+    // QC Inspection Dimension measured by QC (record only; NULL = not entered)
+    for (const col of ['qc_length', 'qc_width', 'qc_thickness', 'qc_diameter', 'qc_outer_diameter']) {
+      try {
+        const [rc] = await connection.query(
+          "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'qc_inspection_items' AND COLUMN_NAME = ?",
+          [col]
+        );
+        if (rc.length === 0) {
+          await connection.query(`ALTER TABLE qc_inspection_items ADD COLUMN \`${col}\` DECIMAL(12,4) NULL`);
+          console.log(`qc_inspection_items.${col} column added`);
+        }
+      } catch (e) {
+        if (e.code !== 'ER_NO_SUCH_TABLE') console.error(`qc_inspection_items.${col} column sync failed:`, e.message);
+      }
+    }
+
+    // GRN Tolerance Override (Deviation): tick + reason per line (record only)
+    for (const tbl of ['po_receipt_items', 'grn_items']) {
+      for (const [col, def] of [['deviation_override', 'TINYINT(1) NOT NULL DEFAULT 0'], ['deviation_reason', 'VARCHAR(500) NULL']]) {
+        try {
+          const [rc] = await connection.query(
+            'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+            [tbl, col]
+          );
+          if (rc.length === 0) {
+            await connection.query(`ALTER TABLE \`${tbl}\` ADD COLUMN \`${col}\` ${def}`);
+            console.log(`${tbl}.${col} column added`);
+          }
+        } catch (e) {
+          if (e.code !== 'ER_NO_SUCH_TABLE') console.error(`${tbl}.${col} column sync failed:`, e.message);
+        }
+      }
+    }
+
     // PO line remark (shown in brackets under the size in the PO PDF)
     try {
       const [poiCols] = await connection.query(

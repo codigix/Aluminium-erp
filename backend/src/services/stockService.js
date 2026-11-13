@@ -940,16 +940,25 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
 
     console.log(`[Stock] Creating entry for QC:${qcId}, GRN:${grnId}, Item:${itemCode}, Qty:${passQty}`);
 
-    // Fetch dimension details from GRN/PO item
+    // Fetch dimension details from GRN/PO item.
+    // Size actually stocked: QC Inspection Dimension (measured by QC) → GRN Receiving Size → ordered size (GRN / PO line).
     let itemDims = {};
     if (grnItemId) {
+      const actualDim = (col) => `CASE
+            WHEN qci.qc_length IS NOT NULL OR qci.qc_width IS NOT NULL OR qci.qc_thickness IS NOT NULL OR qci.qc_diameter IS NOT NULL OR qci.qc_outer_diameter IS NOT NULL
+              THEN NULLIF(qci.qc_${col}, 0)
+            WHEN gi.received_length IS NOT NULL OR gi.received_width IS NOT NULL OR gi.received_thickness IS NOT NULL OR gi.received_diameter IS NOT NULL OR gi.received_outer_diameter IS NOT NULL
+              THEN NULLIF(gi.received_${col}, 0)
+            ELSE COALESCE(NULLIF(gi.${col}, 0), NULLIF(poi.${col}, 0)) END`;
       const [dimRows] = await useConnection.query(`
-        SELECT 
-          COALESCE(NULLIF(gi.length, 0), NULLIF(poi.length, 0)) as length,
-          COALESCE(NULLIF(gi.width, 0), NULLIF(poi.width, 0)) as width,
-          COALESCE(NULLIF(gi.thickness, 0), NULLIF(poi.thickness, 0)) as thickness,
-          COALESCE(NULLIF(gi.diameter, 0), NULLIF(poi.diameter, 0)) as diameter,
-          COALESCE(NULLIF(gi.outer_diameter, 0), NULLIF(poi.outer_diameter, 0)) as outer_diameter,
+        SELECT
+          ${actualDim('length')} as length,
+          ${actualDim('width')} as width,
+          ${actualDim('thickness')} as thickness,
+          ${actualDim('diameter')} as diameter,
+          ${actualDim('outer_diameter')} as outer_diameter,
+          (qci.qc_length IS NOT NULL OR qci.qc_width IS NOT NULL OR qci.qc_thickness IS NOT NULL OR qci.qc_diameter IS NOT NULL OR qci.qc_outer_diameter IS NOT NULL
+           OR gi.received_length IS NOT NULL OR gi.received_width IS NOT NULL OR gi.received_thickness IS NOT NULL OR gi.received_diameter IS NOT NULL OR gi.received_outer_diameter IS NOT NULL) as size_overridden,
           COALESCE(NULLIF(gi.density, 0), NULLIF(poi.density, 0)) as density,
           COALESCE(NULLIF(gi.weight_per_unit, 0), NULLIF(poi.weight_per_unit, 0)) as weight_per_unit,
           poi.shape_type as shape_type,
@@ -957,10 +966,15 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
           poi.material_type as material_type
         FROM grn_items gi
         LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+        LEFT JOIN qc_inspection_items qci ON qci.grn_item_id = gi.id AND qci.qc_inspection_id = ?
         WHERE gi.id = ?
         LIMIT 1
-      `, [grnItemId]);
+      `, [qcId, grnItemId]);
       if (dimRows.length > 0) itemDims = dimRows[0];
+      // Actual size differs from the order: weight per piece = accepted weight ÷ accepted qty (not the ordered piece weight)
+      if (Number(itemDims.size_overridden) === 1 && parseFloat(passQty) > 0 && parseFloat(passWeight) > 0) {
+        itemDims.weight_per_unit = parseFloat((parseFloat(passWeight) / parseFloat(passQty)).toFixed(4));
+      }
     }
 
     // Duplicate check

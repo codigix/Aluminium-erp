@@ -394,13 +394,26 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
            }
          }
 
+        // Receiving Dimension (record only): the size actually received, when entered on the GRN screen.
+        // NULL = same as ordered. Stock / QC keep using the ordered size above (length … outer_diameter).
+        const rcvNum = (v) => (v === undefined || v === null || v === '' ? null : (Number.isFinite(parseFloat(v)) ? parseFloat(v) : null));
+        const rcvDims = item.received_size_edited
+          ? [rcvNum(item.rcv_length), rcvNum(item.rcv_width), rcvNum(item.rcv_thickness), rcvNum(item.rcv_diameter), rcvNum(item.rcv_outer_diameter)]
+          : [null, null, null, null, null];
+        // Tolerance Override (Deviation): ticked on the GRN line, with a reason (record only)
+        const devOverride = item.deviation_override ? 1 : 0;
+        const devReason = devOverride ? (String(item.deviation_reason || '').replace(/\s+/g, ' ').trim().slice(0, 500) || null) : null;
+        const devCols = [devOverride, devReason];
+
         await connection.execute(
           `INSERT INTO po_receipt_items (
             receipt_id, po_item_id, received_quantity, po_qty,
             length, width, thickness, diameter, outer_diameter, density, weight_per_unit,
-            item_code, material_name, drawing_no, unit
+            item_code, material_name, drawing_no, unit,
+            received_length, received_width, received_thickness, received_diameter, received_outer_diameter,
+            deviation_override, deviation_reason
           )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             receiptId, 
             poItemId, 
@@ -416,7 +429,9 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
             item.item_code || null,
             item.material_name || null,
             item.drawing_no || null,
-            item.unit || null
+            item.unit || null,
+            ...rcvDims,
+            ...devCols
           ]
         );
 
@@ -442,9 +457,11 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
         await connection.execute(
           `INSERT INTO grn_items (
             grn_id, po_item_id, po_qty, received_qty, received_weight, accepted_qty, receiving_qty, receiving_weight, status, warehouse_id,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, uom
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, uom,
+            received_length, received_width, received_thickness, received_diameter, received_outer_diameter,
+            deviation_override, deviation_reason
           )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             grnId, 
             poItemId, 
@@ -464,7 +481,9 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
             item.density || 0,
             item.weight_per_unit || 0,
             item.shape_type || item.shape_name || item.shape || null,
-            item.unit || item.uom || null
+            item.unit || item.uom || null,
+            ...rcvDims,
+            ...devCols
           ]
         );
       }

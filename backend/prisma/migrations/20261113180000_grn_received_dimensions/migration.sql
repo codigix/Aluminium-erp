@@ -1,0 +1,54 @@
+-- GRN "Receiving Dimension" (record only): the size actually received, entered on Create GRN.
+-- Added to po_receipt_items and grn_items as received_length / _width / _thickness / _diameter / _outer_diameter.
+-- NULL = same as ordered. The existing size columns (used by QC / stock posting) are not changed.
+-- Additive and nullable; existing rows are not changed. Safe to run more than once.
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'po_receipt_items' AND COLUMN_NAME = 'received_length');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE `po_receipt_items` ADD COLUMN `received_length` DECIMAL(12,4) NULL', 'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'po_receipt_items' AND COLUMN_NAME = 'received_width');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE `po_receipt_items` ADD COLUMN `received_width` DECIMAL(12,4) NULL', 'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'po_receipt_items' AND COLUMN_NAME = 'received_thickness');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE `po_receipt_items` ADD COLUMN `received_thickness` DECIMAL(12,4) NULL', 'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'po_receipt_items' AND COLUMN_NAME = 'received_diameter');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE `po_receipt_items` ADD COLUMN `received_diameter` DECIMAL(12,4) NULL', 'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'po_receipt_items' AND COLUMN_NAME = 'received_outer_diameter');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE `po_receipt_items` ADD COLUMN `received_outer_diameter` DECIMAL(12,4) NULL', 'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'grn_items' AND COLUMN_NAME = 'received_length');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE `grn_items` ADD COLUMN `received_length` DECIMAL(12,4) NULL', 'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'grn_items' AND COLUMN_NAME = 'received_width');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE `grn_items` ADD COLUMN `received_width` DECIMAL(12,4) NULL', 'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'grn_items' AND COLUMN_NAME = 'received_thickness');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE `grn_items` ADD COLUMN `received_thickness` DECIMAL(12,4) NULL', 'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'grn_items' AND COLUMN_NAME = 'received_diameter');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE `grn_items` ADD COLUMN `received_diameter` DECIMAL(12,4) NULL', 'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'grn_items' AND COLUMN_NAME = 'received_outer_diameter');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE `grn_items` ADD COLUMN `received_outer_diameter` DECIMAL(12,4) NULL', 'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

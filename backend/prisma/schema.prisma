@@ -447,6 +447,13 @@ model grn_items {
   weight_per_unit       Decimal?                     @default(0.0000) @db.Decimal(12, 4)
   uom                   String?                      @db.VarChar(20)
   shape_type            String?                      @db.VarChar(100)
+  received_length         Decimal?                   @db.Decimal(12, 4)
+  received_width          Decimal?                   @db.Decimal(12, 4)
+  received_thickness      Decimal?                   @db.Decimal(12, 4)
+  received_diameter       Decimal?                   @db.Decimal(12, 4)
+  received_outer_diameter Decimal?                   @db.Decimal(12, 4)
+  deviation_override      Int                        @default(0) @db.TinyInt
+  deviation_reason        String?                    @db.VarChar(500)
   grn_excess_approvals  grn_excess_approvals[]
   warehouses            warehouses?                  @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction, map: "fk_grn_items_warehouse")
   grns                  grns                         @relation(fields: [grn_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "grn_items_ibfk_1")
@@ -1116,6 +1123,13 @@ model po_receipt_items {
   drawing_no        String?     @db.VarChar(100)
   unit              String?     @db.VarChar(50)
   po_qty            Decimal?    @default(0.000) @db.Decimal(12, 3)
+  received_length         Decimal? @db.Decimal(12, 4)
+  received_width          Decimal? @db.Decimal(12, 4)
+  received_thickness      Decimal? @db.Decimal(12, 4)
+  received_diameter       Decimal? @db.Decimal(12, 4)
+  received_outer_diameter Decimal? @db.Decimal(12, 4)
+  deviation_override      Int      @default(0) @db.TinyInt
+  deviation_reason        String?  @db.VarChar(500)
   po_receipts       po_receipts @relation(fields: [receipt_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "po_receipt_items_ibfk_1")
 
   @@index([receipt_id], map: "receipt_id")
@@ -1440,6 +1454,11 @@ model qc_inspection_items {
   remarks          String?        @db.Text
   created_at       DateTime?      @default(now()) @db.Timestamp(0)
   updated_at       DateTime?      @default(now()) @db.Timestamp(0)
+  qc_length         Decimal?      @db.Decimal(12, 4)
+  qc_width          Decimal?      @db.Decimal(12, 4)
+  qc_thickness      Decimal?      @db.Decimal(12, 4)
+  qc_diameter       Decimal?      @db.Decimal(12, 4)
+  qc_outer_diameter Decimal?      @db.Decimal(12, 4)
   qc_inspections   qc_inspections @relation(fields: [qc_inspection_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "qc_inspection_items_ibfk_1")
   grn_items        grn_items      @relation(fields: [grn_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "qc_inspection_items_ibfk_2")
   warehouses       warehouses?    @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction, map: "qc_inspection_items_ibfk_3")

@@ -5,6 +5,19 @@ import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions } from '../utils/formatters';
+import LineDimensionEditor, { PREFIX_TO_CALC_SHAPE } from '../components/LineDimensionEditor.jsx';
+import { calculateWeight } from '../utils/formatters';
+
+// Receiving Size recorded on the GRN (record only) — text only when it differs from the ordered size
+const receivedSizeText = (item) => {
+  if (!item) return '';
+  const keys = ['length', 'width', 'thickness', 'diameter', 'outer_diameter'];
+  if (!keys.some(k => item[`received_${k}`] !== null && item[`received_${k}`] !== undefined)) return '';
+  const rcv = { ...item };
+  keys.forEach(k => { rcv[k] = item[`received_${k}`]; });
+  const text = formatDimensions(rcv);
+  return text && text !== formatDimensions(item) ? text : '';
+};
 import CompanySourceLock from '../components/CompanySourceLock.jsx';
 import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
 
@@ -510,6 +523,73 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     const totalRejected = newItems.reduce((sum, item) => sum + (parseFloat(item.rejected_qty) || 0), 0);
     setEditFormData({ ...editFormData, items: newItems, status: newStatus, passQuantity: totalAccepted, failQuantity: totalRejected });
   };
+
+  // ── QC Inspection Dimension (record only): qc_* on the QC line; starts from the received size (else ordered) ──
+  const DIM_KEYS = ['length', 'width', 'thickness', 'diameter', 'outer_diameter'];
+  const hasDims = (item, prefix) => DIM_KEYS.some(k => item[`${prefix}${k}`] !== null && item[`${prefix}${k}`] !== undefined && item[`${prefix}${k}`] !== '');
+  const receivedSizeItem = (item) => {
+    const out = { ...item };
+    if (hasDims(item, 'received_')) DIM_KEYS.forEach(k => { out[k] = item[`received_${k}`]; });
+    return out;
+  };
+  const qcSizeItem = (item) => {
+    const out = receivedSizeItem(item);
+    if (item.qc_size_edited !== false && hasDims(item, 'qc_')) DIM_KEYS.forEach(k => { out[k] = item[`qc_${k}`]; });
+    return out;
+  };
+  const updateQcItem = (idx, fn, recalcStatus = false) => setEditFormData(prev => {
+    const items = [...(prev.items || [])];
+    if (!items[idx]) return prev;
+    items[idx] = fn({ ...items[idx] });
+    return recalcStatus ? { ...prev, items, status: deriveQCStatus(items) } : { ...prev, items };
+  });
+
+  // QC Inspection Weight from the QC size: received weight per piece × (weight of QC size ÷ weight of received size)
+  // × QC inspection qty (shared Item Master formula; density cancels out). Accepted / rejected weight are split exactly
+  // like handleQcWeightChange does.
+  const applyQcSizeWeight = (it) => {
+    const isBoughtOut = (it.material_type || it.item_type || '').toUpperCase().trim().includes('BOUGHT') || (it.item_code && String(it.item_code).toUpperCase().startsWith('BO-'));
+    if (isBoughtOut) return it;
+    const recQty = parseFloat(it.received_qty) || 0;
+    const recWt = parseFloat(it.received_weight) || 0;
+    if (!(recQty > 0 && recWt > 0)) return it;
+    const prefix = String(formatDimensions(it) || '').split(' ')[0];
+    const shape = PREFIX_TO_CALC_SHAPE[prefix];
+    let ratio = 1;
+    if (shape) {
+      const calc = (d) => calculateWeight({
+        shape, density: 1000, length: d.length, width: d.width, thickness: d.thickness, diameter: d.diameter,
+        outer_diameter: d.outer_diameter, threadPitch: prefix === 'TR' ? d.thickness : 0
+      });
+      const wRcv = calc(receivedSizeItem(it));
+      const wQc = calc(qcSizeItem(it));
+      if (wRcv > 0 && wQc > 0) ratio = wQc / wRcv;
+    }
+    const inspQty = parseFloat(it.qc_inspection_qty !== undefined && it.qc_inspection_qty !== '' ? it.qc_inspection_qty : recQty) || 0;
+    const inspWt = parseFloat(((recWt / recQty) * ratio * inspQty).toFixed(3));
+    it.qc_inspection_weight = inspWt;
+    const rejQty = parseFloat(it.rejected_qty || 0);
+    const accQty = parseFloat(it.accepted_qty !== undefined ? it.accepted_qty : (inspQty - rejQty));
+    const split = inspQty > 0 ? (accQty / inspQty) : 1;
+    const accWt = parseFloat((inspWt * split).toFixed(3));
+    it.accepted_weight = Math.max(0, accWt);
+    it.rejected_weight = Math.max(0, parseFloat((inspWt - accWt).toFixed(3)));
+    return it;
+  };
+
+  const patchQcSize = (idx, field, value) => updateQcItem(idx, it => {
+    if (!(it.qc_size_edited !== false && hasDims(it, 'qc_'))) {
+      const start = receivedSizeItem(it);
+      DIM_KEYS.forEach(k => { it[`qc_${k}`] = start[k]; });
+    }
+    it[`qc_${field}`] = value;
+    it.qc_size_edited = true;
+    return applyQcSizeWeight(it); // QC Inspection / Accepted / Rejected Weight follow the measured size
+  }, true);
+  const resetQcSize = (idx) => updateQcItem(idx, it => {
+    DIM_KEYS.forEach(k => { it[`qc_${k}`] = null; });
+    return applyQcSizeWeight({ ...it, qc_size_edited: false, qc_size_open: false });
+  }, true);
 
   const handleQcWeightChange = (idx, value) => {
     const newItems = [...editFormData.items];
@@ -1103,6 +1183,16 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               </span>
             </div>
           )}
+          {receivedSizeText(item) && (
+            <div className="mt-0.5 text-[9px] font-semibold text-amber-700" title="Receiving Size recorded on the GRN">
+              Received: {receivedSizeText(item)}
+            </div>
+          )}
+          {Number(item.deviation_override) === 1 && (
+            <div className="mt-0.5 text-[9px] font-semibold text-amber-700" title="Tolerance Override (Deviation) on the GRN">
+              Deviation accepted{item.deviation_reason ? `: ${item.deviation_reason}` : ''}
+            </div>
+          )}
           {item.description && item.description !== val && (
             <div className="text-[8px] text-slate-400 truncate max-w-[180px] italic mt-0.5">
               {item.description}
@@ -1246,6 +1336,16 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               </span>
             </div>
           )}
+          {receivedSizeText(item) && (
+            <div className="mt-0.5 text-[9px] font-semibold text-amber-700" title="Receiving Size recorded on the GRN">
+              Received: {receivedSizeText(item)}
+            </div>
+          )}
+          {Number(item.deviation_override) === 1 && (
+            <div className="mt-0.5 text-[9px] font-semibold text-amber-700" title="Tolerance Override (Deviation) on the GRN">
+              Deviation accepted{item.deviation_reason ? `: ${item.deviation_reason}` : ''}
+            </div>
+          )}
           {item.description && item.description !== val && (
             <div className="text-[8px] text-slate-400 truncate max-w-[180px] italic mt-0.5">
               {item.description}
@@ -1355,6 +1455,23 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       }
     },
     {
+      label: 'Received Dimension',
+      key: 'received_length',
+      className: 'text-center',
+      render: (_, item) => {
+        const ordered = formatDimensions(item);
+        if (!ordered) return <span className="text-slate-300">—</span>;
+        const rcv = formatDimensions(receivedSizeItem(item));
+        const changed = rcv && rcv !== ordered;
+        return (
+          <div className="flex flex-col items-center min-w-[130px]" title={changed ? `Ordered: ${ordered}` : 'Same as ordered'}>
+            <span className={`font-mono text-[11px] font-semibold ${changed ? 'text-amber-700' : 'text-slate-600'}`}>{rcv || ordered}</span>
+            <span className="text-[9px] text-slate-400">{changed ? `Ordered: ${ordered}` : 'As ordered (GRN)'}</span>
+          </div>
+        );
+      }
+    },
+    {
       label: 'QC Inspection Qty (NOS)',
       key: 'qc_inspection_qty',
       className: 'text-center',
@@ -1408,6 +1525,52 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               className="w-24 p-2 bg-white border border-violet-300 rounded text-center text-xs text-violet-700 font-bold focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500 outline-none transition-all"
             />
             <span className="text-[10px] text-slate-400 uppercase">KG</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'QC Inspection Dimension',
+      key: 'qc_length',
+      className: 'text-center',
+      render: (_, item, idx) => {
+        const ordered = formatDimensions(item);
+        if (!ordered) return <span className="text-slate-300">—</span>;
+        const qcText = formatDimensions(qcSizeItem(item));
+        const rcvText = formatDimensions(receivedSizeItem(item));
+        const entered = item.qc_size_edited !== false && hasDims(item, 'qc_');
+        const differs = entered && qcText !== rcvText;
+        return (
+          <div className="flex flex-col gap-1 min-w-[200px] text-left">
+            <div className="flex items-center justify-between gap-1">
+              <span className={`font-mono text-[11px] font-semibold ${differs ? 'text-rose-700' : entered ? 'text-emerald-700' : 'text-slate-400'}`}
+                title={entered ? 'Measured by QC' : 'Not entered yet — starts from the received size'}>
+                {qcText}
+              </span>
+              <div className="flex items-center gap-0.5 shrink-0">
+                {entered && (
+                  <button type="button" onClick={() => resetQcSize(idx)} className="px-1 text-[10px] text-slate-400 hover:text-slate-700" title="Clear QC size">↺</button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => updateQcItem(idx, it => ({ ...it, qc_size_open: !it.qc_size_open }))}
+                  className={`p-1 rounded text-xs ${item.qc_size_open ? 'text-emerald-600 hover:bg-emerald-50' : 'text-blue-600 hover:bg-blue-50'}`}
+                  title={item.qc_size_open ? 'Done' : 'Enter the size measured by QC'}
+                >
+                  {item.qc_size_open ? '✓' : '✎'}
+                </button>
+              </div>
+            </div>
+            <span className="text-[9px] text-slate-400">
+              {!entered ? 'Same as received — ✎ to enter measured size' : differs ? `Differs from received (${rcvText})` : 'Matches received size'}
+            </span>
+            {item.qc_size_open && (
+              <LineDimensionEditor
+                prefix={String(ordered).split(' ')[0]}
+                item={qcSizeItem(item)}
+                onPatch={(field, value) => patchQcSize(idx, field, value)}
+              />
+            )}
           </div>
         );
       }

@@ -32,6 +32,8 @@ import {
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions } from '../utils/formatters';
+import LineDimensionEditor, { PREFIX_TO_CALC_SHAPE } from '../components/LineDimensionEditor.jsx';
+import { calculateWeight } from '../utils/formatters';
 import { getFileUrl } from '../utils/url';
 import CompanySourceLock, { isCompanySourceLocked } from '../components/CompanySourceLock.jsx';
 import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
@@ -280,6 +282,44 @@ const POReceipts = () => {
     });
   };
 
+  // Weight of one received piece: ordered weight per piece, scaled by the Receiving Size when one is entered
+  // (ratio of the shared Item Master formula for received vs ordered size — density cancels out).
+  const receivingUnitWeight = (item) => {
+    const ordQty = parseFloat(item.ordered_qty || item.design_qty || 0);
+    const ordWeight = parseFloat(item.ordered_weight || item.quantity || 0);
+    const base = ordQty > 0 ? (ordWeight / ordQty) : 0;
+    if (!item.received_size_edited || !(base > 0)) return base;
+    const prefix = String(formatDimensions(item) || '').split(' ')[0];
+    const shape = PREFIX_TO_CALC_SHAPE[prefix];
+    if (!shape) return base;
+    const calc = (d) => calculateWeight({
+      shape, density: 1000, length: d.length, width: d.width, thickness: d.thickness, diameter: d.diameter,
+      outer_diameter: d.outer_diameter, threadPitch: prefix === 'TR' ? d.thickness : 0
+    });
+    const wOrdered = calc(item);
+    const wReceived = calc({
+      length: item.rcv_length, width: item.rcv_width, thickness: item.rcv_thickness,
+      diameter: item.rcv_diameter, outer_diameter: item.rcv_outer_diameter
+    });
+    return wOrdered > 0 && wReceived > 0 ? base * (wReceived / wOrdered) : base;
+  };
+
+  // Receiving Weight + Amount of one line after its Receiving Size changed (same rules as handleItemChange)
+  const recalcReceivingLine = (it) => {
+    const isBoughtOut = (it.material_type || it.item_type || '').toUpperCase().trim().includes('BOUGHT') || (it.item_code && String(it.item_code).toUpperCase().startsWith('BO-'));
+    if (isBoughtOut) return it;
+    const qty = parseFloat(it.current_receiving_qty !== undefined && it.current_receiving_qty !== '' ? it.current_receiving_qty : (it.received_qty || 0)) || 0;
+    const weight = parseFloat((qty * receivingUnitWeight(it)).toFixed(3));
+    it.current_receiving_weight = weight;
+    it.received_weight = weight;
+    const lcStr = String(it.laser_cutting || '').trim().toUpperCase();
+    const isLaser = it.laser_cutting === 'With Material' || it.laser_cutting === 'Without Material' ||
+      lcStr === 'WITH_MATERIAL' || lcStr === 'WITHOUT_MATERIAL' || lcStr.includes('WITH MATERIAL') || lcStr.includes('WITHOUT MATERIAL');
+    const rate = parseFloat(it.rate !== undefined && it.rate !== '' ? it.rate : (it.unit_rate || 0)) || 0;
+    it.amount = (isLaser ? qty : weight) * rate;
+    return it;
+  };
+
   const handleItemChange = (index, field, value) => {
     const newItems = [...formData.items];
     newItems[index][field] = value;
@@ -287,11 +327,9 @@ const POReceipts = () => {
     if (field === 'received_qty' || field === 'current_receiving_qty' || field === 'current_receiving_weight' || field === 'rate' || field === 'unit_rate') {
       const item = newItems[index];
 
-      // Auto-calculate receiving weight from receiving quantity
+      // Auto-calculate receiving weight from receiving quantity (per piece follows the Receiving Size when entered)
       if (field === 'current_receiving_qty' || field === 'received_qty') {
-        const ordQty = parseFloat(item.ordered_qty || item.design_qty || 0);
-        const ordWeight = parseFloat(item.ordered_weight || item.quantity || 0);
-        const weightPerUnit = ordQty > 0 ? (ordWeight / ordQty) : 0;
+        const weightPerUnit = receivingUnitWeight(item);
         const receivingQtyVal = parseFloat(value) || 0;
         const newWeight = parseFloat((receivingQtyVal * weightPerUnit).toFixed(3));
         item.current_receiving_weight = newWeight;
@@ -551,6 +589,32 @@ const POReceipts = () => {
       label: `${po.drawing_no} · ${po.po_number || `PO #${po.id}`} - ${po.finished_good || 'No description'}${pendingLines > 0 ? ` (${pendingLines} item${pendingLines > 1 ? 's' : ''} pending)` : ''}`,
       value: String(po.id)
     }));
+
+  // ── Receiving Size (record only) — rcv_* fields on the line; not set = same as the ordered size ──
+  const RCV_FIELDS = ['length', 'width', 'thickness', 'diameter', 'outer_diameter'];
+  const receivedSizeItem = (item) => {
+    const out = { ...item };
+    if (item.received_size_edited) RCV_FIELDS.forEach(f => { out[f] = item[`rcv_${f}`]; });
+    return out;
+  };
+  const updateLine = (idx, fn) => setFormData(prev => {
+    const items = [...(prev.items || [])];
+    if (!items[idx]) return prev;
+    items[idx] = fn({ ...items[idx] });
+    const totalValuation = items.reduce((sum, it) => sum + (parseFloat(it.amount) || 0), 0);
+    return { ...prev, items, totalValuation };
+  });
+  const toggleReceivedSize = (idx) => updateLine(idx, it => ({ ...it, rcv_open: !it.rcv_open }));
+  const resetReceivedSize = (idx) => updateLine(idx, it => {
+    RCV_FIELDS.forEach(f => { delete it[`rcv_${f}`]; });
+    return recalcReceivingLine({ ...it, received_size_edited: false });
+  });
+  const patchReceivedSize = (idx, field, value) => updateLine(idx, it => {
+    if (!it.received_size_edited) RCV_FIELDS.forEach(f => { it[`rcv_${f}`] = it[f]; }); // start from the ordered size
+    it[`rcv_${field}`] = value;
+    it.received_size_edited = true;
+    return recalcReceivingLine(it); // Receiving Weight follows the received size
+  });
 
   const handlePoChange = async (poId) => {
     const selectedPO = purchaseOrders.find(po => String(po.id) === String(poId));
@@ -1371,10 +1435,12 @@ const POReceipts = () => {
                       <th className="p-3 text-center">Prev. Received</th>
                       <th className="p-3 text-center">Receiving Qty (Nos)</th>
                       <th className="p-3 text-center">Receiving Weight (Kg)</th>
+                      <th className="p-3 text-center min-w-[200px]">Receiving Size</th>
                       <th className="p-3 text-center">Pending Qty</th>
                       <th className="p-3 text-center">Pending Weight</th>
                       <th className="p-3 text-center">Rate</th>
                       <th className="p-3 text-right pr-4">Amount</th>
+                      <th className="p-3 text-left min-w-[180px]">Tolerance Override (Deviation)</th>
                       <th className="p-3 text-center"></th>
                     </tr>
                   </thead>
@@ -1435,6 +1501,11 @@ const POReceipts = () => {
                                 subLabelField="item_code"
                                 allowCustom={true}
                               />
+                              {formatDimensions(item) && (
+                                <span className="font-mono text-[11px] font-semibold text-indigo-600 px-1" title="Size from the Purchase Order line">
+                                  {formatDimensions(item)}
+                                </span>
+                              )}
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 <span className="text-[9px] font-semibold text-slate-400 uppercase">Store:</span>
                                 <select
@@ -1514,6 +1585,46 @@ const POReceipts = () => {
                               />
                             )}
                           </td>
+                          {/* Receiving Size (record only): actual received size; empty = same as ordered */}
+                          <td className="p-3 align-top">
+                            {(() => {
+                              const orderedText = formatDimensions(item);
+                              if (!orderedText) return <div className="text-center text-slate-300">—</div>;
+                              const rcvItem = receivedSizeItem(item);
+                              const rcvText = formatDimensions(rcvItem);
+                              const changed = item.received_size_edited && rcvText !== orderedText;
+                              return (
+                                <div className="flex flex-col gap-1 min-w-[200px]">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className={`font-mono text-[11px] font-semibold ${changed ? 'text-amber-700' : 'text-slate-500'}`} title={changed ? `Ordered: ${orderedText}` : 'Same as ordered'}>
+                                      {rcvText}
+                                    </span>
+                                    <div className="flex items-center gap-0.5 shrink-0">
+                                      {item.received_size_edited && (
+                                        <button type="button" onClick={() => resetReceivedSize(idx)} className="px-1 text-[10px] text-slate-400 hover:text-slate-700" title="Same as ordered">↺</button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleReceivedSize(idx)}
+                                        className={`p-1 rounded ${item.rcv_open ? 'text-emerald-600 hover:bg-emerald-50' : 'text-blue-600 hover:bg-blue-50'}`}
+                                        title={item.rcv_open ? 'Done' : 'Enter received size'}
+                                      >
+                                        {item.rcv_open ? '✓' : '✎'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {changed && <span className="text-[10px] text-slate-400">Ordered: {orderedText}</span>}
+                                  {item.rcv_open && (
+                                    <LineDimensionEditor
+                                      prefix={String(orderedText).split(' ')[0]}
+                                      item={rcvItem}
+                                      onPatch={(field, value) => patchReceivedSize(idx, field, value)}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </td>
                           <td className="p-3 text-center font-semibold text-amber-600">
                             {pendingQty.toFixed(0)} <span className="text-[9px] text-slate-400 font-normal">Nos</span>
                           </td>
@@ -1550,6 +1661,28 @@ const POReceipts = () => {
                                 })()}
                               </span>
                             </div>
+                          </td>
+                          {/* Tolerance Override (Deviation): tick + reason, saved on the GRN line (record only) */}
+                          <td className="p-3 align-top min-w-[180px]">
+                            <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={!!item.deviation_override}
+                                onChange={(e) => updateLine(idx, it => ({ ...it, deviation_override: e.target.checked, deviation_reason: e.target.checked ? (it.deviation_reason || '') : '' }))}
+                                className="w-3.5 h-3.5 accent-amber-600"
+                              />
+                              Override deviation
+                            </label>
+                            {item.deviation_override && (
+                              <input
+                                type="text"
+                                maxLength={500}
+                                value={item.deviation_reason || ''}
+                                onChange={(e) => updateLine(idx, it => ({ ...it, deviation_reason: e.target.value }))}
+                                placeholder="Reason (e.g. within tolerance)"
+                                className="mt-1 w-full px-2 py-1 border border-amber-300 bg-amber-50 rounded text-[11px] outline-none focus:ring-1 focus:ring-amber-500"
+                              />
+                            )}
                           </td>
                           <td className="p-3 text-center">
                             {isFullyReceived ? (
@@ -2054,6 +2187,21 @@ const POReceipts = () => {
                             {formatDimensions(item) && (
                               <div className="mt-1">
                                 <span className="text-xs text-slate-400">{formatDimensions(item)}</span>
+                              </div>
+                            )}
+                            {(() => {
+                              // Receiving Size recorded on the GRN (shown only when it differs from the ordered size)
+                              const keys = ['length', 'width', 'thickness', 'diameter', 'outer_diameter'];
+                              if (!keys.some(k => item[`received_${k}`] !== null && item[`received_${k}`] !== undefined)) return null;
+                              const rcv = { ...item };
+                              keys.forEach(k => { rcv[k] = item[`received_${k}`]; });
+                              const rcvText = formatDimensions(rcv);
+                              if (!rcvText || rcvText === formatDimensions(item)) return null;
+                              return <div className="text-[11px] font-semibold text-amber-700 mt-0.5">Received: {rcvText}</div>;
+                            })()}
+                            {Number(item.deviation_override) === 1 && (
+                              <div className="text-[11px] font-semibold text-amber-700 mt-0.5">
+                                Deviation accepted{item.deviation_reason ? `: ${item.deviation_reason}` : ''}
                               </div>
                             )}
                           </td>
