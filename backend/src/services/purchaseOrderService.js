@@ -9,6 +9,13 @@ const poApprovalService = require('./poApprovalService');
 const fs = require('fs');
 const path = require('path');
 
+// PO line remark (shown in brackets under the size in the PO PDF): stored without surrounding brackets, empty → NULL
+const cleanPoNote = (v) => {
+  let s = String(v ?? '').replace(/\s+/g, ' ').trim();
+  while (s.startsWith('(') && s.endsWith(')')) s = s.slice(1, -1).trim();
+  return s ? s.slice(0, 500) : null;
+};
+
 const formatAddressToTwoLines = (addressStr) => {
   if (!addressStr || addressStr === 'N/A' || String(addressStr).trim() === '') return 'N/A';
 
@@ -621,9 +628,9 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
             purchase_order_id, item_code, description, design_qty, quantity, planned_qty, unit, unit_rate, amount,
             cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
             material_name, material_type, drawing_no, drawing_id,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_type, item_note
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             poId,
             correctedItemCode,
@@ -659,7 +666,8 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
             item.outer_diameter || 0,
             item.density || 0,
             item.weight_per_unit || 0,
-            item.shape_type || item.shape_name || item.shape || null
+            item.shape_type || item.shape_name || item.shape || null,
+            cleanPoNote(item.item_note) // quotation line Description → PO line remark
           ]
         );
       }
@@ -802,7 +810,8 @@ const createDirectCompanyPurchaseOrder = async (data) => {
         diameter: parseFloat(item.diameter) || 0,
         outer_diameter: parseFloat(item.outer_diameter) || 0,
         density: parseFloat(item.density) || 0,
-        weight_per_unit: parseFloat(item.weight_per_unit) || 0
+        weight_per_unit: parseFloat(item.weight_per_unit) || 0,
+        item_note: item.item_note || null
       };
     });
 
@@ -858,8 +867,8 @@ const createDirectCompanyPurchaseOrder = async (data) => {
           purchase_order_id, item_code, description, material_name, drawing_no,
           design_qty, planned_qty, quantity, unit, unit_rate, amount, cgst_percent, cgst_amount, 
           sgst_percent, sgst_amount, total_amount, length, width, thickness, 
-          diameter, outer_diameter, density, weight_per_unit, shape_type, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`,
+          diameter, outer_diameter, density, weight_per_unit, shape_type, item_note, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`,
         [
           poId,
           item.item_code,
@@ -884,7 +893,8 @@ const createDirectCompanyPurchaseOrder = async (data) => {
           item.outer_diameter,
           item.density,
           item.weight_per_unit,
-          item.shape_type || null
+          item.shape_type || null,
+          cleanPoNote(item.item_note)
         ]
       );
     }
@@ -1144,7 +1154,7 @@ const getPurchaseOrders = async (filters = {}) => {
         poi.quantity, poi.unit, poi.unit_rate, poi.amount, poi.cgst_percent, poi.cgst_amount,
         poi.sgst_percent, poi.sgst_amount, poi.total_amount, poi.material_name, poi.material_type,
         poi.drawing_id, poi.length, poi.width, poi.thickness, poi.diameter, poi.outer_diameter,
-        poi.density, poi.weight_per_unit, poi.shape_type, poi.shape_type as shape_name,
+        poi.density, poi.weight_per_unit, poi.shape_type, poi.shape_type as shape_name, poi.item_note,
         COALESCE(
           (
             SELECT qi.laser_cutting
@@ -1631,9 +1641,10 @@ const getPurchaseOrderById = async (poId) => {
   const po = rows[0];
 
   const [items] = await pool.query(
-    `SELECT 
+    `SELECT
       poi.id,
       poi.item_code,
+      poi.item_note,
       COALESCE(poi.description, sb.material_name, poi.item_code) as description,
       poi.design_qty,
       poi.planned_qty,
@@ -2058,7 +2069,8 @@ const updatePurchaseOrder = async (poId, payload, userId = null) => {
           await connection.execute(
             `UPDATE purchase_order_items 
              SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, design_qty = ?, planned_qty = ?, description = ?, item_code = ?, unit = ?,
-                 length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?, density = ?, weight_per_unit = ?, drawing_no = ?, shape_type = ?, material_name = ?
+                 length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?, density = ?, weight_per_unit = ?, drawing_no = ?, shape_type = ?, material_name = ?,
+                 item_note = CASE WHEN ? = 1 THEN ? ELSE item_note END
              WHERE id = ? AND purchase_order_id = ?`,
             [
               rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, desc, item.item_code, item.unit || 'NOS',
@@ -2066,6 +2078,8 @@ const updatePurchaseOrder = async (poId, payload, userId = null) => {
               targetDrawingNo || null,
               item.shape_type || item.shape_name || item.shape || null,
               matName,
+              // remark changes only when the screen sends it (older callers keep the saved remark)
+              item.item_note !== undefined ? 1 : 0, cleanPoNote(item.item_note),
               item.id, poId
             ]
           );
@@ -2074,15 +2088,16 @@ const updatePurchaseOrder = async (poId, payload, userId = null) => {
           await connection.execute(
             `INSERT INTO purchase_order_items
              (purchase_order_id, item_code, description, quantity, design_qty, planned_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-              length, width, thickness, diameter, outer_diameter, density, weight_per_unit, drawing_no, shape_type, material_name, material_type)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              length, width, thickness, diameter, outer_diameter, density, weight_per_unit, drawing_no, shape_type, material_name, material_type, item_note)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               poId, item.item_code, desc, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount,
               item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0,
               targetDrawingNo || null,
               item.shape_type || item.shape_name || item.shape || null,
               matName,
-              newLineMaterialType
+              newLineMaterialType,
+              cleanPoNote(item.item_note)
             ]
           );
         }
@@ -2996,7 +3011,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td style="text-align: center; line-height: 1.25;">
           <strong style="font-size: 10px; color: #000;">{{material_name}}</strong>
         </td>
-        <td style="text-align: center; vertical-align: middle; font-weight: bold; color: #000; font-size: 11px; white-space: nowrap;">{{size}}</td>
+        <td style="text-align: center; vertical-align: middle; font-weight: bold; color: #000; font-size: 11px; white-space: nowrap;">{{size}}{{#size_note}}<div style="font-size: 8px; font-weight: 600; white-space: normal; word-break: break-word; line-height: 1.15; margin-top: 1px;">({{size_note}})</div>{{/size_note}}</td>
         <td style="text-align: center;">{{hsn_code}}</td>
         <td style="text-align: center;">{{unit_rate}}</td>
         <td style="text-align: center;">{{design_qty}}</td>
@@ -3387,6 +3402,12 @@ const generatePurchaseOrderPDF = async (poId) => {
         drawing_no: resolvedDrawingNo || '—',
         material_name: i.material_name || i.description || '—',
         size: sizeStr,
+        // Line remark (PO "Remark" / quotation Description): small, in brackets, under the size
+        size_note: (() => {
+          let s = String(i.item_note || '').replace(/\s+/g, ' ').trim();
+          while (s.startsWith('(') && s.endsWith(')')) s = s.slice(1, -1).trim();
+          return s || null;
+        })(),
         description: resolvedDrawingNo || '',
         material_type: i.material_type || '—',
         hsn_code: '73089090', // realistic fallback
@@ -3606,8 +3627,8 @@ const mergePurchaseOrders = async (payload) => {
           drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, 
           amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
           length, width, thickness, diameter, outer_diameter, density, weight_per_unit,
-          sales_order_id, mr_id, source_po_id, source_po_item_id, shape_type
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          sales_order_id, mr_id, source_po_id, source_po_item_id, shape_type, item_note
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newPoId,
           item.item_code || null,
@@ -3637,7 +3658,8 @@ const mergePurchaseOrders = async (payload) => {
           item.mr_id ? parseInt(item.mr_id) : null,
           item.source_po_id ? parseInt(item.source_po_id) : null,
           item.source_po_item_id ? parseInt(item.source_po_item_id) : null,
-          item.shape_type || item.shape_name || item.shape || null
+          item.shape_type || item.shape_name || item.shape || null,
+          cleanPoNote(item.item_note) // merged PO keeps each line's remark
         ]
       );
     }

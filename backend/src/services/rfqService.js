@@ -77,6 +77,56 @@ const createRfq = async (payload) => {
  * Assign per-item vendor IDs and update RFQ status accordingly.
  * itemVendorMap: { [rfq_item_id]: [vendor_id_1, vendor_id_2] }
  */
+// Edit RFQ: save drawing / material / type / sizes / weight / required qty of RFQ lines that are not yet
+// sent to any vendor. Lines with a vendor (or vendor assignment) are skipped. Nothing else is touched.
+const updateRfqItems = async (rfqId, items = []) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+        let updated = 0;
+        const skipped = [];
+        for (const it of Array.isArray(items) ? items : []) {
+            const itemId = parseInt(it.id);
+            if (!itemId) continue;
+            const [[row]] = await connection.query(
+                `SELECT i.id, i.vendor_id,
+                        (SELECT COUNT(*) FROM procurement_rfq_vendor_assignments a WHERE a.rfq_item_id = i.id) AS assigned
+                 FROM procurement_rfq_items i WHERE i.id = ? AND i.rfq_id = ? FOR UPDATE`,
+                [itemId, parseInt(rfqId)]
+            );
+            if (!row) continue;
+            if (row.vendor_id || Number(row.assigned) > 0) { skipped.push(itemId); continue; }
+            const qty = num(it.quantity ?? it.design_qty);
+            await connection.execute(
+                `UPDATE procurement_rfq_items SET
+                   drawing_no = COALESCE(?, drawing_no), material_name = COALESCE(?, material_name), material_type = COALESCE(?, material_type),
+                   quantity = ?, required_weight = CASE WHEN COALESCE(required_weight, 0) > 0 THEN ? ELSE required_weight END,
+                   length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?,
+                   density = CASE WHEN ? > 0 THEN ? ELSE density END,
+                   weight_per_unit = CASE WHEN ? > 0 THEN ? ELSE weight_per_unit END
+                 WHERE id = ? AND rfq_id = ?`,
+                [
+                    it.drawing_no || null, it.material_name || null, it.material_type || null,
+                    qty, qty,
+                    num(it.length), num(it.width), num(it.thickness), num(it.diameter), num(it.outer_diameter),
+                    num(it.density), num(it.density),
+                    num(it.weight_per_unit), num(it.weight_per_unit),
+                    itemId, parseInt(rfqId)
+                ]
+            );
+            updated++;
+        }
+        await connection.commit();
+        return { updated, skipped };
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
+};
+
 const updateRfqItemVendors = async (rfqId, itemVendorMap, targetStatus = null) => {
     const connection = await pool.getConnection();
     try {
@@ -599,6 +649,7 @@ module.exports = {
     getRfqs,
     deleteRfq,
     updateRfqItemVendors,
+    updateRfqItems,
     getMergeEligibleVendors,
     getMergeEligibleRfqs,
     mergeRfqs

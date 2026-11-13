@@ -990,6 +990,59 @@ const updateQuotation = async (quotationId, payload) => {
   }
 };
 
+// Save the size of ONE line of a quotation that is still with the vendor (DRAFT / SENT / EMAIL_RECEIVED / PENDING),
+// in place (no new version): sizes, density, weight per piece and quantity; the line amount and the quotation totals
+// are recalculated with the same rules as create/update. Received / approved quotations must use Edit (new version).
+const updateQuotationItemSize = async (quotationId, itemId, data = {}) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [[quote]] = await connection.query('SELECT id, status, gst_percentage FROM quotations WHERE id = ? FOR UPDATE', [quotationId]);
+    if (!quote) { const e = new Error('Quotation not found'); e.statusCode = 404; throw e; }
+    if (!['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING'].includes(String(quote.status || '').toUpperCase())) {
+      const e = new Error('Only a quotation that is not yet received can have a line saved directly. Use Edit Quotation instead.');
+      e.statusCode = 400; throw e;
+    }
+    const [[line]] = await connection.query('SELECT * FROM quotation_items WHERE id = ? AND quotation_id = ?', [itemId, quotationId]);
+    if (!line) { const e = new Error('Quotation line not found'); e.statusCode = 404; throw e; }
+
+    const num = (v, fb = 0) => { const n = parseFloat(v); return Number.isFinite(n) ? n : fb; };
+    const qty = num(data.quantity ?? data.required_weight, num(line.quantity));
+    const rate = num(line.unit_rate);
+    const lc = String(line.laser_cutting || '').trim().toUpperCase();
+    const hasLaser = lc && !['SELECT', 'NONE', 'NULL', 'UNDEFINED', ''].includes(lc);
+    const designQty = num(line.planned_qty, 0) > 0 ? num(line.planned_qty) : num(line.design_qty);
+    const amount = Number(((hasLaser ? designQty : qty) * rate).toFixed(2));
+    const gst = num(quote.gst_percentage, 18);
+    const half = Number((gst / 2).toFixed(2));
+    const cg = Number(((amount * half) / 100).toFixed(2));
+    const sg = Number(((amount * half) / 100).toFixed(2));
+
+    await connection.execute(
+      `UPDATE quotation_items SET length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?,
+         density = CASE WHEN ? > 0 THEN ? ELSE density END, weight_per_unit = CASE WHEN ? > 0 THEN ? ELSE weight_per_unit END,
+         quantity = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?
+       WHERE id = ? AND quotation_id = ?`,
+      [num(data.length), num(data.width), num(data.thickness), num(data.diameter), num(data.outer_diameter),
+       num(data.density), num(data.density), num(data.weight_per_unit), num(data.weight_per_unit),
+       qty, amount, half, cg, half, sg, Number((amount + cg + sg).toFixed(2)), itemId, quotationId]
+    );
+    const [[t]] = await connection.query(
+      'SELECT COALESCE(SUM(amount),0) a, COALESCE(SUM(cgst_amount + sgst_amount),0) tx FROM quotation_items WHERE quotation_id = ?', [quotationId]
+    );
+    await connection.execute('UPDATE quotations SET total_amount = ?, tax_amount = ?, grand_total = ? WHERE id = ?',
+      [Number(t.a), Number(t.tx), Number((Number(t.a) + Number(t.tx)).toFixed(2)), quotationId]);
+    await connection.commit();
+    const [[saved]] = await pool.query('SELECT * FROM quotation_items WHERE id = ?', [itemId]);
+    return saved;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const deleteQuotation = async (quotationId) => {
   try {
     await getQuotationById(quotationId);
@@ -2455,6 +2508,7 @@ const mergeQuotations = async (payload) => {
 module.exports = {
   createQuotation,
   getQuotations,
+  updateQuotationItemSize,
   getQuotationById,
   updateQuotationStatus,
   updateQuotation,

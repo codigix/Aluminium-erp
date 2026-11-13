@@ -1350,6 +1350,7 @@ model purchase_order_items {
   source_po_id                                                       Int?
   source_po_item_id                                                  Int?
   shape_type                                                         String?                @db.VarChar(100)
+  item_note                                                          String?                @db.VarChar(500)
   material_requests                                                  material_requests?     @relation(fields: [mr_id], references: [id], onUpdate: NoAction, map: "fk_poi_mr")
   sales_orders                                                       sales_orders?          @relation(fields: [sales_order_id], references: [id], onUpdate: NoAction, map: "fk_poi_sales_order")
   purchase_orders_purchase_order_items_source_po_idTopurchase_orders purchase_orders?       @relation("purchase_order_items_source_po_idTopurchase_orders", fields: [source_po_id], references: [id], onUpdate: NoAction, map: "fk_poi_source_po")

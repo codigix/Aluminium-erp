@@ -9,6 +9,16 @@ const createQuotation = async (req, res, next) => {
   }
 };
 
+const updateQuotationItemSize = async (req, res, next) => {
+  try {
+    const item = await quotationService.updateQuotationItemSize(req.params.quotationId, req.params.itemId, req.body || {});
+    res.json({ message: 'Line size saved', data: item });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
+    next(error);
+  }
+};
+
 const getQuotations = async (req, res, next) => {
   try {
     const quotations = await quotationService.getQuotations(req.query);
@@ -291,6 +301,7 @@ const mergeQuotations = async (req, res, next) => {
 
 module.exports = {
   createQuotation,
+  updateQuotationItemSize,
   getQuotations,
   getQuotationById,
   updateQuotation,

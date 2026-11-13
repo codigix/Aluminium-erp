@@ -1002,6 +1002,19 @@ const ensureStockColumns = async () => {
       if (e.code !== 'ER_NO_SUCH_TABLE') console.error('Stock Entries company column sync failed:', e.message);
     }
 
+    // PO line remark (shown in brackets under the size in the PO PDF)
+    try {
+      const [poiCols] = await connection.query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'purchase_order_items' AND COLUMN_NAME = 'item_note'"
+      );
+      if (poiCols.length === 0) {
+        await connection.query('ALTER TABLE purchase_order_items ADD COLUMN `item_note` VARCHAR(500) NULL');
+        console.log('Purchase Order Items item_note column added');
+      }
+    } catch (e) {
+      if (e.code !== 'ER_NO_SUCH_TABLE') console.error('Purchase Order Items item_note column sync failed:', e.message);
+    }
+
     // Quotation line description / note per drawing (shown in brackets in the quotation PDF)
     try {
       const [qiCols] = await connection.query(

@@ -26,6 +26,8 @@ router.get('/:quotationId/received-pdf', authorize(['QUOTATION_VIEW']), quotatio
 router.get('/:quotationId/parse-received-pdf', authorize(['QUOTATION_EDIT']), quotationController.parseReceivedQuotationPDF);
 router.post('/parse-pdf', authorize(['QUOTATION_EDIT']), upload.single('pdf'), quotationController.parseQuotationPDF);
 router.put('/:quotationId', authorize(['QUOTATION_EDIT']), quotationController.updateQuotation);
+// Save one line's size in place (quotation still with the vendor) — Record Vendor Quote per-line save
+router.put('/:quotationId/items/:itemId/size', authorize(['QUOTATION_EDIT']), quotationController.updateQuotationItemSize);
 router.post('/:quotationId/upload-response', authorize(['QUOTATION_EDIT']), upload.array('pdf', 10), quotationController.uploadVendorResponse);
 router.patch('/:quotationId/status', authorize(['QUOTATION_EDIT']), quotationController.updateQuotationStatus);
 router.post('/:quotationId/send-email', authorize(['QUOTATION_EDIT']), quotationController.sendQuotationEmail);

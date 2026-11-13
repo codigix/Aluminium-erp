@@ -37,7 +37,8 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
-import { formatDimensions } from '../utils/formatters';
+import { formatDimensions, calculateWeight, validateShapeDimensions } from '../utils/formatters';
+import LineDimensionEditor, { PREFIX_TO_CALC_SHAPE } from '../components/LineDimensionEditor.jsx';
 import RFQPrintDetail from './RFQPrintDetail.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -114,6 +115,12 @@ const Quotations = () => {
   const [loading, setLoading] = useState(false);
   const [vendors, setVendors] = useState([]);
   const [stockItems, setStockItems] = useState([]);
+  // Unit Rate required on every line of a received / recorded vendor quotation (red boxes after a failed save)
+  const [rateCheckEdit, setRateCheckEdit] = useState(false);
+  const [rateCheckRecord, setRateCheckRecord] = useState(false);
+  const missingRateLines = (items = []) => (items || [])
+    .map((i, n) => (!(parseFloat(i.unit_rate) > 0) ? `${n + 1}. ${i.drawing_no || i.item_code || ''} ${i.material_name || ''}`.trim() : null))
+    .filter(Boolean);
   const [salesOrders, setSalesOrders] = useState([]);
   const [materialRequests, setMaterialRequests] = useState([]);
   const [filterStatus, setFilterStatus] = useState('All Quotations');
@@ -1251,6 +1258,18 @@ const Quotations = () => {
       errorToast('Select a project and vendor to identify the quotation');
       return;
     }
+    // Recording a vendor quote needs a Unit Rate on every line
+    const missingRates = missingRateLines(recordData.items);
+    if (missingRates.length) {
+      setRateCheckRecord(true);
+      errorToast(`Enter Unit Rate for: ${missingRates.join(', ')}`);
+      return;
+    }
+    const badDims = (recordData.items || []).find(i => i._dim_error);
+    if (badDims) {
+      errorToast(`${badDims.drawing_no || badDims.item_code || 'A line'}: ${badDims._dim_error}`);
+      return;
+    }
 
     try {
       const token = localStorage.getItem('authToken');
@@ -1836,6 +1855,7 @@ const Quotations = () => {
     const mappedItems = (quotation.items || []).map(item => ({
       id: item.id, // line id: used only to load this line's saved description below
       drawing_no: item.drawing_no || item.item_code || '',
+      item_code: item.item_code || '',
       material_name: item.material_name || '',
       material_type: getCorrectMaterialType(item.drawing_no || item.item_code, item.material_type),
       design_qty: item.design_qty || item.quantity || 0,
@@ -1899,6 +1919,20 @@ const Quotations = () => {
 
   const handleEditQuotation = async (e) => {
     e.preventDefault();
+    // A received vendor quotation needs a Unit Rate on every line
+    if (String(editFormData.status || '').toUpperCase() === 'RECEIVED') {
+      const missing = missingRateLines(editFormData.items);
+      if (missing.length) {
+        setRateCheckEdit(true);
+        errorToast(`Enter Unit Rate for: ${missing.join(', ')}`);
+        return;
+      }
+    }
+    const badDims = (editFormData.items || []).find(i => i._dim_error);
+    if (badDims) {
+      errorToast(`${badDims.drawing_no || 'A line'}: ${badDims._dim_error}`);
+      return;
+    }
 
     try {
       const token = localStorage.getItem('authToken');
@@ -2072,7 +2106,157 @@ const Quotations = () => {
     setRecordFiles(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
-  const openRFQSendModal = (rfq) => {
+  // Opened from the Edit (pencil) button: same RFQ screen, titled "Edit Quotation"
+  const [rfqEditMode, setRfqEditMode] = useState(false);
+  const [rfqEditingRows, setRfqEditingRows] = useState([]); // RFQ lines unlocked with the per-line Edit action
+
+  // ── Size editing on RFQ lines: same weight formula as Item Master (calculateWeight) ──
+  const [materialsList, setMaterialsList] = useState([]);
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    fetch(`${API_BASE}/materials`, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setMaterialsList(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, []);
+
+  // Density (g/cm³): the line's own → Materials master (by material name) → Item Master (by item code)
+  const resolveLineDensity = useCallback((item) => {
+    const own = parseFloat(item.density) || 0;
+    if (own > 0) return { density: own, source: 'line' };
+    const lc = (v) => String(v || '').trim().toLowerCase();
+    const mat = materialsList.find(m => lc(m.name) && (lc(m.name) === lc(item.material_name) || lc(m.name) === lc(item.material_grade)));
+    if (mat && parseFloat(mat.density) > 0) return { density: parseFloat(mat.density), source: `Materials: ${mat.name}` };
+    const sb = stockItems.find(s => item.item_code && s.item_code === item.item_code && parseFloat(s.density) > 0);
+    if (sb) return { density: parseFloat(sb.density), source: 'Item Master' };
+    return { density: 0, source: '' };
+  }, [materialsList, stockItems]);
+
+  // Shape key from the line's size text (RB, PL, PIPE, FLG …), frozen when editing starts
+  const linePrefixOf = (item) => item._dim_prefix || String(formatDimensions(item) || '').split(' ')[0] || '';
+
+  // Weight per piece from the line's CURRENT sizes (for the Edit size strip; shows right away, before any change)
+  const previewLineWeight = (it) => {
+    const prefix = linePrefixOf(it);
+    const shape = PREFIX_TO_CALC_SHAPE[prefix];
+    const { density } = resolveLineDensity(it);
+    if (!shape || !(density > 0)) return parseFloat(it.weight_per_unit) || 0;
+    return calculateWeight({
+      shape, density, length: it.length, width: it.width, thickness: it.thickness, diameter: it.diameter,
+      outer_diameter: it.outer_diameter, threadPitch: prefix === 'TR' ? it.thickness : 0
+    }) || 0;
+  };
+
+  const recalcLineWeight = (it, mode = 'rfq') => {
+    const prefix = linePrefixOf(it);
+    const shape = PREFIX_TO_CALC_SHAPE[prefix] || it.shape_type || it.shape_name || '';
+    const dims = {
+      shape, length: it.length, width: it.width, thickness: it.thickness, diameter: it.diameter,
+      outer_diameter: it.outer_diameter, threadPitch: prefix === 'TR' ? it.thickness : 0
+    };
+    const check = validateShapeDimensions(dims);
+    it._dim_error = check.isValid ? '' : check.error;
+    if (!check.isValid) return it;
+    const { density } = resolveLineDensity(it);
+    if (!(density > 0) || !PREFIX_TO_CALC_SHAPE[prefix]) return it; // no density / no formula → Required stays manual
+    const wpu = calculateWeight({ ...dims, density });
+    if (!(wpu > 0)) return it;
+    it.density = density;
+    it.weight_per_unit = wpu;
+    const nos = parseFloat(it.planned_qty) || 0;
+    if (nos > 0) {
+      const required = parseFloat((wpu * nos).toFixed(3));
+      if (mode === 'record') {
+        it.required_weight = required; // Record Vendor Quote: the "Required" column
+      } else if (mode === 'edit') {
+        it.required_weight = required; // Edit Quotation (received): "Quoted Qty"
+        if (activeTab === 'sent') it.design_qty = required; // Edit Quotation (sent): "Required"
+      } else {
+        it.design_qty = required; // RFQ screen: the "Required" box
+      }
+      it.quantity = required;
+    }
+    return it;
+  };
+
+  // Edit Quotation (vendor quote): same per-line size edit; amounts/totals are computed from the lines on screen
+  const [editDimRows, setEditDimRows] = useState([]);
+  useEffect(() => { if (!showEditModal) { setEditDimRows([]); setRateCheckEdit(false); } }, [showEditModal]);
+  const patchEditLineDim = (idx, field, value) => {
+    setEditFormData(prev => {
+      const items = [...(prev.items || [])];
+      const before = items[idx];
+      if (!before) return prev;
+      items[idx] = recalcLineWeight({ ...before, _dim_prefix: linePrefixOf(before), [field]: value }, 'edit');
+      return { ...prev, items };
+    });
+  };
+
+  // Record Vendor Quote ✓: save this line's size to the quotation now (kept even if the screen is cancelled)
+  const saveRecordLineSize = async (idx) => {
+    const item = (recordData.items || [])[idx];
+    if (!item) return;
+    if (item._dim_error) { errorToast(`${item.drawing_no || 'Line'}: ${item._dim_error}`); return; }
+    if (!item.id || !recordData.quotationId) { // manually added line: saved with Record Quotation
+      setRecordEditingRows(prev => prev.filter(k => k !== idx));
+      return;
+    }
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/quotations/${recordData.quotationId}/items/${item.id}/size`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          length: item.length, width: item.width, thickness: item.thickness, diameter: item.diameter,
+          outer_diameter: item.outer_diameter, density: item.density, weight_per_unit: item.weight_per_unit,
+          quantity: item.required_weight ?? item.quantity
+        })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.message || body.error || 'Failed to save line size');
+      setRecordEditingRows(prev => prev.filter(k => k !== idx));
+      successToast(`${item.drawing_no || 'Line'} size saved (${formatDimensions(item)})`);
+      fetchQuotations(); // so reopening the quotation shows the saved size
+    } catch (error) {
+      errorToast(error.message || 'Failed to save line size');
+    }
+  };
+
+  // Record Vendor Quote: same per-line size edit; Required, line amount and the subtotal follow
+  const [recordEditingRows, setRecordEditingRows] = useState([]);
+  useEffect(() => { if (!showCreateModal) { setRecordEditingRows([]); setRateCheckRecord(false); } }, [showCreateModal]);
+  const patchRecordLineDim = (idx, field, value) => {
+    setRecordData(prev => {
+      const items = [...(prev.items || [])];
+      const before = items[idx];
+      if (!before) return prev;
+      const it = recalcLineWeight({ ...before, _dim_prefix: linePrefixOf(before), [field]: value }, 'record');
+      const isLc = (x) => ['WITH MATERIAL', 'WITHOUT MATERIAL', 'WITH_MATERIAL', 'WITHOUT_MATERIAL'].includes(String(x.laser_cutting || '').toUpperCase());
+      const effQty = (x) => isLc(x)
+        ? (parseFloat(x.planned_qty !== null && x.planned_qty !== undefined && x.planned_qty !== '' ? x.planned_qty : x.design_qty) || 0)
+        : (parseFloat(x.required_weight !== null && x.required_weight !== undefined && x.required_weight !== '' ? x.required_weight : x.quantity) || 0);
+      it.amount = effQty(it) * (parseFloat(it.unit_rate) || 0);
+      items[idx] = it;
+      const amount = items.reduce((s, x) => s + effQty(x) * (parseFloat(x.unit_rate) || 0), 0);
+      return { ...prev, items, amount };
+    });
+  };
+
+  const patchRfqLineDim = (idx, field, value) => {
+    setFormData(prev => {
+      const items = [...(prev.items || [])];
+      const before = items[idx];
+      if (!before) return prev;
+      const it = { ...before, _dim_prefix: linePrefixOf(before), [field]: value };
+      items[idx] = recalcLineWeight(it);
+      return { ...prev, items };
+    });
+  };
+  useEffect(() => { if (!showCreateModal) { setRfqEditMode(false); setRfqEditingRows([]); } }, [showCreateModal]);
+
+  const openRFQSendModal = (rfq, opts = {}) => {
+    setRfqEditMode(!!opts.edit);
+    setRfqEditingRows([]);
     // 1. Pre-fill formData with RFQ data
     const mrId = rfq.mr_id;
     const initialMap = {};
@@ -2130,8 +2314,58 @@ const Quotations = () => {
     navigate(`${deptPrefix}/quotations/request`, { state: { fromRFQ: true } });
   };
 
+  // Edit RFQ: save line changes (drawing / material / type / sizes / weight / Required) of lines not yet sent
+  const handleUpdateRfq = async () => {
+    if (!formData.rfq_id) return;
+    const badDims = (formData.items || []).find(i => i._dim_error);
+    if (badDims) {
+      errorToast(`${badDims.drawing_no || 'A line'}: ${badDims._dim_error}`);
+      return;
+    }
+    const unsent = (formData.items || []).filter(i => i.id && i.vendor_id == null && !(i.assigned_vendors || []).length);
+    if (unsent.length === 0) {
+      errorToast('All lines are already sent to vendors — edit the vendor quotation instead');
+      return;
+    }
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/rfqs/${formData.rfq_id}/items`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: unsent.map(i => ({
+            id: i.id, drawing_no: i.drawing_no, material_name: i.material_name, material_type: i.material_type,
+            quantity: i.quantity ?? i.design_qty, length: i.length, width: i.width, thickness: i.thickness,
+            diameter: i.diameter, outer_diameter: i.outer_diameter, density: i.density, weight_per_unit: i.weight_per_unit
+          }))
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || err.message || 'Failed to update RFQ');
+      }
+      const result = await res.json();
+      successToast(`RFQ updated (${result.data?.updated ?? unsent.length} line${(result.data?.updated ?? unsent.length) === 1 ? '' : 's'})`);
+      setShowCreateModal(false);
+      setItemVendorMap({});
+      fetchRawRfqs();
+      fetchQuotations();
+      navigate(`${deptPrefix}/quotations`);
+    } catch (error) {
+      errorToast(error.message || 'Failed to update RFQ');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAssignSendSave = async (quotationStatus = 'SENT') => {
     if (!formData.rfq_id) return;
+    const badDims = (formData.items || []).find(i => i._dim_error);
+    if (badDims) {
+      errorToast(`${badDims.drawing_no || 'A line'}: ${badDims._dim_error}`);
+      return;
+    }
     setLoading(true);
 
     try {
@@ -2664,7 +2898,9 @@ const Quotations = () => {
                 )}
                 {q.status !== 'RECEIVED' && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); openEditModal(q); }}
+                    // An RFQ row without vendor quotations yet opens the same Create Quote Request (RFQ) screen as
+                    // "Assign & Send" (drawing, project card, vendor per line); real vendor quotations keep Edit Quotation.
+                    onClick={(e) => { e.stopPropagation(); if (q.isRFQOnly) { openRFQSendModal(q, { edit: true }); } else { openEditModal(q); } }}
                     className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
                     title="Edit RFQ"
                   >
@@ -3228,7 +3464,7 @@ const Quotations = () => {
             <div className="flex justify-between items-start mb-6">
               <div>
                 <h3 className="text-md text-slate-900 text-xs">
-                  {activeTab === 'sent' ? 'Create Quote Request (RFQ)' : 'Record Vendor Quote'}
+                  {activeTab === 'sent' ? (rfqEditMode ? 'Edit Quotation' : 'Create Quote Request (RFQ)') : 'Record Vendor Quote'}
                 </h3>
                 {activeTab !== 'sent' && (
                   <p className="text-xs text-slate-500 mt-1">Record details from vendor response</p>
@@ -3533,7 +3769,7 @@ const Quotations = () => {
                       </p>
                     ) : (
                       <div className="space-y-2">
-                        <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-xs text-slate-500">
+                        <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-xs text-slate-500" style={formData.rfq_id ? { gridTemplateColumns: 'repeat(13, minmax(0, 1fr))' } : undefined}>
                           <div className="col-span-2">Item ID</div>
                           <div className="col-span-2">Material Name & Dimensions</div>
                           <div className="col-span-2">Vendor</div>
@@ -3541,6 +3777,7 @@ const Quotations = () => {
                           <div className="col-span-2">Laser Cutting</div>
                           <div className="col-span-1 text-center">Design Qty</div>
                           <div className="col-span-2 text-center">Required</div>
+                          {formData.rfq_id && <div className="col-span-1 text-center">Action</div>}
                         </div>
                         {formData.items.map((item, idx) => {
                           const alreadyAssignedIds = (item.assigned_vendors || []).map(v => String(v.vendor_id));
@@ -3552,17 +3789,21 @@ const Quotations = () => {
                           const selectedVendorIds = itemVendorMap[item.id] || [];
                           const newlySelectedIds = selectedVendorIds.filter(id => !alreadyAssignedIds.includes(String(id)));
                           const hasNewSelection = !isAlreadyAssigned && newlySelectedIds.length > 0;
+                          // RFQ lines are read-only until "Edit" is clicked on that line (lines already sent to a vendor stay locked)
+                          const rowKey = String(item.id ?? `idx-${idx}`);
+                          const isRowEditing = !!formData.rfq_id && !isAlreadyAssigned && rfqEditingRows.includes(rowKey);
+                          const lockRow = !!formData.rfq_id && !isRowEditing;
 
                           return (
-                            <div key={idx} className={`grid grid-cols-12 gap-2 items-start py-2 border-b border-slate-50 last:border-0 ${isAlreadyAssigned ? 'bg-emerald-50/10' : hasNewSelection ? 'bg-amber-50/10' : ''}`}>
+                            <div key={item.id ?? idx} className={`grid grid-cols-12 gap-2 items-start py-2 border-b border-slate-50 last:border-0 ${isRowEditing ? 'bg-blue-50/40' : isAlreadyAssigned ? 'bg-emerald-50/10' : hasNewSelection ? 'bg-amber-50/10' : ''}`} style={formData.rfq_id ? { gridTemplateColumns: 'repeat(13, minmax(0, 1fr))' } : undefined}>
                               <div className="col-span-2 relative">
                                 <input
                                   type="text"
                                   placeholder="Drawing No"
                                   value={item.drawing_no}
-                                  readOnly={!!formData.rfq_id}
+                                  readOnly={lockRow}
                                   onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
-                                  className={`w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                                  className={`w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${lockRow ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                                 />
                               </div>
                               <div className="col-span-2 space-y-1">
@@ -3570,9 +3811,9 @@ const Quotations = () => {
                                   type="text"
                                   placeholder="Material Name"
                                   value={item.material_name}
-                                  readOnly={!!formData.rfq_id}
+                                  readOnly={lockRow}
                                   onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
-                                  className={`w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                                  className={`w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${lockRow ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                                 />
                                 {formatDimensions(item) && (
                                   <div className="flex flex-wrap gap-x-2 gap-y-1 px-1 font-mono text-[10px] text-slate-500">
@@ -3614,9 +3855,9 @@ const Quotations = () => {
                                 type="text"
                                 placeholder="Type"
                                 value={item.material_type}
-                                readOnly={!!formData.rfq_id}
+                                readOnly={lockRow}
                                 onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
-                                className={`col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                                className={`col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${lockRow ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                               />
                               <div className="col-span-2 space-y-0.5">
                                 <select
@@ -3671,13 +3912,82 @@ const Quotations = () => {
                                     <input
                                       type="number"
                                       placeholder="Required"
-                                      value={item.design_qty === 0 ? 0 : (item.design_qty || '')}
-                                      readOnly={!!formData.rfq_id}
-                                      onChange={(e) => handleItemChange(idx, 'design_qty', e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
-                                      className={`w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                                      value={item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? item.quantity : (item.design_qty || '')}
+                                      readOnly={lockRow}
+                                      onChange={(e) => handleItemChange(idx, 'quantity', e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
+                                      className={`w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 ${lockRow ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                                     />
                                     <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-500 flex items-center justify-center min-w-[40px]">
                                       {item.uom || 'Kg'}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                              {formData.rfq_id && (
+                                <div className="col-span-1 flex items-center justify-center gap-1 pt-1">
+                                  {isAlreadyAssigned ? (
+                                    <span className="text-[10px] text-emerald-600 text-center leading-tight" title="Already sent to a vendor — edit the vendor quotation instead">Sent</span>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => setRfqEditingRows(prev => prev.includes(rowKey) ? prev.filter(k => k !== rowKey) : [...prev, rowKey])}
+                                        className={`p-1.5 rounded transition-colors ${isRowEditing ? 'text-emerald-600 hover:bg-emerald-50' : 'text-blue-600 hover:bg-blue-50'}`}
+                                        title={isRowEditing ? 'Done editing this drawing' : 'Edit this drawing'}
+                                      >
+                                        {isRowEditing ? <Check className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          const res = await Swal.fire({
+                                            title: 'Remove this drawing?',
+                                            text: `${item.drawing_no || 'This line'} will not be sent to vendors in this RFQ.`,
+                                            icon: 'warning',
+                                            showCancelButton: true,
+                                            confirmButtonText: 'Remove',
+                                            confirmButtonColor: '#ef4444'
+                                          });
+                                          if (!res.isConfirmed) return;
+                                          setItemVendorMap(prev => { const n = { ...prev }; delete n[item.id]; return n; });
+                                          setRfqEditingRows(prev => prev.filter(k => k !== rowKey));
+                                          handleRemoveItem(idx);
+                                        }}
+                                        className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                                        title="Remove this drawing"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                              {isRowEditing && (() => {
+                                const prefix = linePrefixOf(item);
+                                const { density, source } = resolveLineDensity(item);
+                                const hasFormula = !!PREFIX_TO_CALC_SHAPE[prefix];
+                                const nos = parseFloat(item.planned_qty) || 0;
+                                const wpu = previewLineWeight(item);
+                                return (
+                                  <div className="mt-1 p-2 bg-white border border-blue-100 rounded" style={{ gridColumn: '1 / -1' }}>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-1.5 text-[11px]">
+                                      <span className="font-semibold text-blue-700">Edit size</span>
+                                      <span className="font-mono text-slate-700">{formatDimensions(item) || '—'}</span>
+                                      {item._dim_error ? (
+                                        <span className="text-red-600 font-semibold">⚠️ {item._dim_error}</span>
+                                      ) : !hasFormula ? (
+                                        <span className="text-amber-700">No weight formula for this shape — enter Required manually.</span>
+                                      ) : !(density > 0) ? (
+                                        <span className="text-amber-700">Density not found — enter Required manually.</span>
+                                      ) : (
+                                        <span className="text-slate-600">
+                                          Wt/pc <b>{wpu.toFixed(3)} kg</b>{nos > 0 ? <> × {nos} Nos = <b className="text-indigo-700">{(wpu * nos).toFixed(3)} kg</b></> : null}
+                                          <span className="text-slate-400"> · density {density} ({source === 'line' ? 'line' : source})</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="max-w-xl">
+                                      <LineDimensionEditor prefix={prefix} item={item} onPatch={(field, value) => patchRfqLineDim(idx, field, value)} />
                                     </div>
                                   </div>
                                 );
@@ -3918,7 +4228,8 @@ const Quotations = () => {
                               const itemAmount = effectiveQty * (parseFloat(item.unit_rate) || 0);
 
                               return (
-                                <tr key={idx} className="hover:bg-slate-50">
+                                <React.Fragment key={idx}>
+                                <tr className="hover:bg-slate-50">
                                   <td className="p-2">
                                     <div className="relative">
                                       <input
@@ -4055,7 +4366,8 @@ const Quotations = () => {
                                       type="number"
                                       value={item.unit_rate || ''}
                                       onChange={(e) => handleRecordItemChange(idx, 'unit_rate', parseFloat(e.target.value) || 0)}
-                                      className="w-full px-2 py-1 border border-slate-200 rounded text-center outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                                      className={`w-full px-2 py-1 border rounded text-center outline-none focus:ring-1 focus:ring-blue-500 font-medium ${rateCheckRecord && !(parseFloat(item.unit_rate) > 0) ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                                      title={rateCheckRecord && !(parseFloat(item.unit_rate) > 0) ? 'Unit Rate is required' : undefined}
                                       placeholder="0"
                                     />
                                   </td>
@@ -4075,15 +4387,58 @@ const Quotations = () => {
                                     />
                                   </td>
                                   <td className="p-2 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRecordRemoveItem(idx)}
-                                      className="text-red-400 hover:text-red-600 transition-colors"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => (recordEditingRows.includes(idx) ? saveRecordLineSize(idx) : setRecordEditingRows(prev => [...prev, idx]))}
+                                        className={`p-1 rounded transition-colors ${recordEditingRows.includes(idx) ? 'text-emerald-600 hover:bg-emerald-50' : 'text-blue-600 hover:bg-blue-50'}`}
+                                        title={recordEditingRows.includes(idx) ? 'Save this line size' : 'Edit size of this line'}
+                                      >
+                                        {recordEditingRows.includes(idx) ? <Check className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => { setRecordEditingRows(prev => prev.filter(k => k !== idx).map(k => (k > idx ? k - 1 : k))); handleRecordRemoveItem(idx); }}
+                                        className="text-red-400 hover:text-red-600 transition-colors"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
+                                {recordEditingRows.includes(idx) && (() => {
+                                  const prefix = linePrefixOf(item);
+                                  const { density, source } = resolveLineDensity(item);
+                                  const hasFormula = !!PREFIX_TO_CALC_SHAPE[prefix];
+                                  const nos = parseFloat(item.planned_qty) || 0;
+                                  const wpu = previewLineWeight(item);
+                                  return (
+                                    <tr className="bg-blue-50/40">
+                                      <td colSpan="11" className="p-2">
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-1.5 text-[11px]">
+                                          <span className="font-semibold text-blue-700">Edit size</span>
+                                          <span className="font-mono text-slate-700">{formatDimensions(item) || '—'}</span>
+                                          {item._dim_error ? (
+                                            <span className="text-red-600 font-semibold">⚠️ {item._dim_error}</span>
+                                          ) : !hasFormula ? (
+                                            <span className="text-amber-700">No weight formula for this shape — enter Required manually.</span>
+                                          ) : !(density > 0) ? (
+                                            <span className="text-amber-700">Density not found — enter Required manually.</span>
+                                          ) : (
+                                            <span className="text-slate-600">
+                                              Wt/pc <b>{wpu.toFixed(3)} kg</b>{nos > 0 ? <> × {nos} Nos = <b className="text-indigo-700">{(wpu * nos).toFixed(3)} kg</b></> : null}
+                                              <span className="text-slate-400"> · density {density} ({source === 'line' ? 'line' : source})</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="max-w-xl">
+                                          <LineDimensionEditor prefix={prefix} item={item} onPatch={(field, value) => patchRecordLineDim(idx, field, value)} />
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })()}
+                                </React.Fragment>
                               );
                             })
                           )}
@@ -4155,7 +4510,18 @@ const Quotations = () => {
                 >
                   Cancel
                 </button>
-                {activeTab === 'sent' && (
+                {activeTab === 'sent' && rfqEditMode && formData.rfq_id && (
+                  <button
+                    type="button"
+                    onClick={handleUpdateRfq}
+                    className="p-2 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                    disabled={loading}
+                    title="Save line changes (sizes, weight, Required) to this RFQ without sending it"
+                  >
+                    {loading ? 'Saving…' : 'Update Quotation'}
+                  </button>
+                )}
+                {activeTab === 'sent' && !(rfqEditMode && formData.rfq_id) && (
                   <button
                     type="button"
                     onClick={(e) => {
@@ -4171,6 +4537,7 @@ const Quotations = () => {
                     Save as Draft
                   </button>
                 )}
+                {!(activeTab === 'sent' && rfqEditMode && formData.rfq_id) && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -4189,6 +4556,7 @@ const Quotations = () => {
                 >
                   {activeTab === 'sent' ? 'Create & Send RFQ' : 'Record Quotation'}
                 </button>
+                )}
               </div>
             </form>
           </div>
@@ -4656,12 +5024,12 @@ const Quotations = () => {
                               <input
                                 type="number"
                                 placeholder="Qty"
-                                value={item.design_qty === 0 ? 0 : (item.design_qty || '')}
+                                value={item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? item.quantity : (item.required_weight || item.design_qty || '')}
                                 onChange={(e) => {
                                   const newItems = [...editFormData.items];
                                   const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
-                                  newItems[idx].design_qty = val;
                                   newItems[idx].quantity = val;
+                                  newItems[idx].required_weight = val;
                                   setEditFormData({ ...editFormData, items: newItems });
                                 }}
                                 className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -4821,7 +5189,8 @@ const Quotations = () => {
                                 newItems[idx].unit_rate = parseFloat(e.target.value) || 0;
                                 setEditFormData({ ...editFormData, items: newItems });
                               }}
-                              className="col-span-1 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                              className={`col-span-1 p-2 border rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium ${rateCheckEdit && !(parseFloat(item.unit_rate) > 0) ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                              title={rateCheckEdit && !(parseFloat(item.unit_rate) > 0) ? 'Unit Rate is required' : undefined}
                             />
                             <div className="col-span-1 text-right text-xs text-slate-700 pt-2 font-medium">
                               {itemAmount > 0 ? formatCurrency(itemAmount) : '—'}
@@ -4844,11 +5213,20 @@ const Quotations = () => {
                             className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none leading-snug"
                           />
                         </div>
-                        <div className="col-span-1 flex justify-center">
+                        <div className="col-span-1 flex justify-center items-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditDimRows(prev => prev.includes(idx) ? prev.filter(k => k !== idx) : [...prev, idx])}
+                            className={`p-1.5 rounded transition-colors ${editDimRows.includes(idx) ? 'text-emerald-600 hover:bg-emerald-50' : 'text-blue-600 hover:bg-blue-50'}`}
+                            title={editDimRows.includes(idx) ? 'Done editing size' : 'Edit size of this line'}
+                          >
+                            {editDimRows.includes(idx) ? <Check className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
                               const newItems = editFormData.items.filter((_, i) => i !== idx);
+                              setEditDimRows(prev => prev.filter(k => k !== idx).map(k => (k > idx ? k - 1 : k)));
                               setEditFormData({ ...editFormData, items: newItems });
                             }}
                             className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
@@ -4856,6 +5234,37 @@ const Quotations = () => {
                             ✕
                           </button>
                         </div>
+                        {editDimRows.includes(idx) && (() => {
+                          const prefix = linePrefixOf(item);
+                          const { density, source } = resolveLineDensity(item);
+                          const hasFormula = !!PREFIX_TO_CALC_SHAPE[prefix];
+                          const nos = parseFloat(item.planned_qty) || 0;
+                          const wpu = previewLineWeight(item);
+                          const req = activeTab === 'sent' ? item.design_qty : item.required_weight;
+                          return (
+                            <div className="p-2 bg-blue-50/40 border border-blue-100 rounded" style={{ gridColumn: '1 / -1' }}>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-1.5 text-[11px]">
+                                <span className="font-semibold text-blue-700">Edit size</span>
+                                <span className="font-mono text-slate-700">{formatDimensions(item) || '—'}</span>
+                                {item._dim_error ? (
+                                  <span className="text-red-600 font-semibold">⚠️ {item._dim_error}</span>
+                                ) : !hasFormula ? (
+                                  <span className="text-amber-700">No weight formula for this shape — enter the quantity manually.</span>
+                                ) : !(density > 0) ? (
+                                  <span className="text-amber-700">Density not found — enter the quantity manually.</span>
+                                ) : (
+                                  <span className="text-slate-600">
+                                    Wt/pc <b>{wpu.toFixed(3)} kg</b>{nos > 0 ? <> × {nos} Nos = <b className="text-indigo-700">{(wpu * nos).toFixed(3)} kg</b></> : null}
+                                    <span className="text-slate-400"> · density {density} ({source === 'line' ? 'line' : source})</span>
+                                  </span>
+                                )}
+                              </div>
+                              <div className="max-w-xl">
+                                <LineDimensionEditor prefix={prefix} item={item} onPatch={(field, value) => patchEditLineDim(idx, field, value)} />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                       );
                     })}

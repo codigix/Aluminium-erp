@@ -101,7 +101,20 @@ const mergeRfqs = async (req, res, next) => {
     }
 };
 
+// Edit RFQ: save line changes (drawing, material, sizes, weight, required qty) of lines not yet sent to a vendor
+const updateRfqItems = async (req, res, next) => {
+    try {
+        const { items } = req.body;
+        if (!Array.isArray(items)) return res.status(400).json({ error: 'items is required' });
+        const result = await rfqService.updateRfqItems(req.params.id, items);
+        res.json({ message: 'RFQ updated', data: result });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
+    updateRfqItems,
     createRfq,
     getRfqById,
     getRfqsByMrId,

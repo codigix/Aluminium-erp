@@ -14,6 +14,7 @@ router.post('/merge', authenticate, rfqController.mergeRfqs);
 
 router.get('/:id', authenticate, rfqController.getRfqById);
 router.put('/:id/assign-vendors', authenticate, rfqController.assignItemVendors);
+router.put('/:id/items', authenticate, rfqController.updateRfqItems); // Edit RFQ: save unsent line changes
 router.delete('/:id', authenticate, rfqController.deleteRfq);
 
 module.exports = router;

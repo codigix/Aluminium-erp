@@ -828,6 +828,7 @@ const PurchaseOrders = () => {
       rate: rate,
       amount: amt,
       remarks: newPoItem.remarks || '',
+      item_note: newPoItem.remarks || '', // line remark → printed in brackets under the size in the PO PDF
       shape_type: newPoItem.shape_type || '',
       material_type: newPoItem.material_type || '',
       item_group: newPoItem.item_group || '', // item group (e.g. Raw Material) → saved as the PO line's material type
@@ -994,7 +995,7 @@ const PurchaseOrders = () => {
       thread_pitch: item.thread_pitch !== undefined && item.thread_pitch !== null ? item.thread_pitch : '',
       rate: item.rate !== undefined && item.rate !== null ? item.rate : 0,
       amount: item.amount !== undefined && item.amount !== null ? item.amount : 0,
-      remarks: item.remarks || item.description || ''
+      remarks: item.item_note || '' // the line remark (saved as item_note)
     });
     setShowAddPoItem(true);
   };
@@ -1192,7 +1193,8 @@ const PurchaseOrders = () => {
             outer_diameter: item.outer_diameter || 0,
             density: item.density || 0,
             weight_per_unit: item.weight_per_unit || 0,
-            laser_cutting: item.laser_cutting || null
+            laser_cutting: item.laser_cutting || null,
+            item_note: item.item_note ?? ''
           }))
         };
 
@@ -1285,7 +1287,8 @@ const PurchaseOrders = () => {
           outer_diameter: item.outer_diameter || 0,
           density: item.density || 0,
           weight_per_unit: item.weight_per_unit || 0,
-          laser_cutting: item.laser_cutting || null
+          laser_cutting: item.laser_cutting || null,
+          item_note: item.item_note ?? ''
         }))
       };
 
@@ -1708,6 +1711,7 @@ const PurchaseOrders = () => {
           density: item.density || 0,
           weight_per_unit: item.weight_per_unit || 0,
           laser_cutting: item.laser_cutting || '',
+          item_note: item.item_note || '',
           rate: rate,
           amount: amount,
           cgst_percent: parseFloat(item.cgst_percent) || 9,
@@ -3285,7 +3289,8 @@ const PurchaseOrders = () => {
                               setNewPoItem(prev => ({
                                 ...prev,
                                 drawing_no: val,
-                                remarks: (!prev.remarks && matchedDwg?.description) ? matchedDwg.description : prev.remarks
+                                // drawing text goes to the line description; Remarks stays free (it prints under the size in the PO PDF)
+                                description: (!prev.description && matchedDwg?.description) ? matchedDwg.description : prev.description
                               }));
                             }}
                             allowCustom={true}
@@ -3792,9 +3797,10 @@ const PurchaseOrders = () => {
                         </div>
 
                         <div className="col-span-6 md:col-span-4 space-y-1">
-                          <label className="text-xs text-slate-600 font-semibold block">Remarks (Optional)</label>
+                          <label className="text-xs text-slate-600 font-semibold block">Remarks (Optional) <span className="font-normal text-slate-400">— shown in ( ) under Size in PO PDF</span></label>
                           <input
                             type="text"
+                            maxLength={500}
                             className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
                             placeholder="Enter remarks or specifications..."
                             value={newPoItem.remarks || ''}
@@ -3854,11 +3860,11 @@ const PurchaseOrders = () => {
                       <tr className="text-xs text-slate-400 border-b border-slate-100">
                         <th className="px-4 p-2 text-left w-32">Drawing No.</th>
                         <th className="px-4 p-2 text-left min-w-[200px]">Item Code & Material</th>
-                        <th className="px-4 p-2 text-left">Remarks / Description</th>
                         <th className="px-4 p-2 text-center w-28">Design Qty</th>
                         <th className="px-4 p-2 text-center w-28">Weight</th>
-                        <th className="px-4 p-2 text-center w-28">Rate</th>
-                        <th className="px-4 p-2 text-right w-32">Amount</th>
+                        <th className="px-2 p-2 text-center min-w-[96px]">Rate</th>
+                        <th className="px-2 p-2 text-right w-28">Amount</th>
+                        <th className="px-2 p-2 text-left min-w-[140px]">Remark (PDF)</th>
                         <th className="px-4 p-2 text-center w-16">Action</th>
                       </tr>
                     </thead>
@@ -3897,15 +3903,6 @@ const PurchaseOrders = () => {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 p-2">
-                            <input
-                              type="text"
-                              value={item.remarks || item.description || ''}
-                              onChange={(e) => handleManualItemChange(idx, 'remarks', e.target.value)}
-                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                              placeholder="Remarks / Description"
-                            />
-                          </td>
                           <td className="px-4 p-2 w-28 text-center">
                             <div className="flex flex-col items-center gap-1">
                               <input
@@ -3933,22 +3930,33 @@ const PurchaseOrders = () => {
                               <span className="text-xs text-slate-400 font-medium">—</span>
                             )}
                           </td>
-                          <td className="px-4 p-2 w-28">
+                          <td className="px-2 p-2 min-w-[96px]">
                             <div className="flex flex-col items-center gap-0.5">
                               <input
                                 type="number"
                                 step="any"
                                 value={item.rate}
                                 onChange={(e) => handleManualItemChange(idx, 'rate', e.target.value)}
-                                className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700"
+                                className="w-[88px] p-1.5 bg-white border border-slate-200 rounded text-xs text-center focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700"
                               />
                               <span className="text-[9px] text-slate-400 font-medium">
                                 {isWeightBasedItem(item) ? '₹ / Kg' : `₹ / ${item.unit || 'Nos'}`}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 p-2 text-right font-bold text-xs text-slate-800 w-32">
+                          <td className="px-2 p-2 text-right font-bold text-xs text-slate-800 w-28 whitespace-nowrap">
                             {formatCurrency(item.amount)}
+                          </td>
+                          <td className="px-2 p-2 min-w-[140px]">
+                            <input
+                              type="text"
+                              maxLength={500}
+                              value={item.item_note || ''}
+                              onChange={(e) => handleManualItemChange(idx, 'item_note', e.target.value)}
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                              placeholder="( Remark )"
+                              title="Remark for this line — printed in brackets under the size in the PO PDF"
+                            />
                           </td>
                           <td className="px-4 p-2 text-center w-16">
                             <div className="flex items-center justify-center gap-1">
