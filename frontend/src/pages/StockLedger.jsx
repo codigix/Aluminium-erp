@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, Modal, DataTable, FormControl } from '../components/ui.jsx';
 import { 
@@ -16,6 +16,7 @@ import {
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast.js';
 import { formatDimensions } from '../utils/formatters';
+import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -62,9 +63,23 @@ const StockLedger = () => {
     remarks: ''
   });
 
+  // Company filter (view only): each ledger row → company of its GRN / Material Request / Stock Entry
+  const cf = useCompanyFilter();
+  const [ledgerCompany, setLedgerCompany] = useState({});
+  const fetchLedgerCompany = useCallback(() => {
+    const token = localStorage.getItem('authToken');
+    fetch(`${API_BASE}/company-change-requests/stock-company-map`, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.ledger) setLedgerCompany(d.ledger); })
+      .catch(() => {});
+  }, []);
+  const companyOfRow = useCallback((row) => (ledgerCompany[row.id] ? String(ledgerCompany[row.id]) : ''), [ledgerCompany]);
+  const visibleLedger = useMemo(() => ledger.filter(row => cf.matches(companyOfRow(row))), [ledger, cf, companyOfRow]);
+
   useEffect(() => {
     fetchLedger();
     fetchShapes();
+    fetchLedgerCompany();
   }, []);
 
   const fetchShapes = async () => {
@@ -359,7 +374,10 @@ const StockLedger = () => {
         }
       >
         <div className="mb-6 p-2 bg-slate-200 rounded border border-slate-100">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 items-end">
+            <FormControl label="Company">
+              <CompanyFilterSelect cf={cf} rows={ledger} getCompanyId={companyOfRow} className="w-full !py-2" />
+            </FormControl>
             <FormControl label="Item Code">
               <div className="relative">
                 <Tag className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -401,7 +419,9 @@ const StockLedger = () => {
                   setItemCode('');
                   setStartDate('');
                   setEndDate('');
+                  cf.setCompanyFilter('ALL');
                   fetchLedger({});
+                  fetchLedgerCompany();
                 }}
                 className="p-2 bg-white text-slate-400 border border-slate-200 rounded hover:bg-slate-50 hover:text-indigo-600 transition-all active:scale-95"
                 title="Reset Filters"
@@ -414,7 +434,7 @@ const StockLedger = () => {
 
         <DataTable
           columns={columns}
-          data={ledger}
+          data={visibleLedger}
           loading={loading}
           hideHeader={true}
           emptyMessage="No stock transactions found for the selected criteria"

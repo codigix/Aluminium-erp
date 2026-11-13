@@ -523,6 +523,45 @@ const getCompanyMap = async () => {
   return { mr, quotation, po, receipt, grn };
 };
 
+// Read-only company view of stock (Stock Ledger / Stock Balance filters). Stock itself stays one shared pool;
+// each ledger row is attributed to the company of its source document:
+//   GRN receipt → GRN (→ PO → Sales Order company), Material Request issue → MR, Stock Entry → its GRN.
+// Rows that can't be traced (manual entries, deleted documents) get no company.
+// `movements` = net IN − OUT per company + item + sizes, used to show a company's balance per stock row.
+const getStockCompanyMap = async () => {
+  const map = await getCompanyMap();
+  const [rows] = await pool.query(
+    `SELECT sl.id, sl.item_code, sl.transaction_type, sl.reference_doc_type, sl.reference_doc_id,
+            sl.quantity, sl.weight_in, sl.weight_out,
+            sl.length, sl.width, sl.thickness, sl.diameter, sl.outer_diameter,
+            gi.grn_id AS grn_item_grn_id, se.grn_id AS entry_grn_id,
+            (SELECT m.id FROM material_requests m WHERE m.mr_number = sl.reference_doc_number LIMIT 1) AS mr_by_number
+     FROM stock_ledger sl
+     LEFT JOIN grn_items gi ON gi.id = sl.grn_item_id
+     LEFT JOIN stock_entries se ON UPPER(sl.reference_doc_type) = 'STOCK_ENTRY' AND se.id = sl.reference_doc_id`
+  );
+  const r3 = (v) => Number((parseFloat(v) || 0).toFixed(3));
+  const ledger = {};
+  const movements = {};
+  for (const r of rows) {
+    const type = String(r.reference_doc_type || '').toUpperCase();
+    let companyId = null;
+    if (type === 'GRN') companyId = map.grn[r.grn_item_grn_id || r.reference_doc_id];
+    else if (type === 'STOCK_ENTRY') companyId = r.entry_grn_id ? map.grn[r.entry_grn_id] : null;
+    else if (type === 'MATERIAL REQUEST') companyId = map.mr[r.reference_doc_id] || (r.mr_by_number && map.mr[r.mr_by_number]);
+    if (companyId) ledger[r.id] = companyId;
+
+    const companyKey = companyId ? String(companyId) : 'NONE';
+    const sizeKey = [r.item_code, r3(r.length), r3(r.width), r3(r.thickness), r3(r.diameter), r3(r.outer_diameter)].join('|');
+    const sign = String(r.transaction_type).toUpperCase() === 'OUT' ? -1 : 1;
+    movements[companyKey] = movements[companyKey] || {};
+    const m = movements[companyKey][sizeKey] || (movements[companyKey][sizeKey] = { qty: 0, weight: 0 });
+    m.qty = r3(m.qty + sign * (parseFloat(r.quantity) || 0));
+    m.weight = r3(m.weight + (parseFloat(r.weight_in) || 0) - (parseFloat(r.weight_out) || 0));
+  }
+  return { ledger, movements };
+};
+
 const markDecisionSeen = async (requestId, userId) => {
   await pool.query(
     "UPDATE company_change_requests SET requester_notified_at = NOW() WHERE id = ? AND requested_by = ? AND status <> 'PENDING' AND requester_notified_at IS NULL",
@@ -552,6 +591,7 @@ module.exports = {
   resolveSource,
   resolvePlanOrder,
   getCompanyMap,
+  getStockCompanyMap,
   markDecisionSeen,
   getPendingCount
 };

@@ -25,6 +25,7 @@ module.exports = {
   }, req.user.id)),
   markSeen: wrap((req) => companyChangeService.markDecisionSeen(req.params.id, req.user.id)),
   getCompanyMap: wrap(() => companyChangeService.getCompanyMap()),
+  getStockCompanyMap: wrap(() => companyChangeService.getStockCompanyMap()),
 
   // Admin
   listRequests: wrap((req) => companyChangeService.listRequests({ status: req.query.status, search: req.query.search })),

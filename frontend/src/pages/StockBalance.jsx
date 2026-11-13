@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, DataTable, Modal, StatusBadge, FormControl, SearchableSelect } from '../components/ui.jsx';
 import {
@@ -19,6 +19,11 @@ import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions } from '../utils/formatters';
 import { PipeCalcFields, FlangeFields, isFlangeShape } from '../components/ShapeCalcFields.jsx';
+import { useCompanyFilter, CompanyFilterSelect } from '../components/CompanyFilter.jsx';
+
+// Same key the backend uses for company-wise stock movements: item code + sizes (3 decimals)
+const r3 = (v) => Number((parseFloat(v) || 0).toFixed(3));
+const stockSizeKey = (row) => [row.item_code, r3(row.length), r3(row.width), r3(row.thickness), r3(row.diameter), r3(row.outer_diameter)].join('|');
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -85,6 +90,71 @@ const StockBalance = () => {
     totalBalance: 0,
     lowStock: 0
   });
+
+  // Company filter (view only). Stock is one shared pool; a company's figure = IN − OUT of the ledger rows
+  // traced to that company (GRN / Material Request / Stock Entry) for the same item + sizes.
+  const cf = useCompanyFilter();
+  const [stockMovements, setStockMovements] = useState({});
+  const fetchStockMovements = () => {
+    const token = localStorage.getItem('authToken');
+    fetch(`${API_BASE}/company-change-requests/stock-company-map`, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.movements) setStockMovements(d.movements); })
+      .catch(() => {});
+  };
+
+  // Movements of one company for one stock row; ledger rows saved without sizes count for the item
+  // only when the item has a single stock row.
+  const rowsPerItem = useMemo(() => balances.reduce((acc, b) => { acc[b.item_code] = (acc[b.item_code] || 0) + 1; return acc; }, {}), [balances]);
+  // Same item + sizes in more than one warehouse row: the company figure goes on one row only (the one holding
+  // the most stock, then the newest), so it isn't counted twice.
+  const sizeOwner = useMemo(() => balances.reduce((acc, b) => {
+    const k = stockSizeKey(b);
+    const cur = acc[k];
+    const better = !cur || (parseFloat(b.current_balance) || 0) > (parseFloat(cur.current_balance) || 0)
+      || ((parseFloat(b.current_balance) || 0) === (parseFloat(cur.current_balance) || 0) && b.id > cur.id);
+    if (better) acc[k] = b;
+    return acc;
+  }, {}), [balances]);
+  const companyMovementOf = (companyKey, row) => {
+    const mv = stockMovements[companyKey] || {};
+    const key = stockSizeKey(row);
+    if (sizeOwner[key] && sizeOwner[key].id !== row.id) return null;
+    const plainKey = `${row.item_code}|0|0|0|0|0`;
+    const parts = [mv[key]];
+    if (key !== plainKey && rowsPerItem[row.item_code] === 1) parts.push(mv[plainKey]);
+    const found = parts.filter(Boolean);
+    if (!found.length) return null;
+    return { qty: r3(found.reduce((s, m) => s + m.qty, 0)), weight: r3(found.reduce((s, m) => s + m.weight, 0)) };
+  };
+
+  // One entry per (stock row, company it has movements for), so the dropdown counts items per company
+  const companyPairs = useMemo(() => {
+    const pairs = [];
+    balances.forEach(row => Object.keys(stockMovements).forEach(c => {
+      if (companyMovementOf(c, row)) pairs.push({ c: c === 'NONE' ? '' : c });
+    }));
+    return pairs;
+  }, [balances, stockMovements, rowsPerItem, sizeOwner]);
+
+  const visibleBalances = useMemo(() => {
+    if (cf.companyFilter === 'ALL') return balances;
+    const companyKey = cf.companyFilter === 'NONE' ? 'NONE' : String(cf.companyFilter);
+    return balances.reduce((acc, row) => {
+      const m = companyMovementOf(companyKey, row);
+      if (m) acc.push({ ...row, current_balance: m.qty, current_weight: m.weight });
+      return acc;
+    }, []);
+  }, [balances, stockMovements, rowsPerItem, sizeOwner, cf.companyFilter]);
+
+  const visibleStats = useMemo(() => {
+    if (cf.companyFilter === 'ALL') return stats;
+    return {
+      totalItems: visibleBalances.length,
+      totalBalance: visibleBalances.reduce((sum, item) => sum + (parseFloat(item.current_balance) || 0), 0),
+      lowStock: visibleBalances.filter(item => (parseFloat(item.current_balance) || 0) < 10).length
+    };
+  }, [cf.companyFilter, stats, visibleBalances]);
 
   useEffect(() => {
     fetchStockBalance();
@@ -292,6 +362,7 @@ const StockBalance = () => {
   const fetchStockBalance = async () => {
     try {
       setLoading(true);
+      fetchStockMovements(); // keep the company-wise view in step with the balance
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/stock/balance`, {
         headers: {
@@ -511,7 +582,7 @@ const StockBalance = () => {
           <div className="bg-indigo-600 border border-indigo-700 rounded p-5 flex items-center justify-between shadow-xl shadow-indigo-100">
             <div>
               <p className="text-xs text-indigo-100    mb-1">Total Items</p>
-              <p className="text-xl   text-white">{stats.totalItems}</p>
+              <p className="text-xl   text-white">{visibleStats.totalItems}</p>
             </div>
             <div className="p-2 bg-indigo-500/50 backdrop-blur-sm rounded  text-white ">
               <Box className="w-3 h-3" />
@@ -521,7 +592,7 @@ const StockBalance = () => {
           <div className="bg-white border border-slate-200 rounded p-5 flex items-center justify-between hover: transition-all">
             <div>
               <p className="text-xs text-slate-500    mb-1">Total Balance</p>
-              <p className="text-xl  text-slate-900">{parseFloat(stats.totalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              <p className="text-xl  text-slate-900">{parseFloat(visibleStats.totalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="p-2 bg-emerald-50 rounded  text-emerald-600 border border-emerald-100">
               <Database className="w-3 h-3" />
@@ -531,7 +602,7 @@ const StockBalance = () => {
           <div className="bg-white border border-slate-200 rounded p-5 flex items-center justify-between hover: transition-all">
             <div>
               <p className="text-xs text-slate-500    mb-1">Low Stock Items</p>
-              <p className="text-xl   text-rose-600">{stats.lowStock}</p>
+              <p className="text-xl   text-rose-600">{visibleStats.lowStock}</p>
             </div>
             <div className="p-2 bg-rose-50 rounded  text-rose-600 border border-rose-100">
               <AlertTriangle className="w-3 h-3" />
@@ -544,7 +615,14 @@ const StockBalance = () => {
         <div>
           <h2 className="text-xl  text-slate-900 ">Inventory Status</h2>
           <p className="text-xs text-slate-500">Manage master items and monitor stock levels</p>
+          {cf.companyFilter !== 'ALL' && (
+            <p className="text-[11px] text-amber-600 mt-0.5">
+              Company view: Qty / Weight = stock received minus issued for this company. Stock is shared, so a negative figure means this company used stock received for another company.
+            </p>
+          )}
         </div>
+        <div className="flex items-center gap-2">
+        <CompanyFilterSelect cf={cf} rows={companyPairs} getCompanyId={p => p.c} />
         <button
           onClick={() => navigate('/stock-balance/add')}
           className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
@@ -552,11 +630,12 @@ const StockBalance = () => {
           <Plus className="w-4 h-4" />
           Create New Item
         </button>
+        </div>
       </div>
 
       <DataTable
         columns={columns}
-        data={balances}
+        data={visibleBalances}
         loading={loading}
         pageSize={5}
         rowIdKey="id"

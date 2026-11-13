@@ -12,6 +12,8 @@ router.get('/pending-count', authorize(['COMPANY_CHANGE_APPROVE']), controller.g
 router.get('/source', authorize(VIEWERS), controller.resolveSource);
 // Company id per MR / quotation / PO / receipt / GRN for list filters (read-only, any signed-in user)
 router.get('/company-map', controller.getCompanyMap);
+// Company per stock ledger row + company-wise stock movements for Stock Ledger / Stock Balance filters (read-only)
+router.get('/stock-company-map', controller.getStockCompanyMap);
 router.get('/order/:orderId', authorize(VIEWERS), controller.getOrderStatus);
 router.get('/', authorize(['COMPANY_CHANGE_APPROVE']), controller.listRequests);
 router.post('/', authorize(REQUESTERS), controller.submitRequest);
