@@ -2124,11 +2124,26 @@ const Quotations = () => {
   const resolveLineDensity = useCallback((item) => {
     const own = parseFloat(item.density) || 0;
     if (own > 0) return { density: own, source: 'line' };
-    const lc = (v) => String(v || '').trim().toLowerCase();
-    const mat = materialsList.find(m => lc(m.name) && (lc(m.name) === lc(item.material_name) || lc(m.name) === lc(item.material_grade)));
-    if (mat && parseFloat(mat.density) > 0) return { density: parseFloat(mat.density), source: `Materials: ${mat.name}` };
-    const sb = stockItems.find(s => item.item_code && s.item_code === item.item_code && parseFloat(s.density) > 0);
+    const lc = (v) => String(v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const matDensity = (m) => (m && parseFloat(m.density) > 0 ? parseFloat(m.density) : 0);
+    const name = lc(item.material_name);
+    const grade = lc(item.material_grade);
+    // 1. Materials master: same name / grade
+    const mat = materialsList.find(m => lc(m.name) && (lc(m.name) === name || (grade && lc(m.name) === grade)));
+    if (matDensity(mat)) return { density: matDensity(mat), source: `Materials: ${mat.name}` };
+    // 2. Item Master rows of the same item code or material name: their linked material, else their own density
+    const sameItem = stockItems.filter(s => (item.item_code && s.item_code === item.item_code) || (name && lc(s.material_name) === name));
+    for (const s of sameItem) {
+      const linked = s.material_id ? materialsList.find(m => String(m.id) === String(s.material_id)) : null;
+      if (matDensity(linked)) return { density: matDensity(linked), source: `Materials: ${linked.name}` };
+    }
+    const sb = sameItem.find(s => parseFloat(s.density) > 0);
     if (sb) return { density: parseFloat(sb.density), source: 'Item Master' };
+    // 3. Materials master name the material name starts with (e.g. "MS Bright" → MS) — longest match wins
+    const prefix = materialsList
+      .filter(m => lc(m.name) && name.startsWith(`${lc(m.name)} `) && matDensity(m))
+      .sort((a, b) => lc(b.name).length - lc(a.name).length)[0];
+    if (prefix) return { density: matDensity(prefix), source: `Materials: ${prefix.name}` };
     return { density: 0, source: '' };
   }, [materialsList, stockItems]);
 

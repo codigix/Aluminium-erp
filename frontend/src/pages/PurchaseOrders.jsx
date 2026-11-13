@@ -2686,15 +2686,16 @@ const PurchaseOrders = () => {
 
       {/* Search & Filter Bar */}
       <Card className="p-2 border-slate-100 bg-white">
-        <div className="flex flex-col md:flex-row items-center gap-4">
-          <div className="relative flex-1 group">
+        {/* One line: big search · Company filter · Status dropdown (All / Requests / Draft / Pending Approval / Sent / Received / Fulfilled) */}
+        <div className="flex flex-col md:flex-row md:items-center gap-2">
+          <div className="relative flex-1 min-w-0 group">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" size={18} />
             <input
               type="text"
               placeholder="Search by PO #, supplier, drawing or project..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
+              className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
             />
           </div>
 
@@ -2702,27 +2703,27 @@ const PurchaseOrders = () => {
             cf={poCompanyFilter}
             rows={pos}
             getCompanyId={poCompanyOf}
-            className="py-2 w-full md:w-auto"
+            className="py-2 w-full md:w-auto shrink-0"
             accent="text-rose-600"
           />
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 no-scrollbar">
-            <Tabs
-              tabs={[
-                { id: 'ALL', label: 'All', icon: List },
-                { id: 'PO_REQUEST', label: 'Requests', icon: Clock },
-                { id: 'DRAFT', label: 'Draft', icon: FileText },
-                { id: 'PENDING_APPROVAL', label: 'Pending Approval', icon: Clock },
-                { id: 'SENT', label: 'Sent', icon: Truck },
-                { id: 'RECEIVED', label: 'Received', icon: CheckCircle2 },
-                { id: 'FULFILLED', label: 'Fulfilled', icon: Package }
-              ]}
-              activeTab={statusFilter}
-              onTabChange={(tab) => {
-                setStatusFilter(tab);
-                setSelectedPOIds([]);
-              }}
-            />
+          <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg w-full md:w-auto shrink-0">
+            <List className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="text-xs text-slate-400">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setSelectedPOIds([]); }}
+              className="text-xs font-medium outline-none bg-transparent cursor-pointer text-rose-600 min-w-[140px]"
+              title="Filter by PO status"
+            >
+              <option value="ALL">All</option>
+              <option value="PO_REQUEST">Requests</option>
+              <option value="DRAFT">Draft</option>
+              <option value="PENDING_APPROVAL">Pending Approval</option>
+              <option value="SENT">Sent</option>
+              <option value="RECEIVED">Received</option>
+              <option value="FULFILLED">Fulfilled</option>
+            </select>
           </div>
         </div>
       </Card>
