@@ -1101,7 +1101,12 @@ const JobCard = () => {
         jc.job_card_no?.toLowerCase().includes(query) ||
         jc.wo_number?.toLowerCase().includes(query) ||
         jc.operation_name?.toLowerCase().includes(query) ||
-        jc.operator_name?.toLowerCase().includes(query)
+        jc.operator_name?.toLowerCase().includes(query) ||
+        jc.item_name?.toLowerCase().includes(query) ||
+        jc.item_code?.toLowerCase().includes(query) ||
+        jc.drawing_no?.toLowerCase().includes(query) ||
+        jc.project_name?.toLowerCase().includes(query) ||
+        jc.client_name?.toLowerCase().includes(query)
       );
     }
 
@@ -1223,6 +1228,95 @@ const JobCard = () => {
 
     return acc;
   }, [filteredJobCards, workOrders, searchQuery]);
+
+  // ---- Drawing-wise view: Production Plan → Assembly drawing → child Part drawings → operations ----
+  const getDrawingKind = (row) => {
+    const sourceType = (row.source_type || '').toUpperCase();
+    const itemName = (row.item_name || '').toUpperCase();
+    const itemCode = (row.item_code || '').toUpperCase();
+    const itemGroup = (row.item_group || '').toUpperCase();
+    const drawingType = (row.drawing_type || '').toUpperCase();
+    if (itemCode.startsWith('BO-') || itemGroup.includes('BOUGHT') || drawingType.includes('BOUGHT') || sourceType === 'BO' || sourceType.includes('BOUGHT')) {
+      return 'BOUGHT OUT';
+    }
+    if (
+      itemGroup === 'ASSEMBLY' || drawingType === 'ASSEMBLY' || itemCode.startsWith('ASSEMBLY-') || itemCode.startsWith('SA-') ||
+      itemCode.startsWith('SFG-') || sourceType === 'FG' || sourceType === 'FINISHED GOOD' || sourceType === 'FINISHED GOODS' ||
+      sourceType === 'SA' || sourceType === 'SUB ASSEMBLY' || sourceType === 'SUB-ASSEMBLY' || itemName.includes('ASSEMBLAGE') ||
+      (itemName.includes('ASSEMBLY') && !itemCode.startsWith('PART-'))
+    ) {
+      if (itemGroup === 'PART' || drawingType === 'PART' || itemCode.startsWith('PART-')) return 'PART';
+      return 'ASSEMBLY';
+    }
+    return 'PART';
+  };
+
+  const drawingTree = useMemo(() => {
+    const plans = [];
+    const planByKey = {};
+    filteredJobCards.forEach(jc => {
+      const planKey = jc.plan_id ? `plan_${jc.plan_id}` : (jc.parent_wo_id ? `parent_${jc.parent_wo_id}` : `wo_${jc.work_order_id}`);
+      if (!planByKey[planKey]) {
+        planByKey[planKey] = { key: planKey, plan_id: jc.plan_id, plan_code: jc.plan_code, project_name: jc.project_name, client_name: jc.client_name, woMap: {}, woOrder: [] };
+        plans.push(planByKey[planKey]);
+      }
+      const plan = planByKey[planKey];
+      const woId = String(jc.work_order_id);
+      if (!plan.woMap[woId]) {
+        plan.woMap[woId] = {
+          key: `wo_${woId}`,
+          work_order_id: woId,
+          wo_number: jc.work_order_no || jc.wo_number,
+          item_code: jc.item_code,
+          item_name: jc.item_name,
+          drawing_no: jc.drawing_no,
+          source_fg: jc.source_fg,
+          parent_wo_id: jc.parent_wo_id ? String(jc.parent_wo_id) : null,
+          wo_quantity: jc.wo_quantity,
+          kind: getDrawingKind(jc),
+          cards: [],
+          children: []
+        };
+        plan.woOrder.push(woId);
+      }
+      plan.woMap[woId].cards.push(jc);
+      if (!plan.project_name && jc.project_name) plan.project_name = jc.project_name;
+      if (!plan.plan_code && jc.plan_code) plan.plan_code = jc.plan_code;
+    });
+
+    plans.forEach(plan => {
+      const wos = plan.woOrder.map(id => plan.woMap[id]);
+      wos.forEach(wo => wo.cards.sort((a, b) =>
+        (parseInt(a.sequence_no || a.operation_sequence || 0) - parseInt(b.sequence_no || b.operation_sequence || 0)) || ((Number(a.id) || 0) - (Number(b.id) || 0))));
+      const assemblies = wos.filter(w => w.kind === 'ASSEMBLY');
+      const norm = (v) => String(v || '').trim().toUpperCase();
+      const roots = [];
+      wos.forEach(wo => {
+        let parent = wo.parent_wo_id && plan.woMap[wo.parent_wo_id] && wo.parent_wo_id !== wo.work_order_id ? plan.woMap[wo.parent_wo_id] : null;
+        if (!parent && wo.kind !== 'ASSEMBLY' && wo.source_fg) {
+          const fg = norm(wo.source_fg);
+          parent = assemblies.find(a => a !== wo && (norm(a.item_name) === fg || norm(a.item_code) === fg || norm(a.drawing_no) === fg)) || null;
+        }
+        if (parent) parent.children.push(wo); else roots.push(wo);
+      });
+      const byKindThenId = (a, b) => ((a.kind === 'ASSEMBLY' ? 0 : 1) - (b.kind === 'ASSEMBLY' ? 0 : 1)) || (Number(a.work_order_id) - Number(b.work_order_id));
+      const sortDeep = (list) => { list.sort(byKindThenId); list.forEach(w => sortDeep(w.children)); };
+      sortDeep(roots);
+      plan.roots = roots;
+      plan.woCount = wos.length;
+      plan.assemblyCount = assemblies.length;
+      plan.partCount = wos.length - assemblies.length;
+      plan.opCount = wos.reduce((s, w) => s + w.cards.length, 0);
+      plan.doneCount = wos.reduce((s, w) => s + w.cards.filter(c => c.status === 'COMPLETED').length, 0);
+    });
+    return plans;
+  }, [filteredJobCards]);
+
+  const [jcTreeExpanded, setJcTreeExpanded] = useState(() => new Set());
+  const [jcTreeCollapsedPlans, setJcTreeCollapsedPlans] = useState(() => new Set());
+  const [jcTreePage, setJcTreePage] = useState(1);
+  const [jcTreePageSize, setJcTreePageSize] = useState(10);
+  useEffect(() => { setJcTreePage(1); }, [searchQuery, jcTreePageSize]);
 
   const stats = useMemo(() => {
     const allowedSourceTypes = ['FG', 'SA', 'SFG', 'Sub Assembly', 'Finished Goods', 'PART', 'Part'];
@@ -7003,6 +7097,283 @@ const JobCard = () => {
     }
   ];
 
+  // Operation rows inside an expanded drawing: same columns/actions as before, without repeating
+  // the project / work order / drawing that the drawing header already shows
+  const jcColByKey = Object.fromEntries(jobCardColumns.map(c => [c.key, c]));
+  const jcOpColumns = [
+    {
+      key: 'job_card_no',
+      label: 'Seq / Job Card',
+      width: '11%',
+      className: 'whitespace-nowrap pr-4',
+      render: (val, row) => (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-50 text-[11px] font-semibold text-indigo-700 border border-indigo-100 shrink-0">
+            {row.sequence_no || row.operation_sequence || '-'}
+          </span>
+          <span className="text-xs font-semibold text-indigo-600 whitespace-nowrap">{val}</span>
+        </div>
+      )
+    },
+    {
+      key: 'operation_name',
+      label: 'Operation',
+      width: '13%',
+      className: 'pl-4',
+      render: (val, row) => {
+        const isSub = row.execution_type === 'Outsource' || row.execution_type === 'Subcontract' || row.execution_type === 'Sub-Contract' || row.outward_challan_id;
+        const [modeText, modeCls] = isShipmentOp(row)
+          ? ['Dispatch', 'bg-emerald-50 text-emerald-700 border-emerald-200']
+          : (isSub ? ['Outsource', 'bg-amber-50 text-amber-700 border-amber-200'] : ['In-house', 'bg-blue-50 text-blue-700 border-blue-200']);
+        const [statusText, statusCls] = row.is_assembly_waiting
+          ? ['Waiting for Components', 'bg-rose-50 text-rose-600 border-rose-200']
+          : row.status === 'IN_PROGRESS' ? ['In-Progress', 'bg-amber-50 text-amber-700 border-amber-200']
+            : row.status === 'COMPLETED' ? ['Completed', 'bg-emerald-50 text-emerald-700 border-emerald-200']
+              : [row.status ? row.status.charAt(0) + row.status.slice(1).toLowerCase().replace(/_/g, ' ') : 'Pending', 'bg-slate-50 text-slate-600 border-slate-200'];
+        return (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-slate-900 leading-tight">{val}</span>
+            <div className="flex flex-wrap items-center gap-1">
+              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusCls}`}>{statusText}</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${modeCls}`}>{modeText}</span>
+            </div>
+          </div>
+        );
+      }
+    },
+    { ...jcColByKey.planned_qty, label: 'Target → Received', width: '17%', className: 'text-left' },
+    {
+      key: 'produced_qty',
+      label: 'Output',
+      width: '12%',
+      className: 'pl-5',
+      render: (_, row) => (
+        <div className="grid grid-cols-[auto_auto] justify-start gap-x-5 text-[11px] leading-5 whitespace-nowrap">
+          <span className="text-slate-400">Produced</span><span className="text-indigo-600 font-semibold text-right">{parseFloat(row.produced_qty || 0).toFixed(2)}</span>
+          <span className="text-slate-400">Accepted</span><span className="text-emerald-600 font-semibold text-right">{parseFloat(row.accepted_qty || 0).toFixed(2)}</span>
+          <span className="text-slate-400">Rework</span><span className="text-amber-600 font-semibold text-right">{parseFloat(row.rework_qty || 0).toFixed(2)}</span>
+        </div>
+      )
+    },
+    { ...jcColByKey.cycle_time, label: 'Time & Cost', width: '11%', className: 'whitespace-nowrap' },
+    { ...jcColByKey.workstation_name, width: '10%' },
+    { ...jcColByKey.operator_name, label: 'Assignee', width: '12%' },
+    { ...jcColByKey.actions, width: '14%', className: 'text-right [&>div]:flex-wrap [&>div]:gap-y-1' }
+  ].filter(c => c && c.key);
+
+  const kindStyle = (kind) => (
+    kind === 'ASSEMBLY' ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+      : kind === 'BOUGHT OUT' ? 'bg-amber-50 text-amber-700 border-amber-200'
+        : 'bg-rose-50 text-rose-600 border-rose-200'
+  );
+
+  const drawingSummary = (wo) => {
+    const total = wo.cards.length;
+    const done = wo.cards.filter(c => c.status === 'COMPLETED').length;
+    const running = wo.cards.find(c => c.status === 'IN_PROGRESS');
+    const waiting = wo.cards.some(c => c.is_assembly_waiting);
+    const current = running || wo.cards.find(c => c.status !== 'COMPLETED');
+    let status = 'Pending', cls = 'text-slate-500 bg-slate-50 border-slate-200';
+    if (total && done === total) { status = 'Completed'; cls = 'text-emerald-700 bg-emerald-50 border-emerald-200'; }
+    else if (waiting && !running) { status = 'Waiting for Components'; cls = 'text-rose-600 bg-rose-50 border-rose-200'; }
+    else if (running || done > 0) { status = 'In-Progress'; cls = 'text-amber-700 bg-amber-50 border-amber-200'; }
+    return { total, done, pct: total ? Math.round((done / total) * 100) : 0, current, status, cls };
+  };
+
+  const toggleJcTree = (key) => setJcTreeExpanded(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const togglePlanCollapse = (key) => setJcTreeCollapsedPlans(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const allDrawingKeys = () => {
+    const keys = [];
+    const walk = (list) => list.forEach(w => { keys.push(w.key); walk(w.children); });
+    drawingTree.forEach(p => walk(p.roots));
+    return keys;
+  };
+
+  const renderDrawingNode = (wo, depth) => {
+    const open = !!searchQuery || jcTreeExpanded.has(wo.key);
+    const s = drawingSummary(wo);
+    const childCount = wo.children.length;
+    return (
+      <div key={wo.key} className={depth > 0 ? 'ml-6 border-l-2 border-indigo-100 pl-3' : ''}>
+        <div
+          onClick={() => toggleJcTree(wo.key)}
+          className={`flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5 cursor-pointer rounded border transition-all ${open ? 'bg-indigo-50/40 border-indigo-100' : 'bg-white border-slate-100 hover:bg-slate-50'}`}
+        >
+          <div className="flex items-center gap-2 min-w-[300px] flex-1">
+            {open ? <ChevronDown className="w-4 h-4 text-indigo-500 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${kindStyle(wo.kind)}`}>
+              {depth > 0 && wo.kind === 'PART' ? 'CHILD PART' : wo.kind}
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="text-xs font-semibold text-slate-900 truncate" title={wo.item_name}>{wo.item_name || wo.item_code || 'Drawing'}</span>
+              <span className="text-[10px] text-slate-500 truncate">
+                {wo.drawing_no || wo.item_code}{wo.wo_number ? ` · WO: ${wo.wo_number}` : ''}
+                {childCount > 0 ? ` · ${childCount} child part${childCount > 1 ? 's' : ''}` : ''}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-col text-[11px] text-slate-600 w-[70px]">
+            <span className="text-slate-400 text-[10px]">Qty</span>
+            <span className="font-semibold">{parseFloat(wo.wo_quantity || 0)}</span>
+          </div>
+          <div className="flex flex-col gap-1 w-[170px]">
+            <div className="flex justify-between text-[11px]">
+              <span className="text-slate-500">Operations</span>
+              <span className="font-semibold text-slate-700">{s.done}/{s.total} done</span>
+            </div>
+            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-indigo-600 rounded-full transition-all" style={{ width: `${s.pct}%` }} />
+            </div>
+          </div>
+          <div className="flex flex-col text-[11px] w-[170px] min-w-0">
+            <span className="text-slate-400 text-[10px]">Current Operation</span>
+            <span className="text-slate-800 truncate">{s.current ? s.current.operation_name : '—'}</span>
+          </div>
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${s.cls}`}>{s.status}</span>
+        </div>
+
+        {open && (
+          <div className="mt-1 mb-2 space-y-1">
+            {wo.cards.length > 0 && (
+              <div className="ml-6 border border-slate-200 rounded-lg bg-white overflow-x-auto shadow-sm">
+                <table className="w-full min-w-[960px] table-fixed text-left">
+                  <colgroup>
+                    {jcOpColumns.map(col => <col key={col.key + col.label} style={col.width ? { width: col.width } : undefined} />)}
+                  </colgroup>
+                  <thead className="bg-gradient-to-r from-slate-50 to-indigo-50/40 border-b border-slate-200">
+                    <tr>
+                      {jcOpColumns.map(col => (
+                        <th key={col.key + col.label} className={`px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap ${col.className || ''}`}>{col.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {wo.cards.map((row, rIdx) => (
+                      <tr key={row.id} className={`align-middle transition-colors hover:bg-indigo-50/30 ${row.status === 'IN_PROGRESS' ? 'bg-amber-50/30' : (rIdx % 2 ? 'bg-slate-50/40' : 'bg-white')}`}>
+                        {jcOpColumns.map(col => (
+                          <td key={col.key + col.label} className={`px-2.5 py-2 ${col.className || ''}`}>
+                            {col.render ? col.render(row[col.key], row) : row[col.key]}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {wo.children.length > 0 && (
+              <div className="space-y-1 pt-1">
+                {wo.children.map(child => renderDrawingNode(child, depth + 1))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderDrawingWiseJobCards = () => {
+    const totalPages = Math.max(1, Math.ceil(drawingTree.length / jcTreePageSize));
+    const page = Math.min(jcTreePage, totalPages);
+    const pagePlans = drawingTree.slice((page - 1) * jcTreePageSize, page * jcTreePageSize);
+    return (
+      <div className="mt-3 bg-white border border-slate-200 rounded">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-slate-100">
+          <div className="flex items-center gap-2 text-xs text-slate-600">
+            <span>Show</span>
+            <select value={jcTreePageSize} onChange={(e) => setJcTreePageSize(Number(e.target.value))}
+              className="px-2 py-1 border border-slate-200 rounded text-xs outline-none">
+              {[5, 10, 20, 50].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <span>plans</span>
+            <span className="mx-2 h-4 w-px bg-slate-200" />
+            <button type="button" onClick={() => { setJcTreeExpanded(new Set(allDrawingKeys())); setJcTreeCollapsedPlans(new Set()); }}
+              className="px-2 py-1 rounded text-indigo-600 hover:bg-indigo-50">Expand all</button>
+            <button type="button" onClick={() => setJcTreeExpanded(new Set())}
+              className="px-2 py-1 rounded text-slate-500 hover:bg-slate-100">Collapse all</button>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search job card, WO, drawing, operation..."
+                className="w-[300px] max-w-full pl-3 pr-8 py-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-400"
+              />
+              {searchQuery && (
+                <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2 top-2 text-slate-400 hover:text-slate-600" title="Clear">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-600 hover:bg-slate-50 transition-all">
+              <Filter className="w-4 h-4" />
+              All Operational States
+              <ChevronDown className="w-4 h-4 ml-2" />
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-xs text-slate-400">Loading...</div>
+        ) : pagePlans.length === 0 ? (
+          <div className="p-8 text-center text-xs text-slate-400">No job cards found</div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {pagePlans.map(plan => {
+              const planOpen = !!searchQuery || !jcTreeCollapsedPlans.has(plan.key);
+              const planTitle = plan.plan_code || (plan.plan_id ? `Plan #${plan.plan_id}` : `WO: ${plan.roots[0]?.wo_number || ''}`);
+              return (
+                <div key={plan.key} className="p-3">
+                  <div onClick={() => togglePlanCollapse(plan.key)} className="flex flex-wrap items-center justify-between gap-2 cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      {planOpen ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                      <Layers className="w-4 h-4 text-indigo-500" />
+                      <span className="text-[10px] text-slate-400">Production Plan</span>
+                      <span className="text-sm font-semibold text-slate-900">{planTitle}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                      {plan.assemblyCount > 0 && <span><b className="text-indigo-600">{plan.assemblyCount}</b> Assembly</span>}
+                      <span><b className="text-rose-500">{plan.partCount}</b> Part{plan.partCount === 1 ? '' : 's'}</span>
+                      <span><b className="text-slate-700">{plan.doneCount}/{plan.opCount}</b> operations done</span>
+                    </div>
+                  </div>
+                  {planOpen && (
+                    <div className="mt-2 space-y-1">
+                      {plan.roots.map(wo => renderDrawingNode(wo, 0))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between p-3 border-t border-slate-100 text-xs text-slate-500">
+          <span>
+            Showing {drawingTree.length ? (page - 1) * jcTreePageSize + 1 : 0} to {Math.min(page * jcTreePageSize, drawingTree.length)} of {drawingTree.length} plans
+          </span>
+          <div className="flex items-center gap-1">
+            <button type="button" disabled={page <= 1} onClick={() => setJcTreePage(page - 1)}
+              className="p-1.5 rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
+            <span className="px-2">{page} / {totalPages}</span>
+            <button type="button" disabled={page >= totalPages} onClick={() => setJcTreePage(page + 1)}
+              className="p-1.5 rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-50"><ChevronRight className="w-3.5 h-3.5" /></button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       {!showProductionEntry ? (
@@ -7073,19 +7444,7 @@ const JobCard = () => {
             ))}
           </div> */}
 
-          <DataTable
-            columns={jobCardColumns}
-            data={filteredJobCards}
-            loading={loading}
-            pageSize={20}
-            actions={
-              <button className="flex items-center gap-2  p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 hover:bg-slate-50 transition-all ">
-                <Filter className="w-4 h-4" />
-                All Operational States
-                <ChevronDown className="w-4 h-4 ml-2" />
-              </button>
-            }
-          />
+          {renderDrawingWiseJobCards()}
         </>
       ) : (
         renderProductionEntry()

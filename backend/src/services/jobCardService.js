@@ -35,6 +35,7 @@ const listJobCards = async () => {
             ROW_NUMBER() OVER (PARTITION BY COALESCE(wo.plan_id, wo.parent_wo_id, wo.id) ORDER BY CASE WHEN wo.source_type = 'SA' OR wo.source_type = 'PART' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC) as operation_sequence,
             wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             wo.plan_id, wo.sales_order_id, wo.parent_wo_id, wo.item_code, wo.sales_order_item_id,
+            (SELECT pp.plan_code FROM production_plans pp WHERE pp.id = wo.plan_id) as plan_code,
             COALESCE(
               CASE WHEN cd.drawing_type IS NOT NULL AND cd.drawing_type != '' THEN cd.drawing_type END,
               CASE WHEN soi.item_group IS NOT NULL AND soi.item_group != '' THEN soi.item_group END,

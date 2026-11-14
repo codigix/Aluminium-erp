@@ -5,6 +5,7 @@ const stockService = require('./stockService');
 const listWorkOrders = async () => {
   const [rows] = await pool.query(
     `SELECT wo.*, COALESCE(so.project_name, o_dir.project_name) as project_name, w.workstation_name, COALESCE(c.company_name, c_dir.company_name) as client_name,
+            (SELECT pp.plan_code FROM production_plans pp WHERE pp.id = wo.plan_id) as plan_code,
             COALESCE(
               CASE WHEN cd.drawing_type IS NOT NULL AND cd.drawing_type != '' THEN cd.drawing_type END,
               CASE WHEN soi.item_group IS NOT NULL AND soi.item_group != '' THEN soi.item_group END,

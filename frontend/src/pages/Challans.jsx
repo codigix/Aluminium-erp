@@ -796,6 +796,12 @@ const Challans = () => {
                   <p className="text-xs text-slate-500">
                     {dcEdit.info.vendor_name}{dcEdit.info.job_card_no ? ` · Job Card ${dcEdit.info.job_card_no}` : ''}{dcEdit.info.operation_name ? ` · ${dcEdit.info.operation_name}` : ''}
                   </p>
+                  {dcEdit.info.company_name && (
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Issuing company: <span className="font-semibold text-slate-700">{dcEdit.info.company_name}</span>
+                      <span className="text-slate-400"> (from Sales Order{dcEdit.info.sales_order_no ? ` ${dcEdit.info.sales_order_no}` : ''})</span>
+                    </p>
+                  )}
                 </div>
               </div>
               {dcEdit.info.edited && dcEdit.info.edited.length > 0 && (

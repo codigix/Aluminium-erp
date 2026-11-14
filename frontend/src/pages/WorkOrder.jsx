@@ -104,17 +104,16 @@ const WorkOrder = () => {
       render: (val) => <span className="text-indigo-600 ">{val}</span>
     },
     {
-      label: 'Project / Client',
-      key: 'project_name',
+      label: 'Production Plan',
+      key: 'plan_code',
       sortable: true,
-      render: (val, row) => {
-        const displayProject = cleanProjectName(row.project_name, row.client_name);
-        return (
-          <div className="flex flex-col">
-            <span className="text-xs text-slate-900 leading-tight " title={displayProject}>{displayProject}</span>
-          </div>
-        );
-      }
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="text-xs text-slate-900 leading-tight" title={val || ''}>
+            {val || (row.plan_id ? `Plan #${row.plan_id}` : '—')}
+          </span>
+        </div>
+      )
     },
     {
       label: 'Specification',

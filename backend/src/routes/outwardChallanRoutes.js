@@ -784,7 +784,7 @@ router.get('/:id/delivery-challan', authenticate, async (req, res) => {
     const { getDeliveryChallan } = require('../utils/generateDeliveryChallanPdf');
     const info = await getDeliveryChallan(req.params.id);
     if (!info) return res.status(404).json({ message: 'Outward challan not found' });
-    const { challan, ...rest } = info;
+    const { challan, company, ...rest } = info;
     res.json(rest);
   } catch (error) {
     console.error('Delivery Challan fetch error:', error);
@@ -798,7 +798,7 @@ router.put('/:id/delivery-challan', authenticate, authorize(['PROD_MANAGE']), as
     const { saveDeliveryChallan } = require('../utils/generateDeliveryChallanPdf');
     const info = await saveDeliveryChallan(req.params.id, req.body || {});
     if (!info) return res.status(404).json({ message: 'Outward challan not found' });
-    const { challan, ...rest } = info;
+    const { challan, company, ...rest } = info;
     res.json({ message: 'Delivery Challan updated', ...rest });
   } catch (error) {
     console.error('Delivery Challan save error:', error);
@@ -812,7 +812,7 @@ router.delete('/:id/delivery-challan', authenticate, authorize(['PROD_MANAGE']),
     const { resetDeliveryChallan } = require('../utils/generateDeliveryChallanPdf');
     const info = await resetDeliveryChallan(req.params.id);
     if (!info) return res.status(404).json({ message: 'Outward challan not found' });
-    const { challan, ...rest } = info;
+    const { challan, company, ...rest } = info;
     res.json({ message: 'Delivery Challan reset to system values', ...rest });
   } catch (error) {
     console.error('Delivery Challan reset error:', error);

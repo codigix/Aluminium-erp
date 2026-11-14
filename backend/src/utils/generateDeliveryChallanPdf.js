@@ -46,9 +46,10 @@ const deliveryChallanNo = (challan) => `SPTPL-${String(challan.id).padStart(4, '
 const loadChallan = async (id) => {
   const [challans] = await pool.query(
     `SELECT oc.*, v.vendor_name, v.vendor_code, v.location AS vendor_location, v.phone AS vendor_phone,
-            v.gstin AS vendor_gstin, jc.job_card_no, wo.wo_number,
+            v.gstin AS vendor_gstin, jc.job_card_no, wo.wo_number, wo.plan_id AS wo_plan_id,
             wo.item_code AS wo_item_code, wo.item_name AS wo_item_name,
-            cp.po_number AS customer_po_number, cp.po_date AS customer_po_date
+            cp.po_number AS customer_po_number, cp.po_date AS customer_po_date,
+            so.host_company_id AS so_company_id, cp.host_company_id AS cpo_company_id
      FROM outward_challans oc
      JOIN vendors v ON oc.vendor_id = v.id
      LEFT JOIN job_cards jc ON oc.job_card_id = jc.id
@@ -63,7 +64,41 @@ const loadChallan = async (id) => {
   const challan = challans[0];
   const [items] = await pool.query('SELECT * FROM outward_challan_items WHERE challan_id = ? ORDER BY id', [challan.id]);
   challan.items = items;
+  await applyPlanOrderLink(challan);
   return challan;
+};
+
+// A plan's sales_order_id can point at the current Sales Order module (`orders`) or the older one
+// (`sales_orders`); ids overlap, so use the same resolver as the company filters / change requests.
+// Gives the real Sales Order company (incl. approved Company Change Requests) and its Customer PO.
+const applyPlanOrderLink = async (challan) => {
+  if (!challan.wo_plan_id) return;
+  let link = null;
+  try {
+    link = await require('../services/companyChangeService').resolvePlanOrder(challan.wo_plan_id);
+  } catch (err) {
+    console.error('[generateDeliveryChallanPdf] resolvePlanOrder failed:', err.message);
+    return;
+  }
+  if (!link) return;
+  challan.so_company_id = link.company_id || null;
+  challan.cpo_company_id = null;
+  let cpo = null;
+  if (link.kind === 'ORDER') {
+    const [[o]] = await pool.query('SELECT source_type, quotation_id FROM orders WHERE id = ?', [link.order_id]);
+    if (o && o.source_type === 'DIRECT' && o.quotation_id) {
+      [[cpo]] = await pool.query('SELECT po_number, po_date, host_company_id FROM customer_pos WHERE id = ?', [o.quotation_id]);
+    }
+  } else {
+    const [[so]] = await pool.query('SELECT customer_po_id FROM sales_orders WHERE id = ?', [link.order_id]);
+    if (so && so.customer_po_id) {
+      [[cpo]] = await pool.query('SELECT po_number, po_date, host_company_id FROM customer_pos WHERE id = ?', [so.customer_po_id]);
+    }
+  }
+  challan.customer_po_number = cpo ? cpo.po_number : null;
+  challan.customer_po_date = cpo ? cpo.po_date : null;
+  if (!challan.so_company_id && cpo) challan.so_company_id = cpo.host_company_id || null;
+  challan.sales_order_no = link.order_no || null;
 };
 
 // What the system prints when nothing has been edited
@@ -158,9 +193,26 @@ const mergeData = (system, saved) => {
   return { data: out, edited };
 };
 
+// Issuing company of the job card's Sales Order (approved Company Change Requests update the Sales Order),
+// else the Customer PO company, else the active company.
+const loadIssuingCompany = async (challan) => {
+  const companyId = challan.so_company_id || challan.cpo_company_id || null;
+  if (companyId) {
+    const [rows] = await pool.query('SELECT * FROM company_master WHERE id = ?', [companyId]);
+    if (rows.length) return rows[0];
+  }
+  try {
+    return await require('../services/adminCompanyMasterService').getActiveCompany();
+  } catch (err) {
+    console.error('[generateDeliveryChallanPdf] Error loading company profile:', err.message);
+    return null;
+  }
+};
+
 const getDeliveryChallan = async (id) => {
   const challan = await loadChallan(id);
   if (!challan) return null;
+  const company = await loadIssuingCompany(challan);
   const system = await buildSystemData(challan);
   const saved = await loadSaved(challan.id);
   const { data, edited } = mergeData(system, saved);
@@ -173,10 +225,13 @@ const getDeliveryChallan = async (id) => {
     job_card_no: challan.job_card_no,
     operation_name: challan.operation_name,
     status: challan.status,
+    company_name: company?.company_name || 'SP TECHPIONEER PRIVATE LIMITED',
+    sales_order_no: challan.sales_order_no || null,
     data,
     system,
     edited,
-    challan
+    challan,
+    company
   };
 };
 
@@ -237,12 +292,7 @@ const renderPdf = async (info) => {
   const { challan, data } = info;
   const template = fs.readFileSync(path.join(__dirname, '../../templates/delivery-challan.html'), 'utf8');
 
-  let activeCompany = null;
-  try {
-    activeCompany = await require('../services/adminCompanyMasterService').getActiveCompany();
-  } catch (err) {
-    console.error('[generateDeliveryChallanPdf] Error loading company profile:', err.message);
-  }
+  const activeCompany = info.company || null;
 
   let logoBase64 = null;
   if (activeCompany && activeCompany.company_logo) {
@@ -259,7 +309,7 @@ const renderPdf = async (info) => {
   const contactParts = [];
   if (activeCompany?.phone) contactParts.push(`Mob.: ${activeCompany.phone}`);
   if (activeCompany?.email) contactParts.push(`Email: ${activeCompany.email}`);
-  const hostGstin = activeCompany?.gstin || '27AAPCS1193L1ZQ';
+  const hostGstin = String(activeCompany?.gstin || '27AAPCS1193L1ZQ').toUpperCase();
 
   const rows = (data.lines || []).map((l, i) => ({ sr: i + 1, main: l.main, sub: l.sub, qty: l.qty, remarks: l.remarks }));
 
