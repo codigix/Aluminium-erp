@@ -57,6 +57,90 @@ const INVOICE_COPY_TYPES = [
   { id: 'all', label: 'Download All Copies (Single PDF)', description: 'Complete set of 4 copies in 1 single PDF file' }
 ];
 
+// Blue "Add Item" button with a searchable picker of order items that still have a balance
+const AddItemPicker = ({ items, onAdd, onAddAll }) => {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = React.useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
+  }, [open]);
+
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return items;
+    return items.filter(it =>
+      String(it.itemCode || '').toLowerCase().includes(s) ||
+      String(it.drawingNo || '').toLowerCase().includes(s) ||
+      String(it.description || '').toLowerCase().includes(s));
+  }, [items, q]);
+
+  if (!items.length) {
+    return <span className="text-[11px] text-slate-400 italic">No other order items with balance</span>;
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition cursor-pointer">
+        <Plus className="w-3.5 h-3.5" />
+        <span>Add Item</span>
+        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-blue-500/70">{items.length}</span>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-[460px] max-w-[90vw] bg-white rounded-xl border border-slate-200 shadow-xl z-30 overflow-hidden">
+          <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search item code, drawing or name…"
+                className="w-full pl-8 pr-2 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            </div>
+            {onAddAll && (
+              <button type="button" onClick={() => { onAddAll(); setOpen(false); }}
+                className="px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border border-blue-200 text-blue-700 bg-white hover:bg-blue-50 whitespace-nowrap cursor-pointer">
+                Add all ({items.length})
+              </button>
+            )}
+          </div>
+          <div className="max-h-[320px] overflow-y-auto divide-y divide-slate-100">
+            {shown.length === 0 ? (
+              <div className="px-4 py-6 text-center text-xs text-slate-400">No item matches “{q}”.</div>
+            ) : shown.map(it => (
+              <button key={it.orderItemId} type="button" onClick={() => onAdd(it.orderItemId)}
+                className="w-full text-left px-3 py-2 hover:bg-blue-50/70 flex items-center gap-3 group cursor-pointer">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10.5px] px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700">{it.itemCode || it.drawingNo || '—'}</span>
+                    <span className="text-[10.5px] text-slate-400 font-mono">{formatINR(it.unitRate)}</span>
+                  </div>
+                  <div className="text-xs font-medium text-slate-800 truncate mt-0.5">{it.description || '—'}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400">Balance</div>
+                  <div className="text-sm font-bold font-mono text-amber-600">{it.invoiceableQty}</div>
+                </div>
+                <span className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition">
+                  <Plus className="w-4 h-4" />
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="px-3 py-1.5 border-t border-slate-100 bg-slate-50 text-[10.5px] text-slate-400">
+            Added with its full balance — change the qty in the table.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function SalesInvoice() {
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'create'
   const [invoices, setInvoices] = useState([]);
@@ -385,16 +469,47 @@ export default function SalesInvoice() {
 
   // Remove Item from Invoice
   const handleRemoveItem = (orderItemId) => {
-    setFormData(prev => {
-      const removed = prev.items.find(it => it.orderItemId === orderItemId);
-      if (removed) {
-        setRemovedItems(r => [...r, removed]);
-      }
-      return {
-        ...prev,
-        items: prev.items.filter(it => it.orderItemId !== orderItemId)
-      };
-    });
+    // Outside the state updater (an updater can run twice in StrictMode and add the item twice)
+    const removed = formData.items.find(it => it.orderItemId === orderItemId);
+    if (removed) {
+      setRemovedItems(r => (r.some(x => x.orderItemId === orderItemId) ? r : [...r, removed]));
+    }
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.filter(it => it.orderItemId !== orderItemId)
+    }));
+  };
+
+  // Add one item (removed earlier, or an order item with balance not on this invoice)
+  const handleAddItem = (orderItemId) => {
+    const it = removedItems.find(r => String(r.orderItemId) === String(orderItemId));
+    if (!it) return;
+    const max = parseFloat(it.invoiceableQty) || 0;
+    const prevQty = parseFloat(it.invoiceQty);
+    const qty = prevQty > 0 && prevQty <= max ? prevQty : max;
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, { ...it, invoiceQty: qty, amount: qty * (parseFloat(it.unitRate) || 0) }]
+    }));
+    setRemovedItems(r => r.filter(x => String(x.orderItemId) !== String(orderItemId)));
+  };
+
+  // Add every item that still has a balance
+  const handleAddAllItems = () => {
+    const onInvoice = new Set(formData.items.map(it => String(it.orderItemId)));
+    const toAdd = removedItems.filter(it => (parseFloat(it.invoiceableQty) || 0) > 0 && !onInvoice.has(String(it.orderItemId)));
+    if (!toAdd.length) return;
+    const ids = new Set(toAdd.map(it => String(it.orderItemId)));
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, ...toAdd.map(it => {
+        const max = parseFloat(it.invoiceableQty) || 0;
+        const prevQty = parseFloat(it.invoiceQty);
+        const qty = prevQty > 0 && prevQty <= max ? prevQty : max;
+        return { ...it, invoiceQty: qty, amount: qty * (parseFloat(it.unitRate) || 0) };
+      })]
+    }));
+    setRemovedItems(r => r.filter(x => !ids.has(String(x.orderItemId))));
   };
 
   // Restore All Removed Items
@@ -415,6 +530,12 @@ export default function SalesInvoice() {
     }));
     setRemovedItems([]);
   };
+
+  // Items that can be added back / added in edit (balance > 0, not already on the invoice)
+  const addableItems = useMemo(() => {
+    const onInvoice = new Set(formData.items.map(it => String(it.orderItemId)));
+    return removedItems.filter(it => (parseFloat(it.invoiceableQty) || 0) > 0 && !onInvoice.has(String(it.orderItemId)));
+  }, [removedItems, formData.items]);
 
   // Calculated Totals
   const calculation = useMemo(() => {
@@ -671,6 +792,8 @@ export default function SalesInvoice() {
             const currentQty = parseFloat(existingIt.invoice_qty) || 0;
             return {
               ...ordIt,
+              // Max for this invoice = balance excluding this invoice (never below what is already billed here)
+              invoiceableQty: Math.max(parseFloat(ordIt.invoiceableQty) || 0, currentQty),
               invoiceQty: currentQty,
               amount: currentQty * (parseFloat(ordIt.unitRate) || 0)
             };
@@ -740,7 +863,13 @@ export default function SalesInvoice() {
         items: mergedItems
       });
 
-      setRemovedItems([]);
+      // Order items not on this invoice that still have a balance → can be added in edit
+      const onInvoice = new Set(mergedItems.map(it => String(it.orderItemId)));
+      const addable = (orderData?.items || [])
+        .filter(it => !onInvoice.has(String(it.orderItemId)) && (parseFloat(it.invoiceableQty) || 0) > 0)
+        .map(it => ({ ...it, invoiceQty: it.invoiceableQty, amount: (parseFloat(it.invoiceableQty) || 0) * (parseFloat(it.unitRate) || 0) }));
+      setOrderAllItems(orderData?.items || []);
+      setRemovedItems(addable);
       setViewMode('create');
     } catch (err) {
       console.error('Error loading invoice for edit:', err);
@@ -1703,6 +1832,9 @@ export default function SalesInvoice() {
                   {activeItemTab === 'invoiceable' ? (
                     <div className="flex items-center gap-3">
                       <span className="text-[11px] text-slate-400">Showing only dispatchable/invoiceable balance</span>
+                      {addableItems.length > 0 && (
+                        <AddItemPicker items={addableItems} onAdd={handleAddItem} onAddAll={handleAddAllItems} />
+                      )}
                       {removedItems.length > 0 && (
                         <button
                           type="button"
@@ -1731,7 +1863,10 @@ export default function SalesInvoice() {
                       </span>
                     </span>
                   </div>
-                  <span className="text-[11px] text-slate-400">Items billed on this invoice (Invoice quantity is fixed in edit mode)</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-slate-400">Change qty, remove lines, or add order items with balance</span>
+                    <AddItemPicker items={addableItems} onAdd={handleAddItem} onAddAll={handleAddAllItems} />
+                  </div>
                 </div>
               )}
 
@@ -1745,8 +1880,9 @@ export default function SalesInvoice() {
                         <th className="py-2 px-3">Item Name / Description</th>
                         <th className="py-2 px-3 text-center">HSN</th>
                         <th className="py-2 px-3 text-center">Dispatch</th>
-                        <th className="py-2 px-3 text-center">Invoiced</th>
+                        <th className="py-2 px-3 text-center" title={editingInvoiceId ? 'Billed on other invoices' : 'Billed on earlier invoices'}>{editingInvoiceId ? 'Invoiced (other)' : 'Invoiced'}</th>
                         <th className="py-2 px-3 text-center">Invoice Qty</th>
+                        <th className="py-2 px-3 text-center" title="Balance left after this invoice">Remaining</th>
                         <th className="py-2 px-3 text-right">Rate (₹)</th>
                         <th className="py-2 px-3 text-right">Amount (₹)</th>
                         <th className="py-2 px-3 text-center">Action</th>
@@ -1755,8 +1891,8 @@ export default function SalesInvoice() {
                     <tbody className="divide-y divide-slate-100 text-xs">
                       {formData.items.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="py-6 text-center text-slate-400">
-                            No items remaining to invoice.
+                          <td colSpan={10} className="py-6 text-center text-slate-400">
+                            {editingInvoiceId ? 'All lines removed — add an item to save this invoice.' : 'No items remaining to invoice.'}
                           </td>
                         </tr>
                       ) : (
@@ -1784,23 +1920,22 @@ export default function SalesInvoice() {
                                 <input
                                   type="number"
                                   min="0"
-                                  max={editingInvoiceId ? item.invoiceQty : item.invoiceableQty}
+                                  max={item.invoiceableQty}
                                   step="1"
                                   value={item.invoiceQty}
                                   onChange={e => handleQuantityChange(item.orderItemId, e.target.value)}
-                                  disabled={Boolean(editingInvoiceId) || item.invoiceableQty <= 0}
-                                  readOnly={Boolean(editingInvoiceId)}
-                                  className={`w-16 px-1.5 py-0.5 text-center font-bold text-slate-800 border rounded text-xs font-mono ${
-                                    editingInvoiceId
-                                      ? 'bg-slate-100 border-slate-200 text-slate-600 cursor-not-allowed select-none'
-                                      : 'bg-white border-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500'
-                                  }`}
-                                  title={editingInvoiceId ? "Invoice quantity cannot be changed in edit mode" : undefined}
+                                  disabled={item.invoiceableQty <= 0}
+                                  className="w-16 px-1.5 py-0.5 text-center font-bold text-slate-800 border rounded text-xs font-mono bg-white border-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  title={`Max ${item.invoiceableQty}`}
                                 />
-                                {!editingInvoiceId && (
-                                  <span className="text-[10px] text-slate-400 font-mono">/ {item.invoiceableQty}</span>
-                                )}
+                                <span className="text-[10px] text-slate-400 font-mono">/ {item.invoiceableQty}</span>
                               </div>
+                            </td>
+                            <td className="py-2 px-3 text-center font-mono">
+                              {(() => {
+                                const rem = Math.max(0, Math.round(((parseFloat(item.invoiceableQty) || 0) - (parseFloat(item.invoiceQty) || 0)) * 1000) / 1000);
+                                return <span className={rem > 0 ? 'font-semibold text-amber-600' : 'text-slate-400'}>{rem}</span>;
+                              })()}
                             </td>
                             <td className="py-2 px-3 text-right font-medium text-slate-800 font-mono text-xs">
                               {formatINR(item.unitRate)}
@@ -1809,21 +1944,15 @@ export default function SalesInvoice() {
                               {formatINR(item.amount)}
                             </td>
                             <td className="py-2 px-3 text-center">
-                              {!editingInvoiceId ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveItem(item.orderItemId)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-md transition shadow-2xs cursor-pointer"
-                                  title="Remove item from this invoice"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                  <span>Remove</span>
-                                </button>
-                              ) : (
-                                <span className="text-[10.5px] font-semibold text-slate-400 px-2 py-0.5 rounded bg-slate-50 border border-slate-200">
-                                  Billed
-                                </span>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(item.orderItemId)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-md transition shadow-2xs cursor-pointer"
+                                title="Remove item from this invoice (qty goes back to the balance)"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Remove</span>
+                              </button>
                             </td>
                           </tr>
                         ))
