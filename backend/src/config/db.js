@@ -1180,6 +1180,21 @@ const ensureStockColumns = async () => {
     } catch (e) {
       console.error('purchase_returns tables sync failed:', e.message);
     }
+    // Purchase Return (Debit Note type) sent to Accounts → Pending Debit Notes
+    for (const [col, def] of [['sent_to_accounts_at', 'TIMESTAMP NULL'], ['sent_to_accounts_by', 'INT NULL']]) {
+      try {
+        const [rc] = await connection.query(
+          "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'purchase_returns' AND COLUMN_NAME = ?",
+          [col]
+        );
+        if (rc.length === 0) {
+          await connection.query(`ALTER TABLE purchase_returns ADD COLUMN \`${col}\` ${def}`);
+          console.log(`purchase_returns.${col} column added`);
+        }
+      } catch (e) {
+        if (e.code !== 'ER_NO_SUCH_TABLE') console.error(`purchase_returns.${col} column sync failed:`, e.message);
+      }
+    }
 
     // GRN Tolerance Override (Deviation): tick + reason per line (record only)
     for (const tbl of ['po_receipt_items', 'grn_items']) {

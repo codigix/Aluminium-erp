@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, FormControl } from '../components/ui.jsx';
 import {
-  RotateCcw, PackageX, Search, Plus, Eye, Download, Edit2, Truck, XCircle, RefreshCw, FileText, AlertTriangle, CheckCircle2
+  RotateCcw, PackageX, Search, Plus, Eye, Download, Edit2, Truck, XCircle, RefreshCw, FileText, AlertTriangle, CheckCircle2, Send
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -264,6 +264,39 @@ const PurchaseReturns = () => {
     }
   };
 
+  // Debit Note returns → Accounts' "Pending Debit Notes" (a Draft is dispatched in the same step)
+  const sendToAccounts = async (r) => {
+    const isDraft = r.status === 'DRAFT';
+    const result = await Swal.fire({
+      title: `Send ${r.return_no} to Accounts?`,
+      html: `
+        <div style="text-align:left;font-size:13px;margin-bottom:8px">Accounts will see it under <b>Debit Note → Pending Debit Notes</b> and post the debit note for <b>${money(r.total_amount)}</b> (before GST) to <b>${r.vendor_name || 'the supplier'}</b>.${isDraft ? '<br/><br/>This return is still a Draft, so it is <b>dispatched</b> now too (no more edits).' : ''}</div>
+        ${isDraft ? `<input id="pr-vehicle" class="swal2-input" placeholder="Vehicle No." value="${r.vehicle_no || ''}" style="margin:6px 0;width:100%">
+        <input id="pr-transporter" class="swal2-input" placeholder="Transporter (optional)" value="${r.transporter || ''}" style="margin:6px 0;width:100%">` : ''}`,
+      showCancelButton: true,
+      confirmButtonText: isDraft ? 'Dispatch & Send to Accounts' : 'Send to Accounts',
+      confirmButtonColor: '#7c3aed',
+      preConfirm: () => (isDraft ? {
+        vehicle_no: document.getElementById('pr-vehicle').value,
+        transporter: document.getElementById('pr-transporter').value
+      } : {})
+    });
+    if (!result.isConfirmed) return;
+    try {
+      const res = await fetch(`${API_BASE}/purchase-returns/${r.id}/send-to-accounts`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(result.value || {})
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Failed to send to Accounts');
+      successToast(`${r.return_no} sent to Accounts for Debit Note`);
+      load();
+    } catch (e) {
+      errorToast(e.message);
+    }
+  };
+
   const cancel = async (r) => {
     const result = await Swal.fire({
       title: `Cancel ${r.return_no}?`,
@@ -483,6 +516,12 @@ const PurchaseReturns = () => {
                     <td className="px-3 py-2.5">
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${STATUS_STYLE[r.status] || STATUS_STYLE.DRAFT}`}>{r.status}</span>
                       {r.dispatched_at && <div className="text-[10px] text-slate-400 mt-0.5">{fmtDate(r.dispatched_at)}{r.vehicle_no ? ` · ${r.vehicle_no}` : ''}</div>}
+                      {r.return_type === 'DEBIT_NOTE' && r.awaiting_debit_note && (
+                        <div className="text-[10px] font-semibold text-violet-700 mt-0.5">Sent to Accounts · DN pending</div>
+                      )}
+                      {r.debit_note_no && r.debit_note_status !== 'CANCELLED' && (
+                        <div className="text-[10px] font-semibold text-emerald-700 mt-0.5">Debit Note {r.debit_note_no}</div>
+                      )}
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-end gap-1">
@@ -494,6 +533,13 @@ const PurchaseReturns = () => {
                             <button onClick={() => dispatch(r)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded" title="Dispatch (material leaves)"><Truck className="w-4 h-4" /></button>
                             <button onClick={() => cancel(r)} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded" title="Cancel"><XCircle className="w-4 h-4" /></button>
                           </>
+                        )}
+                        {r.return_type === 'DEBIT_NOTE' && !r.sent_to_accounts_at && (r.status === 'DRAFT' || r.status === 'DISPATCHED') && (
+                          <button onClick={() => sendToAccounts(r)}
+                            className="ml-1 inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-md bg-violet-600 hover:bg-violet-700 text-white whitespace-nowrap"
+                            title="Send to Accounts for Debit Note">
+                            <Send className="w-3.5 h-3.5" /> Send to Accounts
+                          </button>
                         )}
                       </div>
                     </td>

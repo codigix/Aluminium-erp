@@ -17,6 +17,7 @@ const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
 const httpError = (message, statusCode = 400) => {
   const err = new Error(message);
   err.statusCode = statusCode;
+  err.status = statusCode; // the shared errorHandler reads .status (Accounts debit-note route)
   return err;
 };
 
@@ -336,23 +337,103 @@ const cancelReturn = async (id) => {
   }
 };
 
+// Debit Note type: Procurement sends a dispatched return to Accounts → Accounts' "Pending Debit Notes".
+// A Draft return is dispatched first (same as the Dispatch button), then sent.
+const sendToAccounts = async (id, body = {}, userId = null) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const pr = await lockReturn(connection, id);
+    if (pr.return_type !== 'DEBIT_NOTE') throw httpError('Only a Debit Note type return is sent to Accounts.');
+    if (pr.sent_to_accounts_at) throw httpError('This return is already sent to Accounts.');
+    if (pr.status === 'DRAFT') {
+      const vehicle = cleanText(body.vehicle_no, 50) || pr.vehicle_no;
+      const transporter = cleanText(body.transporter, 150) || pr.transporter;
+      await connection.query(
+        `UPDATE purchase_returns SET status = 'DISPATCHED', dispatched_at = NOW(), dispatched_by = ?, vehicle_no = ?, transporter = ? WHERE id = ?`,
+        [userId, vehicle, transporter, pr.id]
+      );
+    } else if (pr.status !== 'DISPATCHED') {
+      throw httpError(`A ${pr.status} return cannot be sent to Accounts.`);
+    }
+    await connection.query('UPDATE purchase_returns SET sent_to_accounts_at = NOW(), sent_to_accounts_by = ? WHERE id = ?', [userId, pr.id]);
+    await connection.commit();
+    return getReturnById(pr.id);
+  } catch (e) {
+    await connection.rollback();
+    throw e;
+  } finally {
+    connection.release();
+  }
+};
+
+// Called inside the Accounts debit-note transaction: link the posted DN and close the return
+const linkDebitNote = async (connection, returnId, debitNoteId, vendorId) => {
+  const pr = await lockReturn(connection, returnId);
+  if (pr.return_type !== 'DEBIT_NOTE' || !pr.sent_to_accounts_at) throw httpError(`${pr.return_no} is not waiting for a debit note.`);
+  if (String(pr.vendor_id) !== String(vendorId)) throw httpError(`${pr.return_no} belongs to a different supplier.`);
+  if (pr.debit_note_id) {
+    const [[dn]] = await connection.query('SELECT voucher_no, status FROM debit_notes WHERE id = ?', [pr.debit_note_id]);
+    if (dn && dn.status !== 'CANCELLED') throw httpError(`${pr.return_no} already has Debit Note ${dn.voucher_no}.`);
+  }
+  await connection.query(
+    "UPDATE purchase_returns SET debit_note_id = ?, status = 'CLOSED', closed_at = NOW() WHERE id = ?",
+    [debitNoteId, pr.id]
+  );
+};
+
 const LIST_SQL = `
   SELECT pr.*, v.vendor_name, v.vendor_code,
+         dn.voucher_no AS debit_note_no, dn.status AS debit_note_status, dn.total_amount AS debit_note_amount,
          COALESCE(SUM(pri.quantity), 0) AS total_qty, COALESCE(SUM(pri.weight), 0) AS total_weight,
          COALESCE(SUM(pri.amount), 0) AS total_amount, COUNT(pri.id) AS line_count,
          GROUP_CONCAT(DISTINCT pri.grn_id ORDER BY pri.grn_id) AS grn_ids
   FROM purchase_returns pr
   LEFT JOIN vendors v ON v.id = pr.vendor_id
+  LEFT JOIN debit_notes dn ON dn.id = pr.debit_note_id
   LEFT JOIN purchase_return_items pri ON pri.purchase_return_id = pr.id`;
+
+// Sent to Accounts with no live debit note (a cancelled DN puts it back here)
+const isAwaitingDebitNote = (r) =>
+  r.return_type === 'DEBIT_NOTE' && !!r.sent_to_accounts_at && r.status !== 'CANCELLED' &&
+  (!r.debit_note_id || r.debit_note_status === 'CANCELLED');
+
+const shapeHeader = (r) => ({
+  ...r,
+  grn_ids: r.grn_ids ? String(r.grn_ids).split(',').map(Number) : [],
+  total_qty: round3(r.total_qty),
+  total_weight: round3(r.total_weight),
+  total_amount: round2(r.total_amount),
+  awaiting_debit_note: isAwaitingDebitNote(r)
+});
 
 const listReturns = async () => {
   const [rows] = await pool.query(`${LIST_SQL} GROUP BY pr.id ORDER BY pr.id DESC`);
-  return rows.map(r => ({
+  return rows.map(shapeHeader);
+};
+
+// Accounts → Debit Note → "Pending Debit Notes": returns sent to Accounts, with their items
+const getPendingDebitNotes = async () => {
+  const [rows] = await pool.query(
+    `${LIST_SQL} WHERE pr.return_type = 'DEBIT_NOTE' AND pr.sent_to_accounts_at IS NOT NULL AND pr.status <> 'CANCELLED'
+     GROUP BY pr.id ORDER BY pr.sent_to_accounts_at, pr.id`
+  );
+  const pending = rows.map(shapeHeader).filter(r => r.awaiting_debit_note);
+  if (!pending.length) return [];
+  const [items] = await pool.query(
+    'SELECT * FROM purchase_return_items WHERE purchase_return_id IN (?) ORDER BY id',
+    [pending.map(r => r.id)]
+  );
+  return pending.map(r => ({
     ...r,
-    grn_ids: r.grn_ids ? String(r.grn_ids).split(',').map(Number) : [],
-    total_qty: round3(r.total_qty),
-    total_weight: round3(r.total_weight),
-    total_amount: round2(r.total_amount)
+    items: items.filter(i => i.purchase_return_id === r.id).map(i => ({
+      ...i,
+      quantity: round3(i.quantity),
+      weight: round3(i.weight),
+      rate: round2(i.rate),
+      amount: round2(i.amount),
+      grn_no: i.grn_id ? `GRN-${String(i.grn_id).padStart(4, '0')}` : ''
+    }))
   }));
 };
 
@@ -362,11 +443,7 @@ const getReturnById = async (id) => {
   const r = rows[0];
   const [items] = await pool.query('SELECT * FROM purchase_return_items WHERE purchase_return_id = ? ORDER BY id', [id]);
   return {
-    ...r,
-    grn_ids: r.grn_ids ? String(r.grn_ids).split(',').map(Number) : [],
-    total_qty: round3(r.total_qty),
-    total_weight: round3(r.total_weight),
-    total_amount: round2(r.total_amount),
+    ...shapeHeader(r),
     items: items.map(i => ({
       ...i,
       quantity: round3(i.quantity),
@@ -386,5 +463,8 @@ module.exports = {
   createReturn,
   updateReturn,
   dispatchReturn,
-  cancelReturn
+  cancelReturn,
+  sendToAccounts,
+  linkDebitNote,
+  getPendingDebitNotes
 };

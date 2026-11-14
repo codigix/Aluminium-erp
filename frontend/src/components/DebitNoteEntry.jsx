@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { FileMinus, RefreshCw, Printer, XCircle, History, Package, CheckSquare, Square } from 'lucide-react';
+import { FileMinus, RefreshCw, Printer, XCircle, History, Package, CheckSquare, Square, Clock } from 'lucide-react';
 import { SearchableSelect } from './ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 import { formatDimensions, isWeightBasedItem } from '../utils/formatters';
@@ -109,12 +109,20 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
   const [historyLoading, setHistoryLoading] = useState(false);
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankAccountId, setBankAccountId] = useState('');
+  // Purchase Returns (Debit Note type) sent by Procurement → "Pending Debit Notes"
+  const [pendingReturns, setPendingReturns] = useState([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [listTab, setListTab] = useState('pending');
+  const [linkedReturn, setLinkedReturn] = useState(null); // return the form is being filled from
+  const [prefill, setPrefill] = useState(null);           // still to apply (waits for the PO's items)
+  const [sourcesFor, setSourcesFor] = useState('');       // supplier the loaded `sources` belong to
 
   useEffect(() => {
     fetchBankAccounts();
     fetchVendors();
     fetchNextNo();
     fetchHistory();
+    fetchPendingReturns();
   }, []);
 
   useEffect(() => {
@@ -124,13 +132,25 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
   useEffect(() => {
     setForm(f => ({ ...f, reference: '' }));
     if (vendorId) fetchSources(vendorId);
-    else setSources([]);
+    else { setSources([]); setSourcesFor(''); }
   }, [vendorId]);
 
   const selectedSource = useMemo(
     () => sources.find(s => String(s.po_id) === String(form.reference)) || null,
     [sources, form.reference]
   );
+
+  // Pending Debit Note → once the supplier's bills are loaded, pick the return's PO
+  useEffect(() => {
+    if (!prefill || sourcesLoading || String(sourcesFor) !== String(prefill.vendor_id)) return;
+    if (String(form.reference) === String(prefill.po_id)) return;
+    if (sources.some(s => String(s.po_id) === String(prefill.po_id))) {
+      setForm(f => ({ ...f, reference: String(prefill.po_id) }));
+    } else {
+      errorToast(`${prefill.po_number || 'The PO'} of ${prefill.return_no} is not in this supplier's bills/receipts — select it manually.`);
+      setPrefill(null);
+    }
+  }, [prefill, sources, sourcesFor, sourcesLoading, form.reference]);
 
   // Load the selected PO's items into the item panel
   useEffect(() => {
@@ -156,6 +176,31 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
     const gst = items.length ? (parseFloat(items[0].cgst_percent) || 0) + (parseFloat(items[0].sgst_percent) || 0) : 0;
     if (GST_RATES.includes(String(gst)) && gst > 0) setForm(f => ({ ...f, gstRate: String(gst) }));
   }, [selectedSource]);
+
+  // Pending Debit Note → tick the returned items with the returned qty (weight for Kg-billed items)
+  useEffect(() => {
+    if (!prefill || !selectedSource || String(selectedSource.po_id) !== String(prefill.po_id) || !itemRows.length) return;
+    if (itemRows.some(r => r.selected)) return;
+    const byPoItem = new Map();
+    (prefill.items || []).forEach(i => {
+      if (!i.po_item_id) return;
+      const cur = byPoItem.get(String(i.po_item_id)) || { qty: 0, wt: 0 };
+      byPoItem.set(String(i.po_item_id), { qty: cur.qty + (parseFloat(i.quantity) || 0), wt: cur.wt + (parseFloat(i.weight) || 0) });
+    });
+    // Built from the current rows (not inside a setState updater, which runs later — the count would still be 0)
+    let matched = 0;
+    const next = itemRows.map(row => {
+      const ret = byPoItem.get(String(row.poItemId));
+      if (!ret) return row;
+      const qty = row.isWeight && ret.wt > 0 ? ret.wt : ret.qty;
+      if (!(qty > 0)) return row;
+      matched += 1;
+      return { ...row, selected: true, qty: formatNum(qty) };
+    });
+    setItemRows(next);
+    if (!matched) errorToast(`Items of ${prefill.return_no} were not found on ${prefill.po_number} — tick them manually.`);
+    setPrefill(null);
+  }, [prefill, selectedSource, itemRows]);
 
   const fetchVendors = async () => {
     try {
@@ -212,13 +257,54 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
       const res = await fetch(`${API_BASE}/payments/debit-notes/sources?vendorId=${vId}`, { headers: authHeaders() });
       const data = res.ok ? await res.json() : [];
       setSources(Array.isArray(data) ? data : []);
+      setSourcesFor(String(vId));
     } catch (err) {
       console.error('Error fetching supplier bills:', err);
       setSources([]);
+      setSourcesFor(String(vId));
     } finally {
       setSourcesLoading(false);
     }
   };
+
+  const fetchPendingReturns = async () => {
+    try {
+      setPendingLoading(true);
+      const res = await fetch(`${API_BASE}/purchase-returns/accounts/pending-debit-notes`, { headers: authHeaders() });
+      const data = res.ok ? await res.json() : [];
+      setPendingReturns(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching pending debit notes:', err);
+      setPendingReturns([]);
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
+  // "Create Debit Note" on a pending return: fill supplier, PO, reason and the returned items
+  const startFromReturn = (pr) => {
+    setLinkedReturn(pr);
+    setPrefill(pr);
+    setItemRows(rows => rows.map(row => ({ ...row, selected: false, qty: '' })));
+    setForm(f => ({
+      ...f,
+      reason: 'PURCHASE_RETURN',
+      ledger: 'Purchase Returns',
+      narration: `Being purchase return debit note issued to ${pr.vendor_name || 'supplier'} against ${pr.po_number || ''} — ${pr.return_no} (QC rejected material returned).`,
+      reference: String(vendorId) === String(pr.vendor_id) ? f.reference : ''
+    }));
+    if (String(vendorId) !== String(pr.vendor_id)) setVendorId(String(pr.vendor_id));
+    else if (String(form.reference) === String(pr.po_id)) setForm(f => ({ ...f, reference: '' })); // reload the PO's items
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const clearLinkedReturn = () => { setLinkedReturn(null); setPrefill(null); };
+
+  // Pending Debit Notes of the selected company (returns saved before a company was stored stay visible)
+  const displayedPending = useMemo(
+    () => pendingReturns.filter(pr => !hostCompanyId || pr.host_company_id == null || String(pr.host_company_id) === String(hostCompanyId)),
+    [pendingReturns, hostCompanyId]
+  );
 
   const setField = (field, value) => setForm(f => ({ ...f, [field]: value }));
 
@@ -335,6 +421,7 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
   const handleReset = () => {
     setForm(f => ({ ...emptyForm(), reference: f.reference }));
     clearItems();
+    clearLinkedReturn();
   };
 
   const handlePost = async () => {
@@ -364,13 +451,16 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
           ledgerAmount: itemMode ? null : calc.taxable,
           ledgerGstPercent: itemMode ? null : calc.rate,
           narration: form.narration.trim() || defaultNarration,
-          bankAccountId: bankAccountId || null
+          bankAccountId: bankAccountId || null,
+          purchaseReturnId: linkedReturn ? linkedReturn.id : null
         })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Failed to post debit note');
-      successToast(`Debit Note ${data.data.voucherNo} posted for ${formatCurrency(data.data.totalAmount)}`);
+      successToast(`Debit Note ${data.data.voucherNo} posted for ${formatCurrency(data.data.totalAmount)}${linkedReturn ? ` — ${linkedReturn.return_no} closed` : ''}`);
       setForm(emptyForm());
+      clearLinkedReturn();
+      fetchPendingReturns();
       fetchNextNo();
       fetchHistory();
       fetchSources(vendorId);
@@ -390,6 +480,7 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
       if (!res.ok) throw new Error(data.message || 'Failed to cancel debit note');
       successToast(`Debit Note ${dn.voucher_no} cancelled`);
       fetchHistory();
+      fetchPendingReturns();
       if (vendorId) fetchSources(vendorId);
     } catch (err) {
       errorToast(err.message);
@@ -444,6 +535,18 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
             </div>
             <span className="font-mono text-sm font-bold text-rose-700">{nextNo || 'DN-—'}</span>
           </div>
+          {linkedReturn && (
+            <div className="mx-5 mt-4 px-3 py-2 rounded-lg border border-violet-200 bg-violet-50 flex items-center justify-between gap-2">
+              <div className="text-xs text-violet-800">
+                From Purchase Return <span className="font-mono font-bold">{linkedReturn.return_no}</span>
+                {' · '}{linkedReturn.po_number}{' · '}{formatCurrency(linkedReturn.total_amount)} before GST
+                <div className="text-[10px] text-violet-600">Posting this debit note closes the return.</div>
+              </div>
+              <button type="button" onClick={clearLinkedReturn} className="p-1 rounded hover:bg-violet-100 text-violet-500 cursor-pointer" title="Not from this return">
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
             <Field label="Debit Note No.">
@@ -746,19 +849,99 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
         </div>
       </div>
 
-      {/* ── Debit Note History ── */}
+      {/* ── Pending Debit Notes (from Purchase Returns) | Debit Note History ── */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <History className="w-4 h-4 text-slate-500" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-              Debit Note History {selectedVendor ? `· ${selectedVendor.vendor_name}` : ''} ({displayedHistory.length})
-            </h3>
+        <div className="px-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            {[
+              { id: 'pending', label: 'Pending Debit Notes', count: displayedPending.length, Icon: Clock },
+              { id: 'history', label: `Debit Note History${selectedVendor ? ` · ${selectedVendor.vendor_name}` : ''}`, count: displayedHistory.length, Icon: History }
+            ].map(t => (
+              <button key={t.id} type="button" onClick={() => setListTab(t.id)}
+                className={`flex items-center gap-2 px-3 py-2.5 -mb-px border-b-2 text-xs font-bold uppercase tracking-wider cursor-pointer ${listTab === t.id ? 'border-rose-600 text-rose-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                <t.Icon className="w-4 h-4" />
+                {t.label} ({t.count})
+                {t.id === 'pending' && t.count > 0 && <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />}
+              </button>
+            ))}
           </div>
-          <button type="button" onClick={fetchHistory} className="p-1.5 rounded-md hover:bg-slate-100 cursor-pointer" title="Refresh">
-            <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${historyLoading ? 'animate-spin' : ''}`} />
+          <button type="button" onClick={() => { fetchHistory(); fetchPendingReturns(); }} className="p-1.5 rounded-md hover:bg-slate-100 cursor-pointer" title="Refresh">
+            <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${historyLoading || pendingLoading ? 'animate-spin' : ''}`} />
           </button>
         </div>
+        {listTab === 'pending' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 text-[10.5px] uppercase">
+                <tr>
+                  <th className="px-3 py-2">Purchase Return</th>
+                  <th className="px-3 py-2">Supplier</th>
+                  <th className="px-3 py-2">PO / GRN</th>
+                  <th className="px-3 py-2">Items</th>
+                  <th className="px-3 py-2 text-right">Qty / Weight</th>
+                  <th className="px-3 py-2 text-right">Value (before GST)</th>
+                  <th className="px-3 py-2">Sent by Procurement</th>
+                  <th className="px-3 py-2 w-36" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {displayedPending.map(pr => {
+                  const active = linkedReturn && linkedReturn.id === pr.id;
+                  const prCompanyName = hostCompanies.find(h => String(h.id) === String(pr.host_company_id))?.company_name;
+                  return (
+                    <tr key={pr.id} className={active ? 'bg-violet-50/70' : 'hover:bg-slate-50/80'}>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <div className="font-mono font-bold text-violet-700">{pr.return_no}</div>
+                        <div className="text-[10px] text-slate-500">{formatDate(pr.return_date)}</div>
+                        {prCompanyName && <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">{prCompanyName}</div>}
+                      </td>
+                      <td className="px-3 py-2 text-slate-800">{pr.vendor_name}</td>
+                      <td className="px-3 py-2 font-mono text-slate-600 whitespace-nowrap">
+                        {pr.po_number || '—'}
+                        <div className="text-[10px] text-slate-400">{(pr.grn_ids || []).map(id => `GRN-${String(id).padStart(4, '0')}`).join(', ')}</div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">
+                        {(pr.items || []).map(i => (
+                          <div key={i.id} className="leading-tight">
+                            <span className="font-semibold">{i.item_code}</span>
+                            {i.size_text && <span className="text-[10px] text-slate-400"> · {i.size_text}</span>}
+                          </div>
+                        ))}
+                        {pr.reason && <div className="text-[10px] text-slate-400 mt-0.5">Reason: {pr.reason}</div>}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono whitespace-nowrap">
+                        {formatNum(pr.total_qty)} {(pr.items || [])[0]?.unit ? String(pr.items[0].unit).toUpperCase() : 'NOS'}
+                        {parseFloat(pr.total_weight) > 0 && <div className="text-[10px] text-slate-400">{formatNum(pr.total_weight)} KG</div>}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono font-semibold text-slate-900">{formatCurrency(pr.total_amount)}</td>
+                      <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
+                        {formatDate(pr.sent_to_accounts_at)}
+                        {pr.debit_note_no && pr.debit_note_status === 'CANCELLED' && (
+                          <div className="text-[10px] text-amber-600">{pr.debit_note_no} cancelled</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <button type="button" onClick={() => startFromReturn(pr)}
+                          className={`px-3 py-1.5 text-[11px] font-bold rounded-lg inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${active ? 'bg-violet-100 text-violet-700 border border-violet-300' : 'bg-rose-600 hover:bg-rose-700 text-white'}`}>
+                          <FileMinus className="w-3.5 h-3.5" />
+                          {active ? 'In the form ↑' : 'Create Debit Note'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {displayedPending.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-6 text-center text-slate-400 italic">
+                      {pendingLoading ? 'Loading…' : 'No pending debit notes. Purchase Returns sent by Procurement appear here.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {listTab === 'history' && (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 text-[10.5px] uppercase">
@@ -821,6 +1004,7 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );

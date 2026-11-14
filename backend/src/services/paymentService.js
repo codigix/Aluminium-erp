@@ -2434,6 +2434,11 @@ const recordDebitNote = async (payload) => {
       [vendorId, debitNoteId, totalAmount, `Debit Note ${voucherNo}: ${finalNarration}`, voucherDate]
     );
 
+    // Optional: debit note raised from Accounts → "Pending Debit Notes" (a Purchase Return) — link it and close the return
+    if (payload.purchaseReturnId) {
+      await require('./purchaseReturnService').linkDebitNote(connection, payload.purchaseReturnId, debitNoteId, vendorId);
+    }
+
     await connection.commit();
     return {
       id: debitNoteId,

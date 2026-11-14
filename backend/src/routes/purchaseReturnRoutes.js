@@ -18,6 +18,13 @@ router.get('/pending', authorize(VIEW), async (req, res) => {
   } catch (e) { send(res, e); }
 });
 
+// Accounts → Debit Note → "Pending Debit Notes" (Debit Note returns sent to Accounts, no debit note yet)
+router.get('/accounts/pending-debit-notes', authorize(['PAYMENT_VIEW', 'PAYMENT_PROCESS']), async (req, res) => {
+  try {
+    res.json(await service.getPendingDebitNotes());
+  } catch (e) { send(res, e); }
+});
+
 router.get('/', authorize(VIEW), async (req, res) => {
   try {
     res.json(await service.listReturns());
@@ -68,7 +75,13 @@ router.post('/:id/dispatch', authorize(['PURCHASE_ORDER_EDIT']), async (req, res
   } catch (e) { send(res, e); }
 });
 
-router.post('/:id/cancel', authorize(['PURCHASE_ORDER_EDIT']), async (req, res) => {
+router.post('/:id/send-to-accounts', authorize(['PURCHASE_ORDER_EDIT']), async (req, res) => {
+  try {
+    res.json(await service.sendToAccounts(req.params.id, req.body || {}, req.user?.id || null));
+  } catch (e) { send(res, e); }
+});
+
+router.post('/:id/cancel',authorize(['PURCHASE_ORDER_EDIT']), async (req, res) => {
   try {
     res.json(await service.cancelReturn(req.params.id));
   } catch (e) { send(res, e); }

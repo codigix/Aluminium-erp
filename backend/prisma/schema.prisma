@@ -1480,6 +1480,8 @@ model purchase_returns {
   dispatched_by   Int?
   closed_at       DateTime? @db.Timestamp(0)
   cancelled_at    DateTime? @db.Timestamp(0)
+  sent_to_accounts_at DateTime? @db.Timestamp(0)
+  sent_to_accounts_by Int?
   created_by      Int?
   created_at      DateTime? @default(now()) @db.Timestamp(0)
   updated_at      DateTime? @default(now()) @db.Timestamp(0)
