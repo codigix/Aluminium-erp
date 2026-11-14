@@ -75,6 +75,7 @@ import PaymentHistory from "./pages/PaymentHistory";
 import PaymentReceived from "./pages/PaymentReceived";
 import RecordPaymentReceived from "./pages/RecordPaymentReceived";
 import CustomerPaymentHistory from "./pages/CustomerPaymentHistory";
+import LedgerStatement from "./pages/LedgerStatement";
 import BankAccounts from "./pages/BankAccounts";
 import AccountsDashboard from "./pages/AccountsDashboard";
 import AccountsReport from "./pages/AccountsReport";
@@ -111,7 +112,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-master', 'customer-po', 'sales-order', 'sales-invoice', 'customer-drawing', 'client-quotations', 'quotation-form', 'part-tracking', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'purchase-returns', 'po-receipt-details', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'record-payment-received', 'record-payment-made', 'payment-history', 'customer-payment-history', 'bank-accounts', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details', 'admin-company-master', 'database-backup', 'quotation-approvals']
+const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-master', 'customer-po', 'sales-order', 'sales-invoice', 'customer-drawing', 'client-quotations', 'quotation-form', 'part-tracking', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'purchase-returns', 'po-receipt-details', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'record-payment-received', 'record-payment-made', 'payment-history', 'customer-payment-history', 'ledger-statement', 'bank-accounts', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details', 'admin-company-master', 'database-backup', 'quotation-approvals']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -208,7 +209,7 @@ const DEPARTMENT_MODULES = {
   PRODUCTION: ['dashboard', 'item-master', 'project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'routing-operations', 'process-sheet', 'production-report', 'work-order-details'],
   QUALITY: ['dashboard', 'item-master', 'incoming-qc', 'quality-rejections', 'purchase-returns', 'quality-reports', 'quality-rejection-entry', 'qc-inspections'],
   SHIPMENT: ['dashboard', 'item-master', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'],
-  ACCOUNTS: ['dashboard', 'payment-received', 'record-payment-received', 'record-payment-made', 'payment-history', 'customer-payment-history', 'bank-accounts', 'accounts-report', 'transaction-details'],
+  ACCOUNTS: ['dashboard', 'payment-received', 'record-payment-received', 'record-payment-made', 'payment-history', 'customer-payment-history', 'ledger-statement', 'bank-accounts', 'accounts-report', 'transaction-details'],
   INVENTORY: ['dashboard', 'item-master', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'grn-po-details'],
   PROCUREMENT: ['dashboard', 'item-master', 'quotations', 'purchase-orders', 'po-receipts', 'purchase-returns', 'incoming-orders', 'suppliers', 'procurement-report', 'grn-po-details'],
   ADMIN: [
@@ -428,6 +429,10 @@ function App() {
     }
     if ((modules.includes('payment-processing') || modules.includes('payment-history') || user?.department_code === 'ACCOUNTS') && !modules.includes('record-payment-made')) {
       modules.push('record-payment-made')
+    }
+    // Ledger Statement: wherever Payment History is available
+    if ((modules.includes('customer-payment-history') || modules.includes('payment-history') || user?.department_code === 'ACCOUNTS') && !modules.includes('ledger-statement')) {
+      modules.push('ledger-statement')
     }
 
     return modules
@@ -1315,6 +1320,7 @@ function App() {
     },
     { label: 'Record Payment', moduleId: 'record-payment-received', icon: 'credit-card', indent: true, prefix: '/accounts' },
     { label: 'Payment History', moduleId: 'customer-payment-history', icon: 'history', indent: true, prefix: '/accounts' },
+    { label: 'Ledger Account', moduleId: 'ledger-statement', icon: 'book-open', indent: true, prefix: '/accounts' },
     { label: 'Bank Accounts', moduleId: 'bank-accounts', icon: 'landmark', indent: true, deptCode: 'ACCOUNTS', prefix: '/accounts' },
     { label: 'Accounts Report', moduleId: 'accounts-report', icon: 'file-bar-chart', indent: true, deptCode: 'ACCOUNTS', prefix: '/accounts' },
 
@@ -2292,6 +2298,10 @@ function App() {
 
                 {activeModule === 'customer-payment-history' && (
                   <CustomerPaymentHistory />
+                )}
+
+                {activeModule === 'ledger-statement' && (
+                  <LedgerStatement />
                 )}
 
                 {activeModule === 'bank-accounts' && (

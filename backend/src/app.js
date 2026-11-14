@@ -169,6 +169,7 @@ privateRouter.use('/material-issues', materialIssueRoutes);
 privateRouter.use('/material-requests', materialRequestRoutes);
 privateRouter.use('/rfqs', rfqRoutes);
 privateRouter.use('/payments', paymentRoutes);
+privateRouter.use('/ledger-statement', require('./routes/ledgerStatementRoutes'));
 privateRouter.use('/vendor-invoices', vendorInvoiceRoutes);
 privateRouter.use('/customer-payments', customerPaymentRoutes);
 privateRouter.use('/bank-accounts', bankAccountRoutes);
