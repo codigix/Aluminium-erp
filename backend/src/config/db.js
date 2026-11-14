@@ -1086,6 +1086,101 @@ const ensureStockColumns = async () => {
       }
     }
 
+    // QC Decision per line (ACCEPT / TOLERANCE / REJECT) + tolerance details
+    for (const [col, def] of [
+      ['qc_decision', 'VARCHAR(20) NULL'], ['tolerance_diff_weight', 'DECIMAL(12,3) NULL'], ['tolerance_pct', 'DECIMAL(8,3) NULL'],
+      ['tolerance_reason', 'VARCHAR(500) NULL'], ['decision_by', 'INT NULL'], ['decision_at', 'TIMESTAMP NULL']
+    ]) {
+      try {
+        const [rc] = await connection.query(
+          "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'qc_inspection_items' AND COLUMN_NAME = ?",
+          [col]
+        );
+        if (rc.length === 0) {
+          await connection.query(`ALTER TABLE qc_inspection_items ADD COLUMN \`${col}\` ${def}`);
+          console.log(`qc_inspection_items.${col} column added`);
+        }
+      } catch (e) {
+        if (e.code !== 'ER_NO_SUCH_TABLE') console.error(`qc_inspection_items.${col} column sync failed:`, e.message);
+      }
+    }
+    // Global settings (key/value) — QC allowed weight tolerance %
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS app_settings (
+          setting_key VARCHAR(100) NOT NULL,
+          setting_value VARCHAR(500) NULL,
+          updated_by INT NULL,
+          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (setting_key)
+        )
+      `);
+      await connection.query("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES ('qc_weight_tolerance_pct', '5')");
+    } catch (e) {
+      console.error('app_settings table sync failed:', e.message);
+    }
+
+    // Purchase Returns (QC-rejected GRN material back to the supplier)
+    try {
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS purchase_returns (
+          id INT NOT NULL AUTO_INCREMENT,
+          return_no VARCHAR(50) NOT NULL,
+          return_date DATE NOT NULL,
+          vendor_id INT NOT NULL,
+          po_id INT NULL,
+          po_number VARCHAR(100) NULL,
+          host_company_id INT NULL,
+          return_type VARCHAR(20) NOT NULL DEFAULT 'REPLACEMENT',
+          status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+          reason TEXT NULL,
+          vehicle_no VARCHAR(50) NULL,
+          transporter VARCHAR(150) NULL,
+          remarks TEXT NULL,
+          debit_note_id INT NULL,
+          dispatched_at TIMESTAMP NULL,
+          dispatched_by INT NULL,
+          closed_at TIMESTAMP NULL,
+          cancelled_at TIMESTAMP NULL,
+          created_by INT NULL,
+          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY uq_purchase_return_no (return_no),
+          KEY idx_pr_vendor (vendor_id),
+          KEY idx_pr_po (po_id),
+          KEY idx_pr_status (status)
+        )
+      `);
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS purchase_return_items (
+          id INT NOT NULL AUTO_INCREMENT,
+          purchase_return_id INT NOT NULL,
+          qc_inspection_item_id INT NOT NULL,
+          qc_inspection_id INT NULL,
+          grn_id INT NULL,
+          grn_item_id INT NULL,
+          po_item_id INT NULL,
+          item_code VARCHAR(120) NULL,
+          description VARCHAR(500) NULL,
+          size_text VARCHAR(200) NULL,
+          quantity DECIMAL(12,3) NOT NULL DEFAULT 0,
+          weight DECIMAL(12,3) NOT NULL DEFAULT 0,
+          unit VARCHAR(20) NULL,
+          rate DECIMAL(14,2) NOT NULL DEFAULT 0,
+          amount DECIMAL(15,2) NOT NULL DEFAULT 0,
+          remarks VARCHAR(500) NULL,
+          created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          KEY idx_pri_return (purchase_return_id),
+          KEY idx_pri_qc_item (qc_inspection_item_id),
+          KEY idx_pri_po_item (po_item_id)
+        )
+      `);
+    } catch (e) {
+      console.error('purchase_returns tables sync failed:', e.message);
+    }
+
     // GRN Tolerance Override (Deviation): tick + reason per line (record only)
     for (const tbl of ['po_receipt_items', 'grn_items']) {
       for (const [col, def] of [['deviation_override', 'TINYINT(1) NOT NULL DEFAULT 0'], ['deviation_reason', 'VARCHAR(500) NULL']]) {

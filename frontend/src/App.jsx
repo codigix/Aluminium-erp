@@ -23,6 +23,7 @@ import Suppliers from './pages/Suppliers'
 import Quotations from './pages/Quotations'
 import PurchaseOrders from './pages/PurchaseOrders'
 import POReceipts from './pages/POReceipts'
+import PurchaseReturns from './pages/PurchaseReturns'
 import POReceiptDetails from './pages/POReceiptDetails'
 import GRN from './pages/GRN'
 import GRNProcessing from './pages/GRNProcessing'
@@ -110,7 +111,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-master', 'customer-po', 'sales-order', 'sales-invoice', 'customer-drawing', 'client-quotations', 'quotation-form', 'part-tracking', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'po-receipt-details', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'record-payment-received', 'record-payment-made', 'payment-history', 'customer-payment-history', 'bank-accounts', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details', 'admin-company-master', 'database-backup', 'quotation-approvals']
+const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-master', 'customer-po', 'sales-order', 'sales-invoice', 'customer-drawing', 'client-quotations', 'quotation-form', 'part-tracking', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'purchase-returns', 'po-receipt-details', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'record-payment-received', 'record-payment-made', 'payment-history', 'customer-payment-history', 'bank-accounts', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details', 'admin-company-master', 'database-backup', 'quotation-approvals']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -205,11 +206,11 @@ const DEPARTMENT_MODULES = {
   SALES: ['dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-master', 'customer-po', 'sales-order', 'sales-invoice', 'customer-drawing', 'client-quotations', 'quotation-form', 'sales-report', 'approved-quotations', 'sales-report-details', 'part-tracking'],
   DESIGN_ENG: ['dashboard', 'item-master', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet'],
   PRODUCTION: ['dashboard', 'item-master', 'project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'routing-operations', 'process-sheet', 'production-report', 'work-order-details'],
-  QUALITY: ['dashboard', 'item-master', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'qc-inspections'],
+  QUALITY: ['dashboard', 'item-master', 'incoming-qc', 'quality-rejections', 'purchase-returns', 'quality-reports', 'quality-rejection-entry', 'qc-inspections'],
   SHIPMENT: ['dashboard', 'item-master', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'],
   ACCOUNTS: ['dashboard', 'payment-received', 'record-payment-received', 'record-payment-made', 'payment-history', 'customer-payment-history', 'bank-accounts', 'accounts-report', 'transaction-details'],
   INVENTORY: ['dashboard', 'item-master', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'grn-po-details'],
-  PROCUREMENT: ['dashboard', 'item-master', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'suppliers', 'procurement-report', 'grn-po-details'],
+  PROCUREMENT: ['dashboard', 'item-master', 'quotations', 'purchase-orders', 'po-receipts', 'purchase-returns', 'incoming-orders', 'suppliers', 'procurement-report', 'grn-po-details'],
   ADMIN: [
     'dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption',
     'quality-reports',
@@ -403,6 +404,9 @@ function App() {
     }
     if ((modules.includes('purchase-orders') || modules.includes('grn') || modules.includes('procurement-report') || modules.includes('po-receipts')) && !modules.includes('grn-po-details')) {
       modules.push('grn-po-details')
+    if ((modules.includes('po-receipts') || modules.includes('purchase-orders') || modules.includes('incoming-qc') || modules.includes('quality-rejections')) && !modules.includes('purchase-returns')) {
+      modules.push('purchase-returns')
+    }
     }
     if ((modules.includes('procurement-report') || modules.includes('accounts-report')) && !modules.includes('suppliers')) {
       modules.push('suppliers')
@@ -1272,6 +1276,7 @@ function App() {
     { label: 'Purchase RFQs', moduleId: 'quotations', icon: 'file-question', indent: true, prefix: '/procurement' },
     { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'shopping-bag', indent: true, prefix: '/procurement' },
     { label: 'Goods Receipt (PO)', moduleId: 'po-receipts', icon: 'inbox', indent: true, prefix: '/procurement' },
+    { label: 'Purchase Returns', moduleId: 'purchase-returns', icon: 'refresh', indent: true, prefix: '/procurement' },
     { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'PROCUREMENT', prefix: '/procurement' },
     { label: 'Purchase Report', moduleId: 'procurement-report', icon: 'file-bar-chart', indent: true, deptCode: 'PROCUREMENT', prefix: '/procurement' },
 
@@ -2224,6 +2229,10 @@ function App() {
 
                 {activeModule === 'po-receipts' && (
                   <POReceipts />
+                )}
+
+                {activeModule === 'purchase-returns' && (
+                  <PurchaseReturns />
                 )}
 
                 {activeModule === 'inventory-dashboard' && (

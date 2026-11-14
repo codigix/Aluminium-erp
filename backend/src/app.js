@@ -149,6 +149,7 @@ privateRouter.use('/bom', bomRoutes);
 privateRouter.use('/items', stockRoutes);
 privateRouter.use('/drawings', drawingRoutes);
 privateRouter.use('/po-receipts', poReceiptRoutes);
+privateRouter.use('/purchase-returns', require('./routes/purchaseReturnRoutes'));
 privateRouter.use('/grns', grnRoutes);
 privateRouter.use('/grn-items', grnItemRoutes);
 privateRouter.use('/qc-inspections', qcInspectionsRoutes);

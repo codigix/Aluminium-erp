@@ -82,6 +82,42 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   const [isAttachmentsUploading, setIsAttachmentsUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  // Global allowed weight tolerance % for "Accept with Tolerance"
+  const [qcTolerancePct, setQcTolerancePct] = useState(5);
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    fetch(`${API_BASE}/qc-inspections/settings/tolerance`, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && Number.isFinite(parseFloat(d.tolerance_pct))) setQcTolerancePct(parseFloat(d.tolerance_pct)); })
+      .catch(() => {});
+  }, []);
+  const editQcTolerance = async () => {
+    const result = await Swal.fire({
+      title: 'Allowed Tolerance (%)',
+      text: 'Maximum weight variation (actual vs received) that QC may accept with "Accept with Tolerance".',
+      input: 'number',
+      inputValue: qcTolerancePct,
+      inputAttributes: { min: 0, max: 100, step: '0.1' },
+      showCancelButton: true,
+      confirmButtonText: 'Save',
+      inputValidator: (v) => (v === '' || !(parseFloat(v) >= 0 && parseFloat(v) <= 100) ? 'Enter a value between 0 and 100' : undefined)
+    });
+    if (!result.isConfirmed) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/qc-inspections/settings/tolerance`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tolerance_pct: parseFloat(result.value) })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Failed to update tolerance');
+      setQcTolerancePct(parseFloat(data.tolerance_pct));
+      successToast(`Allowed tolerance set to ±${data.tolerance_pct}%`);
+    } catch (err) {
+      errorToast(err.message);
+    }
+  };
   const [editFormData, setEditFormData] = useState({
     status: '',
     remarks: '',
@@ -410,12 +446,42 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     setEditFormData({ ...editFormData, items: newItems });
   };
 
+  // ── QC Decision per line: ACCEPT / TOLERANCE (Accept with Tolerance) / REJECT ──
+  const isBoughtOutLine = (it) => (it.material_type || it.item_type || '').toUpperCase().trim().includes('BOUGHT') || (it.item_code && String(it.item_code).toUpperCase().startsWith('BO-'));
+  // Actual (QC) vs received — by weight, or by quantity for lines without weight (bought-out)
+  const lineVariation = (it) => {
+    const recQty = parseFloat(it.received_qty || 0);
+    const recWt = parseFloat(it.received_weight || 0);
+    const byWeight = !isBoughtOutLine(it) && recWt > 0;
+    const received = byWeight ? recWt : recQty;
+    const rawActual = byWeight ? it.qc_inspection_weight : it.qc_inspection_qty;
+    const actual = rawActual === undefined || rawActual === null || rawActual === '' ? received : (parseFloat(rawActual) || 0);
+    const diff = Math.round((actual - received) * 1000) / 1000;
+    const pct = received > 0 ? Math.round((Math.abs(diff) / received) * 100000) / 1000 : (Math.abs(diff) > 0.0005 ? 100 : 0);
+    return { byWeight, received, actual, diff, pct, varies: Math.abs(diff) > 0.0005, unit: byWeight ? 'KG' : 'NOS' };
+  };
+  const lineHasRejection = (it) => (parseFloat(it.rejected_qty) || 0) > 0 || (parseFloat(it.rejected_weight) || 0) > 0.0005;
+  // Decision used for the line: a rejection always means REJECT; otherwise the chosen one, else a suggestion
+  const effectiveDecision = (it) => {
+    if (lineHasRejection(it)) return 'REJECT';
+    const chosen = String(it.qc_decision || '').toUpperCase();
+    if (chosen === 'ACCEPT' || chosen === 'TOLERANCE') return chosen;
+    return lineVariation(it).varies ? 'TOLERANCE' : 'ACCEPT';
+  };
+  // The allowed % is a guide only (a larger variation can be accepted manually); the reason is mandatory
+  const toleranceOk = (it) => String(it.tolerance_reason || '').trim() !== '';
+
   // Shared helper: derive overall QC status from all items comparing inspection values vs GRN received values
   const deriveQCStatus = (itemList) => {
     let allPassed = true;
     let allRejected = true;
 
     itemList.forEach(item => {
+      // "Accept with Tolerance" (within the allowed %, reason given): the variation is accepted
+      if (!lineHasRejection(item) && effectiveDecision(item) === 'TOLERANCE' && toleranceOk(item)) {
+        allRejected = false;
+        return;
+      }
       const recWt = parseFloat(item.received_weight !== undefined && item.received_weight !== null ? item.received_weight : (item.received_qty || 0));
       const inspWt = parseFloat(item.qc_inspection_weight !== undefined && item.qc_inspection_weight !== null ? item.qc_inspection_weight : recWt);
       const rejWt = parseFloat(item.rejected_weight || 0);
@@ -644,8 +710,64 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     setEditFormData({ ...editFormData, items: newItems, status: newStatus });
   };
 
+  // Select a QC decision for a line: Accept / Accept with Tolerance → nothing rejected; Reject → whole inspected qty/weight
+  // rejected (the Rejected Qty can then be lowered for a partial rejection — the accepted part still goes to stock)
+  const handleDecisionChange = (idx, decision) => {
+    setEditFormData(prev => {
+      const items = [...(prev.items || [])];
+      const it = { ...items[idx] };
+      const recQty = parseFloat(it.received_qty || 0);
+      const inspQty = parseFloat(it.qc_inspection_qty !== undefined && it.qc_inspection_qty !== '' ? it.qc_inspection_qty : recQty) || 0;
+      const recWt = parseFloat(it.received_weight || 0);
+      const inspWt = parseFloat(it.qc_inspection_weight !== undefined && it.qc_inspection_weight !== '' ? it.qc_inspection_weight : recWt) || 0;
+      it.qc_decision = decision;
+      if (decision === 'REJECT') {
+        it.accepted_qty = 0;
+        it.rejected_qty = inspQty;
+        it.accepted_weight = 0;
+        it.rejected_weight = inspWt;
+      } else {
+        it.accepted_qty = inspQty;
+        it.rejected_qty = 0;
+        it.accepted_weight = inspWt;
+        it.rejected_weight = 0;
+      }
+      items[idx] = it;
+      return {
+        ...prev,
+        items,
+        status: deriveQCStatus(items),
+        passQuantity: items.reduce((s, x) => s + (parseFloat(x.accepted_qty) || 0), 0),
+        failQuantity: items.reduce((s, x) => s + (parseFloat(x.rejected_qty) || 0), 0)
+      };
+    });
+  };
+  const handleToleranceReasonChange = (idx, value) => setEditFormData(prev => {
+    const items = [...(prev.items || [])];
+    items[idx] = { ...items[idx], tolerance_reason: value };
+    return { ...prev, items, status: deriveQCStatus(items) };
+  });
+
   const handleUpdateQC = async (e) => {
     e.preventDefault();
+    // QC Decision check per line (same rules as the server)
+    const lineLabel = (it, i) => it.item_code || it.material_name || `Line ${i + 1}`;
+    const problems = [];
+    const itemsToSave = (editFormData.items || []).map((it, i) => {
+      const decision = effectiveDecision(it);
+      const v = lineVariation(it);
+      if (decision === 'ACCEPT' && v.varies) {
+        problems.push(`${lineLabel(it, i)}: actual differs from received by ${Math.abs(v.diff)} ${v.unit} (${v.pct}%) — choose "Accept with Tolerance" or "Reject".`);
+      }
+      if (decision === 'TOLERANCE' && !String(it.tolerance_reason || '').trim()) {
+        problems.push(`${lineLabel(it, i)}: enter the reason for "Accept with Tolerance"${v.pct > qcTolerancePct + 0.0005 ? ` (variation ${v.pct}% is above the standard ±${qcTolerancePct}% — manual approval)` : ''}.`);
+      }
+      return { ...it, qc_decision: decision, tolerance_reason: decision === 'TOLERANCE' ? String(it.tolerance_reason || '').trim() : '' };
+    });
+    if (problems.length) {
+      Swal.fire({ icon: 'warning', title: 'Check QC Decision', html: problems.map(p => `<div style="text-align:left;margin:4px 0">• ${p}</div>`).join('') });
+      return;
+    }
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/qc-inspections/${selectedQC.id}`, {
@@ -654,10 +776,13 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(editFormData)
+        body: JSON.stringify({ ...editFormData, items: itemsToSave })
       });
 
-      if (!response.ok) throw new Error('Failed to update inspection');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || 'Failed to update inspection');
+      }
 
       successToast('Inspection updated successfully');
       setShowEditModal(false);
@@ -1736,17 +1861,61 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       }
     },
     {
-      label: 'Item Status',
+      label: 'Item Status (QC Decision)',
       key: 'status',
-      className: 'text-center whitespace-nowrap',
-      render: (_, item) => {
-        const recWt = parseFloat(item.received_weight || 0);
-        const inspWt = parseFloat(item.qc_inspection_weight !== undefined ? item.qc_inspection_weight : recWt);
-        const shortage = recWt - inspWt;
-        const overage = inspWt - recWt;
-        if (shortage > 0.0005) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-100 text-xs font-bold">SHORTAGE ✅</span>;
-        if (overage > 0.0005) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 text-xs font-bold">OVERAGE ✅</span>;
-        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100 text-xs font-bold">AVAILABLE ✅</span>;
+      className: 'text-center min-w-[230px]',
+      render: (_, item, idx) => {
+        const decision = effectiveDecision(item);
+        const v = lineVariation(item);
+        const style = decision === 'REJECT'
+          ? 'border-rose-300 bg-rose-50 text-rose-700'
+          : decision === 'TOLERANCE' ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-emerald-300 bg-emerald-50 text-emerald-700';
+        const sign = v.diff > 0 ? '+' : '';
+        const outside = v.pct > qcTolerancePct + 0.0005;
+        return (
+          <div className="flex flex-col items-stretch gap-1 text-left">
+            <select
+              value={decision}
+              onChange={(e) => handleDecisionChange(idx, e.target.value)}
+              className={`w-full px-2 py-1.5 border rounded text-xs font-bold outline-none ${style}`}
+            >
+              <option value="ACCEPT">✔ Accept</option>
+              <option value="TOLERANCE">≈ Accept with Tolerance</option>
+              <option value="REJECT">✖ Reject</option>
+            </select>
+
+            {decision === 'ACCEPT' && (
+              v.varies
+                ? <span className="text-[10px] text-rose-600 font-semibold">Actual differs by {sign}{v.diff} {v.unit} ({v.pct}%) — use Tolerance or Reject</span>
+                : <span className="text-[10px] text-emerald-600">Meets spec · accepted qty/weight posted to stock</span>
+            )}
+
+            {decision === 'TOLERANCE' && (
+              <>
+                <span className={`text-[10px] font-semibold ${outside ? 'text-rose-600' : 'text-amber-700'}`}>
+                  Actual {v.actual} vs received {v.received} {v.unit} · diff {sign}{v.diff} ({v.pct}%) · allowed ±{qcTolerancePct}%
+                </span>
+                {outside && <span className="text-[10px] text-rose-600 font-semibold">Above standard ±{qcTolerancePct}% — manual approval, reason required</span>}
+                <input
+                  type="text"
+                  maxLength={500}
+                  value={item.tolerance_reason || ''}
+                  onChange={(e) => handleToleranceReasonChange(idx, e.target.value)}
+                  placeholder={outside ? 'Manual approval reason *' : 'Tolerance reason *'}
+                  className={`w-full px-2 py-1 border rounded text-[11px] outline-none ${String(item.tolerance_reason || '').trim() ? 'border-amber-200' : 'border-rose-300 bg-rose-50/40'}`}
+                />
+                <span className="text-[10px] text-slate-500">Accepted weight (adjusted) is posted to stock</span>
+              </>
+            )}
+
+            {decision === 'REJECT' && (
+              <span className="text-[10px] text-rose-600 font-semibold">
+                Rejected {parseFloat(item.rejected_qty || 0)} NOS{!isBoughtOutLine(item) ? ` / ${parseFloat(item.rejected_weight || 0)} KG` : ''} · kept out of stock → Pending Returns
+                {(parseFloat(item.accepted_qty) || 0) > 0 ? ` · accepted ${parseFloat(item.accepted_qty)} NOS to stock` : ''}
+              </span>
+            )}
+          </div>
+        );
       }
     },
     {
@@ -2194,6 +2363,20 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           </div>
 
           <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded border border-slate-200 bg-slate-50 text-[11px] text-slate-600">
+              <span className="font-semibold text-slate-700">QC Decision per item:</span>
+              <span><b className="text-emerald-700">✔ Accept</b> — meets spec, posted to stock</span>
+              <span><b className="text-amber-700">≈ Accept with Tolerance</b> — variation within allowed %, reason required</span>
+              <span><b className="text-rose-700">✖ Reject</b> — kept out of stock, goes to Pending Returns</span>
+              <button
+                type="button"
+                onClick={editQcTolerance}
+                className="ml-auto px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-700 font-semibold hover:bg-amber-100"
+                title="Change the allowed tolerance %"
+              >
+                Allowed tolerance ±{qcTolerancePct}% ✎
+              </button>
+            </div>
             <div className="bg-white rounded border border-slate-100 overflow-hidden ">
               <DataTable
                 columns={inspectionEditColumns}

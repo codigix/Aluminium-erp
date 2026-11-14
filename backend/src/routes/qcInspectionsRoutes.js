@@ -43,6 +43,24 @@ router.get('/rejections', authenticate, authorize(['QC_VIEW']), async (req, res)
   }
 });
 
+// Global allowed weight tolerance % for "Accept with Tolerance"
+router.get('/settings/tolerance', authenticate, authorize(['QC_VIEW']), async (req, res) => {
+  try {
+    res.json({ tolerance_pct: await qcService.getQcTolerancePct() });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.put('/settings/tolerance', authenticate, authorize(['QC_EDIT']), async (req, res) => {
+  try {
+    const pct = await qcService.setQcTolerancePct(req.body?.tolerance_pct, req.user?.id || null);
+    res.json({ message: 'Allowed tolerance updated', tolerance_pct: pct });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
 router.get('/:qcId', authenticate, authorize(['QC_VIEW']), async (req, res) => {
   try {
     const qc = await qcService.getQCWithDetails(req.params.qcId);
@@ -88,7 +106,7 @@ router.post('/', authenticate, authorize(['QC_CREATE']), async (req, res) => {
 
 router.patch('/:qcId', authenticate, authorize(['QC_EDIT']), async (req, res) => {
   try {
-    const qc = await qcService.updateQC(req.params.qcId, req.body);
+    const qc = await qcService.updateQC(req.params.qcId, req.body, req.user?.id || null);
     res.json(qc);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });

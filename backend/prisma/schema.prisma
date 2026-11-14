@@ -1460,6 +1460,67 @@ model production_plan_op_overrides {
   @@index([plan_id], map: "idx_ppoo_plan")
 }
 
+/// Purchase Returns: QC-rejected GRN material sent back to the supplier (no stock movement)
+model purchase_returns {
+  id              Int       @id @default(autoincrement())
+  return_no       String    @unique(map: "uq_purchase_return_no") @db.VarChar(50)
+  return_date     DateTime  @db.Date
+  vendor_id       Int
+  po_id           Int?
+  po_number       String?   @db.VarChar(100)
+  host_company_id Int?
+  return_type     String    @default("REPLACEMENT") @db.VarChar(20)
+  status          String    @default("DRAFT") @db.VarChar(20)
+  reason          String?   @db.Text
+  vehicle_no      String?   @db.VarChar(50)
+  transporter     String?   @db.VarChar(150)
+  remarks         String?   @db.Text
+  debit_note_id   Int?
+  dispatched_at   DateTime? @db.Timestamp(0)
+  dispatched_by   Int?
+  closed_at       DateTime? @db.Timestamp(0)
+  cancelled_at    DateTime? @db.Timestamp(0)
+  created_by      Int?
+  created_at      DateTime? @default(now()) @db.Timestamp(0)
+  updated_at      DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([vendor_id], map: "idx_pr_vendor")
+  @@index([po_id], map: "idx_pr_po")
+  @@index([status], map: "idx_pr_status")
+}
+
+model purchase_return_items {
+  id                    Int       @id @default(autoincrement())
+  purchase_return_id    Int
+  qc_inspection_item_id Int
+  qc_inspection_id      Int?
+  grn_id                Int?
+  grn_item_id           Int?
+  po_item_id            Int?
+  item_code             String?   @db.VarChar(120)
+  description           String?   @db.VarChar(500)
+  size_text             String?   @db.VarChar(200)
+  quantity              Decimal   @default(0.000) @db.Decimal(12, 3)
+  weight                Decimal   @default(0.000) @db.Decimal(12, 3)
+  unit                  String?   @db.VarChar(20)
+  rate                  Decimal   @default(0.00) @db.Decimal(14, 2)
+  amount                Decimal   @default(0.00) @db.Decimal(15, 2)
+  remarks               String?   @db.VarChar(500)
+  created_at            DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([purchase_return_id], map: "idx_pri_return")
+  @@index([qc_inspection_item_id], map: "idx_pri_qc_item")
+  @@index([po_item_id], map: "idx_pri_po_item")
+}
+
+/// Global key/value settings (e.g. qc_weight_tolerance_pct)
+model app_settings {
+  setting_key   String    @id @db.VarChar(100)
+  setting_value String?   @db.VarChar(500)
+  updated_by    Int?
+  updated_at    DateTime? @default(now()) @db.Timestamp(0)
+}
+
 /// Delivery Challan print: user edits per outward challan (print only; NULL = system value)
 model delivery_challan_details {
   id                 Int       @id @default(autoincrement())
@@ -1495,6 +1556,13 @@ model qc_inspection_items {
   qc_thickness      Decimal?      @db.Decimal(12, 4)
   qc_diameter       Decimal?      @db.Decimal(12, 4)
   qc_outer_diameter Decimal?      @db.Decimal(12, 4)
+  /// QC Decision: ACCEPT / TOLERANCE / REJECT (NULL = not decided)
+  qc_decision           String?   @db.VarChar(20)
+  tolerance_diff_weight Decimal?  @db.Decimal(12, 3)
+  tolerance_pct         Decimal?  @db.Decimal(8, 3)
+  tolerance_reason      String?   @db.VarChar(500)
+  decision_by           Int?
+  decision_at           DateTime? @db.Timestamp(0)
   qc_inspections   qc_inspections @relation(fields: [qc_inspection_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "qc_inspection_items_ibfk_1")
   grn_items        grn_items      @relation(fields: [grn_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "qc_inspection_items_ibfk_2")
   warehouses       warehouses?    @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction, map: "qc_inspection_items_ibfk_3")

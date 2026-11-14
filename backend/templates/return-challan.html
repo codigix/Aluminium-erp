@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Return Challan</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Arial', 'Helvetica', sans-serif; font-size: 11px; color: #000; background: #fff; }
+    .sheet { border: 1.5px solid #000; width: 100%; }
+
+    .hdr { display: flex; align-items: stretch; border-bottom: 1.5px solid #000; }
+    .hdr-logo { width: 110px; display: flex; align-items: center; justify-content: center; padding: 6px; }
+    .hdr-logo img { max-width: 100px; max-height: 70px; object-fit: contain; }
+    .hdr-main { flex: 1; text-align: center; padding: 6px 110px 8px 0; }
+    .doc-title { display: inline-block; font-size: 12px; font-weight: bold; letter-spacing: 1px; border: 1px solid #000; padding: 2px 14px; margin-bottom: 4px; }
+    .doc-sub { font-size: 10px; margin-bottom: 3px; }
+    .co-name { font-size: 22px; font-weight: bold; letter-spacing: 0.5px; }
+    .co-addr { font-size: 10.5px; margin-top: 2px; }
+    .co-contact { font-size: 10.5px; margin-top: 1px; }
+
+    .info { display: flex; border-bottom: 1.5px solid #000; }
+    .to { flex: 1.15; padding: 8px 10px; border-right: 1.5px solid #000; min-height: 112px; }
+    .to-label { font-weight: bold; }
+    .to-name { font-weight: bold; font-size: 12px; margin: 4px 0 2px 26px; }
+    .to-line { margin-left: 26px; font-size: 10.5px; line-height: 1.45; }
+    .refs { flex: 1; }
+    .ref-row { display: flex; border-bottom: 1px solid #000; min-height: 28px; }
+    .ref-row:last-child { border-bottom: none; }
+    .ref-cell { display: flex; align-items: center; padding: 4px 8px; }
+    .ref-cell.no { flex: 1.35; border-right: 1px solid #000; }
+    .ref-cell.dt { flex: 1; }
+    .ref-cell.full { flex: 1; }
+    .lbl { white-space: nowrap; margin-right: 6px; }
+    .val { font-weight: bold; white-space: nowrap; }
+
+    table.items { width: 100%; border-collapse: collapse; }
+    table.items th { border-bottom: 1.5px solid #000; border-right: 1px solid #000; padding: 6px 4px; font-size: 11px; font-weight: bold; text-align: center; }
+    table.items th:last-child, table.items td:last-child { border-right: none; }
+    table.items td { border-right: 1px solid #000; padding: 4px 6px; height: 24px; vertical-align: top; font-size: 10.5px; }
+    table.items tfoot td { border-top: 1.5px solid #000; font-weight: bold; height: auto; padding: 5px 6px; }
+    .c-sr { width: 44px; text-align: center; }
+    .c-qty { width: 70px; text-align: center; }
+    .c-wt { width: 80px; text-align: center; }
+    .c-rem { width: 150px; }
+    .desc-main { font-weight: bold; }
+    .desc-sub { font-size: 9.5px; color: #222; margin-top: 1px; }
+
+    .reason { border-top: 1.5px solid #000; padding: 6px 10px; font-size: 10.5px; }
+    .gst { border-top: 1px solid #000; padding: 6px 10px; font-weight: bold; }
+    .recv { border-top: 1.5px solid #000; padding: 6px 10px; font-style: italic; }
+    .sign { display: flex; border-top: 1.5px solid #000; min-height: 78px; }
+    .sign-l { flex: 1.15; border-right: 1.5px solid #000; display: flex; flex-direction: column; justify-content: space-between; }
+    .sign-recv { padding: 6px 10px; flex: 1; display: flex; align-items: flex-end; }
+    .sign-veh { border-top: 1px solid #000; padding: 6px 10px; }
+    .sign-r { flex: 1; display: flex; flex-direction: column; justify-content: space-between; text-align: center; padding: 6px 10px; }
+    .for-co { font-weight: bold; }
+    .auth { margin-top: auto; }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="hdr">
+      <div class="hdr-logo">{{#logoBase64}}<img src="{{{logoBase64}}}" alt="logo" />{{/logoBase64}}</div>
+      <div class="hdr-main">
+        <div class="doc-title">RETURN CHALLAN</div>
+        <div class="doc-sub">(Rejected material returned to supplier — {{returnTypeLabel}})</div>
+        <div class="co-name">{{hostCompanyName}}</div>
+        <div class="co-addr">{{hostCompanyAddress}}</div>
+        {{#hostContact}}<div class="co-contact">{{hostContact}}</div>{{/hostContact}}
+      </div>
+    </div>
+
+    <div class="info">
+      <div class="to">
+        <div class="to-label">To,</div>
+        <div class="to-name">M/s. {{vendorName}}</div>
+        {{#vendorAddress}}<div class="to-line">{{vendorAddress}}</div>{{/vendorAddress}}
+        {{#vendorPhone}}<div class="to-line">Mob.: {{vendorPhone}}</div>{{/vendorPhone}}
+        {{#vendorGstin}}<div class="to-line">GSTIN: {{vendorGstin}}</div>{{/vendorGstin}}
+      </div>
+      <div class="refs">
+        <div class="ref-row">
+          <div class="ref-cell no"><span class="lbl">Return Ch. No.</span><span class="val">{{returnNo}}</span></div>
+          <div class="ref-cell dt"><span class="lbl">Date :</span><span class="val">{{returnDate}}</span></div>
+        </div>
+        <div class="ref-row">
+          <div class="ref-cell no"><span class="lbl">P.O. No.</span><span class="val">{{poNumber}}</span></div>
+          <div class="ref-cell dt"><span class="lbl">Date :</span><span class="val">{{poDate}}</span></div>
+        </div>
+        <div class="ref-row">
+          <div class="ref-cell no"><span class="lbl">GRN No.</span><span class="val">{{grnNos}}</span></div>
+          <div class="ref-cell dt"><span class="lbl">Date :</span><span class="val">{{grnDate}}</span></div>
+        </div>
+        <div class="ref-row">
+          <div class="ref-cell full"><span class="lbl">Vendor Code No.</span><span class="val">{{vendorCode}}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <table class="items">
+      <thead>
+        <tr>
+          <th class="c-sr">Sr. No.</th>
+          <th>Description</th>
+          <th class="c-qty">Qty</th>
+          <th class="c-wt">Weight (Kg)</th>
+          <th class="c-rem">Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#rows}}
+        <tr>
+          <td class="c-sr">{{sr}}</td>
+          <td>{{#main}}<div class="desc-main">{{main}}</div>{{/main}}{{#sub}}<div class="desc-sub">{{sub}}</div>{{/sub}}</td>
+          <td class="c-qty">{{qty}}</td>
+          <td class="c-wt">{{weight}}</td>
+          <td class="c-rem">{{remarks}}</td>
+        </tr>
+        {{/rows}}
+        <tr id="filler-row"><td class="c-sr"></td><td></td><td class="c-qty"></td><td class="c-wt"></td><td class="c-rem"></td></tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td class="c-sr"></td>
+          <td style="text-align:right">Total</td>
+          <td class="c-qty">{{totalQty}}</td>
+          <td class="c-wt">{{totalWeight}}</td>
+          <td class="c-rem"></td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="reason"><b>Reason for return:</b> {{reason}}{{#remarks}}<br /><b>Note:</b> {{remarks}}{{/remarks}}</div>
+    <div class="gst">GST No. {{hostGstin}}</div>
+    <div class="recv">Received the above mentioned rejected material in good Condition.</div>
+    <div class="sign">
+      <div class="sign-l">
+        <div class="sign-recv">Received Signature with Stamp</div>
+        <div class="sign-veh">Vehicle No. <span class="val">{{vehicleNo}}</span>{{#transporter}} &nbsp; · &nbsp; Transporter: <span class="val">{{transporter}}</span>{{/transporter}}</div>
+      </div>
+      <div class="sign-r">
+        <div class="for-co">For {{hostCompanyName}}</div>
+        <div class="auth">Authorised Signature</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -213,6 +213,7 @@ const getQCWithDetails = async (qcId) => {
         gi.received_length, gi.received_width, gi.received_thickness, gi.received_diameter, gi.received_outer_diameter,
         gi.deviation_override, gi.deviation_reason,
         qci.qc_length, qci.qc_width, qci.qc_thickness, qci.qc_diameter, qci.qc_outer_diameter,
+        qci.qc_decision, qci.tolerance_diff_weight, qci.tolerance_pct, qci.tolerance_reason, qci.decision_at,
         w.warehouse_name
        FROM qc_inspection_items qci
        LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
@@ -257,6 +258,9 @@ const getQCWithDetails = async (qcId) => {
       // QC Inspection Dimension measured by QC (record only; NULL = not entered)
       qc_length: item.qc_length, qc_width: item.qc_width, qc_thickness: item.qc_thickness,
       qc_diameter: item.qc_diameter, qc_outer_diameter: item.qc_outer_diameter,
+      // QC Decision (ACCEPT / TOLERANCE / REJECT; NULL = not decided yet)
+      qc_decision: item.qc_decision || null, tolerance_diff_weight: item.tolerance_diff_weight, tolerance_pct: item.tolerance_pct,
+      tolerance_reason: item.tolerance_reason || '', decision_at: item.decision_at,
       rate: parseFloat(item.unit_rate) || 0,
       design_qty: parseFloat(item.planned_qty || item.design_qty || 0),
       planned_qty: parseFloat(item.planned_qty || 0),
@@ -460,6 +464,7 @@ const getAllQCs = async () => {
         gi.received_length, gi.received_width, gi.received_thickness, gi.received_diameter, gi.received_outer_diameter,
         gi.deviation_override, gi.deviation_reason,
         qci.qc_length, qci.qc_width, qci.qc_thickness, qci.qc_diameter, qci.qc_outer_diameter,
+        qci.qc_decision, qci.tolerance_diff_weight, qci.tolerance_pct, qci.tolerance_reason, qci.decision_at,
         w.warehouse_name
        FROM qc_inspection_items qci 
        LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
@@ -512,6 +517,9 @@ const getAllQCs = async () => {
             // QC Inspection Dimension measured by QC (record only; NULL = not entered)
             qc_length: item.qc_length, qc_width: item.qc_width, qc_thickness: item.qc_thickness,
             qc_diameter: item.qc_diameter, qc_outer_diameter: item.qc_outer_diameter,
+      // QC Decision (ACCEPT / TOLERANCE / REJECT; NULL = not decided yet)
+      qc_decision: item.qc_decision || null, tolerance_diff_weight: item.tolerance_diff_weight, tolerance_pct: item.tolerance_pct,
+      tolerance_reason: item.tolerance_reason || '', decision_at: item.decision_at,
             rate: parseFloat(item.unit_rate) || 0,
             design_qty: parseFloat(item.planned_qty || item.design_qty || 0),
             planned_qty: parseFloat(item.planned_qty || 0),
@@ -625,7 +633,111 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
   }
 };
 
-const updateQC = async (qcId, updates) => {
+// ── QC Decision per line: ACCEPT / TOLERANCE (Accept with Tolerance) / REJECT ──
+// Stock posting is unchanged (accepted qty/weight → stock, rejected never). The decision is validated
+// against the global allowed tolerance % (app_settings.qc_weight_tolerance_pct); the QC save is the approval.
+const QC_DECISIONS = ['ACCEPT', 'TOLERANCE', 'REJECT'];
+const QC_TOLERANCE_KEY = 'qc_weight_tolerance_pct';
+const DEFAULT_QC_TOLERANCE_PCT = 5;
+
+const getQcTolerancePct = async (conn = pool) => {
+  try {
+    const [rows] = await conn.query('SELECT setting_value FROM app_settings WHERE setting_key = ?', [QC_TOLERANCE_KEY]);
+    const v = parseFloat(rows[0]?.setting_value);
+    return Number.isFinite(v) && v >= 0 ? v : DEFAULT_QC_TOLERANCE_PCT;
+  } catch (e) {
+    if (e.code === 'ER_NO_SUCH_TABLE') return DEFAULT_QC_TOLERANCE_PCT;
+    throw e;
+  }
+};
+
+const setQcTolerancePct = async (value, userId = null) => {
+  const pct = parseFloat(value);
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+    const err = new Error('Allowed tolerance must be a number between 0 and 100 %');
+    err.statusCode = 400;
+    throw err;
+  }
+  const rounded = Math.round(pct * 1000) / 1000;
+  await pool.query(
+    `INSERT INTO app_settings (setting_key, setting_value, updated_by) VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)`,
+    [QC_TOLERANCE_KEY, String(rounded), userId]
+  );
+  return rounded;
+};
+
+// Variation of the QC (actual) weight against the GRN received weight; quantity when the line has no weight (bought-out)
+const qcVariation = (received, actual) => {
+  const diff = Math.round((actual - received) * 1000) / 1000;
+  const pct = received > 0 ? Math.abs(diff) / received * 100 : (Math.abs(diff) > 0.0005 ? 100 : 0);
+  return { diff, pct: Math.round(pct * 1000) / 1000 };
+};
+
+const qcDecisionError = (msg) => {
+  const err = new Error(msg);
+  err.statusCode = 400;
+  return err;
+};
+
+// Validates one line's decision; returns the values to store
+const resolveQcDecision = async (connection, item, tolerancePct) => {
+  const decision = String(item.qc_decision || '').toUpperCase();
+  if (!QC_DECISIONS.includes(decision)) throw qcDecisionError(`Invalid QC decision "${item.qc_decision}"`);
+  const [rows] = await connection.query(
+    `SELECT COALESCE(NULLIF(qci.item_code, ''), '') AS code,
+            COALESCE(gi.receiving_qty, qci.received_qty, 0) AS rq,
+            COALESCE(gi.receiving_weight, gi.received_weight, 0) AS rw
+     FROM qc_inspection_items qci LEFT JOIN grn_items gi ON gi.id = qci.grn_item_id WHERE qci.id = ?`,
+    [item.id]
+  );
+  const g = rows[0] || { code: '', rq: 0, rw: 0 };
+  const label = g.code || `line ${item.id}`;
+  const num = (v) => (v === undefined || v === null || v === '' ? null : parseFloat(v));
+  const rw = parseFloat(g.rw) || 0;
+  const rq = parseFloat(g.rq) || 0;
+  const byWeight = rw > 0;
+  const actual = byWeight
+    ? (num(item.qc_inspection_weight) ?? rw)
+    : (num(item.qc_inspection_qty) ?? rq);
+  const { diff, pct } = qcVariation(byWeight ? rw : rq, actual);
+  const rejQty = parseFloat(item.rejected_qty) || 0;
+  const rejWt = parseFloat(item.rejected_weight) || 0;
+  const reason = String(item.tolerance_reason || '').trim().slice(0, 500);
+  const varies = Math.abs(diff) > 0.0005;
+
+  if (decision === 'REJECT') {
+    if (rejQty <= 0 && rejWt <= 0.0005) throw qcDecisionError(`${label}: "Reject" needs a rejected quantity or weight.`);
+  } else {
+    if (rejQty > 0 || rejWt > 0.0005) {
+      throw qcDecisionError(`${label}: has a rejected quantity/weight — choose "Reject" (the accepted part still goes to stock).`);
+    }
+    if (decision === 'ACCEPT' && varies) {
+      throw qcDecisionError(`${label}: actual ${byWeight ? 'weight' : 'quantity'} differs from received by ${Math.abs(diff)} (${pct}%) — choose "Accept with Tolerance" or "Reject".`);
+    }
+    if (decision === 'TOLERANCE') {
+      // The allowed % is a guide only: QC may accept a larger variation manually — the reason is the approval record
+      if (!reason) throw qcDecisionError(`${label}: enter the reason for "Accept with Tolerance".`);
+    }
+  }
+  return { decision, diff, pct, reason: decision === 'TOLERANCE' ? reason : null };
+};
+
+// Validate + store one line's decision (decision_by / decision_at change only when the decision or reason changes)
+const saveQcDecision = async (connection, item, tolerancePct, userId = null) => {
+  const d = await resolveQcDecision(connection, item, tolerancePct);
+  await connection.execute(
+    `UPDATE qc_inspection_items
+     SET decision_by = IF(qc_decision <=> ? AND tolerance_reason <=> ?, decision_by, ?),
+         decision_at = IF(qc_decision <=> ? AND tolerance_reason <=> ?, decision_at, NOW()),
+         qc_decision = ?, tolerance_diff_weight = ?, tolerance_pct = ?, tolerance_reason = ?
+     WHERE id = ?`,
+    [d.decision, d.reason, userId, d.decision, d.reason, d.decision, d.diff, d.pct, d.reason, item.id]
+  );
+  return d;
+};
+
+const updateQC = async (qcId, updates, userId = null) => {
   const { inspectionDate, passQuantity, failQuantity, status, defects, remarks, items } = updates;
 
   const setClause = [];
@@ -676,8 +788,14 @@ const updateQC = async (qcId, updates) => {
 
     // Update items if provided
     if (items && Array.isArray(items)) {
+      const needsTolerance = items.some(i => i && i.id && i.qc_decision);
+      const tolerancePct = needsTolerance ? await getQcTolerancePct(connection) : DEFAULT_QC_TOLERANCE_PCT;
       for (const item of items) {
         if (item.id) {
+          // QC Decision (only when the screen sends one; older clients / inspections stay as they were)
+          if (item.qc_decision) {
+            await saveQcDecision(connection, item, tolerancePct, userId);
+          }
           await connection.execute(
             `UPDATE qc_inspection_items 
              SET qc_inspection_qty = ?,
@@ -1640,6 +1758,9 @@ module.exports = {
   getQCAttachments,
   deleteQCAttachment,
   getRejectedItems,
+  getQcTolerancePct,
+  setQcTolerancePct,
+  saveQcDecision,
   createShipmentFromQC,
   generateQcPdf,
   getCorrectItemCode
