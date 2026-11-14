@@ -4871,18 +4871,46 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           </div>
                           <div>
                             <label className="text-[10px] text-slate-500">Workstation</label>
-                            <select value={opEditor.workstation} onChange={(e) => setOpEditor(prev => ({ ...prev, workstation: e.target.value }))}
-                              className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white cursor-pointer">
-                              <option value="">-- Select --</option>
-                              {opEditor.workstation && !workstations.some(w => (w.workstation_code || w.workstation_name) === opEditor.workstation) && (
-                                <option value={opEditor.workstation}>{opEditor.workstation}</option>
-                              )}
-                              {workstations.map(w => (
-                                <option key={w.id} value={w.workstation_code || w.workstation_name}>
-                                  {w.workstation_code || w.workstation_name}{w.workstation_name && w.workstation_code ? ` – ${w.workstation_name}` : ''}
-                                </option>
-                              ))}
-                            </select>
+                            {/* Filter workstations by selected operation using keyword match */}
+                            {(() => {
+                              const opName = (opEditor.operation_name || '').toLowerCase().trim();
+                              // Build keyword map: operation keyword → workstation name keywords
+                              const keywordMap = [
+                                { keys: ['welding'],          wsKeys: ['welding'] },
+                                { keys: ['cnc turning', 'cnc turning'], wsKeys: ['cnc turning'] },
+                                { keys: ['cnc'],              wsKeys: ['cnc turning'] },
+                                { keys: ['vmc', 'milling'],   wsKeys: ['vmc', 'milling'] },
+                                { keys: ['drilling'],         wsKeys: ['drilling'] },
+                                { keys: ['tapping'],          wsKeys: ['tapping'] },
+                                { keys: ['qc', 'inspection'], wsKeys: ['qc', 'inspection'] },
+                                { keys: ['laser'],            wsKeys: ['laser'] },
+                                { keys: ['assembly', 'fitment'], wsKeys: ['assembly', 'fitment'] },
+                              ];
+                              let filteredWs = workstations;
+                              if (opName) {
+                                const rule = keywordMap.find(r => r.keys.some(k => opName.includes(k)));
+                                if (rule) {
+                                  const matches = workstations.filter(w =>
+                                    rule.wsKeys.some(k => (w.workstation_name || '').toLowerCase().includes(k))
+                                  );
+                                  if (matches.length > 0) filteredWs = matches;
+                                }
+                              }
+                              return (
+                                <select value={opEditor.workstation} onChange={(e) => setOpEditor(prev => ({ ...prev, workstation: e.target.value }))}
+                                  className="w-full p-1.5 border border-slate-200 rounded text-xs bg-white cursor-pointer">
+                                  <option value="">-- Select --</option>
+                                  {opEditor.workstation && !workstations.some(w => (w.workstation_code || w.workstation_name) === opEditor.workstation) && (
+                                    <option value={opEditor.workstation}>{opEditor.workstation}</option>
+                                  )}
+                                  {filteredWs.map(w => (
+                                    <option key={w.id} value={w.workstation_code || w.workstation_name}>
+                                      {w.workstation_code || w.workstation_name}{w.workstation_name && w.workstation_code ? ` – ${w.workstation_name}` : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                              );
+                            })()}
                           </div>
                           <div>
                             <label className="text-[10px] text-slate-500">Process Type</label>

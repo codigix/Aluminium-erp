@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, DataTable, StatusBadge, Modal, FormControl, Tabs, Button } from '../components/ui.jsx';
-import { Truck, Package, Eye, Search, Filter, Calendar, User, Building2, ClipboardList, ArrowRight, Download, FileText, CheckCircle, Send, History, Upload, ChevronDown, Trash2, Plus } from 'lucide-react';
+import { Truck, Package, Eye, Search, Filter, Calendar, User, Building2, ClipboardList, ArrowRight, Download, FileText, CheckCircle, Send, History, Upload, ChevronDown, Trash2, Plus, Edit2, RotateCcw } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 import Swal from 'sweetalert2';
 
@@ -291,6 +291,102 @@ const Challans = () => {
     }
   };
 
+  // Delivery Challan edit (print fields only — outward challan / job card / stock are not changed)
+  const emptyDcLine = () => ({ main: '', sub: '', qty: '', remarks: '' });
+  const [dcEdit, setDcEdit] = useState({ open: false, loading: false, saving: false, row: null, info: null, form: null });
+
+  const dcInfoToForm = (info) => ({
+    dc_date: info.data.dc_date || '',
+    your_ch_no: info.data.your_ch_no || '',
+    your_ch_date: info.data.your_ch_date || '',
+    po_no: info.data.po_no || '',
+    po_date: info.data.po_date || '',
+    vehicle_no: info.data.vehicle_no || '',
+    notes: info.data.notes || '',
+    lines: (info.data.lines || []).map(l => ({ main: l.main || '', sub: l.sub || '', qty: l.qty || '', remarks: l.remarks || '' }))
+  });
+
+  const openDcEdit = async (row) => {
+    setDcEdit({ open: true, loading: true, saving: false, row, info: null, form: null });
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/outward-challans/${row.id}/delivery-challan`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const info = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(info.message || 'Failed to load Delivery Challan');
+      setDcEdit({ open: true, loading: false, saving: false, row, info, form: dcInfoToForm(info) });
+    } catch (error) {
+      errorToast(error.message || 'Failed to load Delivery Challan');
+      setDcEdit({ open: false, loading: false, saving: false, row: null, info: null, form: null });
+    }
+  };
+
+  const closeDcEdit = () => setDcEdit({ open: false, loading: false, saving: false, row: null, info: null, form: null });
+  const patchDcForm = (patch) => setDcEdit(prev => ({ ...prev, form: { ...prev.form, ...patch } }));
+  const patchDcLine = (idx, patch) => setDcEdit(prev => ({
+    ...prev,
+    form: { ...prev.form, lines: prev.form.lines.map((l, i) => (i === idx ? { ...l, ...patch } : l)) }
+  }));
+
+  const saveDcEdit = async (thenView = false) => {
+    const form = dcEdit.form;
+    const lines = form.lines.filter(l => l.main.trim() || l.sub.trim() || l.qty.trim() || l.remarks.trim());
+    if (!lines.length) {
+      errorToast('Add at least one line on the Delivery Challan');
+      return;
+    }
+    if (lines.some(l => !l.main.trim())) {
+      errorToast('Description is required on every line');
+      return;
+    }
+    setDcEdit(prev => ({ ...prev, saving: true }));
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/outward-challans/${dcEdit.row.id}/delivery-challan`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, lines })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Failed to save Delivery Challan');
+      successToast('Delivery Challan updated');
+      const row = dcEdit.row;
+      closeDcEdit();
+      if (thenView) handleDeliveryChallan(row, 'view');
+    } catch (error) {
+      errorToast(error.message || 'Failed to save Delivery Challan');
+      setDcEdit(prev => ({ ...prev, saving: false }));
+    }
+  };
+
+  const resetDcEdit = async () => {
+    const result = await Swal.fire({
+      title: 'Reset Delivery Challan?',
+      text: 'All edits are removed and the challan prints the system values again.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Reset',
+      confirmButtonColor: '#dc2626'
+    });
+    if (!result.isConfirmed) return;
+    setDcEdit(prev => ({ ...prev, saving: true }));
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/outward-challans/${dcEdit.row.id}/delivery-challan`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const info = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(info.message || 'Failed to reset Delivery Challan');
+      successToast('Delivery Challan reset to system values');
+      setDcEdit(prev => ({ ...prev, saving: false, info, form: dcInfoToForm(info) }));
+    } catch (error) {
+      errorToast(error.message || 'Failed to reset Delivery Challan');
+      setDcEdit(prev => ({ ...prev, saving: false }));
+    }
+  };
+
   // Delivery Challan (paper-form print) — open in a browser tab or download
   const handleDeliveryChallan = async (row, mode = 'view') => {
     const win = mode === 'view' ? window.open('', '_blank') : null;
@@ -415,6 +511,9 @@ const Challans = () => {
     { label: 'Quantity', key: 'dispatch_qty', render: (val) => `${parseFloat(val || 0).toFixed(2)} units` },
     { label: 'Actions', key: 'id', className: 'text-right', render: (_, row) => (
       <div className="flex items-center justify-end gap-1">
+        <button onClick={() => openDcEdit(row)} className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded" title="Edit Delivery Challan">
+          <Edit2 className="w-4 h-4" />
+        </button>
         <button onClick={() => handleDeliveryChallan(row, 'view')} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="View / Print Delivery Challan">
           <Eye className="w-4 h-4" />
         </button>
@@ -670,6 +769,171 @@ const Challans = () => {
                 <CheckCircle className="w-4 h-4" />
                 Update Outward Challan
               </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={dcEdit.open}
+        onClose={() => { if (!dcEdit.saving) closeDcEdit(); }}
+        title="Edit Delivery Challan"
+        maxWidth="max-w-5xl"
+      >
+        {dcEdit.loading || !dcEdit.form ? (
+          <div className="p-6 text-center text-xs text-slate-400">Loading Delivery Challan…</div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-50 rounded border border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    {dcEdit.info.dc_no} <span className="text-slate-400 font-normal">· {dcEdit.info.outward_challan_no}</span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {dcEdit.info.vendor_name}{dcEdit.info.job_card_no ? ` · Job Card ${dcEdit.info.job_card_no}` : ''}{dcEdit.info.operation_name ? ` · ${dcEdit.info.operation_name}` : ''}
+                  </p>
+                </div>
+              </div>
+              {dcEdit.info.edited && dcEdit.info.edited.length > 0 && (
+                <span className="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">Edited</span>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-500 bg-amber-50/60 border border-amber-100 rounded px-2 py-1.5">
+              These changes apply to the printed Delivery Challan only. Outward challan, job card and stock quantities are not changed.
+            </p>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              <FormControl label="D. Ch. Date">
+                <input type="date" value={dcEdit.form.dc_date} onChange={(e) => patchDcForm({ dc_date: e.target.value })}
+                  className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
+              </FormControl>
+              <FormControl label="Your Ch. No.">
+                <input type="text" value={dcEdit.form.your_ch_no} maxLength={100} onChange={(e) => patchDcForm({ your_ch_no: e.target.value })}
+                  className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
+              </FormControl>
+              <FormControl label="Your Ch. Date">
+                <input type="date" value={dcEdit.form.your_ch_date} onChange={(e) => patchDcForm({ your_ch_date: e.target.value })}
+                  className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
+              </FormControl>
+              <FormControl label="P.O. No.">
+                <input type="text" value={dcEdit.form.po_no} maxLength={100} onChange={(e) => patchDcForm({ po_no: e.target.value })}
+                  className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
+              </FormControl>
+              <FormControl label="P.O. Date">
+                <input type="date" value={dcEdit.form.po_date} onChange={(e) => patchDcForm({ po_date: e.target.value })}
+                  className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
+              </FormControl>
+              <FormControl label="Vehicle No.">
+                <input type="text" value={dcEdit.form.vehicle_no} maxLength={50} placeholder="e.g. MH-14-AB-1234"
+                  onChange={(e) => patchDcForm({ vehicle_no: e.target.value.toUpperCase() })}
+                  className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
+              </FormControl>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-slate-700">
+                  <ClipboardList className="w-4 h-4" />
+                  <span className="text-xs font-semibold">Challan Lines</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => patchDcForm({ lines: [...dcEdit.form.lines, emptyDcLine()] })}
+                  className="flex items-center gap-1 text-xs text-indigo-600 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 rounded"
+                >
+                  <Plus className="w-3 h-3" /> Add Line
+                </button>
+              </div>
+              <div className="border border-slate-100 rounded overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-100">
+                    <tr>
+                      <th className="p-2 text-slate-500 font-semibold w-12 text-center">Sr.</th>
+                      <th className="p-2 text-slate-500 font-semibold min-w-[260px]">Description</th>
+                      <th className="p-2 text-slate-500 font-semibold w-28 text-center">Quantity</th>
+                      <th className="p-2 text-slate-500 font-semibold min-w-[180px]">Remarks</th>
+                      <th className="p-2 text-slate-500 font-semibold w-12 text-right"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {dcEdit.form.lines.map((line, idx) => (
+                      <tr key={idx} className="bg-white align-top">
+                        <td className="p-2 text-center text-slate-500 pt-3">{idx + 1}</td>
+                        <td className="p-2 space-y-1">
+                          <input type="text" value={line.main} maxLength={500} placeholder="Description *"
+                            onChange={(e) => patchDcLine(idx, { main: e.target.value })}
+                            className="w-full px-2 py-1.5 border border-slate-200 rounded outline-none focus:border-indigo-500 font-medium" />
+                          <input type="text" value={line.sub} maxLength={500} placeholder="Detail line (optional, small text)"
+                            onChange={(e) => patchDcLine(idx, { sub: e.target.value })}
+                            className="w-full px-2 py-1 border border-slate-100 rounded outline-none focus:border-indigo-500 text-[11px] text-slate-600" />
+                        </td>
+                        <td className="p-2">
+                          <input type="text" value={line.qty} maxLength={50} placeholder="e.g. 2 Nos"
+                            onChange={(e) => patchDcLine(idx, { qty: e.target.value })}
+                            className="w-full px-2 py-1.5 border border-slate-200 rounded outline-none focus:border-indigo-500 text-center" />
+                        </td>
+                        <td className="p-2">
+                          <input type="text" value={line.remarks} maxLength={300}
+                            onChange={(e) => patchDcLine(idx, { remarks: e.target.value })}
+                            className="w-full px-2 py-1.5 border border-slate-200 rounded outline-none focus:border-indigo-500" />
+                        </td>
+                        <td className="p-2 text-right pt-2.5">
+                          <button
+                            type="button"
+                            disabled={dcEdit.form.lines.length <= 1}
+                            onClick={() => patchDcForm({ lines: dcEdit.form.lines.filter((_, i) => i !== idx) })}
+                            className="p-1 text-rose-500 hover:bg-rose-50 rounded disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                            title="Delete line"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <FormControl label="Note (printed under the items)">
+              <textarea rows="2" value={dcEdit.form.notes} maxLength={2000} onChange={(e) => patchDcForm({ notes: e.target.value })}
+                className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 resize-none" />
+            </FormControl>
+
+            <div className="flex flex-wrap justify-between items-center gap-2 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={resetDcEdit}
+                disabled={dcEdit.saving || !(dcEdit.info.edited && dcEdit.info.edited.length)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 rounded disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                title="Remove all edits and use the system values"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reset to System Values
+              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={closeDcEdit} disabled={dcEdit.saving} className="p-2 text-xs text-slate-500 hover:text-slate-700 font-medium">
+                  Cancel
+                </button>
+                <button
+                  onClick={() => saveDcEdit(true)}
+                  disabled={dcEdit.saving}
+                  className="flex items-center gap-2 px-4 py-2 border border-indigo-200 text-indigo-600 rounded text-xs hover:bg-indigo-50 font-semibold disabled:opacity-60"
+                >
+                  <Eye className="w-4 h-4" /> Save & View
+                </button>
+                <button
+                  onClick={() => saveDcEdit(false)}
+                  disabled={dcEdit.saving}
+                  className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 font-semibold disabled:opacity-60"
+                >
+                  <CheckCircle className="w-4 h-4" /> {dcEdit.saving ? 'Saving…' : 'Update Delivery Challan'}
+                </button>
+              </div>
             </div>
           </div>
         )}
