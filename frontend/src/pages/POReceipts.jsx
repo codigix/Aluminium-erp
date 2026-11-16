@@ -579,14 +579,16 @@ const POReceipts = () => {
     }
     return pending;
   };
+  // Direct Company Purchase POs have no drawing when none was entered — they are listed by PO number
+  const isDirectPurchasePo = (po) => String(po.po_type || '').toUpperCase() === 'DIRECT_COMPANY';
   const grnDrawingOptions = purchaseOrders
-    .filter(po => po.drawing_no)
+    .filter(po => po.drawing_no || isDirectPurchasePo(po))
     .map(po => ({ po, pendingLines: getPoPendingLineCount(po) }))
     .filter(({ po, pendingLines }) =>
       String(po.id) === String(formData.poId) || // keep the PO already chosen in this form
       (!GRN_HIDDEN_PO_STATUSES.includes(String(po.status || '').toUpperCase()) && pendingLines > 0))
     .map(({ po, pendingLines }) => ({
-      label: `${po.drawing_no} · ${po.po_number || `PO #${po.id}`} - ${po.finished_good || 'No description'}${pendingLines > 0 ? ` (${pendingLines} item${pendingLines > 1 ? 's' : ''} pending)` : ''}`,
+      label: `${po.drawing_no || 'Direct Purchase'} · ${po.po_number || `PO #${po.id}`} - ${po.finished_good || (isDirectPurchasePo(po) ? (po.company_name || 'Direct Purchase') : 'No description')}${pendingLines > 0 ? ` (${pendingLines} item${pendingLines > 1 ? 's' : ''} pending)` : ''}`,
       value: String(po.id)
     }));
 

@@ -173,6 +173,7 @@ const PurchaseOrders = () => {
 
   const [vendors, setVendors] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [masterCompanies, setMasterCompanies] = useState([]);
   const [stockItems, setStockItems] = useState([]);
   const [materialRequests, setMaterialRequests] = useState([]);
   const [showManualCreateModal, setShowManualCreateModal] = useState(false);
@@ -234,6 +235,14 @@ const PurchaseOrders = () => {
 
   const [showAddPoItem, setShowAddPoItem] = useState(false);
   const [editingPoItemIndex, setEditingPoItemIndex] = useState(null);
+  // Add-item form tab: 'AUTO' = existing material-master entry (unchanged), 'MANUAL' = every field typed in
+  const [poEntryMode, setPoEntryMode] = useState('AUTO');
+  const emptyManualPoEntry = () => ({
+    drawing_no: '', item_code: '', material_name: '', mat_select: '', design_qty: 1, unit: 'NOS', weight: '', rate: '', remarks: '',
+    // optional size (mm) — saved on the line; picking an item from the master pre-fills it
+    shape_type: '', length: '', width: '', thickness: '', diameter: ''
+  });
+  const [manualPoEntry, setManualPoEntry] = useState(emptyManualPoEntry);
   const [newPoItem, setNewPoItem] = useState({
     item_code: '',
     drawing_no: '',
@@ -323,6 +332,19 @@ const PurchaseOrders = () => {
       }
     } catch (error) {
       console.error('Error fetching companies:', error);
+    }
+    // Company Master (own / billing companies) — also offered in the Direct PO "Company" list
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_BASE}/admin-company-master/options`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMasterCompanies(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error('Error fetching company master:', error);
     }
   };
 
@@ -618,13 +640,25 @@ const PurchaseOrders = () => {
     return opts;
   }, [availableDrawings]);
 
+  // Customer Master (companies) + Company Master in one searchable list.
+  // A Company Master name that already exists as a customer is shown once (the customer record is used).
+  // Otherwise its value is the name — saved like a typed company name (existing Direct PO behaviour).
   const companyOptions = React.useMemo(() => {
-    return (companies || []).map(c => ({
+    const opts = (companies || []).map(c => ({
       label: c.company_name || c.name || '',
       value: c.id,
-      company_name: c.company_name || c.name || ''
+      company_name: c.company_name || c.name || '',
+      sublabel: ['Customer Master', c.company_code, c.gstin].filter(Boolean).join(' · ')
     }));
-  }, [companies]);
+    const have = new Set(opts.map(o => String(o.label).trim().toLowerCase()));
+    (masterCompanies || []).forEach(m => {
+      const name = String(m.company_name || m.name || '').trim();
+      if (!name || have.has(name.toLowerCase())) return;
+      have.add(name.toLowerCase());
+      opts.push({ label: name, value: name, company_name: name, sublabel: ['Company Master', m.gstin].filter(Boolean).join(' · ') });
+    });
+    return opts.sort((a, b) => String(a.label).localeCompare(String(b.label)));
+  }, [companies, masterCompanies]);
 
   const vendorOptions = React.useMemo(() => {
     return (vendors || []).map(v => ({
@@ -883,6 +917,104 @@ const PurchaseOrders = () => {
       remarks: ''
     });
     setShowAddPoItem(false);
+  };
+
+  // Manual Entry tab: line built only from what was typed. Stored like the other lines
+  // (Kg lines: quantity = total weight, design_qty = pieces) and the amount uses the same ERP rule as the items table.
+  const buildManualPoLine = (m) => {
+    const qty = parseFloat(m.design_qty) || 0;
+    const weight = parseFloat(m.weight) || 0;
+    const isKg = String(m.unit || '').toUpperCase() === 'KG';
+    const line = {
+      item_code: String(m.item_code || '').trim(),
+      drawing_no: String(m.drawing_no || '').trim(),
+      material_name: String(m.material_name || '').trim(),
+      description: String(m.material_name || '').trim(),
+      quantity: isKg && weight > 0 ? weight : qty,
+      design_qty: qty,
+      weight_per_unit: qty > 0 && weight > 0 ? Number((weight / qty).toFixed(4)) : 0,
+      total_weight: weight,
+      unit: isKg ? 'Kg' : (m.unit || 'NOS'),
+      rate: parseFloat(m.rate) || 0,
+      remarks: String(m.remarks || '').trim(),
+      item_note: String(m.remarks || '').trim(),
+      shape_type: String(m.shape_type || '').trim(), material_type: '', item_group: '', density: 0,
+      length: parseFloat(m.length) || 0, width: parseFloat(m.width) || 0, thickness: parseFloat(m.thickness) || 0,
+      diameter: parseFloat(m.diameter) || 0, outer_diameter: 0, thread_pitch: 0,
+      entry_mode: 'MANUAL'
+    };
+    line.amount = calculateItemAmount(line);
+    return line;
+  };
+
+  // Manual Entry → Material / Description dropdown: every item in the item master (one row per item code)
+  const manualMaterialOptions = React.useMemo(() => {
+    const seen = new Set();
+    const list = [];
+    (stockItems || []).forEach(si => {
+      const code = si.item_code ? String(si.item_code).trim() : '';
+      if (!code || seen.has(code.toUpperCase())) return;
+      seen.add(code.toUpperCase());
+      const name = String(si.material_name || si.item_description || si.description || '').trim();
+      list.push({
+        value: code,
+        label: name ? `${name}` : code,
+        sublabel: [code, si.material_type || si.item_group, si.unit].filter(Boolean).join(' · '),
+        item: si
+      });
+    });
+    return list.sort((a, b) => String(a.label).localeCompare(String(b.label)));
+  }, [stockItems]);
+
+  // Picking an item fills Item Code (+ UOM, rate) automatically; typing a new text keeps it as the description
+  const handleManualMaterialPick = (val) => {
+    const opt = manualMaterialOptions.find(o => String(o.value) === String(val));
+    if (opt) {
+      const si = opt.item;
+      const unit = String(si.unit || '').toUpperCase();
+      const knownUnits = ['NOS', 'KG', 'MTR', 'SET', 'LTR', 'SQM', 'GM', 'TON'];
+      const rate = parseFloat(si.valuation_rate) || parseFloat(si.standard_rate) || parseFloat(si.rate) || 0;
+      const dim = (v) => (parseFloat(v) > 0 ? String(parseFloat(v)) : '');
+      const shapeName = si.shape_type || si.shape_name || (shapes.find(s => String(s.id) === String(si.shape_id))?.name) || '';
+      setManualPoEntry(prev => ({
+        ...prev,
+        // size from the item master (editable)
+        shape_type: shapeName,
+        length: dim(si.length), width: dim(si.width), thickness: dim(si.thickness), diameter: dim(si.diameter),
+        mat_select: opt.value,
+        item_code: opt.value,
+        material_name: opt.label,
+        unit: knownUnits.includes(unit) ? unit : prev.unit,
+        rate: rate > 0 && !(parseFloat(prev.rate) > 0) ? String(rate) : prev.rate,
+        drawing_no: prev.drawing_no || (si.drawing_no && !['N/A', '—', '-'].includes(String(si.drawing_no).trim()) ? String(si.drawing_no).trim() : '')
+      }));
+    } else {
+      setManualPoEntry(prev => ({ ...prev, mat_select: val, material_name: val }));
+    }
+  };
+
+  const handleCommitManualPoEntry = () => {
+    const m = manualPoEntry;
+    if (!String(m.item_code || '').trim() && !String(m.material_name || '').trim()) {
+      errorToast('Enter the Item Code or Material name');
+      return;
+    }
+    if (!(parseFloat(m.design_qty) > 0)) {
+      errorToast('Design Qty must be greater than 0');
+      return;
+    }
+    if (String(m.unit || '').toUpperCase() === 'KG' && !(parseFloat(m.weight) > 0)) {
+      errorToast('Enter the Weight (Kg) for a Kg-billed line');
+      return;
+    }
+    if (!(parseFloat(m.rate) > 0)) {
+      errorToast('Enter the Rate');
+      return;
+    }
+    const line = buildManualPoLine({ ...m, item_code: String(m.item_code || '').trim() || String(m.material_name || '').trim() });
+    setManualFormData(prev => ({ ...prev, items: [...prev.items, line] }));
+    successToast('Manual item added to Purchase Order');
+    setManualPoEntry(emptyManualPoEntry());
   };
 
   const handleManualItemChange = (index, field, value) => {
@@ -2957,7 +3089,8 @@ const PurchaseOrders = () => {
                             options={companyOptions}
                             value={manualFormData.companyId}
                             onChange={(e) => setManualFormData(prev => ({ ...prev, companyId: e.target.value }))}
-                            placeholder="Search or enter company name..."
+                            placeholder="Search Customer Master / Company Master or enter name..."
+                            subLabelField="sublabel"
                             allowCustom={true}
                             showSearchIcon={true}
                           />
@@ -3257,13 +3390,200 @@ const PurchaseOrders = () => {
                     });
                   };
 
+                  // Automatic Entry (existing form) | Manual Entry (all fields typed in). Editing a line uses the existing form.
+                  const entryTabs = editingPoItemIndex === null && (
+                    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+                      {[['AUTO', 'Automatic Entry'], ['MANUAL', 'Manual Entry']].map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setPoEntryMode(id)}
+                          className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${poEntryMode === id ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  );
+
+                  if (editingPoItemIndex === null && poEntryMode === 'MANUAL') {
+                    const m = manualPoEntry;
+                    const preview = buildManualPoLine(m);
+                    const setM = (field, value) => setManualPoEntry(prev => ({ ...prev, [field]: value }));
+                    const inputCls = 'w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none';
+                    const billedByWeight = isWeightBasedItem(preview);
+                    return (
+                      <div className="p-4 bg-slate-50 border-slate-200 border-b space-y-3 animate-in fade-in duration-150">
+                        <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                          <div className="flex items-center gap-3">
+                            <h5 className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-violet-600"></span>
+                              Add Purchase Order Item
+                            </h5>
+                            {entryTabs}
+                          </div>
+                          <button type="button" onClick={resetPoItemForm} className="p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-600 transition-colors" title="Close form">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-500">Pick a drawing / item from the dropdowns or type your own — every field stays editable. The line goes into the same items table below.</p>
+
+                        <div className="grid grid-cols-12 gap-3 items-end">
+                          <div className="col-span-12 md:col-span-3 space-y-1">
+                            <label className="text-xs text-slate-600 font-semibold block">Drawing No. <span className="text-[10px] text-slate-400 font-normal">(Optional)</span></label>
+                            <SearchableSelect
+                              placeholder="Search or enter Drawing No..."
+                              options={drawingOptions}
+                              value={m.drawing_no || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const matchedDwg = drawingOptions.find(d => String(d.value).toLowerCase() === String(val || '').toLowerCase());
+                                setManualPoEntry(prev => ({
+                                  ...prev,
+                                  drawing_no: val,
+                                  // drawing text fills an empty Material / Description
+                                  material_name: !prev.material_name && matchedDwg?.description ? matchedDwg.description : prev.material_name,
+                                  mat_select: !prev.material_name && matchedDwg?.description ? matchedDwg.description : prev.mat_select
+                                }));
+                              }}
+                              allowCustom={true}
+                              showSearchIcon={true}
+                              className="font-mono"
+                              renderOption={(opt) => (
+                                <div className="flex flex-col py-0.5">
+                                  <span className="font-bold text-slate-800 font-mono text-xs">{opt.value}</span>
+                                  {opt.description && (
+                                    <span className="text-[11px] text-slate-500 font-normal truncate max-w-[280px]">{opt.description}</span>
+                                  )}
+                                </div>
+                              )}
+                            />
+                          </div>
+                          <div className="col-span-12 md:col-span-3 space-y-1">
+                            <label className="text-xs text-slate-600 font-semibold block">Item Code <span className="text-rose-500">*</span></label>
+                            <input type="text" maxLength={120} className={`${inputCls} font-semibold`} placeholder="e.g. RM-AL6061-001" value={m.item_code} onChange={(e) => setM('item_code', e.target.value)} />
+                          </div>
+                          <div className="col-span-12 md:col-span-6 space-y-1">
+                            <label className="text-xs text-slate-600 font-semibold block">Material / Description <span className="text-rose-500">*</span></label>
+                            <SearchableSelect
+                              placeholder={`Search item master (${manualMaterialOptions.length}) or type a new description…`}
+                              options={manualMaterialOptions}
+                              value={m.mat_select}
+                              onChange={(e) => handleManualMaterialPick(e.target.value)}
+                              labelField="label"
+                              valueField="value"
+                              subLabelField="sublabel"
+                              allowCustom={true}
+                              showSearchIcon={true}
+                              className="font-medium"
+                              renderOption={(opt) => (
+                                <div className="flex items-center justify-between gap-2 py-0.5 w-full">
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="text-slate-800 font-semibold truncate">{opt.label}</span>
+                                    <span className="text-[10.5px] text-slate-400 font-mono truncate">{opt.sublabel}</span>
+                                  </div>
+                                </div>
+                              )}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-12 gap-3 items-end">
+                          <div className="col-span-6 md:col-span-2 space-y-1">
+                            <label className="text-xs text-slate-600 font-semibold block">Design Qty <span className="text-rose-500">*</span></label>
+                            <input type="number" step="any" min="0" className={`${inputCls} text-center font-semibold`} value={m.design_qty} onChange={(e) => setM('design_qty', e.target.value)} />
+                          </div>
+                          <div className="col-span-6 md:col-span-2 space-y-1">
+                            <label className="text-xs text-slate-600 font-semibold block">Billing UOM</label>
+                            <select className={inputCls} value={m.unit} onChange={(e) => setM('unit', e.target.value)}>
+                              {['NOS', 'KG', 'MTR', 'SET', 'LTR', 'SQM', 'GM', 'TON'].map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                          </div>
+                          <div className="col-span-6 md:col-span-2 space-y-1">
+                            <label className="text-xs text-slate-600 font-semibold block">Weight (Kg) {String(m.unit).toUpperCase() === 'KG' ? <span className="text-rose-500">*</span> : <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>}</label>
+                            <input type="number" step="any" min="0" className={`${inputCls} text-center`} placeholder="Total kg" value={m.weight} onChange={(e) => setM('weight', e.target.value)} />
+                          </div>
+                          <div className="col-span-6 md:col-span-2 space-y-1">
+                            <label className="text-xs text-slate-600 font-semibold block">Rate (₹) <span className="text-rose-500">*</span> <span className="text-[10px] text-slate-400 font-normal">{billedByWeight ? '/ Kg' : `/ ${m.unit || 'NOS'}`}</span></label>
+                            <input type="number" step="any" min="0" className={`${inputCls} text-center font-medium`} placeholder="0.00" value={m.rate} onChange={(e) => setM('rate', e.target.value)} />
+                          </div>
+                          <div className="col-span-12 md:col-span-4 space-y-1">
+                            <label className="text-xs text-slate-600 font-semibold block">Remark (PDF) <span className="font-normal text-slate-400">— shown in ( ) under Size</span></label>
+                            <input type="text" maxLength={500} className={inputCls} placeholder="Enter remarks or specifications..." value={m.remarks} onChange={(e) => setM('remarks', e.target.value)} />
+                          </div>
+                        </div>
+
+                        {/* Optional size (mm) — pre-filled from the item master when an item is picked */}
+                        <div className="p-3 bg-white rounded border border-slate-200 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-indigo-700 text-xs font-semibold">
+                              <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                              Size (mm) <span className="text-[10px] text-slate-400 font-normal">(Optional — printed on the PO)</span>
+                            </div>
+                            {(m.shape_type || m.length || m.width || m.thickness || m.diameter) && (
+                              <button type="button" onClick={() => setManualPoEntry(prev => ({ ...prev, shape_type: '', length: '', width: '', thickness: '', diameter: '' }))}
+                                className="text-[10.5px] text-slate-500 hover:text-rose-600 underline">
+                                Clear size
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-[11px] text-slate-500 font-medium">Shape</label>
+                              <select className={inputCls} value={m.shape_type} onChange={(e) => setM('shape_type', e.target.value)}>
+                                <option value="">— None —</option>
+                                {shapes.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                {m.shape_type && !shapes.some(s => s.name === m.shape_type) && <option value={m.shape_type}>{m.shape_type}</option>}
+                              </select>
+                            </div>
+                            {[['length', 'Length'], ['width', 'Width'], ['thickness', 'Thickness'], ['diameter', 'Diameter']].map(([f, label]) => (
+                              <div key={f} className="space-y-1">
+                                <label className="text-[11px] text-slate-500 font-medium">{label}</label>
+                                <input type="number" step="any" min="0" className={`${inputCls} text-center`} placeholder="0" value={m[f]} onChange={(e) => setM(f, e.target.value)} />
+                              </div>
+                            ))}
+                          </div>
+                          {!(m.length || m.width || m.thickness || m.diameter) && m.item_code && (
+                            <p className="text-[10.5px] text-amber-600">No size entered — the PO will show the item master's size for {m.item_code} if it has only one size.</p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 pt-1">
+                          <div className="text-right mr-1">
+                            <div className="text-[10px] text-slate-400 uppercase font-semibold">Amount</div>
+                            <div className="text-sm font-bold text-blue-600">{formatCurrency(preview.amount || 0)}</div>
+                            <div className="text-[10px] text-slate-400">
+                              {billedByWeight
+                                ? `${Number(preview.total_weight || preview.quantity || 0).toFixed(3)} Kg × ₹${parseFloat(m.rate) || 0}`
+                                : `${parseFloat(m.design_qty) || 0} ${m.unit || 'NOS'} × ₹${parseFloat(m.rate) || 0}`}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleCommitManualPoEntry}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition-all active:scale-95 flex items-center gap-1.5"
+                          >
+                            <Plus size={14} />
+                            Add Item
+                          </button>
+                          <button type="button" onClick={() => setManualPoEntry(emptyManualPoEntry())} className="p-2 border border-slate-200 hover:bg-slate-100 text-slate-500 rounded text-xs transition-all" title="Clear">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div className={`p-4 ${editingPoItemIndex !== null ? 'bg-amber-50/40 border-amber-200' : 'bg-slate-50 border-slate-200'} border-b space-y-3 animate-in fade-in duration-150`}>
                       <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                        <div className="flex items-center gap-3">
                         <h5 className="text-xs font-bold text-slate-800 flex items-center gap-2">
                           <span className={`w-2 h-2 rounded-full ${editingPoItemIndex !== null ? 'bg-amber-500' : 'bg-blue-600'}`}></span>
                           {editingPoItemIndex !== null ? `Edit Purchase Order Item (Item #${editingPoItemIndex + 1})` : 'Add Purchase Order Item'}
                         </h5>
+                        {entryTabs}
+                        </div>
                         <button
                           type="button"
                           onClick={resetPoItemForm}
@@ -3885,6 +4205,11 @@ const PurchaseOrders = () => {
                             <div className="flex flex-col gap-0.5">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-bold text-xs text-slate-800">{item.item_code}</span>
+                                {item.entry_mode === 'MANUAL' && (
+                                  <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 bg-violet-50 text-violet-700 rounded border border-violet-200" title="Added from Manual Entry">
+                                    Manual
+                                  </span>
+                                )}
                                 {item.shape_type && (
                                   <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200">
                                     {item.shape_type}
