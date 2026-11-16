@@ -128,16 +128,23 @@ const journalLines = async (match) => {
   return out;
 };
 
-const customerEntries = async (customerId) => {
-  const [[cust]] = await pool.query('SELECT id, company_name FROM companies WHERE id = ?', [customerId]);
-  if (!cust) throw httpError('Customer not found', 404);
+// A ledger id may be several master records with the same name ('12,45') — Tally keeps one ledger per name
+const idList = (v) => [...new Set(String(v || '').split(',').map(s => parseInt(s, 10)).filter(Number.isFinite))];
+
+const customerEntries = async (customerIdRaw) => {
+  const ids = idList(customerIdRaw);
+  if (!ids.length) throw httpError('Customer not found', 404);
+  const [custRows] = await pool.query('SELECT id, company_name FROM companies WHERE id IN (?) ORDER BY id', [ids]);
+  if (!custRows.length) throw httpError('Customer not found', 404);
+  const cust = custRows[0];
+  const customerId = custRows.map(c => c.id);
   const list = [];
 
   const [inv] = await pool.query(
     `SELECT si.id, si.invoice_no, si.invoice_date, si.customer_po_no, si.total_amount, si.subtotal, si.notes, si.created_at,
             COALESCE(si.host_company_id, o.host_company_id) AS host_company_id, o.order_no
      FROM sales_invoices si LEFT JOIN orders o ON o.id = si.order_id
-     WHERE si.client_id = ? AND si.sent_to_accounts = 1`,
+     WHERE si.client_id IN (?) AND si.sent_to_accounts = 1`,
     [customerId]
   );
   inv.forEach(r => list.push(entry({
@@ -152,7 +159,7 @@ const customerEntries = async (customerId) => {
      FROM customer_payments cp
      LEFT JOIN bank_accounts b ON b.id = cp.bank_account_id
      LEFT JOIN sales_invoices si ON si.id = cp.invoice_id
-     WHERE cp.customer_id = ? AND cp.status = 'CONFIRMED'`,
+     WHERE cp.customer_id IN (?) AND cp.status = 'CONFIRMED'`,
     [customerId]
   );
   rec.forEach(r => list.push(entry({
@@ -163,7 +170,7 @@ const customerEntries = async (customerId) => {
     doc: { kind: 'RECEIPT', id: r.id }, created_at: r.created_at
   })));
 
-  const [cns] = await pool.query("SELECT * FROM credit_notes WHERE customer_id = ? AND status = 'POSTED'", [customerId]);
+  const [cns] = await pool.query("SELECT * FROM credit_notes WHERE customer_id IN (?) AND status = 'POSTED'", [customerId]);
   cns.forEach(r => list.push(entry({
     date: r.voucher_date || r.created_at, particulars: r.affected_ledger || 'Credit Note', sub: r.reason,
     voucher_type: 'Credit Note', voucher_no: r.voucher_no, ref_no: r.reference_invoice_no,
@@ -176,12 +183,16 @@ const customerEntries = async (customerId) => {
   return { ledger: { type: 'CUSTOMER', id: cust.id, name: cust.company_name, group: 'Sundry Debtors' }, opening: 0, entries: list };
 };
 
-const supplierEntries = async (vendorId) => {
-  const [[ven]] = await pool.query('SELECT id, vendor_name FROM vendors WHERE id = ?', [vendorId]);
-  if (!ven) throw httpError('Supplier not found', 404);
+const supplierEntries = async (vendorIdRaw) => {
+  const ids = idList(vendorIdRaw);
+  if (!ids.length) throw httpError('Supplier not found', 404);
+  const [venRows] = await pool.query('SELECT id, vendor_name FROM vendors WHERE id IN (?) ORDER BY id', [ids]);
+  if (!venRows.length) throw httpError('Supplier not found', 404);
+  const ven = venRows[0];
+  const vendorId = venRows.map(v => v.id);
   const list = [];
 
-  const [bills] = await pool.query(`${BILL_SQL} WHERE vi.vendor_id = ?`, [vendorId]);
+  const [bills] = await pool.query(`${BILL_SQL} WHERE vi.vendor_id IN (?)`, [vendorId]);
   bills.forEach(r => list.push(entry({
     date: r.bill_date || r.created_at, particulars: 'Purchase @ GST', sub: r.po_number ? `PO ${r.po_number}` : null,
     voucher_type: 'Purchase', voucher_no: r.display_invoice_no, ref_no: r.po_number,
@@ -194,7 +205,7 @@ const supplierEntries = async (vendorId) => {
      FROM payments p
      LEFT JOIN bank_accounts b ON b.id = p.bank_account_id
      LEFT JOIN purchase_orders po ON po.id = p.po_id
-     WHERE p.vendor_id = ? AND p.status = 'CONFIRMED'`,
+     WHERE p.vendor_id IN (?) AND p.status = 'CONFIRMED'`,
     [vendorId]
   );
   pays.forEach(r => list.push(entry({
@@ -205,7 +216,7 @@ const supplierEntries = async (vendorId) => {
     doc: { kind: 'PAYMENT', id: r.id }, created_at: r.created_at
   })));
 
-  const [dns] = await pool.query("SELECT * FROM debit_notes WHERE vendor_id = ? AND status = 'POSTED'", [vendorId]);
+  const [dns] = await pool.query("SELECT * FROM debit_notes WHERE vendor_id IN (?) AND status = 'POSTED'", [vendorId]);
   dns.forEach(r => list.push(entry({
     date: r.voucher_date || r.created_at, particulars: r.affected_ledger || 'Debit Note', sub: r.reason,
     voucher_type: 'Debit Note', voucher_no: r.voucher_no, ref_no: r.reference_invoice_no,
@@ -358,9 +369,22 @@ const getLedgerOptions = async () => {
   const others = [...new Set([...jv, ...dnL, ...cnL].map(r => r.name).filter(n => n && !isDebtorLedger(n) && !isCreditorLedger(n)))].sort();
   const withActivity = new Set(customers.map(c => c.id));
   const supActivity = new Set(suppliers.map(s => s.id));
+  // Same name registered more than once → one ledger (id = '12,45'); its statement covers every record
+  const mergeByName = (rows, active) => {
+    const byName = new Map();
+    rows.forEach(r => {
+      const key = String(r.name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+      if (!key) return;
+      if (!byName.has(key)) byName.set(key, { name: String(r.name).trim(), ids: [], has_entries: false });
+      const g = byName.get(key);
+      g.ids.push(r.id);
+      if (active.has(r.id)) g.has_entries = true;
+    });
+    return [...byName.values()].map(g => ({ id: g.ids.join(','), name: g.name, has_entries: g.has_entries, records: g.ids.length }));
+  };
   return {
-    customers: allCustomers.map(c => ({ ...c, has_entries: withActivity.has(c.id) })),
-    suppliers: allSuppliers.map(s => ({ ...s, has_entries: supActivity.has(s.id) })),
+    customers: mergeByName(allCustomers, withActivity),
+    suppliers: mergeByName(allSuppliers, supActivity),
     banks: banks.map(b => ({ id: b.id, name: b.account_number ? `${b.bank_name} (${b.account_number})` : b.bank_name, is_active: b.is_active })),
     cash: [{ id: 'CASH', name: 'Cash' }],
     others: others.map(n => ({ id: n, name: n }))

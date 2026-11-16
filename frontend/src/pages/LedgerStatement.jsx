@@ -121,7 +121,7 @@ const LedgerStatement = () => {
         all.push({
           value: `${t.id}|${l.id}`,
           label: l.name,
-          sublabel: `${GROUP[t.id]}${party ? (l.has_entries ? ' · has vouchers' : ' · no posted vouchers yet') : ''}`,
+          sublabel: `${GROUP[t.id]}${party ? (l.has_entries ? ' · has vouchers' : ' · no posted vouchers yet') : ''}${l.records > 1 ? ` · ${l.records} records merged` : ''}`,
           active: !party || l.has_entries
         });
       });
@@ -459,7 +459,11 @@ const LedgerStatement = () => {
                   ))}
                   {data && shownRows.length === 0 && (
                     <tr><td colSpan={9} className="px-4 py-10 text-center text-slate-400 italic">
-                      {filtered ? 'No voucher matches the filter.' : 'No vouchers in this period.'}
+                      {filtered
+                        ? 'No voucher matches the filter.'
+                        : (ledgerList.find(l => l.value === ledgerKey)?.active === false
+                          ? 'This ledger has no posted vouchers yet — no bill / invoice, payment / receipt, debit or credit note has been posted for it.'
+                          : 'No vouchers in this period — try All Time or another financial year.')}
                     </td></tr>
                   )}
                 </tbody>
