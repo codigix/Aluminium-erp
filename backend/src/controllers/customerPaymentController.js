@@ -3,8 +3,10 @@ const customerPaymentService = require('../services/customerPaymentService');
 const recordPaymentReceived = async (req, res, next) => {
   try {
     const userId = req.user?.id;
+    // receiptNoOverride is only for Payment History edit (same receipt no.), never from a request body
+    const { receiptNoOverride, ...body } = req.body || {};
     const result = await customerPaymentService.recordPaymentReceived({
-      ...req.body,
+      ...body,
       createdBy: userId
     });
     res.status(201).json({

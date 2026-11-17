@@ -101,6 +101,7 @@ const journalLines = async (match) => {
     `SELECT jv.id, jv.voucher_no, jv.voucher_date, jv.reference_no, jv.narration, jv.host_company_id, jv.created_at,
             jvi.id AS item_id, jvi.ledger_account, jvi.debit_amount, jvi.credit_amount
      FROM journal_vouchers jv JOIN journal_voucher_items jvi ON jvi.journal_voucher_id = jv.id
+     WHERE COALESCE(jv.status, 'POSTED') <> 'CANCELLED'
      ORDER BY jv.id, jvi.id`
   );
   const byVoucher = new Map();
@@ -256,7 +257,10 @@ const bankEntries = async (bankId) => {
     doc: { kind: 'PAYMENT', id: r.id }, created_at: r.created_at
   })));
 
-  const [cvs] = await pool.query('SELECT * FROM contra_vouchers WHERE from_bank_account_id = ? OR to_bank_account_id = ?', [bankId, bankId]);
+  const [cvs] = await pool.query(
+    "SELECT * FROM contra_vouchers WHERE (from_bank_account_id = ? OR to_bank_account_id = ?) AND COALESCE(status, 'POSTED') <> 'CANCELLED'",
+    [bankId, bankId]
+  );
   cvs.forEach(r => {
     const amt = parseFloat(r.amount) || 0;
     if (String(r.to_bank_account_id) === String(bankId)) list.push(entry({
@@ -298,7 +302,7 @@ const cashEntries = async () => {
     credit: parseFloat(r.payment_amount) || 0, narration: r.remarks, host_company_id: r.host_company_id,
     doc: { kind: 'PAYMENT', id: r.id }, created_at: r.created_at
   })));
-  const [cvs] = await pool.query('SELECT * FROM contra_vouchers');
+  const [cvs] = await pool.query("SELECT * FROM contra_vouchers WHERE COALESCE(status, 'POSTED') <> 'CANCELLED'");
   cvs.forEach(r => {
     const amt = parseFloat(r.amount) || 0;
     const toCash = !r.to_bank_account_id && /cash/i.test(r.to_account || '');

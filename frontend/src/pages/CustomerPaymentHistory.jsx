@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   History, RefreshCw, Download, Send, Calendar, User, FileText, 
   Building2, Filter, X, CheckCircle2, Eye, Printer, FileCheck, 
   Wallet, ArrowDownRight, ArrowUpRight, BookOpen, Layers, 
   Search, Building, CreditCard, Check, AlertCircle, ArrowRightLeft,
-  ArrowRight, ArrowLeftRight
+  ArrowRight, ArrowLeftRight, Pencil, Ban, Loader2
 } from 'lucide-react';
 import { DataTable, Button, SearchableSelect } from '../components/ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
@@ -57,7 +58,22 @@ const getRefNo = (row) => {
 // Download and email buttons in the list rows are hidden; the voucher view dialog keeps its own Download / Print
 const SHOW_ROW_DOCUMENT_ACTIONS = false;
 
+// Row kind → /vouchers/:kind API (edit / cancel / history)
+const VOUCHER_API_KIND = {
+  CUSTOMER_RECEIPT: 'receipt',
+  VENDOR_PAYMENT: 'payment',
+  JOURNAL_VOUCHER: 'journal',
+  CONTRA_VOUCHER: 'contra',
+  DEBIT_NOTE: 'debit-note',
+  CREDIT_NOTE: 'credit-note'
+};
+// Debit / credit notes are GST documents: they can be cancelled, not edited
+const EDITABLE_KINDS = new Set(['CUSTOMER_RECEIPT', 'VENDOR_PAYMENT', 'JOURNAL_VOUCHER', 'CONTRA_VOUCHER']);
+const PAYMENT_MODE_OPTIONS = ['NEFT', 'RTGS', 'IMPS', 'BANK_TRANSFER', 'UPI', 'CHEQUE', 'CASH', 'CARD', 'DD'];
+const ymd = (v) => (v ? String(v).slice(0, 10) : '');
+
 const CustomerPaymentHistory = () => {
+  const navigate = useNavigate();
   // Raw Data States
   const [customerPayments, setCustomerPayments] = useState([]);
   const [vendorPayments, setVendorPayments] = useState([]);
@@ -87,6 +103,12 @@ const CustomerPaymentHistory = () => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedVoucherForEmail, setSelectedVoucherForEmail] = useState(null);
   const [emailData, setEmailData] = useState({ to: '', subject: '', message: '' });
+
+  // Edit / cancel (reversal) of vouchers; cancelled vouchers are kept and shown only on request
+  const [showCancelled, setShowCancelled] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState(null); // { row, preview, loading, reason, saving, error }
+  const [editTarget, setEditTarget] = useState(null); // { row, form, reason, saving, error }
+  const [historyTarget, setHistoryTarget] = useState(null); // { row, entries, loading }
 
   useEffect(() => {
     fetchAllVoucherData();
@@ -167,22 +189,28 @@ const CustomerPaymentHistory = () => {
       };
 
       // Parallel fetch for Customer Payments, Vendor Payments, Journal Vouchers, and Contra Vouchers
-      const [cpRes, vpRes, jvRes, cvRes, dnRes, cnRes] = await Promise.all([
+      // Cancelled vouchers are loaded too; they are left out of every total and shown only with "Show cancelled"
+      const [cpRes, vpRes, jvRes, cvRes, dnRes, cnRes, cpCancelledRes, vpCancelledRes] = await Promise.all([
         fetch(`${API_BASE}/customer-payments?status=CONFIRMED`, { headers: authHeaders }),
         fetch(`${API_BASE}/payments?status=CONFIRMED`, { headers: authHeaders }),
-        fetch(`${API_BASE}/payments/journal`, { headers: authHeaders }),
-        fetch(`${API_BASE}/payments/contra`, { headers: authHeaders }),
+        fetch(`${API_BASE}/payments/journal?includeCancelled=1`, { headers: authHeaders }),
+        fetch(`${API_BASE}/payments/contra?includeCancelled=1`, { headers: authHeaders }),
         fetch(`${API_BASE}/payments/debit-notes`, { headers: authHeaders }).catch(() => null),
-        fetch(`${API_BASE}/customer-payments/credit-notes`, { headers: authHeaders }).catch(() => null)
+        fetch(`${API_BASE}/customer-payments/credit-notes`, { headers: authHeaders }).catch(() => null),
+        fetch(`${API_BASE}/customer-payments?status=CANCELLED`, { headers: authHeaders }).catch(() => null),
+        fetch(`${API_BASE}/payments?status=CANCELLED`, { headers: authHeaders }).catch(() => null)
       ]);
+      const readList = async (res) => {
+        if (!res || !res.ok) return [];
+        const data = await res.json();
+        return Array.isArray(data) ? data : [];
+      };
 
       if (cpRes.ok) {
-        const data = await cpRes.json();
-        setCustomerPayments(Array.isArray(data) ? data : []);
+        setCustomerPayments([...(await readList(cpRes)), ...(await readList(cpCancelledRes))]);
       }
       if (vpRes.ok) {
-        const data = await vpRes.json();
-        setVendorPayments(Array.isArray(data) ? data : []);
+        setVendorPayments([...(await readList(vpRes)), ...(await readList(vpCancelledRes))]);
       }
       if (jvRes.ok) {
         const data = await jvRes.json();
@@ -205,6 +233,104 @@ const CustomerPaymentHistory = () => {
       errorToast('Failed to fetch voucher history');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── Edit / cancel / history of a voucher (backend: /vouchers/:kind/:id) ──
+  const voucherRequest = async (path, options = {}) => {
+    const token = localStorage.getItem('authToken');
+    const res = await fetch(`${API_BASE}/vouchers/${path}`, {
+      ...options,
+      headers: { 'Authorization': `Bearer ${token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || data.error || 'Request failed');
+    return data;
+  };
+
+  const openCancel = async (row) => {
+    const kind = VOUCHER_API_KIND[row.kind];
+    setCancelTarget({ row, loading: true, preview: null, reason: '', saving: false, error: '' });
+    try {
+      const preview = await voucherRequest(`${kind}/${row.rawId}/cancel-preview`);
+      setCancelTarget(prev => (prev && prev.row.id === row.id ? { ...prev, loading: false, preview } : prev));
+    } catch (err) {
+      setCancelTarget(prev => (prev && prev.row.id === row.id ? { ...prev, loading: false, error: err.message } : prev));
+    }
+  };
+
+  const confirmCancel = async () => {
+    if (!cancelTarget) return;
+    const reason = cancelTarget.reason.trim();
+    if (reason.length < 3) {
+      setCancelTarget(prev => ({ ...prev, error: 'Please enter the reason for cancelling' }));
+      return;
+    }
+    setCancelTarget(prev => ({ ...prev, saving: true, error: '' }));
+    try {
+      const kind = VOUCHER_API_KIND[cancelTarget.row.kind];
+      const res = await voucherRequest(`${kind}/${cancelTarget.row.rawId}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) });
+      successToast(res.message || 'Voucher cancelled');
+      setCancelTarget(null);
+      fetchAllVoucherData();
+    } catch (err) {
+      setCancelTarget(prev => ({ ...prev, saving: false, error: err.message }));
+    }
+  };
+
+  const openEdit = (row) => {
+    // Receipts / payments / journals / contras open on their full voucher entry screen (every field editable)
+    if (['CUSTOMER_RECEIPT', 'VENDOR_PAYMENT', 'JOURNAL_VOUCHER', 'CONTRA_VOUCHER'].includes(row.kind)) {
+      navigate(`/accounts/record-payment-received?editVoucher=${VOUCHER_API_KIND[row.kind]}:${row.rawId}`);
+      return;
+    }
+    const r = row.raw || {};
+    let form;
+    if (row.kind === 'CUSTOMER_RECEIPT' || row.kind === 'VENDOR_PAYMENT') {
+      form = {
+        paymentDate: ymd(r.payment_date || r.created_at),
+        paymentMode: r.payment_mode || '',
+        bankAccountId: r.bank_account_id ? String(r.bank_account_id) : '',
+        transactionRefNo: r.transaction_ref_no || '',
+        chequeNumber: r.cheque_number || '',
+        chequeDate: ymd(r.cheque_date),
+        remarks: r.remarks || ''
+      };
+    } else if (row.kind === 'JOURNAL_VOUCHER') {
+      form = { voucherDate: ymd(r.voucher_date || r.created_at), referenceNo: r.reference_no || '', narration: r.narration || '' };
+    } else {
+      form = { voucherDate: ymd(r.voucher_date || r.created_at), amount: String(r.amount ?? ''), referenceNo: r.reference_no || '', narration: r.narration || '' };
+    }
+    setEditTarget({ row, form, reason: '', saving: false, error: '' });
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    const reason = editTarget.reason.trim();
+    if (reason.length < 3) {
+      setEditTarget(prev => ({ ...prev, error: 'Please enter the reason for this change' }));
+      return;
+    }
+    setEditTarget(prev => ({ ...prev, saving: true, error: '' }));
+    try {
+      const kind = VOUCHER_API_KIND[editTarget.row.kind];
+      const res = await voucherRequest(`${kind}/${editTarget.row.rawId}`, { method: 'PUT', body: JSON.stringify({ ...editTarget.form, reason }) });
+      successToast(res.message || 'Voucher updated');
+      setEditTarget(null);
+      fetchAllVoucherData();
+    } catch (err) {
+      setEditTarget(prev => ({ ...prev, saving: false, error: err.message }));
+    }
+  };
+
+  const openHistory = async (row) => {
+    setHistoryTarget({ row, entries: [], loading: true });
+    try {
+      const entries = await voucherRequest(`${VOUCHER_API_KIND[row.kind]}/${row.rawId}/audit`);
+      setHistoryTarget(prev => (prev && prev.row.id === row.id ? { ...prev, entries: Array.isArray(entries) ? entries : [], loading: false } : prev));
+    } catch (err) {
+      errorToast(err.message || 'Failed to load history');
+      setHistoryTarget(null);
     }
   };
 
@@ -367,7 +493,8 @@ const CustomerPaymentHistory = () => {
   }, [startDate, endDate, monthlySummary]);
 
   // 1. Normalized Unified Voucher Records
-  const unifiedVouchers = useMemo(() => {
+  // Every voucher, cancelled ones included (is_cancelled); unifiedVouchers below keeps the active ones only
+  const allVouchers = useMemo(() => {
     const list = [];
 
     // A. Customer Payment Receipts (F6)
@@ -410,6 +537,8 @@ const CustomerPaymentHistory = () => {
         amount: amt,
         narration: p.remarks,
         status: p.status || 'CONFIRMED',
+        is_cancelled: p.status === 'CANCELLED',
+        cancel_reason: p.cancel_reason || null,
         raw: p
       });
     });
@@ -454,6 +583,8 @@ const CustomerPaymentHistory = () => {
         amount: amt,
         narration: p.remarks,
         status: p.status || 'CONFIRMED',
+        is_cancelled: p.status === 'CANCELLED',
+        cancel_reason: p.cancel_reason || null,
         raw: p
       });
     });
@@ -538,7 +669,9 @@ const CustomerPaymentHistory = () => {
         journal_debit: drAmt,
         journal_credit: crAmt,
         narration: jv.narration && jv.narration !== 'okk' ? jv.narration : (isDiscountJournal ? 'Discount Adjustment' : 'Journal Adjustment'),
-        status: 'CONFIRMED',
+        status: jv.status || 'POSTED',
+        is_cancelled: jv.status === 'CANCELLED',
+        cancel_reason: jv.cancel_reason || null,
         items: items,
         raw: jv
       });
@@ -602,7 +735,9 @@ const CustomerPaymentHistory = () => {
         credit: l.credit,
         amount: amt,
         narration: showCash(cv.narration) || 'Internal fund transfer between company accounts',
-        status: 'CONFIRMED',
+        status: cv.status || 'POSTED',
+        is_cancelled: cv.status === 'CANCELLED',
+        cancel_reason: cv.cancel_reason || null,
         // Both accounts kept for the voucher breakdown modal and PDF
         from_account: fromAcc,
         to_account: toAcc,
@@ -610,8 +745,8 @@ const CustomerPaymentHistory = () => {
       }));
     });
 
-    // E. Debit Notes (Alt+F9) - supplier debited for purchase returns / adjustments (posted only)
-    debitNotes.filter(dn => dn.status === 'POSTED').forEach(dn => {
+    // E. Debit Notes (Alt+F9) - supplier debited for purchase returns / adjustments (posted; cancelled kept apart)
+    debitNotes.filter(dn => dn.status === 'POSTED' || dn.status === 'CANCELLED').forEach(dn => {
       const total = parseFloat(dn.total_amount) || 0;
       list.push({
         id: `dn_${dn.id}`,
@@ -642,14 +777,16 @@ const CustomerPaymentHistory = () => {
         credit: total,
         amount: total,
         narration: dn.narration,
-        status: 'CONFIRMED',
+        status: dn.status,
+        is_cancelled: dn.status === 'CANCELLED',
+        cancel_reason: dn.cancel_reason || null,
         dn_items: Array.isArray(dn.items) ? dn.items : [],
         raw: dn
       });
     });
 
-    // F. Credit Notes (Alt+F8) - customer credited for sales returns / rebates (posted only)
-    creditNotes.filter(cn => cn.status === 'POSTED').forEach(cn => {
+    // F. Credit Notes (Alt+F8) - customer credited for sales returns / rebates (posted; cancelled kept apart)
+    creditNotes.filter(cn => cn.status === 'POSTED' || cn.status === 'CANCELLED').forEach(cn => {
       const total = parseFloat(cn.total_amount) || 0;
       list.push({
         id: `cn_${cn.id}`,
@@ -680,7 +817,9 @@ const CustomerPaymentHistory = () => {
         credit: null,
         amount: total,
         narration: cn.narration,
-        status: 'CONFIRMED',
+        status: cn.status,
+        is_cancelled: cn.status === 'CANCELLED',
+        cancel_reason: cn.cancel_reason || null,
         cn_items: Array.isArray(cn.items) ? cn.items : [],
         raw: cn
       });
@@ -721,6 +860,10 @@ const CustomerPaymentHistory = () => {
       return (Number(b.rawId) || 0) - (Number(a.rawId) || 0);
     });
   }, [customerPayments, vendorPayments, journalVouchers, contraVouchers, debitNotes, creditNotes, allRegisteredBanks]);
+
+  // Active vouchers: everything that feeds totals, statements and filter options (unchanged behaviour)
+  const unifiedVouchers = useMemo(() => allVouchers.filter(v => !v.is_cancelled), [allVouchers]);
+  const cancelledCount = useMemo(() => new Set(allVouchers.filter(v => v.is_cancelled).map(v => `${v.kind}_${v.rawId}`)).size, [allVouchers]);
 
   // Comprehensive Unified Search Options: Bank Name, Client/Customer, Vendor, Agst Ref, PO Number, Customer PO
   const searchOptions = useMemo(() => {
@@ -869,7 +1012,8 @@ const CustomerPaymentHistory = () => {
 
   // Filtered Vouchers List with Universal Search Match
   const filteredVouchers = useMemo(() => {
-    return unifiedVouchers.filter(row => {
+    // Cancelled vouchers appear in the list only with "Show cancelled"; they never count in the totals below
+    return (showCancelled ? allVouchers : unifiedVouchers).filter(row => {
       // 1. Unified Search Filter: Bank, Client/Customer, Vendor, Agst Ref, PO #, Customer PO, Voucher #, Cheque #
       if (selectedCompany) {
         const target = selectedCompany.toLowerCase().trim();
@@ -919,7 +1063,7 @@ const CustomerPaymentHistory = () => {
 
       return true;
     });
-  }, [unifiedVouchers, selectedCompany, selectedVoucherType, selectedHostId, startDate, endDate]);
+  }, [unifiedVouchers, allVouchers, showCancelled, selectedCompany, selectedVoucherType, selectedHostId, startDate, endDate]);
 
   // Aggregate Metrics
   const summaryMetrics = useMemo(() => {
@@ -933,7 +1077,8 @@ const CustomerPaymentHistory = () => {
     // Contra vouchers appear as two legs – count each voucher once
     const contraIds = new Set();
 
-    filteredVouchers.forEach(v => {
+    const activeVouchers = filteredVouchers.filter(v => !v.is_cancelled);
+    activeVouchers.forEach(v => {
       if (v.debit) totalDebit += v.debit;
       if (v.credit) totalCredit += v.credit;
 
@@ -943,10 +1088,10 @@ const CustomerPaymentHistory = () => {
       else if (v.kind === 'CONTRA_VOUCHER') contraIds.add(v.rawId);
     });
     contrasCount = contraIds.size;
-    const contraLegCount = filteredVouchers.filter(v => v.kind === 'CONTRA_VOUCHER').length;
+    const contraLegCount = activeVouchers.filter(v => v.kind === 'CONTRA_VOUCHER').length;
 
     return {
-      totalCount: filteredVouchers.length - contraLegCount + contrasCount,
+      totalCount: activeVouchers.length - contraLegCount + contrasCount,
       totalDebit,
       totalCredit,
       receiptsCount,
@@ -1327,10 +1472,52 @@ const CustomerPaymentHistory = () => {
               <Send className="w-3.5 h-3.5" />
             </button>
           )}
+          {row.is_cancelled ? (
+            <span
+              className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap"
+              title={row.cancel_reason ? `Reason: ${row.cancel_reason}` : 'Cancelled'}
+            >
+              Cancelled
+            </span>
+          ) : (
+            <>
+              {EDITABLE_KINDS.has(row.kind) && (
+                <button
+                  type="button"
+                  onClick={() => openEdit(row)}
+                  className="p-1.5 hover:bg-amber-50 rounded-lg text-slate-500 hover:text-amber-700 transition-colors border border-slate-200 shadow-2xs cursor-pointer"
+                  title="Edit voucher"
+                  aria-label="Edit voucher"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => openCancel(row)}
+                className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-500 hover:text-rose-600 transition-colors border border-slate-200 shadow-2xs cursor-pointer"
+                title="Cancel (delete) voucher – reverses its effect"
+                aria-label="Cancel voucher"
+              >
+                <Ban className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => openHistory(row)}
+            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-colors border border-slate-200 shadow-2xs cursor-pointer"
+            title="Change history"
+            aria-label="Change history"
+          >
+            <History className="w-3.5 h-3.5" />
+          </button>
         </div>
       )
     }
   ];
+
+  const inputCls = 'w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white';
 
   return (
     <div className="space-y-4 animate-in fade-in duration-500 pb-10">
@@ -1589,12 +1776,26 @@ const CustomerPaymentHistory = () => {
 
       {/* Main Double-Entry Voucher Register Table */}
       <div className="overflow-hidden bg-white rounded-xl border border-slate-200 shadow-2xs">
+        <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-end gap-2 text-xs">
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none text-slate-600">
+            <input
+              type="checkbox"
+              checked={showCancelled}
+              onChange={(e) => setShowCancelled(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-slate-300 text-rose-600"
+            />
+            Show cancelled vouchers
+            <span className="px-1.5 rounded-full bg-slate-100 text-slate-500 font-semibold">{cancelledCount}</span>
+          </label>
+          {showCancelled && <span className="text-[11px] text-slate-400">Cancelled vouchers are not included in any total</span>}
+        </div>
         <DataTable
           columns={columns}
           data={filteredVouchers}
           loading={loading}
           searchPlaceholder="Search by voucher #, party name, particulars, narration..."
           className="border-none"
+          rowClassName={(row) => (row.is_cancelled ? 'bg-rose-50/40 opacity-70 [&_.font-mono]:line-through' : '')}
         />
       </div>
 
@@ -2346,6 +2547,233 @@ const CustomerPaymentHistory = () => {
                   Download / Print Voucher
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel (delete) voucher: shows exactly what will be reversed before confirming */}
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => !cancelTarget.saving && setCancelTarget(null)} />
+          <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2"><Ban className="w-4 h-4 text-rose-600" /> Cancel Voucher</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  <span className="font-mono font-semibold text-slate-700">{cancelTarget.row.voucher_number}</span> · {cancelTarget.row.voucher_type} · {cancelTarget.row.party_name}
+                </p>
+              </div>
+              <button type="button" onClick={() => !cancelTarget.saving && setCancelTarget(null)} className="p-1 rounded-md text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-xs text-slate-600">
+                The voucher is not deleted. It is marked <b>Cancelled</b>, its effect is reversed and it stops counting in every total, statement and balance.
+              </p>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-[11px] font-semibold text-amber-800 mb-1.5">This will happen:</p>
+                {cancelTarget.loading ? (
+                  <p className="text-xs text-slate-500 flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking the effect...</p>
+                ) : cancelTarget.preview ? (
+                  <ul className="text-xs text-amber-900 space-y-1 list-disc pl-4">
+                    {(cancelTarget.preview.effects || []).map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-rose-700">{cancelTarget.error || 'Could not check the effect'}</p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Reason for cancelling <span className="text-rose-500">*</span></label>
+                <textarea
+                  rows={2}
+                  value={cancelTarget.reason}
+                  onChange={(e) => setCancelTarget(prev => ({ ...prev, reason: e.target.value }))}
+                  placeholder="e.g. Entered twice by mistake"
+                  className={`${inputCls} resize-y`}
+                  disabled={!cancelTarget.preview}
+                />
+              </div>
+              {cancelTarget.preview && cancelTarget.error && <p className="text-xs text-rose-700 font-medium">{cancelTarget.error}</p>}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
+              <button type="button" onClick={() => setCancelTarget(null)} disabled={cancelTarget.saving} className="px-4 py-2 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Keep Voucher</button>
+              <button
+                type="button"
+                onClick={confirmCancel}
+                disabled={!cancelTarget.preview || cancelTarget.saving}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                {cancelTarget.saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />} Cancel Voucher
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit voucher */}
+      {editTarget && (() => {
+        const { row, form } = editTarget;
+        const set = (key) => (e) => setEditTarget(prev => ({ ...prev, form: { ...prev.form, [key]: e.target.value } }));
+        const isMoney = row.kind === 'CUSTOMER_RECEIPT' || row.kind === 'VENDOR_PAYMENT';
+        const modes = Array.from(new Set([...(form.paymentMode ? [form.paymentMode] : []), ...PAYMENT_MODE_OPTIONS]));
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/40" onClick={() => !editTarget.saving && setEditTarget(null)} />
+            <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2"><Pencil className="w-4 h-4 text-amber-600" /> Edit Voucher</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    <span className="font-mono font-semibold text-slate-700">{row.voucher_number}</span> · {row.voucher_type} · {row.party_name}
+                  </p>
+                </div>
+                <button type="button" onClick={() => !editTarget.saving && setEditTarget(null)} className="p-1 rounded-md text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {isMoney ? (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-700">Date *</label>
+                        <input type="date" value={form.paymentDate} onChange={set('paymentDate')} className={inputCls} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-700">Mode</label>
+                        <select value={form.paymentMode} onChange={set('paymentMode')} className={inputCls}>
+                          {modes.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">Bank Account</label>
+                      <select value={form.bankAccountId} onChange={set('bankAccountId')} className={inputCls}>
+                        <option value="">Cash / No bank</option>
+                        {allRegisteredBanks.map(b => (
+                          <option key={b.id} value={String(b.id)}>{b.bank_name}{b.account_number ? ` (${b.account_number})` : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-700">Ref / UTR No.</label>
+                        <input type="text" value={form.transactionRefNo} onChange={set('transactionRefNo')} className={inputCls} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-700">Cheque No.</label>
+                        <input type="text" value={form.chequeNumber} onChange={set('chequeNumber')} className={inputCls} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-700">Cheque Date</label>
+                        <input type="date" value={form.chequeDate} onChange={set('chequeDate')} className={inputCls} />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">Narration / Remarks</label>
+                      <textarea rows={2} value={form.remarks} onChange={set('remarks')} className={`${inputCls} resize-y`} />
+                    </div>
+                    <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2">
+                      Amount <b>{formatCurrency(row.amount)}</b> and the bill allocation cannot be changed here. To correct them, cancel this voucher and record it again.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-700">Date *</label>
+                        <input type="date" value={form.voucherDate} onChange={set('voucherDate')} className={inputCls} />
+                      </div>
+                      {row.kind === 'CONTRA_VOUCHER' ? (
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-slate-700">Amount (₹) *</label>
+                          <input type="number" min="0" step="0.01" value={form.amount} onChange={set('amount')} className={`${inputCls} font-mono`} />
+                        </div>
+                      ) : <div />}
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">{row.kind === 'CONTRA_VOUCHER' ? 'Slip / Cheque / Ref No.' : 'Reference No.'}</label>
+                      <input type="text" value={form.referenceNo} onChange={set('referenceNo')} className={inputCls} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-700">Narration</label>
+                      <textarea rows={2} value={form.narration} onChange={set('narration')} className={`${inputCls} resize-y`} />
+                    </div>
+                    {row.kind === 'JOURNAL_VOUCHER' && (
+                      <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2">
+                        Journal lines and amounts cannot be changed here. To correct them, cancel this journal and record it again.
+                      </p>
+                    )}
+                  </>
+                )}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">Reason for this change <span className="text-rose-500">*</span></label>
+                  <input
+                    type="text"
+                    value={editTarget.reason}
+                    onChange={(e) => setEditTarget(prev => ({ ...prev, reason: e.target.value }))}
+                    placeholder="e.g. Wrong cheque number entered"
+                    className={inputCls}
+                  />
+                </div>
+                {editTarget.error && <p className="text-xs text-rose-700 font-medium">{editTarget.error}</p>}
+              </div>
+              <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
+                <button type="button" onClick={() => setEditTarget(null)} disabled={editTarget.saving} className="px-4 py-2 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Close</button>
+                <button
+                  type="button"
+                  onClick={saveEdit}
+                  disabled={editTarget.saving}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {editTarget.saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Update Voucher
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Change history of a voucher */}
+      {historyTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setHistoryTarget(null)} />
+          <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl max-h-[80vh] flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2"><History className="w-4 h-4 text-slate-600" /> Change History</h3>
+                <p className="text-xs text-slate-500 mt-0.5"><span className="font-mono font-semibold text-slate-700">{historyTarget.row.voucher_number}</span> · {historyTarget.row.voucher_type}</p>
+              </div>
+              <button type="button" onClick={() => setHistoryTarget(null)} className="p-1 rounded-md text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="px-5 py-4 overflow-y-auto space-y-3">
+              {historyTarget.loading && <p className="text-xs text-slate-500 flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading...</p>}
+              {!historyTarget.loading && historyTarget.entries.length === 0 && (
+                <p className="text-xs text-slate-400">No changes recorded. This voucher has not been edited or cancelled.</p>
+              )}
+              {historyTarget.entries.map(h => (
+                <div key={h.id} className="border border-slate-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${h.action === 'CANCEL' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                      {h.action === 'CANCEL' ? 'Cancelled' : 'Edited'}
+                    </span>
+                    <span className="text-[11px] text-slate-500">{formatDate(String(h.created_at).replace(' ', 'T'))}{h.user_name ? ` · ${h.user_name}` : ''}</span>
+                  </div>
+                  {h.reason && <p className="text-xs text-slate-700 mt-1.5"><span className="text-slate-400">Reason:</span> {h.reason}</p>}
+                  {h.new_values && Object.keys(h.new_values).length > 0 && (
+                    <ul className="mt-1.5 text-[11px] text-slate-600 space-y-0.5">
+                      {Object.entries(h.new_values).map(([field, value]) => (
+                        <li key={field}>
+                          <span className="font-semibold">{field.replace(/_/g, ' ')}</span>: <span className="line-through text-slate-400">{String(h.old_values?.[field] ?? '—')}</span> → {String(value ?? '—')}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {Array.isArray(h.effects) && h.effects.length > 0 && (
+                    <ul className="mt-1.5 text-[11px] text-slate-600 list-disc pl-4 space-y-0.5">
+                      {h.effects.map((e, i) => <li key={i}>{e}</li>)}
+                    </ul>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>

@@ -82,8 +82,9 @@ const getVendorInvoices = async (vendorId = null, hostCompanyId = null) => {
   return rows;
 };
 
-const getVendorInvoiceById = async (id) => {
-  const [invoices] = await pool.query(
+// db: optional transaction connection (Payment History edit checks the outstanding inside its transaction)
+const getVendorInvoiceById = async (id, db = pool) => {
+  const [invoices] = await db.query(
     `${VENDOR_INVOICE_SELECT}
      WHERE vi.id = ?`,
     [id]

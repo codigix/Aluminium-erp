@@ -207,6 +207,8 @@ model customer_payments {
   card_last_4_digits  String?                               @db.VarChar(4)
   authorization_code  String?                               @db.VarChar(255)
   status              customer_payments_status?             @default(CONFIRMED)
+  cancelled_at        DateTime?                             @db.Timestamp(0)
+  cancel_reason       String?                               @db.Text
   host_company_id     Int?
   created_by          Int?
   created_at          DateTime?                             @default(now()) @db.Timestamp(0)
@@ -1079,6 +1081,8 @@ model payments {
   card_last_4_digits      String?                @db.VarChar(4)
   authorization_code      String?                @db.VarChar(255)
   status                  payments_status?       @default(CONFIRMED)
+  cancelled_at            DateTime?              @db.Timestamp(0)
+  cancel_reason           String?                @db.Text
   host_company_id         Int?
   created_by              Int?
   created_at              DateTime?              @default(now()) @db.Timestamp(0)
@@ -2900,12 +2904,14 @@ enum customer_payments_status {
   PENDING
   CONFIRMED
   FAILED
+  CANCELLED
 }
 
 enum payments_status {
   PENDING
   CONFIRMED
   FAILED
+  CANCELLED
 }
 
 enum shipment_orders_packing_status {
@@ -3032,6 +3038,9 @@ model journal_vouchers {
   total_debit           Decimal                 @db.Decimal(14, 2)
   total_credit          Decimal                 @db.Decimal(14, 2)
   narration             String                  @db.Text
+  status                String                  @default("POSTED") @db.VarChar(20)
+  cancelled_at          DateTime?               @db.Timestamp(0)
+  cancel_reason         String?                 @db.Text
   host_company_id       Int?
   created_by            Int?
   created_at            DateTime?               @default(now()) @db.Timestamp(0)
@@ -3066,6 +3075,9 @@ model contra_vouchers {
   amount               Decimal   @db.Decimal(15, 2)
   reference_no         String?   @db.VarChar(100)
   narration            String?   @db.Text
+  status               String    @default("POSTED") @db.VarChar(20)
+  cancelled_at         DateTime? @db.Timestamp(0)
+  cancel_reason        String?   @db.Text
   host_company_id      Int?
   created_by           Int?
   created_at           DateTime? @default(now()) @db.Timestamp(0)
@@ -3097,6 +3109,7 @@ model debit_notes {
   narration            String?            @db.Text
   status               String             @default("POSTED") @db.VarChar(20)
   cancelled_at         DateTime?          @db.Timestamp(0)
+  cancel_reason        String?            @db.Text
   host_company_id      Int?
   created_by           Int?
   created_at           DateTime?          @default(now()) @db.Timestamp(0)
@@ -3109,6 +3122,24 @@ model debit_notes {
   @@index([bank_account_id], map: "idx_dn_bank_account")
   @@index([voucher_date], map: "idx_dn_date")
   @@index([host_company_id], map: "idx_dn_host_company")
+}
+
+model voucher_audit_log {
+  id           Int      @id @default(autoincrement())
+  voucher_kind String   @db.VarChar(30)
+  voucher_id   Int
+  voucher_no   String?  @db.VarChar(60)
+  action       String   @db.VarChar(20)
+  reason       String?  @db.Text
+  old_values   Json?
+  new_values   Json?
+  effects      Json?
+  user_id      Int?
+  user_name    String?  @db.VarChar(150)
+  created_at   DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([voucher_kind, voucher_id], map: "idx_val_voucher")
+  @@index([created_at], map: "idx_val_created")
 }
 
 model customers {
@@ -3183,6 +3214,7 @@ model credit_notes {
   narration            String?             @db.Text
   status               String              @default("POSTED") @db.VarChar(20)
   cancelled_at         DateTime?           @db.Timestamp(0)
+  cancel_reason        String?             @db.Text
   host_company_id      Int?
   created_by           Int?
   created_at           DateTime?           @default(now()) @db.Timestamp(0)

@@ -3810,6 +3810,44 @@ const ensureAccountingTables = async () => {
         await connection.query(`ALTER TABLE ${table} ADD COLUMN host_company_id INT NULL`);
       }
     }
+    // Cancellation (reversal) of vouchers from Payment History — see migration 20261117120000_voucher_cancel_and_audit
+    const cancelColumns = [
+      ['journal_vouchers', 'status', "VARCHAR(20) NOT NULL DEFAULT 'POSTED'"],
+      ['contra_vouchers', 'status', "VARCHAR(20) NOT NULL DEFAULT 'POSTED'"]
+    ];
+    for (const table of ['journal_vouchers', 'contra_vouchers', 'debit_notes', 'credit_notes', 'customer_payments', 'payments']) {
+      cancelColumns.push([table, 'cancelled_at', 'TIMESTAMP NULL'], [table, 'cancel_reason', 'TEXT NULL']);
+    }
+    for (const [table, column, definition] of cancelColumns) {
+      const [existing] = await connection.query(`SHOW COLUMNS FROM ${table} LIKE '${column}'`);
+      if (existing.length === 0) {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      }
+    }
+    for (const table of ['customer_payments', 'payments']) {
+      const [statusCol] = await connection.query(`SHOW COLUMNS FROM ${table} LIKE 'status'`);
+      if (statusCol.length && /^enum\(/i.test(statusCol[0].Type) && !/'CANCELLED'/i.test(statusCol[0].Type)) {
+        await connection.query(`ALTER TABLE ${table} MODIFY COLUMN status ENUM('PENDING', 'CONFIRMED', 'FAILED', 'CANCELLED') NULL DEFAULT 'CONFIRMED'`);
+      }
+    }
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS voucher_audit_log (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        voucher_kind VARCHAR(30) NOT NULL,
+        voucher_id INT NOT NULL,
+        voucher_no VARCHAR(60) NULL,
+        action VARCHAR(20) NOT NULL,
+        reason TEXT NULL,
+        old_values JSON NULL,
+        new_values JSON NULL,
+        effects JSON NULL,
+        user_id INT NULL,
+        user_name VARCHAR(150) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_val_voucher (voucher_kind, voucher_id),
+        INDEX idx_val_created (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
     console.log('Accounting tables (journal_vouchers, contra_vouchers, debit_notes, credit_notes) synchronized');
   } catch (error) {
     console.error('Error synchronizing accounting tables:', error.message);

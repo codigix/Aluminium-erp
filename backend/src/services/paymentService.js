@@ -32,7 +32,9 @@ const generatePaymentVoucherNo = async () => {
   return `PAY-${year}-${String(nextSeq).padStart(4, '0')}`;
 };
 
-const processPayment = async (payload) => {
+// db: pool by default; Payment History edit passes its transaction connection (and the original voucherNumber)
+// so the old payment is reversed and the corrected one recorded in one transaction
+const processPayment = async (payload, db = pool) => {
   const {
     invoiceId,
     poId,
@@ -80,7 +82,7 @@ const processPayment = async (payload) => {
     voucherNo = await generatePaymentVoucherNo();
   } else {
     // If the provided voucher number already exists in payments or payment_vouchers, auto-generate next
-    const [existing] = await pool.query(
+    const [existing] = await db.query(
       'SELECT id FROM payments WHERE payment_voucher_no = ? UNION SELECT id FROM payment_vouchers WHERE voucher_no = ?',
       [voucherNo, voucherNo]
     );
@@ -96,7 +98,7 @@ const processPayment = async (payload) => {
     if (!bankAccountId && bankAccount) {
       const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
       if (isNumericId) {
-        const [banks] = await pool.query('SELECT id FROM bank_accounts WHERE id = ?', [parseInt(bankAccount)]);
+        const [banks] = await db.query('SELECT id FROM bank_accounts WHERE id = ?', [parseInt(bankAccount)]);
         if (banks.length > 0) {
           bankAccountId = parseInt(bankAccount);
         } else {
@@ -150,7 +152,7 @@ const processPayment = async (payload) => {
         if (isNaN(allocPoId)) allocPoId = null;
 
         if (!allocPoId && allocInvoiceId) {
-          const [invRows] = await pool.query('SELECT po_id FROM vendor_invoices WHERE id = ?', [allocInvoiceId]);
+          const [invRows] = await db.query('SELECT po_id FROM vendor_invoices WHERE id = ?', [allocInvoiceId]);
           if (invRows.length > 0 && invRows[0].po_id) {
             allocPoId = invRows[0].po_id;
           }
@@ -158,7 +160,7 @@ const processPayment = async (payload) => {
 
         // An 'Agst Ref' payment cannot exceed what is still outstanding on the bill (a paid bill cannot be paid again)
         if (allocInvoiceId && (alloc.type || 'Agst Ref') === 'Agst Ref') {
-          const bill = await vendorInvoiceService.getVendorInvoiceById(allocInvoiceId);
+          const bill = await vendorInvoiceService.getVendorInvoiceById(allocInvoiceId, db);
           if (bill) {
             const allocatedSoFar = allocatedToBill.get(allocInvoiceId) || 0;
             const billOutstanding = parseFloat(bill.outstanding) || 0;
@@ -190,7 +192,7 @@ const processPayment = async (payload) => {
       const voucherDesc = narration || remarks || (refsSummary ? `Payment against ${refsSummary}` : 'Vendor Payment');
 
       // 1. Insert EXACTLY ONE master payment record into `payments` under this voucher
-      const [paymentResult] = await pool.execute(
+      const [paymentResult] = await db.execute(
         `INSERT INTO payments (
           payment_voucher_no,
           invoice_id,
@@ -247,7 +249,7 @@ const processPayment = async (payload) => {
 
       // 2. Insert bill-wise allocations under this voucher in `payment_allocations`
       for (const item of validAllocs) {
-        await pool.execute(
+        await db.execute(
           `INSERT INTO payment_allocations (
             payment_id,
             voucher_no,
@@ -272,21 +274,21 @@ const processPayment = async (payload) => {
 
         // Update PO status if fully paid
         if (item.allocPoId) {
-          const [poRows] = await pool.query('SELECT total_amount FROM purchase_orders WHERE id = ?', [item.allocPoId]);
-          const [paidRows] = await pool.query(
+          const [poRows] = await db.query('SELECT total_amount FROM purchase_orders WHERE id = ?', [item.allocPoId]);
+          const [paidRows] = await db.query(
             `SELECT 
               COALESCE((SELECT SUM(amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = ? AND p.status = 'CONFIRMED'), 0) +
               COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = ? AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0) as total_paid`,
             [item.allocPoId, item.allocPoId]
           );
           if (poRows.length > 0 && parseFloat(paidRows[0].total_paid) >= parseFloat(poRows[0].total_amount)) {
-            await pool.execute('UPDATE purchase_orders SET status = ? WHERE id = ?', ['PAID', item.allocPoId]);
+            await db.execute('UPDATE purchase_orders SET status = ? WHERE id = ?', ['PAID', item.allocPoId]);
           }
         }
       }
 
       // 3. Insert unified Payment Voucher
-      await pool.execute(
+      await db.execute(
         `INSERT INTO payment_vouchers (
           voucher_no,
           voucher_date,
@@ -306,7 +308,7 @@ const processPayment = async (payload) => {
       );
 
       // 4. Insert Ledger record
-      await pool.execute(
+      await db.execute(
         `INSERT INTO vendor_ledger (
           vendor_id,
           reference_doc_id,
@@ -339,12 +341,12 @@ const processPayment = async (payload) => {
     let referenceNo = invoiceId || '';
     if (!invoiceId) {
       if (poId) {
-        const [poRows] = await pool.query('SELECT po_number FROM purchase_orders WHERE id = ?', [poId]);
+        const [poRows] = await db.query('SELECT po_number FROM purchase_orders WHERE id = ?', [poId]);
         if (poRows.length > 0) {
           referenceNo = poRows[0].po_number;
         }
       } else if (jobCardQualityLogId) {
-        const [qlRows] = await pool.query(`
+        const [qlRows] = await db.query(`
           SELECT jc.job_card_no, ql.vendor_invoice_no 
           FROM job_card_quality_logs ql
           JOIN job_cards jc ON ql.job_card_id = jc.id
@@ -356,7 +358,7 @@ const processPayment = async (payload) => {
       }
     }
 
-    const [result] = await pool.execute(
+    const [result] = await db.execute(
       `INSERT INTO payments (
         payment_voucher_no,
         invoice_id,
@@ -411,7 +413,7 @@ const processPayment = async (payload) => {
 
     const paymentId = result.insertId;
 
-    await pool.execute(
+    await db.execute(
       `INSERT INTO payment_vouchers (
         voucher_no,
         voucher_date,
@@ -430,7 +432,7 @@ const processPayment = async (payload) => {
       ]
     );
 
-    await pool.execute(
+    await db.execute(
       `INSERT INTO vendor_ledger (
         vendor_id,
         reference_doc_id,
@@ -453,7 +455,7 @@ const processPayment = async (payload) => {
 
     // Record in payment_allocations for bill tracking
     if (poId || invoiceId) {
-      await pool.execute(
+      await db.execute(
         `INSERT INTO payment_allocations (
           payment_id,
           voucher_no,
@@ -479,8 +481,8 @@ const processPayment = async (payload) => {
 
     // Update status if fully paid
     if (poId) {
-      const [poRows] = await pool.query('SELECT total_amount FROM purchase_orders WHERE id = ?', [poId]);
-      const [paidRows] = await pool.query(
+      const [poRows] = await db.query('SELECT total_amount FROM purchase_orders WHERE id = ?', [poId]);
+      const [paidRows] = await db.query(
         `SELECT 
           COALESCE((SELECT SUM(amount) FROM payment_allocations pa JOIN payments p ON pa.payment_id = p.id WHERE pa.po_id = ? AND p.status = 'CONFIRMED'), 0) +
           COALESCE((SELECT SUM(p.payment_amount) FROM payments p WHERE p.po_id = ? AND p.status = 'CONFIRMED' AND NOT EXISTS (SELECT 1 FROM payment_allocations pa WHERE pa.payment_id = p.id)), 0) as total_paid`,
@@ -488,14 +490,14 @@ const processPayment = async (payload) => {
       );
 
       if (poRows.length > 0 && parseFloat(paidRows[0].total_paid) >= parseFloat(poRows[0].total_amount)) {
-        await pool.execute('UPDATE purchase_orders SET status = ? WHERE id = ?', ['PAID', poId]);
+        await db.execute('UPDATE purchase_orders SET status = ? WHERE id = ?', ['PAID', poId]);
       }
     } else if (jobCardQualityLogId) {
-      const [qlRows] = await pool.query('SELECT grand_total FROM job_card_quality_logs WHERE id = ?', [jobCardQualityLogId]);
-      const [paymentRows] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM payments WHERE job_card_quality_log_id = ? AND status = ?', [jobCardQualityLogId, 'CONFIRMED']);
+      const [qlRows] = await db.query('SELECT grand_total FROM job_card_quality_logs WHERE id = ?', [jobCardQualityLogId]);
+      const [paymentRows] = await db.query('SELECT SUM(payment_amount) as total_paid FROM payments WHERE job_card_quality_log_id = ? AND status = ?', [jobCardQualityLogId, 'CONFIRMED']);
 
       if (qlRows.length > 0 && paymentRows[0].total_paid >= qlRows[0].grand_total) {
-        await pool.execute('UPDATE job_card_quality_logs SET status = ? WHERE id = ?', ['PAID', jobCardQualityLogId]);
+        await db.execute('UPDATE job_card_quality_logs SET status = ? WHERE id = ?', ['PAID', jobCardQualityLogId]);
       }
     }
 
@@ -846,9 +848,12 @@ const updatePaymentStatus = async (paymentId, status) => {
   return { id: paymentId, status };
 };
 
-const deletePayment = async (paymentId) => {
-  await pool.execute('DELETE FROM payments WHERE id = ?', [paymentId]);
-  return { id: paymentId, message: 'Payment deleted successfully' };
+// A payment is never hard-deleted (that left POs "PAID" and ledger entries orphaned): it is cancelled,
+// which reverses its ledger entries and recomputes the POs it settled
+const deletePayment = async (paymentId, reason = 'Deleted from Payment History') => {
+  const voucherAdminService = require('./voucherAdminService');
+  await voucherAdminService.cancelVoucher('payment', paymentId, reason);
+  return { id: paymentId, message: 'Payment cancelled successfully' };
 };
 
 const generatePaymentVoucherPDF = async (paymentId) => {
@@ -1814,7 +1819,7 @@ const generateNextJournalVoucherNo = async () => {
   return `JV-${year}-${String(nextSeq).padStart(4, '0')}`;
 };
 
-const recordJournalVoucher = async (payload) => {
+const recordJournalVoucher = async (payload, db = null) => {
   const {
     voucherNo: inputVoucherNo,
     date,
@@ -1839,9 +1844,11 @@ const recordJournalVoucher = async (payload) => {
 
   const voucherNo = inputVoucherNo || (await generateNextJournalVoucherNo());
 
-  const connection = await pool.getConnection();
+  // db: an open transaction connection (Payment History edit); otherwise this function runs its own transaction
+  const ownConnection = !db;
+  const connection = db || await pool.getConnection();
   try {
-    await connection.beginTransaction();
+    if (ownConnection) await connection.beginTransaction();
 
     const [result] = await connection.query(
       `INSERT INTO journal_vouchers (voucher_no, voucher_date, reference_no, total_debit, total_credit, narration, host_company_id, created_by)
@@ -1907,7 +1914,7 @@ const recordJournalVoucher = async (payload) => {
       }
     }
 
-    await connection.commit();
+    if (ownConnection) await connection.commit();
     return {
       id: journalVoucherId,
       voucherNo,
@@ -1918,14 +1925,15 @@ const recordJournalVoucher = async (payload) => {
       rowsCount: rows.length
     };
   } catch (err) {
-    await connection.rollback();
+    if (ownConnection) await connection.rollback();
     throw err;
   } finally {
-    connection.release();
+    if (ownConnection) connection.release();
   }
 };
 
-const getJournalVouchers = async (vendorId = null) => {
+// Cancelled journals are left out unless includeCancelled is set (Payment History "Show cancelled")
+const getJournalVouchers = async (vendorId = null, includeCancelled = false) => {
   const [rows] = await pool.query(
     `SELECT jv.*,
             COALESCE(
@@ -1943,6 +1951,7 @@ const getJournalVouchers = async (vendorId = null) => {
               ), '[]'
             ) as items
      FROM journal_vouchers jv
+     ${includeCancelled ? '' : "WHERE COALESCE(jv.status, 'POSTED') <> 'CANCELLED'"}
      ORDER BY jv.created_at DESC, jv.id DESC`
   );
   return rows.map(r => ({
@@ -1973,7 +1982,7 @@ const generateNextContraVoucherNo = async () => {
   return `CV-${year}-${String(nextSeq).padStart(4, '0')}`;
 };
 
-const recordContraVoucher = async (payload) => {
+const recordContraVoucher = async (payload, db = null) => {
   const {
     voucherNo: inputVoucherNo,
     date,
@@ -2003,9 +2012,11 @@ const recordContraVoucher = async (payload) => {
 
   const voucherNo = inputVoucherNo || (await generateNextContraVoucherNo());
 
-  const connection = await pool.getConnection();
+  // db: an open transaction connection (Payment History edit); otherwise this function runs its own transaction
+  const ownConnection = !db;
+  const connection = db || await pool.getConnection();
   try {
-    await connection.beginTransaction();
+    if (ownConnection) await connection.beginTransaction();
 
     let resolvedFromBankId = fromBankAccountId ? parseInt(fromBankAccountId, 10) : null;
     let resolvedToBankId = toBankAccountId ? parseInt(toBankAccountId, 10) : null;
@@ -2052,7 +2063,7 @@ const recordContraVoucher = async (payload) => {
 
     const contraVoucherId = result.insertId;
 
-    await connection.commit();
+    if (ownConnection) await connection.commit();
 
     return {
       id: contraVoucherId,
@@ -2065,14 +2076,15 @@ const recordContraVoucher = async (payload) => {
       narration: narration || `Transfer from ${fromAccount} to ${toAccount}`
     };
   } catch (err) {
-    await connection.rollback();
+    if (ownConnection) await connection.rollback();
     throw err;
   } finally {
-    connection.release();
+    if (ownConnection) connection.release();
   }
 };
 
-const getContraVouchers = async () => {
+// Cancelled contras are left out unless includeCancelled is set (Payment History "Show cancelled")
+const getContraVouchers = async (includeCancelled = false) => {
   const [rows] = await pool.query(
     `SELECT cv.*,
             b_from.bank_name as from_bank_name, b_from.account_number as from_bank_account_number,
@@ -2080,6 +2092,7 @@ const getContraVouchers = async () => {
      FROM contra_vouchers cv
      LEFT JOIN bank_accounts b_from ON cv.from_bank_account_id = b_from.id
      LEFT JOIN bank_accounts b_to ON cv.to_bank_account_id = b_to.id
+     ${includeCancelled ? '' : "WHERE COALESCE(cv.status, 'POSTED') <> 'CANCELLED'"}
      ORDER BY cv.created_at DESC, cv.id DESC`
   );
   return rows;

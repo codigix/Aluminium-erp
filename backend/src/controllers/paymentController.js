@@ -187,7 +187,7 @@ const recordJournalVoucher = async (req, res, next) => {
 
 const getJournalVouchers = async (req, res, next) => {
   try {
-    const vouchers = await paymentService.getJournalVouchers();
+    const vouchers = await paymentService.getJournalVouchers(null, req.query.includeCancelled === '1');
     res.json(vouchers);
   } catch (error) {
     next(error);
@@ -221,7 +221,7 @@ const recordContraVoucher = async (req, res, next) => {
 
 const getContraVouchers = async (req, res, next) => {
   try {
-    const vouchers = await paymentService.getContraVouchers();
+    const vouchers = await paymentService.getContraVouchers(req.query.includeCancelled === '1');
     res.json(vouchers);
   } catch (error) {
     next(error);

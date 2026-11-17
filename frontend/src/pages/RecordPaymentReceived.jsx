@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   CreditCard, Search, RefreshCw, Building2, Calendar, FileText, 
   CheckCircle2, Clock, AlertCircle, ChevronDown, Download, Check, 
@@ -771,6 +772,80 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
       handleSelectVoucherType(initialVoucherType);
     }
   }, [initialVoucherType]);
+
+  // ── Edit from Payment History: ?editVoucher=receipt:<id> | payment:<id> ──
+  // Opens this voucher entry screen pre-filled with the saved voucher; saving replaces it (same voucher no.)
+  const navigate = useNavigate();
+  const [editVoucher, setEditVoucher] = useState(null);
+  const leaveEditMode = () => {
+    setEditVoucher(null);
+    navigate('/accounts/customer-payment-history');
+  };
+
+  useEffect(() => {
+    const param = new URLSearchParams(window.location.search).get('editVoucher');
+    const [kind, rawId] = String(param || '').split(':');
+    if (!['receipt', 'payment', 'journal', 'contra'].includes(kind) || !rawId) return;
+    (async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        const headers = { 'Authorization': `Bearer ${token}` };
+        const res = await fetch(`${API_BASE}/vouchers/${kind}/${rawId}/edit-data`, { headers });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || 'Failed to load voucher for editing');
+
+        const host = data.hostCompanyId ? `hostCompanyId=${data.hostCompanyId}` : '';
+        if (data.hostCompanyId) setSelectedHostId(String(data.hostCompanyId));
+        if (kind === 'journal' || kind === 'contra') {
+          // Journal / contra entry screens need no party or bill list
+          handleSelectVoucherType(kind === 'journal' ? 'JOURNAL' : 'CONTRA');
+          setSelectedInvoicesForModal([]);
+          setSelectedInvoice(null);
+          setEditVoucher({ ...data, kind, id: data.id || rawId });
+          setIsPaymentModalOpen(true);
+          return;
+        }
+        handleSelectVoucherType(kind === 'payment' ? 'PAYMENT' : 'RECEIPT');
+
+        // Bills of the party, with this voucher's own allocation added back to their outstanding
+        // (once the voucher is replaced, that amount is free again), so the bill reference can be changed
+        const allocs = Array.isArray(data.allocations) ? data.allocations : [];
+        let bills = [];
+        if (kind === 'receipt') {
+          setSelectedCompanyId(String(data.partyId));
+          const r = await fetch(`${API_BASE}/customer-payments/customer/${data.partyId}/outstanding${host ? `?${host}` : ''}`, { headers });
+          const rows = r.ok ? await r.json() : [];
+          bills = (Array.isArray(rows) ? rows : []).map(row => {
+            const own = allocs
+              .filter(a => a.invoiceId && String(a.invoiceId) === String(row.invoice_id || row.id))
+              .reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
+            return own > 0 ? { ...row, outstanding: round2((parseFloat(row.outstanding) || 0) + own) } : row;
+          });
+          bills = bills.filter(b => (parseFloat(b.outstanding) || 0) > 0).map(formatInvoiceForModal);
+        } else {
+          setSelectedVendorId(String(data.partyId));
+          const r = await fetch(`${API_BASE}/vendor-invoices?vendorId=${data.partyId}${host ? `&${host}` : ''}`, { headers });
+          const rows = r.ok ? await r.json() : [];
+          bills = (Array.isArray(rows) ? rows : []).map(row => {
+            const own = allocs
+              .filter(a => a.billId && String(a.billId) === String(row.id))
+              .reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
+            return own > 0 ? { ...row, outstanding: round2((parseFloat(row.outstanding) || 0) + own) } : row;
+          });
+          bills = bills.filter(b => (parseFloat(b.outstanding) || 0) > 0).map(formatVendorBillForModal);
+        }
+
+        setSelectedInvoiceIds(new Set());
+        setSelectedInvoicesForModal(bills);
+        setSelectedInvoice(bills.length === 1 ? bills[0] : null);
+        setEditVoucher({ ...data, kind, id: data.id || rawId });
+        setIsPaymentModalOpen(true);
+      } catch (err) {
+        errorToast(err.message || 'Failed to load voucher for editing');
+        navigate('/accounts/customer-payment-history');
+      }
+    })();
+  }, []);
 
   // Keyboard shortcut listener for Accounting Voucher types (F5, F6, F7, F4, Alt+F9, Alt+F8)
   useEffect(() => {
@@ -2559,15 +2634,18 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         vendorId={selectedVendorId}
         vendor={selectedVendor}
         isVendorMode={isPaymentMode || selectedVoucherType === 'PAYMENT'}
-        hasExplicitSelection={selectedInvoiceIds.size > 0}
+        hasExplicitSelection={editVoucher ? false : selectedInvoiceIds.size > 0}
+        editVoucher={editVoucher}
         onClose={() => {
           setIsPaymentModalOpen(false);
           setSelectedInvoice(null);
           setSelectedInvoicesForModal([]);
+          if (editVoucher) leaveEditMode();
         }}
         invoice={selectedInvoice}
         invoices={selectedInvoicesForModal}
         onSuccess={() => {
+          if (editVoucher) { setIsPaymentModalOpen(false); setSelectedInvoicesForModal([]); leaveEditMode(); return; }
           setIsPaymentModalOpen(false);
           setSelectedInvoice(null);
           setSelectedInvoicesForModal([]);
@@ -4118,15 +4196,18 @@ const RecordPaymentReceived = ({ initialVoucherType = 'RECEIPT' }) => {
         vendorId={selectedVendorId}
         vendor={selectedVendor}
         isVendorMode={isPaymentMode || selectedVoucherType === 'PAYMENT'}
-        hasExplicitSelection={selectedInvoiceIds.size > 0}
+        hasExplicitSelection={editVoucher ? false : selectedInvoiceIds.size > 0}
+        editVoucher={editVoucher}
         onClose={() => {
           setIsPaymentModalOpen(false);
           setSelectedInvoice(null);
           setSelectedInvoicesForModal([]);
+          if (editVoucher) leaveEditMode();
         }}
         invoice={selectedInvoice}
         invoices={selectedInvoicesForModal}
         onSuccess={() => {
+          if (editVoucher) { setIsPaymentModalOpen(false); setSelectedInvoicesForModal([]); leaveEditMode(); return; }
           setIsPaymentModalOpen(false);
           setSelectedInvoice(null);
           setSelectedInvoicesForModal([]);

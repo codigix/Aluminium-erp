@@ -85,8 +85,10 @@ const PaymentReceivedModal = ({
   isPage = false,
   initialVoucherType = 'RECEIPT',
   hideHeader = false,
-  hostCompanyId = null
+  hostCompanyId = null,
+  editVoucher = null // { kind: 'receipt' | 'payment', id, voucherNo, ...edit-data } when editing from Payment History
 }) => {
+  const [editReason, setEditReason] = useState('');
   // Normalize incoming selection
   const selectedInvoices = useMemo(() => {
     if (Array.isArray(invoices) && invoices.length > 0) return invoices;
@@ -343,7 +345,7 @@ const PaymentReceivedModal = ({
 
   useEffect(() => {
     if (voucherType === 'CONTRA') {
-      fetchNextContraVoucherNo();
+      if (!editVoucher) fetchNextContraVoucherNo();
       fetchBankAccounts();
     }
   }, [voucherType]);
@@ -392,7 +394,7 @@ const PaymentReceivedModal = ({
   };
 
   useEffect(() => {
-    if (voucherType === 'JOURNAL') {
+    if (voucherType === 'JOURNAL' && !editVoucher) {
       fetchNextJournalVoucherNo();
     }
   }, [voucherType]);
@@ -512,6 +514,10 @@ const PaymentReceivedModal = ({
       errorToast('Narration is required before saving the journal voucher.');
       return;
     }
+    if (editVoucher && !editReason.trim()) {
+      errorToast('Please enter the reason for changing this voucher');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -527,7 +533,7 @@ const PaymentReceivedModal = ({
 
       const token = localStorage.getItem('authToken');
       let savedData = payload;
-      const res = await fetch(`${API_BASE}/payments/journal`, {
+      const res = await voucherFetch(`${API_BASE}/payments/journal`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -558,7 +564,7 @@ const PaymentReceivedModal = ({
         console.error('Storage error:', storageErr);
       }
 
-      successToast(`Journal Voucher ${journalVoucherNo} saved successfully (${formatCurrency(totalJournalDebit)})`);
+      notifySuccess(`Journal Voucher ${journalVoucherNo} saved successfully (${formatCurrency(totalJournalDebit)})`);
       handleClearJournal();
       fetchNextJournalVoucherNo();
       onSuccess?.(savedData);
@@ -591,6 +597,10 @@ const PaymentReceivedModal = ({
       setVoucherErrors(newErrors);
       return;
     }
+    if (editVoucher && !editReason.trim()) {
+      errorToast('Please enter the reason for changing this voucher');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -606,7 +616,7 @@ const PaymentReceivedModal = ({
       };
 
       const token = localStorage.getItem('authToken');
-      const res = await fetch(`${API_BASE}/payments/contra`, {
+      const res = await voucherFetch(`${API_BASE}/payments/contra`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -623,7 +633,7 @@ const PaymentReceivedModal = ({
       const json = await res.json();
       const savedData = json.data || payload;
 
-      successToast(`Contra Voucher ${vNum} recorded successfully (${formatCurrency(amt)})`);
+      notifySuccess(`Contra Voucher ${vNum} recorded successfully (${formatCurrency(amt)})`);
       
       // Clear form
       setVoucherForm(prev => ({
@@ -898,7 +908,7 @@ const PaymentReceivedModal = ({
         || '';
 
       if (incomingCustId) {
-        fetchCustomerLastCheque(incomingCustId);
+        if (!editVoucher) fetchCustomerLastCheque(incomingCustId);
         fetchCustomerInvoices(incomingCustId);
         fetchCustomerLedgerBalance(incomingCustId);
         fetchInstallmentHistory(null, 'SALES_INVOICE', null, incomingCustId);
@@ -1014,6 +1024,109 @@ const PaymentReceivedModal = ({
       setVoucherErrors({});
     }
   }, [isOpen, invoice, invoices]);
+
+  // Edit mode: pre-fill every field from the saved voucher (runs after the initialisation above)
+  useEffect(() => {
+    if (!isOpen || !editVoucher) return;
+    const ev = editVoucher;
+    if (ev.kind === 'journal') {
+      setEditReason('');
+      setJournalVoucherNo(ev.voucherNo);
+      setJournalDate(String(ev.date || '').slice(0, 10) || new Date().toISOString().split('T')[0]);
+      setJournalRefNo(ev.referenceNo || '');
+      setJournalNarration(ev.narration || '');
+      const rows = (Array.isArray(ev.rows) ? ev.rows : []).map((r, i) => ({ id: i + 1, ...r }));
+      while (rows.length < 2) rows.push({ id: rows.length + 1, ledger: '', debit: '', credit: '', partyId: '', partyName: '' });
+      setJournalRows(rows);
+      setJournalSubmitted(false);
+      return;
+    }
+    if (ev.kind === 'contra') {
+      setEditReason('');
+      setContraVoucherNo(ev.voucherNo);
+      setVoucherForm(prev => ({
+        ...prev,
+        date: String(ev.date || '').slice(0, 10) || prev.date,
+        contraFromAccount: ev.fromAccount || '',
+        contraToAccount: ev.toAccount || '',
+        contraAmount: Number(ev.amount) > 0 ? Number(ev.amount).toFixed(2) : '',
+        contraRefNo: ev.referenceNo || '',
+        narration: ev.narration || ''
+      }));
+      return;
+    }
+    const isPay = ev.kind === 'payment';
+    const amt = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n.toFixed(2) : ''; };
+    const allocs = Array.isArray(ev.allocations) ? ev.allocations : [];
+    const rawRemarks = String(ev.remarks || '');
+    const newRefMatch = rawRemarks.match(/\[New Ref:\s*([^\]]*)\]/);
+    // Drop the tags this screen adds to the remarks when saving, so they are not added twice
+    const cleanRemarks = rawRemarks
+      .replace(/^Payment against \[Agst Ref:[^\]]*\]$/, '')
+      .replace(/\s*\[Agst Ref:[^\]]*\]$/, '')
+      .replace(/^\[Advance Balance\] Stored for future invoice adjustment$/, '')
+      .replace(/^\[On Account\] Unallocated party ledger credit$/, '')
+      .replace(/^\[(Advance|On Account)\]\s*/, '')
+      .replace(/^\[New Ref:[^\]]*\]\s*/, '')
+      .replace(/^Payment to .* \((AGST_REF|ADVANCE|ON_ACCOUNT|NEW_REF)\)$/, '')
+      .trim();
+
+    const bankAccount = ev.bankAccountId ? String(ev.bankAccountId) : (ev.manualBankAccount ? '__custom__' : '');
+    setFormData(prev => ({
+      ...prev,
+      customerId: isPay ? prev.customerId : String(ev.partyId || prev.customerId || ''),
+      paymentAmount: amt(ev.amount),
+      paymentDate: String(ev.paymentDate || '').slice(0, 10) || prev.paymentDate,
+      paymentMode: ev.paymentMode || '',
+      bankAccount,
+      manualBankAccount: bankAccount === '__custom__' ? (ev.manualBankAccount || '') : '',
+      transactionRefNo: ev.transactionRefNo || '',
+      chequeNumber: ev.chequeNumber || '',
+      chequeDate: String(ev.chequeDate || '').slice(0, 10),
+      upiApp: ev.upiApp || '',
+      upiTransactionId: ev.upiTransactionId || '',
+      remarks: ev.option === 'ADVANCE' ? '' : cleanRemarks
+    }));
+
+    const option = ev.option || 'AGST_REF';
+    setBillAllocationOption(option);
+    setEditReason('');
+    if (option === 'AGST_REF') {
+      const next = {};
+      const missing = [];
+      allocs.forEach(a => {
+        const bill = selectedInvoices.find(b => isPay
+          ? String(b.id) === String(a.billId)
+          : (a.invoiceId && (String(b.invoice_id || b.id) === String(a.invoiceId))));
+        const key = bill ? bill.id : (isPay ? a.billId : a.invoiceId);
+        if (!key) return;
+        next[key] = ((parseFloat(next[key]) || 0) + (parseFloat(a.amount) || 0)).toFixed(2);
+        if (!bill) {
+          // Bill not in the pending list any more: keep it on screen so it can still be edited
+          missing.push(isPay
+            ? { id: a.billId, po_id: a.poId, vendor_id: ev.partyId, invoice_no: a.referenceNo, display_invoice_no: a.referenceNo, outstanding: parseFloat(a.amount) || 0, total_amount: parseFloat(a.amount) || 0 }
+            : { id: a.invoiceId, invoice_id: a.invoiceId, sales_order_id: a.salesOrderId, sales_order_source: a.salesOrderSource || 'SALES_INVOICE', customer_id: ev.partyId, invoice_no: a.referenceNo, outstanding: parseFloat(a.amount) || 0, total_amount: parseFloat(a.amount) || 0 });
+        }
+      });
+      if (missing.length) setManuallyAddedInvoices(missing);
+      setAllocations(next);
+      setLumpSumAmount(amt(ev.amount));
+    } else if (option === 'ADVANCE') {
+      setAllocations({});
+      setAdvanceDetails({ refNote: cleanRemarks, amount: amt(ev.amount) });
+    } else if (option === 'ON_ACCOUNT') {
+      setAllocations({});
+      setOnAccountDetails({ amount: amt(ev.amount) });
+    } else if (option === 'NEW_REF') {
+      setAllocations({});
+      setNewRefDetails(prev => ({
+        ...prev,
+        refNo: allocs[0]?.referenceNo || newRefMatch?.[1]?.trim() || prev.refNo,
+        date: String(ev.paymentDate || '').slice(0, 10) || prev.date,
+        amount: amt(ev.amount)
+      }));
+    }
+  }, [isOpen, editVoucher, invoices]);
 
   useEffect(() => {
     if (formData.customerId && !singleInvoice && !isMultiMode && isOpen) {
@@ -1577,6 +1690,38 @@ const PaymentReceivedModal = ({
     return newErrors;
   };
 
+  // Edit mode (opened from Payment History): the same payload goes to the replace endpoint, which
+  // reverses the old voucher and records this one under the same voucher number.
+  const voucherFetch = (url, options) => {
+    if (!editVoucher) return fetch(url, options);
+    const body = { ...JSON.parse(options.body || '{}'), editReason: editReason.trim() };
+    return fetch(`${API_BASE}/vouchers/${editVoucher.kind}/${editVoucher.id}/replace`, {
+      ...options,
+      method: 'PUT',
+      body: JSON.stringify(body)
+    });
+  };
+  const notifySuccess = (message) => {
+    successToast(editVoucher ? `Voucher ${editVoucher.voucherNo} updated successfully` : message);
+  };
+  const editReasonBox = editVoucher ? (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+      <p className="text-xs font-bold text-amber-800">
+        Editing {editVoucher.voucherNo} — saving reverses the old entry and records this one under the same voucher no.
+      </p>
+      <label className="block text-[11px] font-semibold text-slate-700">
+        Reason for change <span className="text-red-500">*</span>
+        <input
+          type="text"
+          value={editReason}
+          onChange={(e) => setEditReason(e.target.value)}
+          placeholder="e.g. Wrong bill reference selected"
+          className="mt-1 w-full px-2.5 py-1.5 text-xs border border-amber-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+        />
+      </label>
+    </div>
+  ) : null;
+
   // 1. Live Accounting Execution for RECEIPT
   const handleReceiptSubmit = async (e) => {
     e.preventDefault();
@@ -1584,6 +1729,10 @@ const PaymentReceivedModal = ({
     if (Object.keys(validationErrors).length > 0) {
       const firstError = Object.values(validationErrors)[0];
       errorToast(firstError);
+      return;
+    }
+    if (editVoucher && !editReason.trim()) {
+      errorToast('Please enter the reason for changing this voucher');
       return;
     }
 
@@ -1687,7 +1836,7 @@ const PaymentReceivedModal = ({
           allocations: vendorAllocations
         };
 
-        const res = await fetch(`${API_BASE}/payments`, {
+        const res = await voucherFetch(`${API_BASE}/payments`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -1703,7 +1852,7 @@ const PaymentReceivedModal = ({
 
         const result = await res.json();
         const recordedVNo = result.data?.paymentVoucherNo || result.paymentVoucherNo || vNo;
-        successToast(`Payment voucher ${recordedVNo} for ${formatCurrency(totalAmt)} recorded successfully!`);
+        notifySuccess(`Payment voucher ${recordedVNo} for ${formatCurrency(totalAmt)} recorded successfully!`);
         fetchNextPaymentVoucherNo();
         onSuccess?.(result);
         onClose();
@@ -1770,7 +1919,7 @@ const PaymentReceivedModal = ({
             allocations: customerAllocations
           };
 
-          const response = await fetch(`${API_BASE}/customer-payments`, {
+          const response = await voucherFetch(`${API_BASE}/customer-payments`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -1786,7 +1935,7 @@ const PaymentReceivedModal = ({
 
           const result = await response.json();
           const receiptNo = result.data?.paymentReceiptNo || result.paymentReceiptNo || 'Receipt';
-          successToast(`Successfully recorded voucher ${receiptNo} for ${formatCurrency(totalRecordedAmt)} against ${customerAllocations.length} invoice reference(s)`);
+          notifySuccess(`Successfully recorded voucher ${receiptNo} for ${formatCurrency(totalRecordedAmt)} against ${customerAllocations.length} invoice reference(s)`);
           onSuccess?.(result);
           onClose();
           return;
@@ -1817,7 +1966,7 @@ const PaymentReceivedModal = ({
           authorizationCode: formData.authorizationCode,
         };
 
-        const response = await fetch(`${API_BASE}/customer-payments`, {
+        const response = await voucherFetch(`${API_BASE}/customer-payments`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -1831,7 +1980,7 @@ const PaymentReceivedModal = ({
           throw new Error(errorData.message || 'Failed to record advance payment');
         }
 
-        successToast(`Advance payment of ${formatCurrency(advAmt)} recorded successfully`);
+        notifySuccess(`Advance payment of ${formatCurrency(advAmt)} recorded successfully`);
         onSuccess?.();
         onClose();
         return;
@@ -1861,7 +2010,7 @@ const PaymentReceivedModal = ({
           authorizationCode: formData.authorizationCode,
         };
 
-        const response = await fetch(`${API_BASE}/customer-payments`, {
+        const response = await voucherFetch(`${API_BASE}/customer-payments`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -1875,7 +2024,7 @@ const PaymentReceivedModal = ({
           throw new Error(errorData.message || 'Failed to record on-account payment');
         }
 
-        successToast(`On-account payment of ${formatCurrency(onAccAmt)} recorded successfully`);
+        notifySuccess(`On-account payment of ${formatCurrency(onAccAmt)} recorded successfully`);
         onSuccess?.();
         onClose();
         return;
@@ -1905,7 +2054,7 @@ const PaymentReceivedModal = ({
           authorizationCode: formData.authorizationCode,
         };
 
-        const response = await fetch(`${API_BASE}/customer-payments`, {
+        const response = await voucherFetch(`${API_BASE}/customer-payments`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -1919,7 +2068,7 @@ const PaymentReceivedModal = ({
           throw new Error(errorData.message || 'Failed to record new reference payment');
         }
 
-        successToast(`New reference ${newRefDetails.refNo} (${formatCurrency(newRefAmt)}) recorded successfully`);
+        notifySuccess(`New reference ${newRefDetails.refNo} (${formatCurrency(newRefAmt)}) recorded successfully`);
         onSuccess?.();
         onClose();
         return;
@@ -1952,7 +2101,7 @@ const PaymentReceivedModal = ({
         authorizationCode: formData.authorizationCode,
       };
 
-      const response = await fetch(`${API_BASE}/customer-payments`, {
+      const response = await voucherFetch(`${API_BASE}/customer-payments`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1967,7 +2116,7 @@ const PaymentReceivedModal = ({
       }
 
       const result = await response.json();
-      successToast('Payment received and recorded successfully');
+      notifySuccess('Payment received and recorded successfully');
       onSuccess?.(result);
       onClose();
     } catch (error) {
@@ -2398,6 +2547,8 @@ const PaymentReceivedModal = ({
             />
           </div>
 
+          {editReasonBox}
+
           {/* Card 5: Bottom Buttons */}
           <div className="flex items-center justify-end gap-2.5 pt-1">
             <button
@@ -2416,10 +2567,10 @@ const PaymentReceivedModal = ({
               {loading ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Saving Journal Voucher...</span>
+                  <span>{editVoucher ? 'Updating Journal Voucher...' : 'Saving Journal Voucher...'}</span>
                 </>
               ) : (
-                <span>Save Journal Voucher</span>
+                <span>{editVoucher ? `Update Journal Voucher (${editVoucher.voucherNo})` : 'Save Journal Voucher'}</span>
               )}
             </button>
           </div>
@@ -3375,6 +3526,8 @@ const PaymentReceivedModal = ({
                 </div>
               </div>
 
+              {editReasonBox}
+
               {/* Action Buttons (Clear, Cancel, Save) */}
               <div className="flex gap-2.5 pt-3 border-t border-slate-200">
                 <button
@@ -3422,7 +3575,7 @@ const PaymentReceivedModal = ({
                         <>
                           <Check className="w-4 h-4" />
                           <span>
-                            Save & Record Payment ({formatCurrency(totalAllocated || parseFloat(formData.paymentAmount) || 0)})
+                            {editVoucher ? `Update ${editVoucher.voucherNo}` : 'Save & Record Payment'} ({formatCurrency(totalAllocated || parseFloat(formData.paymentAmount) || 0)})
                           </span>
                         </>
                       )}
@@ -3942,6 +4095,8 @@ const PaymentReceivedModal = ({
                 />
               </div>
 
+              {editReasonBox}
+
               {/* Action */}
               <div className="flex gap-3 pt-3 border-t border-slate-200">
                 <button
@@ -3958,7 +4113,7 @@ const PaymentReceivedModal = ({
                   className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
                 >
                   <ArrowLeftRight className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                  <span>{loading ? 'Recording Voucher...' : `Save Contra Voucher (${contraVoucherNo || getVoucherNumber('CONTRA')})`}</span>
+                  <span>{loading ? 'Recording Voucher...' : (editVoucher ? `Update Contra Voucher (${editVoucher.voucherNo})` : `Save Contra Voucher (${contraVoucherNo || getVoucherNumber('CONTRA')})`)}</span>
                 </button>
               </div>
             </div>

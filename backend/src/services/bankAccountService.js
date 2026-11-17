@@ -105,7 +105,7 @@ const calculateBankBalances = async (accountIds = []) => {
   const [contraInRows] = await pool.query(
     `SELECT to_bank_account_id as bank_account_id, COALESCE(SUM(amount), 0) as total_contra_in, COUNT(*) as contra_in_count
      FROM contra_vouchers
-     WHERE to_bank_account_id IN (${placeholders})
+     WHERE to_bank_account_id IN (${placeholders}) AND COALESCE(status, 'POSTED') <> 'CANCELLED'
      GROUP BY to_bank_account_id`,
     accountIds
   );
@@ -114,7 +114,7 @@ const calculateBankBalances = async (accountIds = []) => {
   const [contraOutRows] = await pool.query(
     `SELECT from_bank_account_id as bank_account_id, COALESCE(SUM(amount), 0) as total_contra_out, COUNT(*) as contra_out_count
      FROM contra_vouchers
-     WHERE from_bank_account_id IN (${placeholders})
+     WHERE from_bank_account_id IN (${placeholders}) AND COALESCE(status, 'POSTED') <> 'CANCELLED'
      GROUP BY from_bank_account_id`,
     accountIds
   );
@@ -473,11 +473,12 @@ const getBankPeriodSummary = async (accountId, startDateInput, endDateInput, hos
   const endDate = (endDateInput || `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())}`).slice(0, 10);
 
   // The four movements that make up a bank balance (same sources as calculateBankBalances)
+  // statusSql keeps cancelled / unconfirmed vouchers out of the balance
   const sources = [
-    { table: 'customer_payments', amount: 'payment_amount', bank: 'bank_account_id', date: 'payment_date', status: true },
-    { table: 'payments', amount: 'payment_amount', bank: 'bank_account_id', date: 'payment_date', status: true },
-    { table: 'contra_vouchers', amount: 'amount', bank: 'to_bank_account_id', date: 'voucher_date', status: false },
-    { table: 'contra_vouchers', amount: 'amount', bank: 'from_bank_account_id', date: 'voucher_date', status: false }
+    { table: 'customer_payments', amount: 'payment_amount', bank: 'bank_account_id', date: 'payment_date', statusSql: "AND status = 'CONFIRMED'" },
+    { table: 'payments', amount: 'payment_amount', bank: 'bank_account_id', date: 'payment_date', statusSql: "AND status = 'CONFIRMED'" },
+    { table: 'contra_vouchers', amount: 'amount', bank: 'to_bank_account_id', date: 'voucher_date', statusSql: "AND COALESCE(status, 'POSTED') <> 'CANCELLED'" },
+    { table: 'contra_vouchers', amount: 'amount', bank: 'from_bank_account_id', date: 'voucher_date', statusSql: "AND COALESCE(status, 'POSTED') <> 'CANCELLED'" }
   ];
   // Company-wise statement: only vouchers recorded for the chosen company
   const hostCondition = hostId ? 'AND host_company_id = ?' : '';
@@ -485,7 +486,7 @@ const getBankPeriodSummary = async (accountId, startDateInput, endDateInput, hos
   const sumFor = async (src, dateCondition, dateParams) => {
     const [rows] = await pool.query(
       `SELECT COALESCE(SUM(${src.amount}), 0) as total FROM ${src.table}
-       WHERE ${src.bank} = ? ${src.status ? "AND status = 'CONFIRMED'" : ''} ${hostCondition} AND ${dateCondition.replace(/%D%/g, `DATE(${src.date})`)}`,
+       WHERE ${src.bank} = ? ${src.statusSql} ${hostCondition} AND ${dateCondition.replace(/%D%/g, `DATE(${src.date})`)}`,
       [accountId, ...hostParams, ...dateParams]
     );
     return parseFloat(rows[0]?.total || 0);
@@ -497,7 +498,7 @@ const getBankPeriodSummary = async (accountId, startDateInput, endDateInput, hos
   // registered, or its first entry if one is dated earlier. Periods that end before that show nothing.
   const firstDates = await Promise.all(sources.map(async (src) => {
     const [rows] = await pool.query(
-      `SELECT DATE_FORMAT(MIN(${src.date}), '%Y-%m-%d') as d FROM ${src.table} WHERE ${src.bank} = ? ${src.status ? "AND status = 'CONFIRMED'" : ''}`,
+      `SELECT DATE_FORMAT(MIN(${src.date}), '%Y-%m-%d') as d FROM ${src.table} WHERE ${src.bank} = ? ${src.statusSql}`,
       [accountId]
     );
     return rows[0]?.d || null;
