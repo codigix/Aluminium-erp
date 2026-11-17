@@ -332,6 +332,17 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
     setItemRows(rows => rows.map(row => (row.poItemId === poItemId ? { ...row, qty: value, selected: parseFloat(value) > 0 } : row)));
   };
 
+  // Weight-billed items: entering the design qty (pieces) works out the weight pro rata
+  // (billed weight / design qty per piece). The weight stays editable; editing it re-derives the pieces.
+  const setItemPcs = (poItemId, value) => {
+    setItemRows(rows => rows.map(row => {
+      if (row.poItemId !== poItemId) return row;
+      const pcs = parseFloat(value);
+      const weight = pcs > 0 && row.designQty > 0 ? formatNum(pcs * row.billedQty / row.designQty) : '';
+      return { ...row, pcs: value, pcsQty: weight, qty: weight, selected: true };
+    }));
+  };
+
   const selectAll = () => setItemRows(rows => rows.map(row => {
     const limit = getLimit(row, form.reason);
     return limit > 0 ? { ...row, selected: true, qty: formatNum(limit) } : row;
@@ -748,11 +759,21 @@ const DebitNoteEntry = ({ initialVendorId = '', hostCompanyId = null, hostCompan
                               <>
                                 <td className="px-2 py-2.5 align-top text-right whitespace-nowrap">
                                   {r.designQty > 0 ? (
-                                    <>
-                                      <span className="font-mono font-semibold text-slate-800">{formatNum(r.designQty)}</span>
-                                      <span className="text-[10px] text-slate-400 ml-1">{r.designUnit}</span>
-                                      {returnPcs !== null && <div className="text-[10px] mt-0.5 text-rose-500">return {formatNum(returnPcs)}</div>}
-                                    </>
+                                    r.selected ? (
+                                      <>
+                                        {/* Pieces typed here stay as typed while the weight is the one they produced */}
+                                        <input type="number" min="0" step="any"
+                                          value={r.pcs !== undefined && r.pcsQty === r.qty ? r.pcs : (returnPcs !== null ? formatNum(returnPcs) : '')}
+                                          onChange={(e) => setItemPcs(r.poItemId, e.target.value)}
+                                          className={`w-16 text-right font-mono border rounded-md px-1.5 py-1 focus:outline-none ${over ? 'border-rose-400 bg-rose-50 text-rose-700' : 'border-slate-300 focus:border-blue-500'}`} />
+                                        <div className="text-[10px] mt-0.5 text-slate-400">of {formatNum(r.designQty)} {r.designUnit}</div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="font-mono font-semibold text-slate-800">{formatNum(r.designQty)}</span>
+                                        <span className="text-[10px] text-slate-400 ml-1">{r.designUnit}</span>
+                                      </>
+                                    )
                                   ) : <span className="text-slate-300">—</span>}
                                 </td>
                                 <td className="px-2 py-2.5 align-top text-right whitespace-nowrap">{qtyCell}</td>
