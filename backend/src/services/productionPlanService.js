@@ -2399,6 +2399,44 @@ const removeManualMaterialFromPlan = async (planId, materialId) => {
   return true;
 };
 
+// Material Request "Edit size": save the edited size / density on the plan's material row(s) before the
+// request is sent, so the new size stays when the Material Request screen is opened again.
+const updatePlanMaterialSize = async (planId, data = {}) => {
+  const ids = [...new Set((Array.isArray(data.ppm_ids) && data.ppm_ids.length ? data.ppm_ids : [data.ppm_id])
+    .map(Number).filter(n => n > 0))];
+  if (ids.length === 0) {
+    const err = new Error('Plan material line not found'); err.statusCode = 400; throw err;
+  }
+  const [rows] = await pool.query(
+    'SELECT id, design_qty, required_qty, uom FROM production_plan_materials WHERE plan_id = ? AND id IN (?)',
+    [planId, ids]
+  );
+  if (rows.length !== ids.length) {
+    const err = new Error('Plan material line not found'); err.statusCode = 404; throw err;
+  }
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const len = num(data.length); const wid = num(data.width); const thk = num(data.thickness);
+  const dia = num(data.diameter); const od = num(data.outer_diameter);
+  const dens = num(data.density); const wpu = num(data.weight_per_unit);
+  const qty = num(data.quantity);
+  for (const r of rows) {
+    const isKg = /^(KG|KGS|KILOGRAM)/i.test(String(r.uom || '').trim());
+    const nos = num(r.design_qty);
+    // Kg lines: Required = Wt/pc × this row's Design Qty; a single row takes the screen's quantity
+    let required = num(r.required_qty);
+    if (isKg && wpu > 0 && nos > 0) required = Number((wpu * nos).toFixed(3));
+    else if (rows.length === 1 && qty > 0) required = qty;
+    await pool.execute(
+      `UPDATE production_plan_materials
+          SET length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?,
+              density = ?, weight_per_unit = ?, required_qty = ?
+        WHERE id = ? AND plan_id = ?`,
+      [len, wid, thk, dia, od, dens, wpu, required, r.id, planId]
+    );
+  }
+  return { updated: rows.length };
+};
+
 const getMaterialRequestItemsForPlan = async (planId) => {
   const [plans] = await pool.query(
     'SELECT * FROM production_plans WHERE id = ?',
@@ -2420,7 +2458,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   );
   const hasRequests = mrCheck.length > 0;
 
-  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists, dimensions = {}, isExistingRequest = false, isManual = false, ppmId = null, shapeType = '') => {
+  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists, dimensions = {}, isExistingRequest = false, isManual = false, ppmId = null, shapeType = '', extra = {}) => {
     if (!itemCode && !name) return;
 
     const code = (itemCode || name).trim();
@@ -2479,6 +2517,12 @@ const getMaterialRequestItemsForPlan = async (planId) => {
       if (shapeType && !existing.shape_type) {
         existing.shape_type = shapeType;
       }
+      // All plan material rows merged into this line (used by Material Request "Edit size" save)
+      if (ppmId && !(existing.ppm_ids || []).includes(ppmId)) {
+        existing.ppm_ids = [...(existing.ppm_ids || []), ppmId];
+        if (!existing.ppm_id) existing.ppm_id = ppmId;
+      }
+      if (!(Number(existing.density) > 0) && Number(extra.density) > 0) existing.density = Number(extra.density);
     } else {
       aggregatedMap.set(key, {
         item_code: code,
@@ -2495,7 +2539,9 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         dimensions: dimensions || {},
         is_manual: !!isManual,
         ppm_id: ppmId,
-        shape_type: shapeType || ''
+        ppm_ids: ppmId ? [ppmId] : [],
+        shape_type: shapeType || '',
+        ...(Number(extra.density) > 0 ? { density: Number(extra.density) } : {})
       });
     }
   };
@@ -2639,7 +2685,8 @@ const getMaterialRequestItemsForPlan = async (planId) => {
       false,             // isExistingRequest
       !!mat.is_manual,   // isManual
       mat.id,            // ppmId
-      shapeType          // shapeType
+      shapeType,         // shapeType
+      { density: mat.density } // saved density (0 = not set → screen looks it up)
     );
   }
 
@@ -3856,6 +3903,7 @@ module.exports = {
   createMaterialRequestFromPlan,
   getMaterialRequestItemsForPlan,
   addManualMaterialToPlan,
+  updatePlanMaterialSize,
   savePlanOperation,
   removePlanOperationOverride,
   removeManualMaterialFromPlan,

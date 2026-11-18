@@ -13,6 +13,7 @@ import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions, validateShapeDimensions, calculateWeight } from '../utils/formatters';
 import { PipeCalcFields, FlangeFields, isFlangeShape } from '../components/ShapeCalcFields.jsx';
+import LineDimensionEditor, { PREFIX_TO_CALC_SHAPE } from '../components/LineDimensionEditor.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -628,6 +629,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
   const confirmTransmitMR = async () => {
     if (!mrPlanDetails) return;
+    const badSize = mrItems.find(item => !item.request_exists && item._dim_error);
+    if (badSize) {
+      errorToast(`${badSize.material_name || badSize.item_code || 'Line'}: ${badSize._dim_error}`);
+      return;
+    }
 
     try {
       setTransmittingMr(true);
@@ -3612,6 +3618,176 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     return terms.every(term => haystack.includes(term));
   });
 
+  // ── Material Request: edit a line's size before it is requested (same editor + weight formula as RFQ "Edit size").
+  // The edited size / density / weight live on the row and go into the Material Request when it is sent.
+  const mrLineDims = (row) => {
+    const d = row.dimensions && typeof row.dimensions === 'object' ? row.dimensions : {};
+    const pick = (k, alt) => (row[k] !== undefined && row[k] !== null && row[k] !== '' ? row[k] : (d[k] ?? (alt ? d[alt] : undefined) ?? 0));
+    return {
+      ...row,
+      length: pick('length'), width: pick('width'), diameter: pick('diameter'),
+      outer_diameter: pick('outer_diameter', 'outerDiameter'),
+      thickness: pick('thickness') || pick('thread_pitch', 'threadPitch')
+    };
+  };
+  const mrLinePrefix = (row) => row._dim_prefix || String(formatDimensions(mrLineDims(row)) || '').split(' ')[0] || '';
+
+  // Density (g/cm³): the line's own → Materials master (by name / grade) → Item Master item (linked material,
+  // grade or its own density) → Materials master name the material name starts with (e.g. "MS Bright" → MS)
+  const resolveMrDensity = (row) => {
+    // Typed in the Density box: used as typed (empty → no weight calculation until a value is entered)
+    if (row._density_source === 'entered') return { density: parseFloat(row.density) || 0, source: 'entered' };
+    const own = parseFloat(row.density) || 0;
+    if (own > 0) return { density: own, source: row._density_source || 'saved' };
+    const lc = (v) => String(v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const matD = (m) => (m && parseFloat(m.density) > 0 ? parseFloat(m.density) : 0);
+    const mats = Array.isArray(materials) ? materials : [];
+    const byName = (n) => (lc(n) ? mats.find(m => lc(m.name) === lc(n)) : null);
+    const name = lc(row.material_name);
+    const direct = byName(row.material_name) || byName(row.material_grade);
+    if (matD(direct)) return { density: matD(direct), source: `Materials: ${direct.name}` };
+    const code = String(row.item_code || '').trim().toUpperCase();
+    const sameItem = (allStockItems || []).filter(s => (code && String(s.item_code || '').trim().toUpperCase() === code) || (name && lc(s.material_name) === name));
+    for (const s of sameItem) {
+      const linked = (s.material_id ? mats.find(m => String(m.id) === String(s.material_id)) : null) || byName(s.material_grade) || byName(s.material_type);
+      if (matD(linked)) return { density: matD(linked), source: `Materials: ${linked.name}` };
+    }
+    const sb = sameItem.find(s => parseFloat(s.density) > 0);
+    if (sb) return { density: parseFloat(sb.density), source: 'Item Master' };
+    const prefix = mats
+      .filter(m => lc(m.name) && name.startsWith(`${lc(m.name)} `) && matD(m))
+      .sort((a, b) => lc(b.name).length - lc(a.name).length)[0];
+    if (prefix) return { density: matD(prefix), source: `Materials: ${prefix.name}` };
+    return { density: 0, source: '' };
+  };
+
+  const isMrWeightLine = (row) => /^(KG|KGS|KILOGRAM)/i.test(String(row.uom || row.unit || '').trim());
+
+  // Material Request: weight per piece from the shared Item Master / BOM / RFQ formula (3 decimals),
+  // so Required matches those screens (e.g. PL 4×135×16 @ 2.83 → 0.024 kg/pc × 4 Nos = 0.096 kg).
+  const mrWeightPerUnit = (args) => calculateWeight(args) || 0;
+
+  // Recalculate weight per piece and, for Kg lines, Required = Wt/pc × Design Qty (Nos)
+  const recalcMrLine = (it) => {
+    const prefix = mrLinePrefix(it);
+    const shape = PREFIX_TO_CALC_SHAPE[prefix];
+    const dims = {
+      shape: shape || it.shape_type || '', length: it.length, width: it.width, thickness: it.thickness,
+      diameter: it.diameter, outer_diameter: it.outer_diameter, threadPitch: prefix === 'TR' ? it.thickness : 0
+    };
+    it.dimensions = { ...(it.dimensions || {}), length: it.length, width: it.width, thickness: it.thickness, diameter: it.diameter, outer_diameter: it.outer_diameter };
+    if (prefix === 'TR') it.thread_pitch = it.thickness;
+    const check = validateShapeDimensions(dims);
+    it._dim_error = check.isValid ? '' : check.error;
+    if (!check.isValid || !shape) return it;
+    const { density, source } = resolveMrDensity(it);
+    if (!(density > 0)) return it; // no density → Required stays as it is
+    const wpu = mrWeightPerUnit({ ...dims, density });
+    if (!(wpu > 0)) return it;
+    if (it._density_source !== 'entered') { // keep a typed density exactly as typed (e.g. "7." while typing)
+      it.density = density;
+      it._density_source = source;
+    }
+    it.weight_per_unit = wpu;
+    const nos = parseFloat(it.design_qty) || 0;
+    if (isMrWeightLine(it) && nos > 0) it.quantity = parseFloat((wpu * nos).toFixed(3));
+    return it;
+  };
+
+  const startMrSizeEdit = (row) => setMrItems(prev => prev.map(r => (r === row
+    ? { ...mrLineDims(r), _dim_prefix: mrLinePrefix(r), _editing: true }
+    : r)));
+  const patchMrLine = (row, field, value) => setMrItems(prev => prev.map(r => (r === row
+    ? recalcMrLine({ ...r, [field]: value, ...(field === 'density' ? { _density_source: 'entered' } : {}) })
+    : r)));
+  const finishMrSizeEdit = async (row) => {
+    if (row._dim_error) { errorToast(`${row.material_name || row.item_code || 'Line'}: ${row._dim_error}`); return; }
+    // Plan lines (from the production plan) are saved on the plan so the size stays after reopening.
+    // Lines added here with "Add Item" are not on the plan yet – they keep the size until the request is sent.
+    const ppmIds = (Array.isArray(row.ppm_ids) && row.ppm_ids.length ? row.ppm_ids : [row.ppm_id]).filter(Boolean);
+    if (ppmIds.length > 0 && mrPlanDetails?.id) {
+      if (row._saving) return;
+      setMrItems(prev => prev.map(r => (r === row ? { ...r, _saving: true } : r)));
+      try {
+        const token = localStorage.getItem('authToken');
+        const res = await fetch(`${API_BASE}/production-plans/${mrPlanDetails.id}/materials/size`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ppm_ids: ppmIds,
+            length: row.length, width: row.width, thickness: row.thickness,
+            diameter: row.diameter, outer_diameter: row.outer_diameter,
+            density: parseFloat(row.density) || 0,
+            weight_per_unit: parseFloat(row.weight_per_unit) || 0,
+            quantity: parseFloat(row.quantity) || 0
+          })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          errorToast(err.message || 'Failed to save size');
+          setMrItems(prev => prev.map(r => (r.ppm_id === row.ppm_id && r._saving ? { ...r, _saving: false } : r)));
+          return;
+        }
+        successToast('Size saved');
+      } catch (e) {
+        console.error('Error saving MR line size:', e);
+        errorToast('Failed to save size');
+        setMrItems(prev => prev.map(r => (r.ppm_id === row.ppm_id && r._saving ? { ...r, _saving: false } : r)));
+        return;
+      }
+      setMrItems(prev => prev.map(r => (r.ppm_id === row.ppm_id && r._saving ? { ...r, _saving: false, _editing: false } : r)));
+      return;
+    }
+    setMrItems(prev => prev.map(r => (r === row ? { ...r, _editing: false } : r)));
+  };
+
+  const renderMrSizeEditor = (row) => {
+    const prefix = mrLinePrefix(row);
+    const hasFormula = !!PREFIX_TO_CALC_SHAPE[prefix];
+    const { density, source } = resolveMrDensity(row);
+    const nos = parseFloat(row.design_qty) || 0;
+    const wpu = hasFormula && density > 0
+      ? mrWeightPerUnit({
+          shape: PREFIX_TO_CALC_SHAPE[prefix], density, length: row.length, width: row.width, thickness: row.thickness,
+          diameter: row.diameter, outer_diameter: row.outer_diameter, threadPitch: prefix === 'TR' ? row.thickness : 0
+        })
+      : (parseFloat(row.weight_per_unit) || 0);
+    return (
+      <div className="mt-1 p-2 bg-blue-50/60 border border-blue-100 rounded space-y-1.5 min-w-[260px]" onClick={(e) => e.stopPropagation()}>
+        <div className="text-[10px] leading-snug">
+          <span className="font-semibold text-blue-700">Edit size</span>
+          {row._dim_error ? (
+            <span className="text-red-600 font-semibold"> · ⚠️ {row._dim_error}</span>
+          ) : !hasFormula ? (
+            <span className="text-amber-700"> · No weight formula for this shape — Required stays as it is.</span>
+          ) : !(density > 0) ? (
+            <span className="text-amber-700"> · Density not found — set it in the Materials master.</span>
+          ) : (
+            <span className="text-slate-600">
+              {' '}· Wt/pc <b>{wpu.toFixed(3)} kg</b>{nos > 0 ? <> × {nos} Nos = <b className="text-indigo-700">{(wpu * nos).toFixed(3)} kg</b></> : null}
+              <span className="text-slate-400"> · density {density} ({source})</span>
+            </span>
+          )}
+        </div>
+        <LineDimensionEditor prefix={prefix} item={row} onPatch={(field, value) => patchMrLine(row, field, value)} />
+        {hasFormula && (
+          <div className="flex items-center gap-1.5">
+            <label className="text-[10px] text-slate-400 font-medium whitespace-nowrap">Density (g/cm³)</label>
+            {/* Read-only: density comes from the Materials / Item master, not typed per line */}
+            <input
+              type="number" placeholder="—"
+              value={row._density_source === 'entered' ? (row.density ?? '') : (parseFloat(row.density) > 0 ? row.density : (density > 0 ? density : ''))}
+              readOnly
+              disabled
+              title="Density comes from the Materials master"
+              className="w-20 p-1 bg-slate-100 border border-slate-200 rounded text-[11px] text-slate-500 cursor-not-allowed outline-none"
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const mrColumns = [
     {
       label: 'Material Name',
@@ -3630,7 +3806,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     {
       label: 'Dimensions',
       key: 'dimensions',
-      render: (_, row) => renderDimensions(row)
+      render: (_, row) => (
+        <>
+          {renderDimensions(row)}
+          {row._editing && !row.request_exists && renderMrSizeEditor(row)}
+        </>
+      )
     },
     {
       label: 'Design Qty',
@@ -3652,7 +3833,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       render: (val, row) => (
         <div className="flex flex-col items-center">
           <span className="text-xs font-semibold text-indigo-600">
-            {Number(val || 0).toFixed(2)}
+            {Number(val || 0).toFixed(3)}
           </span>
           <span className="text-[9px] text-slate-400 uppercase">{row.uom || row.unit || 'Nos'}</span>
         </div>
@@ -3665,7 +3846,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       render: (val, row) => (
         <div className="flex flex-col items-center">
           <span className={`text-xs font-semibold ${parseFloat(val || 0) > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-            {Number(val || 0).toFixed(2)}
+            {Number(val || 0).toFixed(3)}
           </span>
           <span className="text-[9px] text-slate-400 uppercase">{row.uom || row.unit || 'Nos'}</span>
         </div>
@@ -3679,18 +3860,13 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         const req = parseFloat(row.quantity || 0);
 
         if (val) {
-          if (inv >= req) {
+          // Sent lines: FULFILLED only when the Material Request itself is fulfilled/completed,
+          // otherwise REQUESTED (stock on hand does not make a request "partially fulfilled")
+          if (row.is_fulfilled) {
             return (
               <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-[10px] border border-emerald-100 font-medium">
                 <CheckCircle2 className="w-3 h-3" />
                 FULFILLED
-              </div>
-            );
-          } else if (inv > 0) {
-            return (
-              <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-[10px] border border-amber-100 font-medium">
-                <Clock className="w-3 h-3" />
-                PARTIALLY FULFILLED
               </div>
             );
           } else {
@@ -3724,7 +3900,18 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       label: 'Actions',
       key: 'actions',
       className: 'text-center',
-      render: (_, row) => row.is_manual && !row.request_exists && (
+      render: (_, row) => !row.request_exists && (
+        <div className="flex items-center justify-center gap-1">
+        <button
+          type="button"
+          onClick={() => (row._editing ? finishMrSizeEdit(row) : startMrSizeEdit(row))}
+          disabled={!!row._saving}
+          className={`p-1 rounded disabled:opacity-50 ${row._editing ? 'text-emerald-600 hover:bg-emerald-50' : 'text-blue-600 hover:bg-blue-50'}`}
+          title={row._editing ? 'Save size' : 'Edit size of this line'}
+        >
+          {row._editing ? <CheckCircle2 size={14} /> : <Edit2 size={14} />}
+        </button>
+        {row.is_manual && (
         <button
           onClick={async () => {
             if (row.ppm_id) {
@@ -3755,6 +3942,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         >
           <Trash2 size={14} />
         </button>
+        )}
+        </div>
       )
     }
   ];

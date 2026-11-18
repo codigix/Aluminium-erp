@@ -21,6 +21,8 @@ router.put('/:id', authorize(['PROD_MANAGE']), productionPlanController.updatePr
 router.post('/transmit-mr/:id', authorize(['PROD_MANAGE']), productionPlanController.createMaterialRequestFromPlan);
 router.get('/material-request-items/:id', authorize(['PROD_VIEW']), productionPlanController.getMaterialRequestItemsForPlan);
 router.post('/:id/materials', authorize(['PROD_MANAGE']), productionPlanController.addManualMaterial);
+// Material Request "Edit size": save a line's edited size / density on the plan
+router.put('/:id/materials/size', authorize(['PROD_MANAGE']), productionPlanController.updateMaterialSize);
 // Configure Work Order: add / edit operations for this plan only (before work orders exist)
 router.put('/:id/operations', authorize(['PROD_MANAGE']), productionPlanController.savePlanOperation);
 router.delete('/:id/operations/:overrideId', authorize(['PROD_MANAGE']), productionPlanController.removePlanOperation);

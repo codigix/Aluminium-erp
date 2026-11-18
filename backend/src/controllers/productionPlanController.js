@@ -144,6 +144,15 @@ const addManualMaterial = async (req, res, next) => {
   }
 };
 
+const updateMaterialSize = async (req, res, next) => {
+  try {
+    const result = await productionPlanService.updatePlanMaterialSize(req.params.id, req.body);
+    res.json({ message: 'Size saved', ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const removeManualMaterial = async (req, res, next) => {
   try {
     await productionPlanService.removeManualMaterialFromPlan(req.params.id, req.params.materialId);
@@ -208,6 +217,7 @@ module.exports = {
   savePlanOperation,
   removePlanOperation,
   removeManualMaterial,
+  updateMaterialSize,
   getBulkCreationPreview,
   bulkCreateProductionPlans,
   getBulkMaterialRequestPreview,
