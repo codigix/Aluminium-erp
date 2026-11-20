@@ -2522,7 +2522,10 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         existing.ppm_ids = [...(existing.ppm_ids || []), ppmId];
         if (!existing.ppm_id) existing.ppm_id = ppmId;
       }
-      if (!(Number(existing.density) > 0) && Number(extra.density) > 0) existing.density = Number(extra.density);
+      if (!(Number(existing.density) > 0) && Number(extra.density) > 0) {
+        existing.density = Number(extra.density);
+        existing.density_source = extra.densitySource || '';
+      }
     } else {
       aggregatedMap.set(key, {
         item_code: code,
@@ -2541,15 +2544,16 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         ppm_id: ppmId,
         ppm_ids: ppmId ? [ppmId] : [],
         shape_type: shapeType || '',
-        ...(Number(extra.density) > 0 ? { density: Number(extra.density) } : {})
+        ...(Number(extra.density) > 0 ? { density: Number(extra.density), density_source: extra.densitySource || '' } : {})
       });
     }
   };
 
   // Step 1: Add Materials (ONLY materials should be in Material Request)
   const [materials] = await pool.query(`
-    SELECT ppm.*, 
+    SELECT ppm.*,
            shape_lookup.shape_name as shape_type,
+           shape_lookup.bom_density as bom_density,
            COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
            COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
            COALESCE(actual_sb.current_balance, 0) as current_balance,
@@ -2563,7 +2567,8 @@ const getMaterialRequestItemsForPlan = async (planId) => {
     FROM production_plan_materials ppm
     LEFT JOIN (
         SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
-               MAX(s.name) as shape_name
+               MAX(s.name) as shape_name,
+               MAX(NULLIF(som.density, 0)) as bom_density
         FROM sales_order_item_materials som
         LEFT JOIN shapes s ON som.shape_id = s.id
         GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
@@ -2686,7 +2691,10 @@ const getMaterialRequestItemsForPlan = async (planId) => {
       !!mat.is_manual,   // isManual
       mat.id,            // ppmId
       shapeType,         // shapeType
-      { density: mat.density } // saved density (0 = not set → screen looks it up)
+      // saved density on the plan line, else the BOM line's density (same material + size)
+      Number(mat.density) > 0
+        ? { density: mat.density, densitySource: 'saved' }
+        : { density: mat.bom_density, densitySource: 'BOM' }
     );
   }
 

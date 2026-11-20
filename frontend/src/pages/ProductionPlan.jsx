@@ -3638,7 +3638,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     // Typed in the Density box: used as typed (empty → no weight calculation until a value is entered)
     if (row._density_source === 'entered') return { density: parseFloat(row.density) || 0, source: 'entered' };
     const own = parseFloat(row.density) || 0;
-    if (own > 0) return { density: own, source: row._density_source || 'saved' };
+    if (own > 0) return { density: own, source: row._density_source || row.density_source || 'saved' };
     const lc = (v) => String(v || '').replace(/\s+/g, ' ').trim().toLowerCase();
     const matD = (m) => (m && parseFloat(m.density) > 0 ? parseFloat(m.density) : 0);
     const mats = Array.isArray(materials) ? materials : [];
@@ -3753,7 +3753,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         })
       : (parseFloat(row.weight_per_unit) || 0);
     return (
-      <div className="mt-1 p-2 bg-blue-50/60 border border-blue-100 rounded space-y-1.5 min-w-[260px]" onClick={(e) => e.stopPropagation()}>
+      <div className="mt-1 p-2 bg-blue-50/60 border border-blue-100 rounded space-y-1.5 min-w-[360px] overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="text-[10px] leading-snug">
           <span className="font-semibold text-blue-700">Edit size</span>
           {row._dim_error ? (
@@ -3769,7 +3769,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             </span>
           )}
         </div>
-        <LineDimensionEditor prefix={prefix} item={row} onPatch={(field, value) => patchMrLine(row, field, value)} />
+        {/* UI only: each label on its own line above its input, so long pipe / flange labels
+            ("Outer Diameter (OD) (mm)") don't push the inputs out of the box into the next column */}
+        <div className="min-w-0 [&_label]:block [&_label]:leading-tight [&_label]:mb-0.5 [&_label]:break-words [&_input]:min-w-0 [&_select]:min-w-0 [&_select]:w-full">
+          <LineDimensionEditor prefix={prefix} item={row} onPatch={(field, value) => patchMrLine(row, field, value)} />
+        </div>
         {hasFormula && (
           <div className="flex items-center gap-1.5">
             <label className="text-[10px] text-slate-400 font-medium whitespace-nowrap">Density (g/cm³)</label>
