@@ -1322,6 +1322,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   };
 
   const handleOrderSelect = async (orderId) => {
+    // Validation: block Sales Orders without a ready BOM (cost > 0 with materials/components)
+    if (orderId) {
+      const so = productionReadyOrders.find(o => String(o.id) === String(orderId));
+      if (so && so.bom_ready === false) {
+        errorToast(`BOM not ready for ${so.order_no}. Add materials and approve the BOM (cost > 0) for at least one drawing${so.bom_pending_drawings ? `: ${so.bom_pending_drawings}` : ''}.`);
+        return;
+      }
+    }
     setSelectedOrderId(orderId);
     setSelectedBomId('');
     setAvailableBoms([]);
@@ -2325,7 +2333,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         return (
                           <SearchableSelect
                             options={soOptions.map(so => ({
-                              label: `${so.order_no} - ${so.company_name || 'No Client'}`,
+                              label: `${so.order_no} - ${so.company_name || 'No Client'}${so.bom_ready === false ? ' (BOM pending)' : ''}`,
                               value: so.id.toString(),
                               order_no: so.order_no
                             }))}

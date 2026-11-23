@@ -512,6 +512,16 @@ const createProductionPlan = async (planData, createdBy) => {
     const finalBomNo = bomNo || (bom && bom.bomNo) || null;
     const finalTargetQty = targetQty || targetQuantity || (bom && bom.targetQty) || 0;
 
+    // Validation: Sales Order must have at least one drawing with a BOM (cost > 0, materials/components)
+    if (finalSalesOrderId) {
+      const readiness = await getSalesOrderBomReadiness(finalSalesOrderId, connection);
+      if (readiness && !readiness.ready) {
+        const err = new Error(`BOM not ready for ${readiness.orderNo}. Add materials and approve the BOM (cost > 0) for at least one drawing${readiness.pendingDrawings ? `: ${readiness.pendingDrawings}` : ''}.`);
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+
     if (finalSalesOrderId && finalBomNo) {
       // Find directly paired sales order ID (design vs execution orders) only via direct quotation_id, NEVER customer_po_id
       const [pairedIdsRows] = await connection.query(
@@ -1027,13 +1037,55 @@ const getReadySalesOrderItems = async () => {
 
 const getProductionReadySalesOrders = async () => {
   const [rows] = await pool.query(
-    `SELECT combined.* FROM (
-      SELECT o.id, 
-              o.order_no, 
-              COALESCE(o.project_name, so.project_name, c.company_name, '') as project_name, 
-              cp.po_number, 
-              c.company_name, 
-              o.created_at
+    `SELECT combined.id, combined.order_no, combined.project_name, combined.po_number, combined.company_name, combined.created_at,
+            MAX(combined.bom_ready) AS bom_ready,
+            MAX(combined.bom_pending_drawings) AS bom_pending_drawings
+     FROM (
+      SELECT o.id,
+              o.order_no,
+              COALESCE(o.project_name, so.project_name, c.company_name, '') as project_name,
+              cp.po_number,
+              c.company_name,
+              o.created_at,
+              -- BOM ready = at least one drawing whose BOM has cost > 0 and materials/components
+              (
+                EXISTS (
+                  SELECT 1 FROM order_items oi
+                  JOIN sales_order_items soi ON (
+                    TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
+                    OR TRIM(oi.drawing_no) LIKE CONCAT(TRIM(soi.drawing_no), ' %')
+                    OR TRIM(oi.drawing_no) LIKE CONCAT(TRIM(soi.drawing_no), '-%')
+                  )
+                  WHERE oi.order_id = o.id
+                    AND soi.bom_cost > 0
+                    AND (EXISTS (SELECT 1 FROM sales_order_item_materials m WHERE m.sales_order_item_id = soi.id)
+                      OR EXISTS (SELECT 1 FROM sales_order_item_components sc WHERE sc.sales_order_item_id = soi.id))
+                )
+                OR EXISTS (
+                  SELECT 1 FROM sales_order_items soi
+                  WHERE soi.sales_order_id = so.id
+                    AND soi.bom_cost > 0
+                    AND (EXISTS (SELECT 1 FROM sales_order_item_materials m WHERE m.sales_order_item_id = soi.id)
+                      OR EXISTS (SELECT 1 FROM sales_order_item_components sc WHERE sc.sales_order_item_id = soi.id))
+                )
+              ) AS bom_ready,
+              (
+                SELECT GROUP_CONCAT(DISTINCT TRIM(oi.drawing_no) ORDER BY oi.id SEPARATOR ', ')
+                FROM order_items oi
+                WHERE oi.order_id = o.id
+                  AND oi.drawing_no IS NOT NULL AND TRIM(oi.drawing_no) <> ''
+                  AND NOT EXISTS (
+                    SELECT 1 FROM sales_order_items soi
+                    WHERE (
+                      TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
+                      OR TRIM(oi.drawing_no) LIKE CONCAT(TRIM(soi.drawing_no), ' %')
+                      OR TRIM(oi.drawing_no) LIKE CONCAT(TRIM(soi.drawing_no), '-%')
+                    )
+                    AND soi.bom_cost > 0
+                    AND (EXISTS (SELECT 1 FROM sales_order_item_materials m WHERE m.sales_order_item_id = soi.id)
+                      OR EXISTS (SELECT 1 FROM sales_order_item_components sc WHERE sc.sales_order_item_id = soi.id))
+                  )
+              ) AS bom_pending_drawings
        FROM orders o
        LEFT JOIN sales_orders so ON (
          (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
@@ -1059,29 +1111,27 @@ const getProductionReadySalesOrders = async () => {
          ))
          -- 2. Exclude rejected or cancelled sales orders
          AND (o.quotation_id IS NULL OR so.status IS NULL OR so.status NOT IN ('REJECTED', 'CANCELLED'))
-         -- 3. Must have at least one BOM record with cost > 0 (or be an active order with items)
-          AND (
-            EXISTS (
-              SELECT 1 FROM order_items oi
-              JOIN sales_order_items soi ON (
-                TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
-                OR TRIM(oi.drawing_no) LIKE CONCAT(TRIM(soi.drawing_no), ' %')
-                OR TRIM(oi.drawing_no) LIKE CONCAT(TRIM(soi.drawing_no), '-%')
-              )
-              WHERE oi.order_id = o.id
-                AND soi.bom_cost > 0
-            )
-            OR EXISTS (
-              SELECT 1 FROM sales_order_items soi 
-              WHERE soi.sales_order_id = so.id 
-              AND soi.bom_cost > 0
-            )
-          )
+         -- 3. BOM readiness is returned as bom_ready (orders without a ready BOM are listed as "BOM pending" and blocked on select/create)
     ) AS combined
     GROUP BY combined.id, combined.order_no, combined.project_name, combined.po_number, combined.company_name, combined.created_at
     ORDER BY combined.created_at DESC`
   );
-  return rows;
+  // One row per order: ready if any joined row is ready
+  return rows.map(r => ({
+    ...r,
+    bom_ready: Number(r.bom_ready) === 1,
+    bom_pending_drawings: r.bom_pending_drawings || ''
+  }));
+};
+
+// Validation: a sales order can be planned only if at least one drawing has a BOM with cost > 0 and materials/components
+const getSalesOrderBomReadiness = async (orderId, conn = pool) => {
+  const [[order]] = await conn.query(`SELECT id, order_no FROM orders WHERE id = ?`, [orderId]);
+  if (!order) return null; // not an execution order — no check
+  const rows = await getProductionReadySalesOrders();
+  const row = rows.find(r => String(r.id) === String(orderId));
+  if (!row) return null;
+  return { ready: row.bom_ready, orderNo: row.order_no, pendingDrawings: row.bom_pending_drawings };
 };
 
 const getSalesOrderFullDetails = async (id) => {

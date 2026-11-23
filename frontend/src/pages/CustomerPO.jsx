@@ -2194,6 +2194,13 @@ const CustomerPO = ({
         setLocalError(msg);
         return;
       }
+      if (!item.rate || !(Number(item.rate) > 0)) {
+        isSubmittingRef.current = false;
+        const msg = `Rate (cost) is required for ${itemLabel} (${item.drawingNo.trim()}). Please add a rate.`;
+        showToast(msg);
+        setLocalError(msg);
+        return;
+      }
       if (!item.unit || !item.unit.trim()) {
         item.unit = 'NOS';
       }
@@ -2943,15 +2950,19 @@ const CustomerPO = ({
           return <span className="text-xs font-mono font-semibold text-slate-700">{formatCurrency(val)}</span>;
         }
         const needsReviewRate = item.needsReview && (!val || Number(val) <= 0);
+        const missingRate = !val || !(Number(val) > 0);
         return (
           <input
             type="number"
             value={val || ''}
             onChange={(e) => handleItemChange(targetIndex, 'rate', e.target.value)}
+            title={missingRate ? 'Rate is required' : undefined}
             className={`w-full rounded py-1 px-1.5 text-xs text-center focus:border-indigo-500 focus:bg-white outline-none transition-all ${
               needsReviewRate
                 ? 'bg-amber-50 border border-amber-300 text-amber-900 placeholder:text-amber-300 ring-1 ring-amber-200'
-                : 'bg-indigo-50 border border-indigo-100 text-indigo-600 placeholder:text-indigo-200'
+                : missingRate
+                  ? 'bg-red-50 border border-red-300 text-red-700 placeholder:text-red-300'
+                  : 'bg-indigo-50 border border-indigo-100 text-indigo-600 placeholder:text-indigo-200'
             }`}
             placeholder="0.00"
           />
