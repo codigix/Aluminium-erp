@@ -167,21 +167,25 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
     return sum + (amt + cgst + sgst);
   }, 0) || 0;
 
+  void taxInclusiveSubtotal; // kept for reference; totals below follow the PO form / PO PDF / saved PO total
+
+  // Same calculation as the PO form, the PO PDF and the saved PO total:
+  // Subtotal − Discount + Loading/Forwarding/Transport = Taxable Amount; + CGST 9% + SGST 9% = Grand Total
   const discountType = po?.discount_type || 'AMOUNT';
   const discountVal = parseFloat(po?.discount_value) || 0;
   let discountAmount = 0;
   if (discountType === 'PERCENTAGE') {
-    discountAmount = (taxInclusiveSubtotal * discountVal) / 100;
+    discountAmount = Number(((pureSubtotal * discountVal) / 100).toFixed(2));
   } else {
     discountAmount = parseFloat(po?.discount_amount) || 0;
-    if (!discountAmount && discountVal > 0) {
-      discountAmount = Math.min(discountVal, taxInclusiveSubtotal);
-    } else {
-      discountAmount = Math.min(discountAmount, taxInclusiveSubtotal);
-    }
+    if (!discountAmount && discountVal > 0) discountAmount = discountVal;
+    discountAmount = Number(Math.min(discountAmount, pureSubtotal).toFixed(2));
   }
-
-  const grandTotal = Math.max(0, taxInclusiveSubtotal - discountAmount);
+  const freightCharges = Math.max(0, Number((parseFloat(po?.freight_charges) || 0).toFixed(2)));
+  const taxableAmount = Number((Math.max(0, pureSubtotal - discountAmount) + freightCharges).toFixed(2));
+  const cgstTotal = Number((taxableAmount * 0.09).toFixed(2));
+  const sgstTotal = Number((taxableAmount * 0.09).toFixed(2));
+  const grandTotal = Number((taxableAmount + cgstTotal + sgstTotal).toFixed(2));
 
   return (
     <>
@@ -607,6 +611,24 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                     - {formatCurrency(discountAmount, po.currency)}
                   </span>
                 </div>
+                {freightCharges > 0 && (
+                  <div className="flex justify-end gap-12 text-xs">
+                    <span className="text-slate-400">Loading / Forwarding / Transport</span>
+                    <span className="text-slate-600 font-medium w-32 text-right">+ {formatCurrency(freightCharges, po.currency)}</span>
+                  </div>
+                )}
+                <div className="flex justify-end gap-12 text-xs">
+                  <span className="text-slate-500 font-semibold">Taxable Amount</span>
+                  <span className="text-slate-700 font-semibold w-32 text-right">{formatCurrency(taxableAmount, po.currency)}</span>
+                </div>
+                <div className="flex justify-end gap-12 text-xs">
+                  <span className="text-slate-400">CGST (9%)</span>
+                  <span className="text-slate-600 font-medium w-32 text-right">+ {formatCurrency(cgstTotal, po.currency)}</span>
+                </div>
+                <div className="flex justify-end gap-12 text-xs">
+                  <span className="text-slate-400">SGST (9%)</span>
+                  <span className="text-slate-600 font-medium w-32 text-right">+ {formatCurrency(sgstTotal, po.currency)}</span>
+                </div>
               </div>
               <div className="bg-blue-600 p-2.5 flex justify-between items-center text-white font-bold">
                 <span className="text-xs">Grand Total</span>
@@ -941,11 +963,25 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
           <div className="border-t border-slate-200 bg-slate-50/50 p-3 space-y-2">
             <div className="flex justify-end gap-12 text-xs">
               <span className="text-slate-500">Total Amount</span>
-              <span className="text-slate-800 font-semibold w-32 text-right">{formatCurrency(taxInclusiveSubtotal, po.currency)}</span>
+              <span className="text-slate-800 font-semibold w-32 text-right">{formatCurrency(pureSubtotal, po.currency)}</span>
             </div>
             <div className="flex justify-end gap-12 text-xs">
               <span className="text-slate-500">Discount {discountType === 'PERCENTAGE' && discountVal > 0 ? `(${discountVal}%)` : ''}</span>
               <span className="text-rose-600 font-semibold w-32 text-right">- {formatCurrency(discountAmount, po.currency)}</span>
+            </div>
+            {freightCharges > 0 && (
+              <div className="flex justify-end gap-12 text-xs">
+                <span className="text-slate-500">Loading / Forwarding / Transport</span>
+                <span className="text-slate-800 font-semibold w-32 text-right">+ {formatCurrency(freightCharges, po.currency)}</span>
+              </div>
+            )}
+            <div className="flex justify-end gap-12 text-xs">
+              <span className="text-slate-500">Taxable Amount</span>
+              <span className="text-slate-800 font-semibold w-32 text-right">{formatCurrency(taxableAmount, po.currency)}</span>
+            </div>
+            <div className="flex justify-end gap-12 text-xs">
+              <span className="text-slate-500">CGST (9%) + SGST (9%)</span>
+              <span className="text-slate-800 font-semibold w-32 text-right">+ {formatCurrency(cgstTotal + sgstTotal, po.currency)}</span>
             </div>
             <div className="flex justify-end gap-12 text-sm font-bold border-t border-slate-200 pt-2">
               <span>GRAND TOTAL</span>

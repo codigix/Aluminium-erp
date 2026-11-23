@@ -198,6 +198,7 @@ const PurchaseOrders = () => {
     currency: 'INR (Indian Rupee)',
     discountType: 'AMOUNT',
     discountValue: 0,
+    freightCharges: '',
     items: []
   });
 
@@ -1095,6 +1096,7 @@ const PurchaseOrders = () => {
       discountType: 'AMOUNT',
       discountValue: 0,
       discountAmount: 0,
+      freightCharges: '',
       items: []
     });
     navigate(`${deptPrefix}/purchase-orders`);
@@ -1305,6 +1307,7 @@ const PurchaseOrders = () => {
           currency: manualFormData.currency?.split(' ')[0] || 'INR',
           discount_type: manualFormData.discountType || 'AMOUNT',
           discount_value: discVal,
+          freight_charges: Math.max(0, parseFloat(manualFormData.freightCharges) || 0),
           items: manualFormData.items.map(item => ({
             id: item.id || undefined,
             item_code: item.item_code,
@@ -1397,7 +1400,9 @@ const PurchaseOrders = () => {
         discount_type: manualFormData.discountType || 'AMOUNT',
         discount_value: discVal,
         discount_amount: discAmt,
-        total_amount: Math.max(0, subtotal - discAmt) * 1.18,
+        freight_charges: Math.max(0, parseFloat(manualFormData.freightCharges) || 0),
+        // Loading / Forwarding / Transport charges are taxed with the goods
+        total_amount: (Math.max(0, subtotal - discAmt) + Math.max(0, parseFloat(manualFormData.freightCharges) || 0)) * 1.18,
         status: manualFormData.id ? undefined : 'DRAFT',
         items: manualFormData.items.map(item => ({
           id: item.id || undefined,
@@ -1868,6 +1873,7 @@ const PurchaseOrders = () => {
         discountType: data.discount_type || 'AMOUNT',
         discountValue: data.discount_value !== undefined && data.discount_value !== null ? data.discount_value : 0,
         discountAmount: data.discount_amount || 0,
+        freightCharges: parseFloat(data.freight_charges) > 0 ? parseFloat(data.freight_charges) : '',
         // No company stored on the PO / its quotation: default to the Active company, as the Quotation edit screen does
         hostCompanyId: data.host_company_id
           ? String(data.host_company_id)
@@ -4364,6 +4370,19 @@ const PurchaseOrders = () => {
                       </select>
                     </div>
                     <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                      <label className="text-xs text-slate-500 font-semibold mb-1 block">Loading / Forwarding / Transport Charges (₹)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={manualFormData.freightCharges ?? ''}
+                        onChange={(e) => setManualFormData({ ...manualFormData, freightCharges: e.target.value })}
+                        className="w-full p-2 bg-white border border-slate-300 rounded text-xs outline-none font-bold text-slate-800"
+                        placeholder="0"
+                      />
+                      <p className="text-[10px] text-slate-400 ml-0.5">Added to the taxable amount — GST applies on these charges too.</p>
+                    </div>
+                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-xs text-slate-500 font-semibold mb-1 block">Discount Type</label>
@@ -4401,7 +4420,9 @@ const PurchaseOrders = () => {
                       const discVal = parseFloat(manualFormData.discountValue) || 0;
                       const discType = manualFormData.discountType || 'AMOUNT';
                       const discAmt = discVal > 0 ? (discType === 'PERCENTAGE' ? (subtotal * discVal) / 100 : Math.min(discVal, subtotal)) : 0;
-                      const taxable = Math.max(0, subtotal - discAmt);
+                      // Loading / Forwarding / Transport charges: taxed with the goods
+                      const freight = Math.max(0, parseFloat(manualFormData.freightCharges) || 0);
+                      const taxable = Math.max(0, subtotal - discAmt) + freight;
                       const cgst = taxable * 0.09;
                       const sgst = taxable * 0.09;
                       const grandTotal = taxable + cgst + sgst;
@@ -4415,6 +4436,10 @@ const PurchaseOrders = () => {
                           <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-1.5 text-xs">
                             <span>Discount {discType === 'PERCENTAGE' && discVal > 0 ? `(${discVal}%)` : ''}</span>
                             <span className="font-semibold text-rose-200">- {formatCurrency(discAmt)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-1.5 text-xs">
+                            <span>Loading / Forwarding / Transport</span>
+                            <span className="font-semibold">+ {formatCurrency(freight)}</span>
                           </div>
                           <div className="flex justify-between items-center text-white/90 border-b border-white/10 pb-1.5 text-xs font-bold">
                             <span>Taxable Amount</span>

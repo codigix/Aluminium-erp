@@ -1415,6 +1415,7 @@ model purchase_orders {
   company_id                                                              Int?
   customer_po_no                                                          String?                                  @db.VarChar(100)
   host_company_id                                                         Int?
+  freight_charges                                                         Decimal?                                 @default(0.00) @db.Decimal(14, 2)
   payments                                                                payments[]
   purchase_order_items_purchase_order_items_source_po_idTopurchase_orders purchase_order_items[]                   @relation("purchase_order_items_source_po_idTopurchase_orders")
   purchase_order_items                                                    purchase_order_items[]

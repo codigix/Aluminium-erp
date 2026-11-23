@@ -290,7 +290,7 @@ const previewPurchaseOrder = async (quotationId) => {
 };
 
 const createPurchaseOrder = async (data, existingConnection = null) => {
-  const { quotationId, mrId: providedMrId, expectedDeliveryDate, notes, poNumber: manualPoNumber, items: manualItems, vendorId, vendor_id, discount_type, discount_value, discount_amount } = data;
+  const { quotationId, mrId: providedMrId, expectedDeliveryDate, notes, poNumber: manualPoNumber, items: manualItems, vendorId, vendor_id, discount_type, discount_value, discount_amount, freight_charges } = data;
   const publicId = crypto.randomUUID();
 
   const connection = existingConnection || await pool.getConnection();
@@ -557,14 +557,16 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
       }
     }
 
-    const taxableAmount = Number(Math.max(0, subtotal - discAmt).toFixed(2));
+    // Loading / Forwarding / Transport charges: taxed with the goods (Taxable = Subtotal − Discount + Charges)
+    const freightAmt = Math.max(0, Number((parseFloat(freight_charges) || 0).toFixed(2)));
+    const taxableAmount = Number((Math.max(0, subtotal - discAmt) + freightAmt).toFixed(2));
     const cgstTotal = Number((taxableAmount * 0.09).toFixed(2));
     const sgstTotal = Number((taxableAmount * 0.09).toFixed(2));
     const actualTotalAmount = Number((taxableAmount + cgstTotal + sgstTotal).toFixed(2));
 
     const [result] = await connection.execute(
-      `INSERT INTO purchase_orders (po_number, public_id, quotation_id, mr_id, vendor_id, sales_order_id, status, total_amount, expected_delivery_date, notes, discount_type, discount_value, discount_amount)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO purchase_orders (po_number, public_id, quotation_id, mr_id, vendor_id, sales_order_id, status, total_amount, expected_delivery_date, notes, discount_type, discount_value, discount_amount, freight_charges)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         poNumber,
         publicId,
@@ -578,7 +580,8 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
         notes || null,
         discType,
         discVal,
-        discAmt
+        discAmt,
+        freightAmt
       ]
     );
 
@@ -719,6 +722,7 @@ const createDirectCompanyPurchaseOrder = async (data) => {
     discount_type,
     discount_value,
     discount_amount,
+    freight_charges,
     currency
   } = data;
 
@@ -826,7 +830,9 @@ const createDirectCompanyPurchaseOrder = async (data) => {
       discAmt = Number(Math.min(discVal, subtotal).toFixed(2));
     }
 
-    const taxableAmount = Math.max(0, subtotal - discAmt);
+    // Loading / Forwarding / Transport charges: taxed with the goods (Taxable = Subtotal − Discount + Charges)
+    const freightAmt = Math.max(0, Number((parseFloat(freight_charges) || 0).toFixed(2)));
+    const taxableAmount = Math.max(0, subtotal - discAmt) + freightAmt;
     const cgstTotal = Number((taxableAmount * 0.09).toFixed(2));
     const sgstTotal = Number((taxableAmount * 0.09).toFixed(2));
     const actualTotalAmount = Number((taxableAmount + cgstTotal + sgstTotal).toFixed(2));
@@ -839,9 +845,9 @@ const createDirectCompanyPurchaseOrder = async (data) => {
       `INSERT INTO purchase_orders (
         po_number, public_id, po_type, company_id, vendor_id, 
         quotation_id, mr_id, sales_order_id, status, total_amount, 
-        expected_delivery_date, notes, discount_type, discount_value, discount_amount,
+        expected_delivery_date, notes, discount_type, discount_value, discount_amount, freight_charges,
         customer_po_no, invoice_url, created_at
-      ) VALUES (?, ?, 'DIRECT_COMPANY', ?, ?, NULL, NULL, NULL, 'DRAFT', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, 'DIRECT_COMPANY', ?, ?, NULL, NULL, NULL, 'DRAFT', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         poNumber,
         publicId,
@@ -853,6 +859,7 @@ const createDirectCompanyPurchaseOrder = async (data) => {
         discType,
         discVal,
         discAmt,
+        freightAmt,
         finalCustomerPoNo,
         finalInvoiceUrl,
         createdAtValue
@@ -1890,6 +1897,7 @@ const updatePurchaseOrder = async (poId, payload, userId = null) => {
     discount_type, 
     discount_value, 
     discount_amount,
+    freight_charges,
     customerPoNo,
     customer_po_no,
     orderDate,
@@ -1987,6 +1995,10 @@ const updatePurchaseOrder = async (poId, payload, userId = null) => {
     if (discount_amount !== undefined) {
       updates.push('discount_amount = ?');
       params.push(parseFloat(discount_amount) || 0);
+    }
+    if (freight_charges !== undefined) {
+      updates.push('freight_charges = ?');
+      params.push(Math.max(0, parseFloat(freight_charges) || 0));
     }
 
     if (updates.length > 0) {
@@ -2121,7 +2133,9 @@ const updatePurchaseOrder = async (poId, payload, userId = null) => {
         }
       }
 
-      const taxableAmount = Number(Math.max(0, subtotal - targetDiscAmt).toFixed(2));
+      // Loading / Forwarding / Transport charges (sent now, else the PO's saved value): taxed with the goods
+      const targetFreight = Math.max(0, Number((parseFloat(freight_charges !== undefined ? freight_charges : existing[0].freight_charges) || 0).toFixed(2)));
+      const taxableAmount = Number((Math.max(0, subtotal - targetDiscAmt) + targetFreight).toFixed(2));
       const cgstTotal = Number((taxableAmount * 0.09).toFixed(2));
       const sgstTotal = Number((taxableAmount * 0.09).toFixed(2));
       const grandTotal = Number((taxableAmount + cgstTotal + sgstTotal).toFixed(2));
@@ -3053,8 +3067,9 @@ const generatePurchaseOrderPDF = async (poId) => {
       </td>
       <td style="width: 40%; padding: 0;">
         <table class="totals-subtable">
+          <!-- Same breakdown as the PO form: Subtotal − Discount + Charges = Taxable, + CGST + SGST = Grand Total -->
           <tr>
-            <td style="width: 55%; padding: 3px 5px; font-weight: bold;">Total Amount</td>
+            <td style="width: 55%; padding: 3px 5px; font-weight: bold;">Subtotal</td>
             <td style="width: 5%; text-align: center; padding: 3px 0;">:</td>
             <td style="text-align: right; padding: 3px 5px;">₹ {{subtotal}}</td>
           </tr>
@@ -3062,6 +3077,28 @@ const generatePurchaseOrderPDF = async (poId) => {
             <td style="padding: 3px 5px; font-weight: bold;">Discount {{#discount_label}}({{discount_label}}){{/discount_label}}</td>
             <td style="text-align: center; padding: 3px 0;">:</td>
             <td style="text-align: right; padding: 3px 5px;">- ₹ {{discount_amount_str}}</td>
+          </tr>
+          {{#freight_amount_str}}
+          <tr>
+            <td style="padding: 3px 5px; font-weight: bold;">Loading / Forwarding / Transport</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">+ ₹ {{freight_amount_str}}</td>
+          </tr>
+          {{/freight_amount_str}}
+          <tr>
+            <td style="padding: 3px 5px; font-weight: bold;">Taxable Amount</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px; font-weight: bold;">₹ {{taxable_amount_str}}</td>
+          </tr>
+          <tr>
+            <td style="padding: 3px 5px; font-weight: bold;">CGST ({{cgst_rate_summary}}%)</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">+ ₹ {{cgst_total}}</td>
+          </tr>
+          <tr>
+            <td style="padding: 3px 5px; font-weight: bold;">SGST ({{sgst_rate_summary}}%)</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">+ ₹ {{sgst_total}}</td>
           </tr>
 
           <tr class="grand-total-row">
@@ -3186,28 +3223,28 @@ const generatePurchaseOrderPDF = async (poId) => {
     return sum + (amt + cgst + sgst);
   }, 0);
 
+  void taxInclusiveSubtotal; // kept for reference; totals below follow the PO form / saved PO total
+
+  // Totals box = same calculation as the PO form and the saved PO total:
+  // Subtotal − Discount + Loading/Forwarding/Transport = Taxable Amount; + CGST 9% + SGST 9% = Grand Total
   const discountType = po.discount_type || 'AMOUNT';
   const discountVal = parseFloat(po.discount_value) || 0;
   let discountAmount = 0;
   if (discountType === 'PERCENTAGE') {
-    discountAmount = (taxInclusiveSubtotal * discountVal) / 100;
+    discountAmount = Number(((subtotal * discountVal) / 100).toFixed(2));
   } else {
     discountAmount = parseFloat(po.discount_amount) || 0;
-    if (!discountAmount && discountVal > 0) {
-      discountAmount = Math.min(discountVal, taxInclusiveSubtotal);
-    } else {
-      discountAmount = Math.min(discountAmount, taxInclusiveSubtotal);
-    }
+    if (!discountAmount && discountVal > 0) discountAmount = discountVal;
+    discountAmount = Number(Math.min(discountAmount, subtotal).toFixed(2));
   }
-  const taxableAmount = Math.max(0, taxInclusiveSubtotal - discountAmount);
+  const freightBase = Math.max(0, Number((parseFloat(po.freight_charges) || 0).toFixed(2)));
+  const taxableAmount = Number((Math.max(0, subtotal - discountAmount) + freightBase).toFixed(2));
+  const cgst_total = Number((taxableAmount * 0.09).toFixed(2));
+  const sgst_total = Number((taxableAmount * 0.09).toFixed(2));
+  const grand_total = Number((taxableAmount + cgst_total + sgst_total).toFixed(2));
 
-  const cgst_total = 0;
-  const sgst_total = 0;
-  const grand_total = taxInclusiveSubtotal - discountAmount;
-
-  const firstItem = po.items[0] || {};
-  const cgst_rate_summary = parseFloat(firstItem.cgst_percent || 9).toFixed(0);
-  const sgst_rate_summary = parseFloat(firstItem.sgst_percent || 9).toFixed(0);
+  const cgst_rate_summary = '9';
+  const sgst_rate_summary = '9';
 
   // Basic number to words for the words section
   const numberToWords = (num) => {
@@ -3242,13 +3279,13 @@ const generatePurchaseOrderPDF = async (poId) => {
     contact_person: po.contact_person || 'N/A',
     project_name: po.project_name || 'General Procurement',
     project_ref: po.mr_number ? `MR-${po.mr_number}` : (po.sales_order_id ? `SO-${po.so_number || po.sales_order_id}` : 'Direct Procurement'),
-    subtotal: taxInclusiveSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    subtotal: subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     discount_label: discountType === 'PERCENTAGE' && discountVal > 0 ? `${discountVal}%` : null,
     discount_amount_str: discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    freight_amount_str: freightBase > 0 ? freightBase.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
     taxable_amount_str: taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    cgst_total: cgst_total > 0 ? cgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00',
-    sgst_total: sgst_total > 0 ? sgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00',
-    sgst_total: sgst_total > 0 ? sgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
+    cgst_total: cgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    sgst_total: sgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     cgst_rate_summary,
     sgst_rate_summary,
     total_amount: grand_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -3706,6 +3743,12 @@ const forwardToAccounts = async (poId, receiptId = null) => {
           const rate = parseFloat(it.unit_rate || 0);
           subtotal += recWt > 0 ? (recWt * rate) : (recQty * rate);
         });
+        // PO Loading / Forwarding / Transport charges: added once, to the first bill forwarded for this PO
+        const freightBase = Math.max(0, parseFloat(po.freight_charges) || 0);
+        if (freightBase > 0) {
+          const [[billed]] = await connection.query('SELECT COUNT(*) AS n FROM vendor_invoices WHERE po_id = ?', [poId]);
+          if (!(Number(billed.n) > 0)) subtotal += freightBase;
+        }
         const gst = subtotal * 0.18;
         poAmount = Number((subtotal + gst).toFixed(2));
         grnNumber = `GRN-${String(receipt.id).padStart(4, '0')}`;
