@@ -2413,6 +2413,11 @@ const PurchaseOrders = () => {
           <span className="text-xs text-slate-400  flex items-center gap-1 mt-0.5">
             {row.mr_number || (row.quotation_id ? `QT-${row.quotation_id}` : (row.po_type === 'DIRECT_COMPANY' ? 'Direct Purchase' : `ID-${row.id}`))}
           </span>
+          {row.customer_po_display && (
+            <span className="text-[10px] text-slate-500 mt-0.5 break-words" title="Customer PO No.">
+              Cust PO: {row.customer_po_display}
+            </span>
+          )}
         </div>
       )
     },

@@ -1119,6 +1119,20 @@ const getPurchaseOrders = async (filters = {}) => {
         ),
         'Internal'
       ) as company_name,
+      -- Customer PO No (display only): saved value, own MR, or source quotations of a merged RFQ
+      COALESCE(
+        NULLIF(TRIM(po.customer_po_no), ''),
+        (SELECT cpl.po_number FROM material_requests mrl JOIN production_plans ppl ON mrl.plan_id = ppl.id JOIN orders ol ON ppl.sales_order_id = ol.id JOIN customer_pos cpl ON ol.quotation_id = cpl.id WHERE mrl.id = po.mr_id LIMIT 1),
+        (SELECT GROUP_CONCAT(DISTINCT TRIM(cpq.po_number) SEPARATOR ', ')
+         FROM quotations sq
+         JOIN material_requests mrq ON mrq.id = sq.mr_id
+         JOIN production_plans ppq ON ppq.id = mrq.plan_id
+         JOIN orders oq ON oq.id = ppq.sales_order_id
+         JOIN customer_pos cpq ON cpq.id = oq.quotation_id
+         WHERE po.quotation_id IS NOT NULL
+           AND (sq.merged_into_quotation_id = po.quotation_id
+             OR sq.id IN (SELECT qi.source_quotation_id FROM quotation_items qi WHERE qi.quotation_id = po.quotation_id AND qi.source_quotation_id IS NOT NULL)))
+      ) as customer_po_display,
       COUNT(poi.id) as items_count,
       IFNULL(SUM(poi.quantity), 0) as total_quantity,
       (SELECT IFNULL(SUM(gi.accepted_qty), 0) 
@@ -1592,6 +1606,16 @@ const getPurchaseOrderById = async (poId) => {
          JOIN sales_orders som ON som.id = ppm.sales_order_id
          JOIN customer_pos cpm ON cpm.id = som.customer_po_id
          WHERE src.merged_into_po_id = po.id),
+        -- PO from a merged RFQ/quotation: Customer PO No(s) via the source quotations' MRs
+        (SELECT GROUP_CONCAT(DISTINCT TRIM(cpq.po_number) SEPARATOR ', ')
+         FROM quotations sq
+         JOIN material_requests mrq ON mrq.id = sq.mr_id
+         JOIN production_plans ppq ON ppq.id = mrq.plan_id
+         JOIN orders oq ON oq.id = ppq.sales_order_id
+         JOIN customer_pos cpq ON cpq.id = oq.quotation_id
+         WHERE po.quotation_id IS NOT NULL
+           AND (sq.merged_into_quotation_id = po.quotation_id
+             OR sq.id IN (SELECT qi.source_quotation_id FROM quotation_items qi WHERE qi.quotation_id = po.quotation_id AND qi.source_quotation_id IS NOT NULL))),
         '—'
       ) as customer_po_no,
       COALESCE(
@@ -1628,6 +1652,18 @@ const getPurchaseOrderById = async (poId) => {
          LEFT JOIN customer_pos cpm ON cpm.id = om.quotation_id AND om.source_type = 'DIRECT'
          LEFT JOIN customers cum ON cum.id = cpm.customer_id
          WHERE src.merged_into_po_id = po.id LIMIT 1),
+        -- PO from a merged RFQ/quotation: customer via the source quotations' MRs
+        (SELECT GROUP_CONCAT(DISTINCT COALESCE(cuq.customer_name, cq.company_name) SEPARATOR ', ')
+         FROM quotations sq
+         JOIN material_requests mrq ON mrq.id = sq.mr_id
+         JOIN production_plans ppq ON ppq.id = mrq.plan_id
+         JOIN orders oq ON oq.id = ppq.sales_order_id
+         JOIN companies cq ON cq.id = oq.client_id
+         LEFT JOIN customer_pos cpq ON cpq.id = oq.quotation_id AND oq.source_type = 'DIRECT'
+         LEFT JOIN customers cuq ON cuq.id = cpq.customer_id
+         WHERE po.quotation_id IS NOT NULL
+           AND (sq.merged_into_quotation_id = po.quotation_id
+             OR sq.id IN (SELECT qi.source_quotation_id FROM quotation_items qi WHERE qi.quotation_id = po.quotation_id AND qi.source_quotation_id IS NOT NULL))),
         'Internal'
       ) as company_name
       FROM purchase_orders po
