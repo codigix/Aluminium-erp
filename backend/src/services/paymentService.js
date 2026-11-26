@@ -1250,18 +1250,20 @@ const formatDimensions = (item) => {
   matchedShape = resolveDiameterlessShape(matchedShape, dia, od, wid, thk);
   let prefix = '', dimParts = [];
   const hollowId = matchedShape === 'pipe' ? getHollowPipeId(item, od, thk, dia) : 0;
-  if (matchedShape === 'flange')             { prefix = 'FLG';  dimParts = [od > 0 ? `OD${nf(od)}` : null, dia > 0 ? `ID${nf(dia)}` : null, nf(thk)]; }
-  else if (matchedShape === 'pipe' && hollowId > 0) { prefix = 'PIPE'; dimParts = [`OD${nf(od)}`, `ID${nf(hollowId)}`, nf(len)]; }
-  else if (matchedShape === 'plate')         { prefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
-  else if (matchedShape === 'flat bar')      { prefix = 'FL';   dimParts = [nf(wid), nf(thk), nf(len)]; }
-  else if (matchedShape === 'round bar')     { prefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
-  else if (matchedShape === 'hexagonal bar') { prefix = 'HEX';  dimParts = [`AF${nf(wid)}`, nf(len)]; }
-  else if (matchedShape === 'square bar')    { prefix = 'SQ';   dimParts = [nf(wid), nf(len)]; }
-  else if (matchedShape === 'rectangular bar') { prefix = 'REC'; dimParts = [nf(wid), nf(od), nf(len)]; }
-  else if (matchedShape === 'pipe')          { prefix = 'PIPE'; const ov = od > 0 ? od : dia; dimParts = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
-  else if (matchedShape === 'square tube')   { prefix = 'SQT';  dimParts = [nf(wid), nf(thk), nf(len)]; }
-  else if (matchedShape === 'rectangular tube') { prefix = 'RCT'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
-  else if (matchedShape === 'threaded rod')  { prefix = 'TR';   const dv = dia > 0 ? dia : od; const pv = parseFloat(item.thread_pitch || item.threadPitch || thk || item.thickness || 0); dimParts = [`M${nf(dv)}`, pv > 0 ? nf(pv) : null, nf(len)]; }
+  // Labeled value, e.g. "W:300"; dropped (like nf) when the value is empty / 0
+  const lbl = (label, v) => { const s = nf(v); return s ? `${label}:${s}` : null; };
+  if (matchedShape === 'flange')             { prefix = 'FLG';  dimParts = [lbl('OD', od), lbl('ID', dia), lbl('T', thk)]; }
+  else if (matchedShape === 'pipe' && hollowId > 0) { prefix = 'PIPE'; dimParts = [lbl('OD', od), lbl('ID', hollowId), lbl('LNT', len)]; }
+  else if (matchedShape === 'plate')         { prefix = 'PL';   dimParts = [lbl('W', wid), lbl('H', len), lbl('T', thk)]; }
+  else if (matchedShape === 'flat bar')      { prefix = 'FL';   dimParts = [lbl('W', wid), lbl('T', thk), lbl('LNT', len)]; }
+  else if (matchedShape === 'round bar')     { prefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [lbl('Ø', dv), lbl('LNT', len)]; }
+  else if (matchedShape === 'hexagonal bar') { prefix = 'HEX';  dimParts = [lbl('AF', wid), lbl('LNT', len)]; }
+  else if (matchedShape === 'square bar')    { prefix = 'SB';   dimParts = [lbl('A', wid), lbl('LNT', len)]; }
+  else if (matchedShape === 'rectangular bar') { prefix = 'REC'; dimParts = [lbl('W', wid), lbl('H', od), lbl('LNT', len)]; }
+  else if (matchedShape === 'pipe')          { prefix = 'PIPE'; const ov = od > 0 ? od : dia; dimParts = [lbl('OD', ov), lbl('T', thk), lbl('LNT', len)]; }
+  else if (matchedShape === 'square tube')   { prefix = 'SQT';  dimParts = [lbl('A', wid), lbl('T', thk), lbl('LNT', len)]; }
+  else if (matchedShape === 'rectangular tube') { prefix = 'RCT'; dimParts = [lbl('W', wid), lbl('H', od), lbl('T', thk), lbl('LNT', len)]; }
+  else if (matchedShape === 'threaded rod')  { prefix = 'TR';   const dv = dia > 0 ? dia : od; const pv = parseFloat(item.thread_pitch || item.threadPitch || thk || item.thickness || 0); dimParts = [`OD:${nf(dv)}`, lbl('P', pv), lbl('LNT', len)]; }
   else if (matchedShape === 'angle')         { prefix = 'L';    dimParts = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
   else if (matchedShape === 'equal angle')   { prefix = 'EA';   dimParts = [nf(wid), nf(wid), nf(thk), nf(len)]; }
   else if (matchedShape === 'unequal angle') { prefix = 'UA';   dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
@@ -1429,7 +1431,7 @@ const generateVendorInvoicePDF = async (id, type) => {
           const dia = parseFloat(item.diameter || 0);
           const od = parseFloat(item.outer_diameter || 0);
           const shapeRaw = (item.shape_type || item.shape_name || item.material_name || '').toLowerCase();
-          const nf = (v) => { if (!v || isNaN(parseFloat(v))) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
+          const nf = (v) => { if (!v || isNaN(parseFloat(v)) || parseFloat(v) === 0) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
 
           let matchedShape = '';
           if (shapeRaw.includes('flange')) matchedShape = 'flange';
@@ -1457,18 +1459,20 @@ const generateVendorInvoicePDF = async (id, type) => {
           let dimPrefix = '', dimParts = [];
           matchedShape = resolveDiameterlessShape(matchedShape, dia, od, wid, thk);
           const hollowId = matchedShape === 'pipe' ? getHollowPipeId(item, od, thk, dia) : 0;
-          if (matchedShape === 'flange')          { dimPrefix = 'FLG';  dimParts = [od > 0 ? `OD${nf(od)}` : null, dia > 0 ? `ID${nf(dia)}` : null, nf(thk)]; }
-          else if (matchedShape === 'pipe' && hollowId > 0) { dimPrefix = 'PIPE'; dimParts = [`OD${nf(od)}`, `ID${nf(hollowId)}`, nf(len)]; }
-          else if (matchedShape === 'plate')      { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
-          else if (matchedShape === 'flat bar')   { dimPrefix = 'FL';   dimParts = [nf(wid), nf(thk), nf(len)]; }
-          else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
-          else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [`AF${nf(wid)}`, nf(len)]; }
-          else if (matchedShape === 'square bar') { dimPrefix = 'SQ';   dimParts = [nf(wid), nf(len)]; }
-          else if (matchedShape === 'rectangular bar') { dimPrefix = 'REC'; dimParts = [nf(wid), nf(od), nf(len)]; }
-          else if (matchedShape === 'pipe')       { dimPrefix = 'PIPE'; const ov = od > 0 ? od : dia; dimParts = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
-          else if (matchedShape === 'square tube') { dimPrefix = 'SQT'; dimParts = [nf(wid), nf(thk), nf(len)]; }
-          else if (matchedShape === 'rectangular tube') { dimPrefix = 'RCT'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
-          else if (matchedShape === 'threaded rod') { dimPrefix = 'TR'; const dv = dia > 0 ? dia : od; dimParts = [`M${nf(dv)}`, nf(len)]; }
+          // Labeled value, e.g. "W:300"; dropped (like nf) when the value is empty
+          const lbl = (label, v) => { const s = nf(v); return s ? `${label}:${s}` : null; };
+          if (matchedShape === 'flange')          { dimPrefix = 'FLG';  dimParts = [od > 0 ? lbl('OD', od) : null, dia > 0 ? lbl('ID', dia) : null, lbl('T', thk)]; }
+          else if (matchedShape === 'pipe' && hollowId > 0) { dimPrefix = 'PIPE'; dimParts = [lbl('OD', od), lbl('ID', hollowId), lbl('LNT', len)]; }
+          else if (matchedShape === 'plate')      { dimPrefix = 'PL';   dimParts = [lbl('W', wid), lbl('H', len), lbl('T', thk)]; }
+          else if (matchedShape === 'flat bar')   { dimPrefix = 'FL';   dimParts = [lbl('W', wid), lbl('T', thk), lbl('LNT', len)]; }
+          else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [lbl('Ø', dv), lbl('LNT', len)]; }
+          else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [lbl('AF', wid), lbl('LNT', len)]; }
+          else if (matchedShape === 'square bar') { dimPrefix = 'SB';   dimParts = [lbl('A', wid), lbl('LNT', len)]; }
+          else if (matchedShape === 'rectangular bar') { dimPrefix = 'REC'; dimParts = [lbl('W', wid), lbl('H', od), lbl('LNT', len)]; }
+          else if (matchedShape === 'pipe')       { dimPrefix = 'PIPE'; const ov = od > 0 ? od : dia; dimParts = [lbl('OD', ov), lbl('T', thk), lbl('LNT', len)]; }
+          else if (matchedShape === 'square tube') { dimPrefix = 'SQT'; dimParts = [lbl('A', wid), lbl('T', thk), lbl('LNT', len)]; }
+          else if (matchedShape === 'rectangular tube') { dimPrefix = 'RCT'; dimParts = [lbl('W', wid), lbl('H', od), lbl('T', thk), lbl('LNT', len)]; }
+          else if (matchedShape === 'threaded rod') { dimPrefix = 'TR'; const dv = dia > 0 ? dia : od; dimParts = [`OD:${nf(dv)}`, lbl('LNT', len)]; }
           else if (matchedShape === 'angle')      { dimPrefix = 'L';   dimParts = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
           else if (matchedShape === 'equal angle') { dimPrefix = 'EA'; dimParts = [nf(wid), nf(wid), nf(thk), nf(len)]; }
           else if (matchedShape === 'unequal angle') { dimPrefix = 'UA'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
@@ -1594,7 +1598,7 @@ const generateVendorInvoicePDF = async (id, type) => {
         const od = parseFloat(item.outer_diameter || item.outerDiameter || item.dimensions?.outer_diameter || 0);
         const shapeRaw = (item.shape_type || item.shape_name || item.shape || item.material_name || '').toLowerCase();
 
-        const nf = (v) => { if (!v || isNaN(parseFloat(v))) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
+        const nf = (v) => { if (!v || isNaN(parseFloat(v)) || parseFloat(v) === 0) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
 
         let matchedShape = '';
         if (shapeRaw.includes('flange')) matchedShape = 'flange';
@@ -1625,18 +1629,20 @@ const generateVendorInvoicePDF = async (id, type) => {
         let dimPrefix = '', dimParts = [];
         matchedShape = resolveDiameterlessShape(matchedShape, dia, od, wid, thk);
           const hollowId = matchedShape === 'pipe' ? getHollowPipeId(item, od, thk, dia) : 0;
-          if (matchedShape === 'flange')          { dimPrefix = 'FLG';  dimParts = [od > 0 ? `OD${nf(od)}` : null, dia > 0 ? `ID${nf(dia)}` : null, nf(thk)]; }
-          else if (matchedShape === 'pipe' && hollowId > 0) { dimPrefix = 'PIPE'; dimParts = [`OD${nf(od)}`, `ID${nf(hollowId)}`, nf(len)]; }
-          else if (matchedShape === 'plate')      { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
-        else if (matchedShape === 'flat bar')   { dimPrefix = 'FL';   dimParts = [nf(wid), nf(thk), nf(len)]; }
-        else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
-        else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [`AF${nf(wid)}`, nf(len)]; }
-        else if (matchedShape === 'square bar') { dimPrefix = 'SQ';   dimParts = [nf(wid), nf(len)]; }
-        else if (matchedShape === 'rectangular bar') { dimPrefix = 'REC'; dimParts = [nf(wid), nf(od), nf(len)]; }
-        else if (matchedShape === 'pipe')       { dimPrefix = 'PIPE'; const ov = od > 0 ? od : dia; dimParts = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
-        else if (matchedShape === 'square tube') { dimPrefix = 'SQT'; dimParts = [nf(wid), nf(thk), nf(len)]; }
-        else if (matchedShape === 'rectangular tube') { dimPrefix = 'RCT'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
-        else if (matchedShape === 'threaded rod') { dimPrefix = 'TR'; const dv = dia > 0 ? dia : od; const pv = parseFloat(item.thread_pitch || item.threadPitch || thk || item.thickness || 0); dimParts = [`M${nf(dv)}`, pv > 0 ? nf(pv) : null, nf(len)]; }
+          // Labeled value, e.g. "W:300"; dropped (like nf) when the value is empty
+          const lbl = (label, v) => { const s = nf(v); return s ? `${label}:${s}` : null; };
+          if (matchedShape === 'flange')          { dimPrefix = 'FLG';  dimParts = [od > 0 ? lbl('OD', od) : null, dia > 0 ? lbl('ID', dia) : null, lbl('T', thk)]; }
+          else if (matchedShape === 'pipe' && hollowId > 0) { dimPrefix = 'PIPE'; dimParts = [lbl('OD', od), lbl('ID', hollowId), lbl('LNT', len)]; }
+          else if (matchedShape === 'plate')      { dimPrefix = 'PL';   dimParts = [lbl('W', wid), lbl('H', len), lbl('T', thk)]; }
+        else if (matchedShape === 'flat bar')   { dimPrefix = 'FL';   dimParts = [lbl('W', wid), lbl('T', thk), lbl('LNT', len)]; }
+        else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [lbl('Ø', dv), lbl('LNT', len)]; }
+        else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [lbl('AF', wid), lbl('LNT', len)]; }
+        else if (matchedShape === 'square bar') { dimPrefix = 'SB';   dimParts = [lbl('A', wid), lbl('LNT', len)]; }
+        else if (matchedShape === 'rectangular bar') { dimPrefix = 'REC'; dimParts = [lbl('W', wid), lbl('H', od), lbl('LNT', len)]; }
+        else if (matchedShape === 'pipe')       { dimPrefix = 'PIPE'; const ov = od > 0 ? od : dia; dimParts = [lbl('OD', ov), lbl('T', thk), lbl('LNT', len)]; }
+        else if (matchedShape === 'square tube') { dimPrefix = 'SQT'; dimParts = [lbl('A', wid), lbl('T', thk), lbl('LNT', len)]; }
+        else if (matchedShape === 'rectangular tube') { dimPrefix = 'RCT'; dimParts = [lbl('W', wid), lbl('H', od), lbl('T', thk), lbl('LNT', len)]; }
+        else if (matchedShape === 'threaded rod') { dimPrefix = 'TR'; const dv = dia > 0 ? dia : od; const pv = parseFloat(item.thread_pitch || item.threadPitch || thk || item.thickness || 0); dimParts = [`OD:${nf(dv)}`, pv > 0 ? lbl('P', pv) : null, lbl('LNT', len)]; }
         else if (matchedShape === 'angle')      { dimPrefix = 'L';   dimParts = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
         else if (matchedShape === 'equal angle') { dimPrefix = 'EA'; dimParts = [nf(wid), nf(wid), nf(thk), nf(len)]; }
         else if (matchedShape === 'unequal angle') { dimPrefix = 'UA'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }

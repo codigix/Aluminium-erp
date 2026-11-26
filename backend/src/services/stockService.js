@@ -184,14 +184,21 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
     grn.shape_type as grn_shape_type
   FROM stock_ledger sl
   LEFT JOIN grn_items grn ON sl.grn_item_id = grn.id
-  LEFT JOIN stock_balance sb ON (
-    sl.item_code = sb.item_code 
-    AND (sl.warehouse = sb.warehouse OR (sl.warehouse IS NULL AND sb.warehouse IS NULL))
-    AND (ABS(COALESCE(sl.length, 0) - COALESCE(sb.length, 0)) < 0.0001)
-    AND (ABS(COALESCE(sl.width, 0) - COALESCE(sb.width, 0)) < 0.0001)
-    AND (ABS(COALESCE(sl.thickness, 0) - COALESCE(sb.thickness, 0)) < 0.0001)
-    AND (ABS(COALESCE(sl.diameter, 0) - COALESCE(sb.diameter, 0)) < 0.0001)
-    AND (ABS(COALESCE(sl.outer_diameter, 0) - COALESCE(sb.outer_diameter, 0)) < 0.0001)
+  -- One stock balance row per ledger row. Several balance rows can share item code + warehouse + sizes but differ in
+  -- shape (e.g. Hexagonal Bar and Square Bar of the same material 120 x 30); joining on sizes alone returned the ledger
+  -- row once per balance row (duplicates). Pick the row with the same shape first, otherwise the lowest id (as before).
+  LEFT JOIN stock_balance sb ON sb.id = (
+    SELECT sb2.id
+    FROM stock_balance sb2
+    WHERE sl.item_code = sb2.item_code
+      AND (sl.warehouse = sb2.warehouse OR (sl.warehouse IS NULL AND sb2.warehouse IS NULL))
+      AND (ABS(COALESCE(sl.length, 0) - COALESCE(sb2.length, 0)) < 0.0001)
+      AND (ABS(COALESCE(sl.width, 0) - COALESCE(sb2.width, 0)) < 0.0001)
+      AND (ABS(COALESCE(sl.thickness, 0) - COALESCE(sb2.thickness, 0)) < 0.0001)
+      AND (ABS(COALESCE(sl.diameter, 0) - COALESCE(sb2.diameter, 0)) < 0.0001)
+      AND (ABS(COALESCE(sl.outer_diameter, 0) - COALESCE(sb2.outer_diameter, 0)) < 0.0001)
+    ORDER BY (LOWER(TRIM(COALESCE(sb2.shape_type, ''))) = LOWER(TRIM(COALESCE(NULLIF(TRIM(sl.shape_type), ''), grn.shape_type, '')))) DESC, sb2.id
+    LIMIT 1
   )
   LEFT JOIN shapes s ON sb.shape_id = s.id`;
 

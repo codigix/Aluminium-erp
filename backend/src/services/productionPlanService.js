@@ -1,6 +1,33 @@
 const pool = require('../config/db');
 const bomService = require('./bomService');
 
+// Shape name stored on a production plan material line (production_plan_materials.shape_type), so a saved
+// plan keeps "Hexagonal Bar" vs "Square Bar" even when material + sizes are identical. null when unknown.
+const planMaterialShape = (mat) => {
+  const s = String(mat?.shape_type || mat?.shape_name || mat?.shape || '').trim();
+  return s ? s.substring(0, 100) : null;
+};
+
+// Shape part of a Material Request line key, so "HEX AF:120 × LNT:30" and "SB A:120 × LNT:30" of the same
+// material + sizes stay separate lines. '' when the shape is unknown.
+const shapeKeyOf = (shape) => String(shape || '').trim().toLowerCase();
+
+// SQL: stock balance for a plan / MR line, matched like before (material name or item code + all sizes) but only
+// counting stock of the same shape. Stock rows without a shape, or lines without a shape, still count.
+// `alias` = the line table (ppm / mri); `shapeExpr` = that line's shape name; `codeFilter` = extra item_code condition.
+const shapeAwareBalanceSql = (alias, nameCol, shapeExpr, codeFilter = '') => `COALESCE((
+    SELECT SUM(sbx.current_balance)
+    FROM stock_balance sbx
+    LEFT JOIN shapes sx ON sx.id = sbx.shape_id
+    WHERE (sbx.material_name = ${alias}.${nameCol} OR (sbx.item_code = ${alias}.item_code ${codeFilter}))
+      AND ABS(COALESCE(sbx.length, 0) - COALESCE(${alias}.length, 0)) < 0.0001
+      AND ABS(COALESCE(sbx.width, 0) - COALESCE(${alias}.width, 0)) < 0.0001
+      AND ABS(COALESCE(sbx.thickness, 0) - COALESCE(${alias}.thickness, 0)) < 0.0001
+      AND ABS(COALESCE(sbx.diameter, 0) - COALESCE(${alias}.diameter, 0)) < 0.0001
+      AND ABS(COALESCE(sbx.outer_diameter, 0) - COALESCE(${alias}.outer_diameter, 0)) < 0.0001
+      AND (sx.name IS NULL OR COALESCE(${shapeExpr}, '') = '' OR LOWER(TRIM(sx.name)) = LOWER(TRIM(${shapeExpr})))
+  ), 0)`;
+
 /**
  * Ensures that every Part and Assembly Production Plan contains Shipment as the final default operation.
  * - Preserves all existing operations in their original order.
@@ -321,7 +348,7 @@ const getProductionPlanById = async (id) => {
 
   // 4. Fetch Materials
   const [materials] = await pool.query(
-    `SELECT ppm.*, MAX(s.name) as shape_type
+    `SELECT ppm.*, COALESCE(NULLIF(TRIM(ppm.shape_type), ''), MAX(s.name)) as shape_type
      FROM production_plan_materials ppm
      LEFT JOIN sales_order_item_materials som ON (
           (ppm.item_code IS NOT NULL AND LOWER(TRIM(ppm.item_code)) = LOWER(TRIM(som.item_code)))
@@ -670,8 +697,8 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
-           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, total_wt, is_kg_material, status, length, width, thickness, diameter, outer_diameter)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, source_assembly, material_category, total_wt, is_kg_material, status, length, width, thickness, diameter, outer_diameter, shape_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
@@ -691,7 +718,8 @@ const createProductionPlan = async (planData, createdBy) => {
             mat.width !== undefined && mat.width !== null && mat.width !== '' ? mat.width : (mat.dimensions?.width || 0),
             mat.thickness !== undefined && mat.thickness !== null && mat.thickness !== '' ? mat.thickness : (mat.dimensions?.thickness || 0),
             mat.diameter !== undefined && mat.diameter !== null && mat.diameter !== '' ? mat.diameter : (mat.dimensions?.diameter || 0),
-            mat.outer_diameter !== undefined && mat.outer_diameter !== null && mat.outer_diameter !== '' ? mat.outer_diameter : (mat.dimensions?.outer_diameter || 0)
+            mat.outer_diameter !== undefined && mat.outer_diameter !== null && mat.outer_diameter !== '' ? mat.outer_diameter : (mat.dimensions?.outer_diameter || 0),
+            planMaterialShape(mat)
           ]
         );
       }
@@ -855,8 +883,8 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const mat of materialList) {
         await connection.execute(
           `INSERT INTO production_plan_materials 
-           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, total_wt, is_kg_material, source_assembly, material_category, status, length, width, thickness, diameter, outer_diameter)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse, bom_ref, total_wt, is_kg_material, source_assembly, material_category, status, length, width, thickness, diameter, outer_diameter, shape_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
@@ -876,7 +904,8 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
             mat.width !== undefined && mat.width !== null && mat.width !== '' ? mat.width : (mat.dimensions?.width || 0),
             mat.thickness !== undefined && mat.thickness !== null && mat.thickness !== '' ? mat.thickness : (mat.dimensions?.thickness || 0),
             mat.diameter !== undefined && mat.diameter !== null && mat.diameter !== '' ? mat.diameter : (mat.dimensions?.diameter || 0),
-            mat.outer_diameter !== undefined && mat.outer_diameter !== null && mat.outer_diameter !== '' ? mat.outer_diameter : (mat.dimensions?.outer_diameter || 0)
+            mat.outer_diameter !== undefined && mat.outer_diameter !== null && mat.outer_diameter !== '' ? mat.outer_diameter : (mat.dimensions?.outer_diameter || 0),
+            planMaterialShape(mat)
           ]
         );
       }
@@ -1888,7 +1917,10 @@ const getItemBOMDetails = async (salesOrderItemId, drawingNoHint = null, itemCod
       const thk = Number(m.thickness) || 0;
       const dia = Number(m.diameter) || 0;
       const od = Number(m.outer_diameter) || 0;
-      const mKey = `${matName}-${matCode}-${len}-${wid}-${thk}-${dia}-${od}`;
+      // Shape is part of the identity: e.g. HEX AF:120 × LNT:30 and SB A:120 × LNT:30 share the same
+      // material and sizes but are different stock, so they must stay separate lines.
+      const shapeKey = String(m.shape_type || m.shape_name || m.shape || m.shape_id || '').toLowerCase().trim();
+      const mKey = `${matName}-${matCode}-${shapeKey}-${len}-${wid}-${thk}-${dia}-${od}`;
 
       const existing = materialMap.get(mKey);
       const reqQty = baseQtyPerFG * qtyMultiplier;
@@ -2418,8 +2450,8 @@ const addManualMaterialToPlan = async (planId, item) => {
     `INSERT INTO production_plan_materials (
       plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse,
       bom_ref, is_kg_material, material_category, status, length, width, thickness,
-      diameter, outer_diameter, density, weight_per_unit, is_manual
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CORE', NULL, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      diameter, outer_diameter, density, weight_per_unit, is_manual, shape_type
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CORE', NULL, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
     [
       planId,
       item.item_code || item.material_name,
@@ -2431,7 +2463,8 @@ const addManualMaterialToPlan = async (planId, item) => {
       item.warehouse || 'Consumables Store',
       bomRef,
       isKg ? 1 : 0,
-      len, wid, thk, dia, od, dens, wpu
+      len, wid, thk, dia, od, dens, wpu,
+      shapeName ? String(shapeName).trim().substring(0, 100) : null
     ]
   );
   return { id: result.insertId };
@@ -2517,7 +2550,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
     const thk = Number(dimensions?.thickness) || 0;
     const dia = Number(dimensions?.diameter) || 0;
     const od = Number(dimensions?.outer_diameter) || 0;
-    const key = `${code.toUpperCase()}-${len}-${wid}-${thk}-${dia}-${od}`;
+    const key = `${code.toUpperCase()}-${shapeKeyOf(shapeType)}-${len}-${wid}-${thk}-${dia}-${od}`;
 
     // Skip SFG, FG and PART items from material request
     const c = code.toUpperCase();
@@ -2602,11 +2635,11 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   // Step 1: Add Materials (ONLY materials should be in Material Request)
   const [materials] = await pool.query(`
     SELECT ppm.*,
-           shape_lookup.shape_name as shape_type,
+           COALESCE(NULLIF(TRIM(ppm.shape_type), ''), shape_lookup.shape_name) as shape_type,
            shape_lookup.bom_density as bom_density,
            COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
            COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
-           COALESCE(actual_sb.current_balance, 0) as current_balance,
+           ${shapeAwareBalanceSql('ppm', 'material_name', "COALESCE(NULLIF(TRIM(ppm.shape_type), ''), shape_lookup.shape_name)", "AND ppm.item_code NOT LIKE 'PART-%' AND ppm.item_code NOT LIKE 'SA-%' AND ppm.item_code NOT LIKE 'FG-%' AND ppm.item_code NOT LIKE 'SFG-%' AND ppm.item_code NOT LIKE 'ASSEMBLY%'")} as current_balance,
            COALESCE(issued.issued_qty, 0) as issued_qty,
            COALESCE(mr_data.status_rank, 0) as status_rank,
            COALESCE(NULLIF(ppm.length, 0), actual_sb.length, 0) as length, 
@@ -2753,9 +2786,9 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   const [mrItems] = await pool.query(`
     SELECT mri.*, mri.quantity as required_qty, mr.status,
            ppm.bom_ref as ppm_bom_ref,
-           shape_lookup.shape_name as shape_type,
+           COALESCE(NULLIF(TRIM(mri.shape_type), ''), shape_lookup.shape_name) as shape_type,
            COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
-           COALESCE(actual_sb.current_balance, 0) as current_balance,
+           ${shapeAwareBalanceSql('mri', 'item_name', "COALESCE(NULLIF(TRIM(mri.shape_type), ''), shape_lookup.shape_name)")} as current_balance,
            COALESCE(issued.issued_qty, 0) as issued_qty,
            COALESCE(NULLIF(mri.length, 0), actual_sb.length, 0) as length, 
            COALESCE(NULLIF(mri.width, 0), actual_sb.width, 0) as width, 
@@ -2772,6 +2805,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         AND ABS(COALESCE(mri.diameter, 0) - COALESCE(ppm.diameter, 0)) < 0.0001
         AND ABS(COALESCE(mri.outer_diameter, 0) - COALESCE(ppm.outer_diameter, 0)) < 0.0001
         AND ppm.plan_id = mr.plan_id
+        AND (COALESCE(TRIM(mri.shape_type), '') = '' OR COALESCE(TRIM(ppm.shape_type), '') = '' OR LOWER(TRIM(mri.shape_type)) = LOWER(TRIM(ppm.shape_type)))
     )
     LEFT JOIN (
         SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
@@ -2924,7 +2958,7 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
       const thk = Number(dimensions?.thickness) || 0;
       const dia = Number(dimensions?.diameter) || 0;
       const od = Number(dimensions?.outer_diameter) || 0;
-      const key = `${code.toUpperCase()}-${len}-${wid}-${thk}-${dia}-${od}`;
+      const key = `${code.toUpperCase()}-${shapeKeyOf(dimensions?.shape_type)}-${len}-${wid}-${thk}-${dia}-${od}`;
 
       // Skip SFG, FG and PART items from material request
       const c = code.toUpperCase();
@@ -3020,6 +3054,7 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
                -- BOM match by name + sizes → BOM row of the same part / drawing with the same sizes (names may differ,
                -- read-only) → Item Master shape only when the material has ONE shape in stock
                COALESCE(
+                 NULLIF(TRIM(ppm.shape_type), ''),
                  shape_lookup.shape_name,
                  (SELECT MAX(s3.name)
                     FROM sales_order_item_materials som3

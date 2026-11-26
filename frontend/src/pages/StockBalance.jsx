@@ -564,6 +564,8 @@ const StockBalance = () => {
     const normalize = (str) =>
       String(str || '')
         .toLowerCase()
+        // "OD:40" → "od40" so searching "OD40", "OD:40" or "OD 40" all match the labeled size text
+        .replace(/:/g, '')
         .replace(/[×xX*]/g, ' ')
         .replace(/[^a-z0-9\s]/g, ' ')
         .replace(/\s+/g, ' ');

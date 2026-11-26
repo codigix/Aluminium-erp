@@ -119,7 +119,7 @@ export const PipeCalcFields = ({
         <div className={`${selectWrapClass} text-[11px] text-indigo-700`}>
           V = π/4 × (OD² − ID²) × L
           {num(od) > 0 && num(idValue) > 0 && !idInvalid && (
-            <span className="text-slate-500"> · PIPE OD{num(od)} × ID{num(idValue)}{num(length) > 0 ? ` × ${num(length)}` : ''} mm · wall {thickness} mm</span>
+            <span className="text-slate-500"> · PIPE OD:{num(od)} × ID:{num(idValue)}{num(length) > 0 ? ` × LNT:${num(length)}` : ''} mm · wall {thickness} mm</span>
           )}
           {idInvalid && <span className="ml-2 text-amber-700 font-semibold">⚠️ Inner Diameter must be less than the Outer Diameter.</span>}
         </div>
@@ -155,7 +155,7 @@ export const FlangeFields = ({
       <div className={`${noteClass} text-[11px] text-indigo-700`}>
         V = π/4 × (OD² − ID²) × T <span className="text-slate-500">(without bolt-hole deduction)</span>
         {num(od) > 0 && num(diameter) > 0 && num(thickness) > 0 && !idInvalid && (
-          <span className="text-slate-500"> · FLG OD{num(od)} × ID{num(diameter)} × {num(thickness)} mm</span>
+          <span className="text-slate-500"> · FLG OD:{num(od)} × ID:{num(diameter)} × T:{num(thickness)} mm</span>
         )}
         {idInvalid && <span className="ml-2 text-amber-700 font-semibold">⚠️ Inner Diameter must be less than the Outer Diameter.</span>}
       </div>

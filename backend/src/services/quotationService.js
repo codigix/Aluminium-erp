@@ -1917,18 +1917,20 @@ const generateQuotationPDF = async (quotationId) => {
         ms = resolveDiameterlessShape(ms, dia, od, wid, thk);
         let pfx = '', dp = [];
         const hollowId = ms === 'pipe' ? getHollowPipeId(i, od, thk, dia) : 0;
-        if (ms === 'flange')             { pfx = 'FLG';  dp = [od > 0 ? `OD${nf(od)}` : null, dia > 0 ? `ID${nf(dia)}` : null, nf(thk)]; }
-        else if (ms === 'pipe' && hollowId > 0) { pfx = 'PIPE'; dp = [`OD${nf(od)}`, `ID${nf(hollowId)}`, nf(len)]; }
-        else if (ms === 'plate')         { pfx = 'PL';   dp = [nf(wid), nf(len), nf(thk)]; }
-        else if (ms === 'flat bar')      { pfx = 'FL';   dp = [nf(wid), nf(thk), nf(len)]; }
-        else if (ms === 'round bar')     { pfx = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dp = [`Ø${nf(dv)}`, nf(len)]; }
-        else if (ms === 'hexagonal bar') { pfx = 'HEX';  dp = [`AF${nf(wid)}`, nf(len)]; }
-        else if (ms === 'square bar')    { pfx = 'SQ';   dp = [nf(wid), nf(len)]; }
-        else if (ms === 'rectangular bar') { pfx = 'REC'; dp = [nf(wid), nf(od), nf(len)]; }
-        else if (ms === 'pipe')          { pfx = 'PIPE'; const ov = od > 0 ? od : dia; dp = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
-        else if (ms === 'square tube')   { pfx = 'SQT';  dp = [nf(wid), nf(thk), nf(len)]; }
-        else if (ms === 'rectangular tube') { pfx = 'RCT'; dp = [nf(wid), nf(od), nf(thk), nf(len)]; }
-        else if (ms === 'threaded rod')  { pfx = 'TR';   const dv = dia > 0 ? dia : od; const pv = parseFloat(i.thread_pitch || i.threadPitch || thk || i.thickness || 0); dp = [`M${nf(dv)}`, pv > 0 ? nf(pv) : null, nf(len)]; }
+        // Labeled value, e.g. "W:300"; dropped (like nf) when the value is empty / 0
+        const lbl = (label, v) => { const s = nf(v); return s ? `${label}:${s}` : null; };
+        if (ms === 'flange')             { pfx = 'FLG';  dp = [lbl('OD', od), lbl('ID', dia), lbl('T', thk)]; }
+        else if (ms === 'pipe' && hollowId > 0) { pfx = 'PIPE'; dp = [lbl('OD', od), lbl('ID', hollowId), lbl('LNT', len)]; }
+        else if (ms === 'plate')         { pfx = 'PL';   dp = [lbl('W', wid), lbl('H', len), lbl('T', thk)]; }
+        else if (ms === 'flat bar')      { pfx = 'FL';   dp = [lbl('W', wid), lbl('T', thk), lbl('LNT', len)]; }
+        else if (ms === 'round bar')     { pfx = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dp = [lbl('Ø', dv), lbl('LNT', len)]; }
+        else if (ms === 'hexagonal bar') { pfx = 'HEX';  dp = [lbl('AF', wid), lbl('LNT', len)]; }
+        else if (ms === 'square bar')    { pfx = 'SB';   dp = [lbl('A', wid), lbl('LNT', len)]; }
+        else if (ms === 'rectangular bar') { pfx = 'REC'; dp = [lbl('W', wid), lbl('H', od), lbl('LNT', len)]; }
+        else if (ms === 'pipe')          { pfx = 'PIPE'; const ov = od > 0 ? od : dia; dp = [lbl('OD', ov), lbl('T', thk), lbl('LNT', len)]; }
+        else if (ms === 'square tube')   { pfx = 'SQT';  dp = [lbl('A', wid), lbl('T', thk), lbl('LNT', len)]; }
+        else if (ms === 'rectangular tube') { pfx = 'RCT'; dp = [lbl('W', wid), lbl('H', od), lbl('T', thk), lbl('LNT', len)]; }
+        else if (ms === 'threaded rod')  { pfx = 'TR';   const dv = dia > 0 ? dia : od; const pv = parseFloat(i.thread_pitch || i.threadPitch || thk || i.thickness || 0); dp = [`OD:${nf(dv)}`, lbl('P', pv), lbl('LNT', len)]; }
         else if (ms === 'angle')         { pfx = 'L';    dp = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
         else if (ms === 'equal angle')   { pfx = 'EA';   dp = [nf(wid), nf(wid), nf(thk), nf(len)]; }
         else if (ms === 'unequal angle') { pfx = 'UA';   dp = [nf(wid), nf(od), nf(thk), nf(len)]; }

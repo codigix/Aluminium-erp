@@ -2263,6 +2263,9 @@ const ensureProductionPlanTables = async () => {
     if (!existingPpmCols.has('density')) {
       await connection.query('ALTER TABLE production_plan_materials ADD COLUMN density DECIMAL(12, 6) DEFAULT 0');
     }
+    if (!existingPpmCols.has('shape_type')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN shape_type VARCHAR(100) NULL');
+    }
     if (!existingPpmCols.has('weight_per_unit')) {
       await connection.query('ALTER TABLE production_plan_materials ADD COLUMN weight_per_unit DECIMAL(12, 6) DEFAULT 0');
     }

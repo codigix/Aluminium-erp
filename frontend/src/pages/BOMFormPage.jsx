@@ -34,6 +34,27 @@ import { successToast, errorToast } from '../utils/toast';
 import { formatDimensions, calculateWeight, validateShapeDimensions } from '../utils/formatters';
 import { PipeCalcFields, FlangeFields, isFlangeShape } from '../components/ShapeCalcFields.jsx';
 
+// Map an item's stored unit ("Kgs", "KG", "KILOGRAM", "nos" …) to the Raw Material UOM dropdown option,
+// so the select shows the real value and the Kg material/shape panel opens on first selection.
+const MATERIAL_UOM_OPTIONS = ['Kg', 'Nos', 'Mtr', 'Set', 'Pkt', 'Litre (Ltr)', 'Millilitre (ml)', 'Cubic Meter (m³)', 'Millimeter (mm)', 'Feet (ft)', 'Inch (in)', 'Gram (g)', 'Ton', 'Metric Ton (MT)'];
+const toMaterialUomOption = (unit) => {
+  const raw = String(unit || '').trim();
+  if (!raw) return 'Kg';
+  const key = raw.toLowerCase().replace(/\./g, '');
+  if (['kg', 'kgs', 'kilogram', 'kilograms'].includes(key)) return 'Kg';
+  return MATERIAL_UOM_OPTIONS.find(o => o.toLowerCase() === key) || raw;
+};
+
+// Dimension value for the form inputs: drops DB decimal padding ("120.0000" → "120", "4.5000" → "4.5");
+// zero / empty becomes '' so the input shows its placeholder. Display only — saved values are unchanged.
+const cleanDim = (v) => {
+  if (v === null || v === undefined || v === '') return '';
+  const num = parseFloat(v);
+  if (isNaN(num)) return v;
+  if (num === 0) return '';
+  return String(parseFloat(num.toFixed(4)));
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const RecursiveBOMRow = ({
@@ -187,7 +208,7 @@ const RecursiveBOMRow = ({
           </td>
           <td className="p-2 text-center text-[11px]  text-slate-600">
             <div className="flex flex-col items-center">
-              <span>{qty.toFixed(2)} {item.uom}</span>
+              <span>{parseFloat(qty.toFixed(2))} {item.uom}</span>
               {unitWeight > 0 && (
                 <span className="text-xs text-slate-400">({unitWeight.toFixed(3)} Kg)</span>
               )}
@@ -333,7 +354,7 @@ const RecursiveBOMRow = ({
         </td>
         <td className="p-2 text-center text-[11px]  text-slate-600">
           <div className="flex flex-col items-center">
-            <span>{(qty / cumulativeLossFactor).toFixed(actualType === 'material' ? 4 : 2)} {item.uom}</span>
+            <span>{parseFloat((qty / cumulativeLossFactor).toFixed(actualType === 'material' ? 4 : 2))} {item.uom}</span>
             {unitWeight > 0 && (
               <span className="text-xs text-slate-400">({unitWeight.toFixed(3)} Kg)</span>
             )}
@@ -2140,13 +2161,13 @@ const BOMFormPage = () => {
         description: item.description || '',
         weightPerUnit: item.weight_per_unit || item.weightPerUnit || '',
         scrapPercent: item.scrap_percent || item.scrapPercent || '0',
-        length: item.length || '',
-        width: item.width || '',
-        thickness: item.thickness || '',
-        diameter: item.diameter || '',
-        outer_diameter: item.outer_diameter || '',
-        threadPitch: item.thread_pitch || item.threadPitch || '',
-        thread_pitch: item.thread_pitch || item.threadPitch || '',
+        length: cleanDim(item.length),
+        width: cleanDim(item.width),
+        thickness: cleanDim(item.thickness),
+        diameter: cleanDim(item.diameter),
+        outer_diameter: cleanDim(item.outer_diameter),
+        threadPitch: cleanDim(item.thread_pitch || item.threadPitch),
+        thread_pitch: cleanDim(item.thread_pitch || item.threadPitch),
         density: item.density || '',
         shapeId: item.shape_id || item.shapeId || '',
         materialId: item.material_id || item.materialId || ''
@@ -2166,11 +2187,11 @@ const BOMFormPage = () => {
         weightPerUnit: item.weight_per_unit || item.weightPerUnit || '',
         scrapPercent: item.scrap_percent || item.scrapPercent || '0',
         itemGroup: item.item_group || item.itemGroup || '',
-        length: item.length || '',
-        width: item.width || '',
-        thickness: item.thickness || '',
-        diameter: item.diameter || '',
-        outer_diameter: item.outer_diameter || '',
+        length: cleanDim(item.length),
+        width: cleanDim(item.width),
+        thickness: cleanDim(item.thickness),
+        diameter: cleanDim(item.diameter),
+        outer_diameter: cleanDim(item.outer_diameter),
         drawingNo: item.drawing_no || item.drawingNo || 'N/A',
         drawing_no: item.drawing_no || item.drawingNo || 'N/A'
       });
@@ -3159,11 +3180,11 @@ const BOMFormPage = () => {
                                 weightPerUnit: item.weightPerUnit || 0,
                                 itemGroup: item.itemGroup || "",
                                 scrapPercent: item.scrapPercent || 0,
-                                length: item.length || '',
-                                width: item.width || '',
-                                thickness: item.thickness || '',
-                                diameter: item.diameter || '',
-                                outer_diameter: item.outer_diameter || '',
+                                length: cleanDim(item.length),
+                                width: cleanDim(item.width),
+                                thickness: cleanDim(item.thickness),
+                                diameter: cleanDim(item.diameter),
+                                outer_diameter: cleanDim(item.outer_diameter),
                                 drawingNo: item.drawingNo || 'N/A',
                                 drawing_no: item.drawingNo || 'N/A'
                               });
@@ -3466,14 +3487,14 @@ const BOMFormPage = () => {
                             itemCode: item ? item.item_code : '',
                             itemGroup: autoGroup,
                             rate: item ? (bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0))) : prev.rate,
-                            uom: item ? (item.unit || 'Kg') : prev.uom,
+                            uom: item ? toMaterialUomOption(item.unit) : prev.uom,
                             description: item ? item.material_name : prev.description,
                             weightPerUnit: item ? (item.weight_per_unit || prev.weightPerUnit) : prev.weightPerUnit,
-                            length: item ? (item.length || prev.length) : prev.length,
-                            width: item ? (item.width || prev.width) : prev.width,
-                            thickness: item ? (item.thickness || prev.thickness) : prev.thickness,
-                            diameter: item ? (item.diameter || prev.diameter) : prev.diameter,
-                            outer_diameter: item ? (item.outer_diameter || prev.outer_diameter) : prev.outer_diameter,
+                            length: cleanDim(item ? (item.length || prev.length) : prev.length),
+                            width: cleanDim(item ? (item.width || prev.width) : prev.width),
+                            thickness: cleanDim(item ? (item.thickness || prev.thickness) : prev.thickness),
+                            diameter: cleanDim(item ? (item.diameter || prev.diameter) : prev.diameter),
+                            outer_diameter: cleanDim(item ? (item.outer_diameter || prev.outer_diameter) : prev.outer_diameter),
                             density: itemDensity ? String(itemDensity) : prev.density,
                             shapeId: matchedShapeId || prev.shapeId,
                             materialId: matchedMaterialId || prev.materialId
@@ -3647,11 +3668,11 @@ const BOMFormPage = () => {
                                             setMaterialForm(prev => ({
                                               ...prev,
                                               itemCode: selectedVariant.item_code,
-                                              length: selectedVariant.length !== null && selectedVariant.length !== undefined && parseFloat(selectedVariant.length) > 0 ? selectedVariant.length : prev.length,
-                                              width: selectedVariant.width !== null && selectedVariant.width !== undefined && parseFloat(selectedVariant.width) > 0 ? selectedVariant.width : prev.width,
-                                              thickness: selectedVariant.thickness !== null && selectedVariant.thickness !== undefined && parseFloat(selectedVariant.thickness) > 0 ? selectedVariant.thickness : prev.thickness,
-                                              diameter: selectedVariant.diameter !== null && selectedVariant.diameter !== undefined && parseFloat(selectedVariant.diameter) > 0 ? selectedVariant.diameter : prev.diameter,
-                                              outer_diameter: selectedVariant.outer_diameter !== null && selectedVariant.outer_diameter !== undefined && parseFloat(selectedVariant.outer_diameter) > 0 ? selectedVariant.outer_diameter : prev.outer_diameter,
+                                              length: selectedVariant.length !== null && selectedVariant.length !== undefined && parseFloat(selectedVariant.length) > 0 ? cleanDim(selectedVariant.length) : prev.length,
+                                              width: selectedVariant.width !== null && selectedVariant.width !== undefined && parseFloat(selectedVariant.width) > 0 ? cleanDim(selectedVariant.width) : prev.width,
+                                              thickness: selectedVariant.thickness !== null && selectedVariant.thickness !== undefined && parseFloat(selectedVariant.thickness) > 0 ? cleanDim(selectedVariant.thickness) : prev.thickness,
+                                              diameter: selectedVariant.diameter !== null && selectedVariant.diameter !== undefined && parseFloat(selectedVariant.diameter) > 0 ? cleanDim(selectedVariant.diameter) : prev.diameter,
+                                              outer_diameter: selectedVariant.outer_diameter !== null && selectedVariant.outer_diameter !== undefined && parseFloat(selectedVariant.outer_diameter) > 0 ? cleanDim(selectedVariant.outer_diameter) : prev.outer_diameter,
                                               rate: selectedVariant.selling_rate > 0 ? selectedVariant.selling_rate : (selectedVariant.valuation_rate || prev.rate)
                                             }));
                                           } else {

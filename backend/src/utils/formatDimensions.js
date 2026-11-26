@@ -104,6 +104,8 @@ const formatDimensions = (item) => {
     const num = parseFloat(val);
     return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1);
   };
+  // Labeled value, e.g. "W:300"; dropped (like n) when the value is empty / 0
+  const lbl = (label, val) => { const v = n(val); return v ? `${label}:${v}` : null; };
 
   let prefix = '';
   let dimStr = '';
@@ -111,48 +113,48 @@ const formatDimensions = (item) => {
   if (matchedShape === 'flange') {
     // Flange: OD (outer_diameter) × ID (diameter) × T (thickness)
     prefix = 'FLG';
-    dimStr = [od > 0 ? `OD${n(od)}` : null, dia > 0 ? `ID${n(dia)}` : null, n(thk)].filter(Boolean).join(' × ');
+    dimStr = [lbl('OD', od), lbl('ID', dia), lbl('T', thk)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'plate') {
     prefix = 'PL';
-    dimStr = [n(wid), n(len), n(thk)].filter(Boolean).join(' × ');
+    dimStr = [lbl('W', wid), lbl('H', len), lbl('T', thk)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'flat bar') {
     prefix = 'FL';
     const hOrT = thk > 0 ? thk : (od > 0 ? od : 0);
-    dimStr = [n(wid), n(hOrT), n(len)].filter(Boolean).join(' × ');
+    dimStr = [lbl('W', wid), lbl('T', hOrT), lbl('LNT', len)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'round bar') {
     prefix = 'RB';
     const dVal = dia > 0 ? dia : (od > 0 ? od : wid);
-    dimStr = [`Ø${n(dVal)}`, n(len)].filter(Boolean).join(' × ');
+    dimStr = [lbl('Ø', dVal), lbl('LNT', len)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'hexagonal bar') {
     prefix = 'HEX';
-    dimStr = [`AF${n(wid)}`, n(len)].filter(Boolean).join(' × ');
+    dimStr = [lbl('AF', wid), lbl('LNT', len)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'square bar') {
     prefix = 'SB';
-    dimStr = [n(wid), n(len)].filter(Boolean).join(' × ');
+    dimStr = [lbl('A', wid), lbl('LNT', len)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'rectangular bar') {
     prefix = 'REC';
-    dimStr = [n(wid), n(od), n(len)].filter(Boolean).join(' × ');
+    dimStr = [lbl('W', wid), lbl('H', od), lbl('LNT', len)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'pipe') {
     prefix = 'PIPE';
     const hollowId = getHollowPipeId(item, od, thk, dia);
     if (hollowId > 0) {
       // Pipe Calculation 2 (Hollow): OD × ID × L
-      dimStr = [`OD${n(od)}`, `ID${n(hollowId)}`, n(len)].filter(Boolean).join(' × ');
+      dimStr = [lbl('OD', od), lbl('ID', hollowId), lbl('LNT', len)].filter(Boolean).join(' × ');
     } else {
       const odVal = od > 0 ? od : dia;
-      dimStr = [`OD${n(odVal)}`, n(thk), n(len)].filter(Boolean).join(' × ');
+      dimStr = [lbl('OD', odVal), lbl('T', thk), lbl('LNT', len)].filter(Boolean).join(' × ');
     }
   } else if (matchedShape === 'square tube') {
     prefix = 'SQT';
-    dimStr = [n(wid), n(thk), n(len)].filter(Boolean).join(' × ');
+    dimStr = [lbl('A', wid), lbl('T', thk), lbl('LNT', len)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'rectangular tube') {
     prefix = 'RCT';
-    dimStr = [n(wid), n(od), n(thk), n(len)].filter(Boolean).join(' × ');
+    dimStr = [lbl('W', wid), lbl('H', od), lbl('T', thk), lbl('LNT', len)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'threaded rod') {
     prefix = 'TR';
     const dVal = dia > 0 ? dia : od;
     const pVal = parseFloat(item.thread_pitch || item.threadPitch || item.dimensions?.thread_pitch || item.dimensions?.threadPitch || thk || item.thickness || item.dimensions?.thickness || 0);
-    dimStr = [`M${n(dVal)}`, pVal > 0 ? n(pVal) : null, n(len)].filter(Boolean).join(' × ');
+    dimStr = [`OD:${n(dVal)}`, lbl('P', pVal), lbl('LNT', len)].filter(Boolean).join(' × ');
   } else if (matchedShape === 'angle') {
     prefix = 'L';
     dimStr = [n(wid), n(od || thk), n(thk), n(len)].filter(Boolean).join(' × ');
