@@ -177,9 +177,17 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
     return 5;
   })();
 
-  // ── Pages: fixed 10 item rows per A4 sheet, short pages padded with blank rows ──
-  const ROWS_PER_PAGE = 10;
-  const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+  // ── Pages: the last sheet (totals / terms / signature) holds up to 10 item rows; every earlier sheet is filled with
+  // up to 15 item rows and the next sheet follows directly. Short sheets are padded with blank rows. ──
+  const LAST_PAGE_ROWS = 10;
+  const FULL_PAGE_ROWS = 15;
+  const pageChunks = [];
+  const remainingRows = rows.slice();
+  while (remainingRows.length > LAST_PAGE_ROWS) {
+    pageChunks.push(remainingRows.splice(0, Math.min(FULL_PAGE_ROWS, remainingRows.length - 1)));
+  }
+  pageChunks.push(remainingRows);
+  const totalPages = pageChunks.length;
 
   const rowHtml = (r) => {
     if (!r) return '<tr class="item-row blank-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
@@ -209,9 +217,9 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
               <tr class="totals-row grand-row"><td colspan="5" class="totals-label">Grand Total</td><td class="amount-col">${fmtINR(grandTotal)}</td></tr>`;
 
   const pagesHtml = Array.from({ length: totalPages }, (_, p) => {
-    const pageRows = rows.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE);
-    while (pageRows.length < ROWS_PER_PAGE) pageRows.push(null);
     const isLastPage = p === totalPages - 1;
+    const pageRows = pageChunks[p].slice();
+    while (pageRows.length < (isLastPage ? LAST_PAGE_ROWS : FULL_PAGE_ROWS)) pageRows.push(null);
     return `
       <div class="page-wrap${isLastPage ? ' last-page' : ''}">
         <div class="sheet">
@@ -257,7 +265,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
             <p style="padding-left: 12px;">We thank you for your enquiry. Please find our quotation for the following requirement.</p>
           </div>
 
-          <table class="details-table">
+          <table class="details-table${isLastPage ? '' : ' full-page'}">
             <colgroup>
               <col style="width: 5%;">
               <col style="width: 13%;">
@@ -299,13 +307,14 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
             </ol>
           </div>
           ${noteText ? `<div class="note-box" style="font-size: ${noteFontPx}px;"><p><strong>Note:</strong> ${esc(noteText)}</p></div>` : ''}
-          ` : `<div class="continued">Continued on page ${p + 2}...</div>`}
+          ` : ''}
 
+          ${isLastPage ? `
           <div class="sign-row">
             <div class="sign-for">For ${esc(hostCompanyName)}</div>
-            ${isLastPage && signatureBase64 ? `<img src="${signatureBase64}" style="max-height: 26px; max-width: 120px; object-fit: contain;" />` : ''}
+            ${signatureBase64 ? `<img src="${signatureBase64}" style="max-height: 26px; max-width: 120px; object-fit: contain;" />` : ''}
             <div class="sign-label">Authorised Signatory</div>
-          </div>
+          </div>` : ''}
         </div>
 
         <div class="footer">
@@ -355,6 +364,8 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
         .details-table th:last-child, .details-table td:last-child { border-right: none; }
         .item-row td { height: 13mm; border-bottom: none; }
         .cell { height: 13mm; padding: 0.6mm 0; overflow: hidden; display: flex; flex-direction: column; justify-content: center; gap: 1px; line-height: 1.1; }
+        /* Continuation sheets have no totals / terms / signature block: more, slightly taller rows fill the whole sheet */
+        .details-table.full-page .item-row td, .details-table.full-page .cell { height: 13.5mm; }
         .one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         /* Description line 1 with the item note in brackets right after it (wraps over at most 3 lines) */
         .desc-line { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; line-height: 1.15; }

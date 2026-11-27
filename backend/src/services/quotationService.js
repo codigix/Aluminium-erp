@@ -1409,6 +1409,13 @@ const generateQuotationPDF = async (quotationId) => {
           border-bottom: none;
         }
 
+        /* Continuation sheets carry no totals / terms / signature block, so they hold more rows and
+           the rows are slightly taller so the table fills the whole sheet before the next page starts */
+        .details-table.full-page .item-row td,
+        .details-table.full-page .cell {
+          height: 13.5mm;
+        }
+
         /* Small gap between lines of one entry; row padding gives the medium gap between entries */
         .cell {
           height: 13mm;
@@ -1640,7 +1647,7 @@ const generateQuotationPDF = async (quotationId) => {
             {{^isRFQ}}<p style="padding-left: 12px;">We thank you for your quotation. The details for our requirement are as below.</p>{{/isRFQ}}
           </div>
 
-          <table class="details-table">
+          <table class="details-table{{^isLastPage}} full-page{{/isLastPage}}">
             <colgroup>
               <col style="width: 5%;">
               <col style="width: 13%;">
@@ -1755,14 +1762,12 @@ const generateQuotationPDF = async (quotationId) => {
           {{/notes}}
           {{/isLastPage}}
 
-          {{^isLastPage}}
-          <div class="continued">Continued on page {{nextPageNo}}...</div>
-          {{/isLastPage}}
-
+          {{#isLastPage}}
           <div class="sign-row">
             <div class="sign-for">For {{hostCompanyName}}</div>
             <div class="sign-label">Authorised Signatory</div>
           </div>
+          {{/isLastPage}}
         </div>
 
         <div class="footer">
@@ -2045,18 +2050,30 @@ const generateQuotationPDF = async (quotationId) => {
     logoBase64
   };
 
-  // Fixed 10 item rows per A4 page; short pages are padded with blank rows
-  const ROWS_PER_PAGE = 10;
-  const totalPages = Math.max(1, Math.ceil(viewData.items.length / ROWS_PER_PAGE));
-  viewData.pages = Array.from({ length: totalPages }, (_, p) => {
-    const rows = viewData.items.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE);
-    while (rows.length < ROWS_PER_PAGE) rows.push({ isBlank: true });
+  // The last sheet carries totals / terms / note / signature, so it holds up to 10 item rows. Every earlier sheet has
+  // nothing below the table, so it is filled with up to 15 item rows and the next sheet follows directly.
+  // Short sheets are padded with blank rows.
+  const LAST_PAGE_ROWS = 10;
+  const FULL_PAGE_ROWS = 15;
+  const pageChunks = [];
+  const remainingItems = viewData.items.slice();
+  while (remainingItems.length > LAST_PAGE_ROWS) {
+    // leave at least one item for the last sheet
+    pageChunks.push(remainingItems.splice(0, Math.min(FULL_PAGE_ROWS, remainingItems.length - 1)));
+  }
+  pageChunks.push(remainingItems);
+  const totalPages = pageChunks.length;
+  viewData.pages = pageChunks.map((chunk, p) => {
+    const isLastPage = p === totalPages - 1;
+    const rows = chunk.slice();
+    const capacity = isLastPage ? LAST_PAGE_ROWS : FULL_PAGE_ROWS;
+    while (rows.length < capacity) rows.push({ isBlank: true });
     return {
       rows,
       pageNo: p + 1,
       nextPageNo: p + 2,
       totalPages,
-      isLastPage: p === totalPages - 1
+      isLastPage
     };
   });
 
