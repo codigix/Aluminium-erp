@@ -29,248 +29,359 @@ const createTransporter = () => {
   return nodemailer.createTransport(config);
 };
 
+// Client quotation sheet — same layout as the received-quote (RFQ) PDF in quotationService.generateQuotationPDF:
+// A4, 10 item rows per sheet, header / services band / party box / salutation / table / totals / terms / note / signature / footer.
+// The same HTML is used for the Download PDF button and for the PDF attached to the quotation email.
 const generateQuotationHTML = async (clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany = null, clientDetails = null) => {
-  for (let item of items) {
-    if (!item.hsn_code) {
-      let hsn = '—';
-      if (item.drawing_no) {
-        const [dRows] = await pool.query('SELECT hsn_code FROM customer_drawings WHERE drawing_no = ?', [item.drawing_no]);
-        if (dRows.length > 0 && dRows[0].hsn_code) hsn = dRows[0].hsn_code;
-      }
-      if (hsn === '—' && item.item_code) {
-        const [iRows] = await pool.query('SELECT hsn_code FROM items WHERE item_code = ?', [item.item_code]);
-        if (iRows.length > 0 && iRows[0].hsn_code) hsn = iRows[0].hsn_code;
-      }
-      item.hsn_code = hsn;
+  const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const fmtINR = (n) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Item note: spaces collapsed, outer brackets removed (re-added when printed), max 500 chars — same rule as the received quote
+  const cleanNote = (v) => {
+    let s = String(v ?? '').replace(/\s+/g, ' ').trim();
+    while (s.startsWith('(') && s.endsWith(')')) s = s.slice(1, -1).trim();
+    return s ? s.slice(0, 500) : null;
+  };
+
+  // ── "To," block: taken from the Customer Master (customers / customer_contacts), matched by GSTIN (else by name).
+  // The quotation's own saved client fields are only the fallback — they can hold stale or repeated text. ──
+  const dedupeAddress = (addr) => {
+    const seen = new Set();
+    const out = [];
+    for (const part of String(addr ?? '').split(/[\n\r,]+/)) {
+      const t = part.trim();
+      const k = t.toLowerCase();
+      if (!t || ['n/a', '—', '-'].includes(k) || seen.has(k)) continue;
+      seen.add(k);
+      out.push(t);
     }
+    return out.join(', ');
+  };
+  let partyName = clientName;
+  let partyAddress = dedupeAddress(clientDetails?.address);
+  let partyGstin = clientDetails?.gstin || '';
+  let partyContact = clientDetails?.contact_person || '';
+  let partyPhone = clientDetails?.phone || '';
+  let partyEmail = clientDetails?.email || '';
+  try {
+    let gst = String(partyGstin || '').trim();
+    if (!gst && clientId) {
+      const [g] = await pool.query('SELECT gstin FROM companies WHERE id = ?', [clientId]);
+      gst = String(g[0]?.gstin || '').trim();
+    }
+    let master = null;
+    if (gst) {
+      const [m] = await pool.query('SELECT * FROM customers WHERE gst_no = ? LIMIT 1', [gst]);
+      master = m[0] || null;
+    }
+    if (!master && clientName) {
+      const [m] = await pool.query('SELECT * FROM customers WHERE LOWER(TRIM(customer_name)) = LOWER(TRIM(?)) LIMIT 1', [clientName]);
+      master = m[0] || null;
+    }
+    if (master) {
+      partyName = master.customer_name || partyName;
+      partyAddress = dedupeAddress(master.address) || partyAddress;
+      partyGstin = master.gst_no || partyGstin;
+      // Contact: keep the person this quotation was addressed to; if none, use the master's first contact
+      if (!partyContact || !partyEmail || !partyPhone) {
+        const [cc] = await pool.query('SELECT contact_name, mobile, email FROM customer_contacts WHERE customer_id = ? ORDER BY sort_order, id LIMIT 1', [master.id]);
+        const first = cc[0];
+        if (!partyContact) partyContact = first?.contact_name || '';
+        if (!partyPhone) partyPhone = first?.mobile || '';
+        if (!partyEmail) partyEmail = first?.email || master.email || '';
+      }
+    }
+  } catch (e) {
+    console.error('[Quotation PDF] Customer master lookup failed, using the quotation\'s own client details:', e.message);
   }
+
+  // ── Amounts (unchanged logic): rejected lines are listed but not counted ──
   let subTotal = 0;
   let totalTax = 0;
-  let totalProfit = 0;
-  let totalOverride = 0;
+  const gstRatesUsed = new Set();
+  const rows = (items || []).map((item, idx) => {
+    const isRejected = item.status === 'REJECTED';
+    const quantity = parseFloat(item.quantity) || 1;
+    const gstRate = item.gst_percentage !== undefined && item.gst_percentage !== null && item.gst_percentage !== '' ? parseFloat(item.gst_percentage) : 18;
+    const unitRate = parseFloat(item.quotedPrice) || 0;
+    const lineTotalBase = unitRate * quantity;
+    if (!isRejected) {
+      subTotal += lineTotalBase;
+      totalTax += lineTotalBase * (gstRate / 100);
+      gstRatesUsed.add(gstRate);
+    }
+    const note = cleanNote(item.item_notes);
+    return {
+      sr: idx + 1,
+      drawing_no: item.drawing_no || '—',
+      description: item.description || '',
+      note,
+      isRejected,
+      reason: item.rejection_reason || 'Not specified',
+      qtyStr: `${quantity % 1 === 0 ? quantity.toFixed(0) : quantity.toFixed(3)} Nos`,
+      unitRateStr: isRejected ? 'REJECTED' : fmtINR(unitRate),
+      amountStr: isRejected ? 'REJECTED' : fmtINR(lineTotalBase)
+    };
+  });
 
-  const itemsHTML = (items || [])
-    .map((item, idx) => {
-      const isRejected = item.status === 'REJECTED';
-      const quantity = item.quantity || 1;
-      const profitP = parseFloat(item.profit_percentage) || 0;
-      const overrideP = parseFloat(item.override_percentage) || 0;
-      const gstRate = item.gst_percentage !== undefined && item.gst_percentage !== null && item.gst_percentage !== '' ? parseFloat(item.gst_percentage) : 18;
+  const discountType = (items && items[0]) ? items[0].discount_type || 'percentage' : 'percentage';
+  const discountValue = (items && items[0]) ? parseFloat(items[0].discount_value) || 0 : 0;
+  let discountAmount = discountType === 'percentage' ? subTotal * (discountValue / 100) : discountValue;
+  if (discountAmount > subTotal) discountAmount = subTotal;
+  const discountRatio = subTotal > 0 ? (subTotal - discountAmount) / subTotal : 1;
+  const finalTax = totalTax * discountRatio;
+  const grandTotal = subTotal - discountAmount + finalTax;
 
-      // Calculate rates
-      // item.quotedPrice already includes profit (it's the Unit Rate from UI)
-      const unitRate = parseFloat(item.quotedPrice) || 0;
-      const lineTotalBase = unitRate * quantity;
-      const lineTax = lineTotalBase * (gstRate / 100);
-      const lineTotalWithTax = lineTotalBase + lineTax;
-
-      if (!isRejected) {
-        subTotal += lineTotalBase;
-        totalTax += lineTax;
-
-        // Calculate profit & override amounts for this line
-        const bomCost = parseFloat(item.bom_cost) || 0;
-        const itemBomCost = bomCost || (unitRate / (1 + profitP / 100) / (1 + overrideP / 100)) || 0;
-        const profitAmount = itemBomCost * (profitP / 100) * quantity;
-        const overrideAmount = (itemBomCost * (1 + profitP / 100)) * (overrideP / 100) * quantity;
-
-        totalProfit += profitAmount;
-        totalOverride += overrideAmount;
-      }
-
-      const unitPriceStr = isRejected ?
-        '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' :
-        `₹${unitRate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-
-      const totalLineStr = isRejected ?
-        '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' :
-        `₹${lineTotalBase.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-
-      // PDF: Always use solid border for main rows (child parts are hidden)
-      const mainItemRow = `
-      <tr>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: center;">${idx + 1}</td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
-          <div style="font-weight: bold; color: #000;">${item.drawing_no || '—'}</div>
-          ${item.description ? `<div style="font-weight: bold; color: #000; font-size: 12px; text-transform: uppercase; margin-top: 4px;">${item.description}</div>` : ''}
-          ${isRejected ? `<div style="font-size: 10px; color: #dc2626; margin-top: 4px; font-weight: bold;">Reason: ${item.rejection_reason || 'Not specified'}</div>` : ''}
-        </td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: center;">${item.hsn_code || '—'}</td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: center;">${quantity}</td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: right;">${unitPriceStr}</td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: right; font-weight: bold;">${totalLineStr}</td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: left;">${item.item_notes || '—'}</td>
-      </tr>
-    `;
-
-      // Child part rows are hidden in the PDF (internal use only)
-      return mainItemRow;
-    })
-    .join('');
-
+  // ── Company / client ──
   const { getHostCompanyLogoBase64, getHostCompanySignatureBase64 } = require('./hostCompanyLogoHelper');
   const logoBase64 = getHostCompanyLogoBase64(hostCompany);
   const signatureBase64 = getHostCompanySignatureBase64(hostCompany);
 
   const hostCompanyName = hostCompany?.company_name || 'SP TECHPIONEER PVT. LTD.';
-  const hostCompanyAddress = hostCompany?.company_address || 'Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026';
+  const hostCompanyAddress = String(hostCompany?.company_address || 'Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026')
+    .split(/[\r\n]+/).map(p => p.trim()).filter(Boolean).join(', ');
+  const hostGSTIN = hostCompany?.gstin || '';
+  const hostEmail = hostCompany?.email || hostCompany?.company_email || '';
+  const hostPhone = hostCompany?.phone || hostCompany?.company_phone || hostCompany?.contact_mobile || '';
 
-  let hostCompanyAddressHtml = '';
-  if (hostCompanyAddress) {
-    const parts = hostCompanyAddress.split(/[\r\n,]+/).map(p => p.trim()).filter(Boolean);
-    if (parts.length > 0) {
-      const mid = Math.ceil(parts.length / 2);
-      const line1 = parts.slice(0, mid).join(', ');
-      const line2 = parts.slice(mid).join(', ');
-      hostCompanyAddressHtml = `${line1}<br/>${line2}`;
-    } else {
-      hostCompanyAddressHtml = 'Sector No 7, Plot No 97, PCNTDA<br/>Bhosari, Pune - 411026, Maharashtra';
+  const clientGSTIN = partyGstin || '';
+  const hostStateCode = String(hostGSTIN).trim().slice(0, 2);
+  const clientStateCode = String(clientGSTIN).trim().slice(0, 2);
+  const isIGST = /^\d{2}$/.test(hostStateCode) && /^\d{2}$/.test(clientStateCode) && hostStateCode !== clientStateCode;
+  const singleRate = gstRatesUsed.size === 1 ? [...gstRatesUsed][0] : null;
+  const halfRate = singleRate !== null ? Number((singleRate / 2).toFixed(2)) : null;
+  const cgstAmount = Number((finalTax / 2).toFixed(2));
+  const sgstAmount = Number((finalTax - cgstAmount).toFixed(2));
+  const taxTerm = singleRate !== null
+    ? (isIGST ? `IGST ${singleRate}%` : `CGST ${halfRate}% and SGST ${halfRate}%`)
+    : (isIGST ? 'IGST as applicable' : 'CGST and SGST as applicable');
+
+  const clientContactLine = [
+    partyPhone ? `Mob: ${partyPhone}` : '',
+    partyEmail ? `Email: ${partyEmail}` : ''
+  ].filter(Boolean).join(' | ');
+
+  const quoteNo = quoteNumber || `QT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const quoteDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const generatedAt = new Date().toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const noteText = (notes && !String(notes).trim().startsWith('Drawing Numbers:')) ? String(notes).trim()
+    : (hostCompany?.invoice_footer_notes ? String(hostCompany.invoice_footer_notes).trim() : '');
+
+  // Note box has a fixed height (12mm ≈ 45px): a long note steps its font down (8.5px → 5px) until all of it fits
+  const noteFontPx = (() => {
+    const len = noteText.length + 6; // "Note: "
+    for (const f of [8.5, 8, 7.5, 7, 6.5, 6, 5.5, 5]) {
+      const perLine = Math.floor(700 / (f * 0.62));
+      const lines = Math.ceil(len / perLine);
+      if (lines * f * 1.3 + 6 <= 45) return f;
     }
-  } else {
-    hostCompanyAddressHtml = 'Sector No 7, Plot No 97, PCNTDA<br/>Bhosari, Pune - 411026, Maharashtra';
-  }
+    return 5;
+  })();
 
-  const hostEmail = hostCompany?.email || hostCompany?.company_email || 'reactjscodigix@gmail.com';
-  const hostPhone = hostCompany?.phone || hostCompany?.company_phone || hostCompany?.contact_mobile || '+91 9876543210';
+  // ── Pages: fixed 10 item rows per A4 sheet, short pages padded with blank rows ──
+  const ROWS_PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
 
-  const discountType = (items && items[0]) ? items[0].discount_type || 'percentage' : 'percentage';
-  const discountValue = (items && items[0]) ? parseFloat(items[0].discount_value) || 0 : 0;
+  const rowHtml = (r) => {
+    if (!r) return '<tr class="item-row blank-row"><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+    return `
+              <tr class="item-row">
+                <td class="center-col"><div class="cell">${r.sr}</div></td>
+                <td><div class="cell"><span class="one-line" style="font-weight: 700;">${esc(r.drawing_no)}</span></div></td>
+                <td>
+                  <div class="cell">
+                    <span class="desc-line" style="font-weight: 700;">${esc(r.description || r.drawing_no)}${r.note ? ` (${esc(r.note)})` : ''}</span>
+                    ${r.isRejected ? `<span class="one-line sub-text" style="font-weight: 700; color: #dc2626;">Reason: ${esc(r.reason)}</span>` : ''}
+                  </div>
+                </td>
+                <td class="center-col"><div class="cell"><span class="one-line">${esc(r.qtyStr)}</span></div></td>
+                <td class="amount-col"${r.isRejected ? ' style="color: #dc2626; font-weight: 700;"' : ''}>${esc(r.unitRateStr)}</td>
+                <td class="amount-col"${r.isRejected ? ' style="color: #dc2626; font-weight: 700;"' : ''}>${esc(r.amountStr)}</td>
+              </tr>`;
+  };
 
-  let discountAmount = 0;
-  if (discountType === 'percentage') {
-    discountAmount = subTotal * (discountValue / 100);
-  } else {
-    discountAmount = discountValue;
-  }
-  if (discountAmount > subTotal) discountAmount = subTotal;
+  const totalsHtml = () => `
+              <tr class="totals-row first-total"><td colspan="5" class="totals-label">Sub Total</td><td class="amount-col">${fmtINR(subTotal)}</td></tr>
+              ${discountAmount > 0 ? `<tr class="totals-row"><td colspan="5" class="totals-label">Discount${discountType === 'percentage' ? ` @ ${discountValue}%` : ''}</td><td class="amount-col">- ${fmtINR(discountAmount)}</td></tr>` : ''}
+              ${isIGST
+                ? `<tr class="totals-row"><td colspan="5" class="totals-label">IGST${singleRate !== null ? ` @ ${singleRate}%` : ''}</td><td class="amount-col">${fmtINR(finalTax)}</td></tr>`
+                : `<tr class="totals-row"><td colspan="5" class="totals-label">CGST${halfRate !== null ? ` @ ${halfRate}%` : ''}</td><td class="amount-col">${fmtINR(cgstAmount)}</td></tr>
+              <tr class="totals-row"><td colspan="5" class="totals-label">SGST${halfRate !== null ? ` @ ${halfRate}%` : ''}</td><td class="amount-col">${fmtINR(sgstAmount)}</td></tr>`}
+              <tr class="totals-row grand-row"><td colspan="5" class="totals-label">Grand Total</td><td class="amount-col">${fmtINR(grandTotal)}</td></tr>`;
 
-  const discountRatio = subTotal > 0 ? (subTotal - discountAmount) / subTotal : 1;
-  const finalTax = totalTax * discountRatio;
-  const grandTotal = subTotal - discountAmount;
+  const pagesHtml = Array.from({ length: totalPages }, (_, p) => {
+    const pageRows = rows.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE);
+    while (pageRows.length < ROWS_PER_PAGE) pageRows.push(null);
+    const isLastPage = p === totalPages - 1;
+    return `
+      <div class="page-wrap${isLastPage ? ' last-page' : ''}">
+        <div class="sheet">
+          <div class="header-block">
+            <div class="doc-title">Quotation</div>
+            <div class="header">
+              <div class="logo-container">
+                ${logoBase64 ? `<img src="${logoBase64}" style="max-height: 54px; max-width: 68px; object-fit: contain;" />` : '<div class="logo-placeholder">SP<br><span style="font-size: 10px;">TP</span></div>'}
+              </div>
+              <div class="header-content">
+                <h1 class="company-name">${esc(hostCompanyName)}</h1>
+                <p class="company-line">${esc(hostCompanyAddress)}</p>
+                ${hostPhone ? `<p class="company-line">Mob no - ${esc(hostPhone)}</p>` : ''}
+                <p class="company-line" style="font-weight: 500;">${hostGSTIN ? `GSTIN: ${esc(hostGSTIN)}` : ''}${hostEmail ? `${hostGSTIN ? ' | ' : ''}Email: ${esc(hostEmail)}` : ''}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="services-band">
+            <p>Special Purpose Machines / Fixtures Design &amp; Manufacturing, Reverse Engineering,</p>
+            <p>Precision Engineering Work, CAD Services</p>
+          </div>
+
+          <div class="party-grid">
+            <div class="party-to">
+              <p>To,</p>
+              <p style="font-weight: 700; font-size: 10px;">${esc(partyName)}</p>
+              ${partyAddress ? `<p>${esc(partyAddress)}</p>` : ''}
+              ${partyContact ? `<p>Kind Attn: ${esc(partyContact)}</p>` : ''}
+              ${clientContactLine ? `<p>${esc(clientContactLine)}</p>` : ''}
+              ${clientGSTIN ? `<p>GSTIN: ${esc(clientGSTIN)}</p>` : ''}
+            </div>
+            <div class="party-meta">
+              <table class="meta-table">
+                <tr><td class="meta-label">Quotation No</td><td class="meta-value" style="word-break: break-all;">: ${esc(quoteNo)}</td></tr>
+                <tr><td class="meta-label">Date</td><td class="meta-value">: ${quoteDate}</td></tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="salutation">
+            <p>Dear Sir,</p>
+            <p style="padding-left: 12px;">We thank you for your enquiry. Please find our quotation for the following requirement.</p>
+          </div>
+
+          <table class="details-table">
+            <colgroup>
+              <col style="width: 5%;">
+              <col style="width: 13%;">
+              <col style="width: 44%;">
+              <col style="width: 10%;">
+              <col style="width: 13%;">
+              <col style="width: 15%;">
+            </colgroup>
+            <thead>
+              <tr>
+                <th rowspan="2">Sr no</th>
+                <th rowspan="2">Drawing No.</th>
+                <th rowspan="2">Description</th>
+                <th rowspan="2">Quantity</th>
+                <th class="money-head">Unit Rate</th>
+                <th class="money-head">Amount</th>
+              </tr>
+              <tr>
+                <th><div class="rs-ps"><span>Rs.</span><span>Ps.</span></div></th>
+                <th><div class="rs-ps"><span>Rs.</span><span>Ps.</span></div></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${pageRows.map(rowHtml).join('')}
+              ${isLastPage ? totalsHtml() : ''}
+            </tbody>
+          </table>
+
+          ${isLastPage ? `
+          <div class="terms">
+            <p class="terms-title">Terms &amp; Conditions</p>
+            <ol>
+              <li>Validity: This quotation hold good for acceptance for 30days after which it is subject to our confirmation.<br>We hope that the above is clear &amp; look forward to the pleasure of receiving your valuable order at the earliest.</li>
+              <li>Prices quoted are on F.O.R. basis.</li>
+              <li>Packing &amp; Forwarding Charges</li>
+              <li>Taxes: ${esc(taxTerm)}</li>
+              <li>Delivery: Depends on delivery schedule</li>
+              <li>Payment Terms: 30 days</li>
+            </ol>
+          </div>
+          ${noteText ? `<div class="note-box" style="font-size: ${noteFontPx}px;"><p><strong>Note:</strong> ${esc(noteText)}</p></div>` : ''}
+          ` : `<div class="continued">Continued on page ${p + 2}...</div>`}
+
+          <div class="sign-row">
+            <div class="sign-for">For ${esc(hostCompanyName)}</div>
+            ${isLastPage && signatureBase64 ? `<img src="${signatureBase64}" style="max-height: 26px; max-width: 120px; object-fit: contain;" />` : ''}
+            <div class="sign-label">Authorised Signatory</div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div>Generated By: System Admin | Generated Date &amp; Time: ${generatedAt}</div>
+          <div>${esc(hostCompanyName)} | Page ${p + 1} of ${totalPages}</div>
+        </div>
+      </div>`;
+  }).join('');
 
   const html = `
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
     <head>
-      <meta charset="UTF-8">
-      <title>Quotation - ${hostCompanyName}</title>
+      <meta charset="utf-8">
+      <title>Quotation - ${esc(hostCompanyName)}</title>
       <style>
-        body { font-family: 'roboto', sans-serif; font-size: 12px; color: #000; line-height: 1.4; padding: 20px; }
-        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .header-table td { padding: 10px; border: 1px solid #cbd5e1; }
-        .title { font-size: 24px; font-weight: bold; color: #f26522; text-align: center; }
-        .company-name { font-size: 18px; font-weight: bold; text-align: center; margin-top: 5px; }
-        .company-info { font-size: 11px; text-align: center; margin-top: 5px; }
-        .quote-info { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .quote-info td { padding: 8px; border: 1px solid #cbd5e1; width: 50%; }
-        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .items-table th { background-color: #f8fafc; padding: 10px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; }
-        .totals-table { width: 40%; margin-left: auto; border-collapse: collapse; }
-        .totals-table td { padding: 10px; border: 1px solid #cbd5e1; }
-        .footer { margin-top: 40px; font-size: 11px; }
-        .signature-table { width: 100%; margin-top: 60px; border-collapse: collapse; }
-        .signature-table td { text-align: center; border: none; font-weight: bold; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        @page { size: A4 portrait; margin: 0; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; color: #111827; line-height: 1.3; margin: 0; padding: 0; background-color: #fff; font-size: 9.5px; }
+        .page-wrap { width: 210mm; height: 297mm; padding: 7mm 8mm 0 8mm; overflow: hidden; page-break-after: always; }
+        .page-wrap.last-page { page-break-after: auto; }
+        .sheet { height: 278mm; border: 1.5px solid #111827; display: flex; flex-direction: column; overflow: hidden; }
+        .header-block { height: 22mm; flex-shrink: 0; }
+        .doc-title { text-align: center; font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 3px 0 0 0; }
+        .header { display: flex; align-items: center; padding: 0 10px; }
+        .logo-container { width: 70px; height: 54px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .logo-placeholder { font-size: 20px; font-weight: 800; color: #64748b; border: 2px solid #64748b; padding: 4px; text-align: center; border-radius: 4px; line-height: 1; }
+        .header-content { flex-grow: 1; text-align: center; padding-right: 70px; overflow: hidden; }
+        .company-name { font-size: 19px; font-weight: 800; margin: 0 0 2px 0; }
+        .company-line { font-size: 9px; font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .services-band { height: 8mm; flex-shrink: 0; border-top: 1px solid #111827; padding: 2px 10px; text-align: center; font-size: 9px; font-weight: 600; text-transform: uppercase; line-height: 1.3; display: flex; flex-direction: column; justify-content: center; }
+        .services-band p { margin: 0; }
+        .party-grid { height: 26mm; flex-shrink: 0; display: grid; grid-template-columns: 3fr 2fr; border-top: 1px solid #111827; border-bottom: 1px solid #111827; overflow: hidden; }
+        .party-to { padding: 4px 10px; border-right: 1px solid #111827; overflow: hidden; }
+        .party-to p, .party-meta p { margin: 0; }
+        .party-meta { padding: 4px 10px; overflow: hidden; }
+        .meta-table { width: 100%; border-collapse: collapse; }
+        .meta-table td { padding: 0.5px 0; font-size: 9px; vertical-align: top; }
+        .meta-label { width: 40%; color: #374151; }
+        .meta-value { font-weight: 700; }
+        .salutation { height: 7mm; flex-shrink: 0; padding: 2px 10px; border-bottom: 1px solid #111827; display: flex; flex-direction: column; justify-content: center; }
+        .salutation p { margin: 0; font-weight: 700; }
+        .details-table { width: 100%; border-collapse: collapse; table-layout: fixed; flex-shrink: 0; }
+        .details-table th { height: 6mm; border-bottom: 1px solid #111827; border-right: 1px solid #111827; padding: 0 4px; font-size: 9px; font-weight: 700; text-align: center; vertical-align: middle; }
+        .details-table td { border-right: 1px solid #111827; border-bottom: 1px solid #e5e7eb; padding: 0 5px; font-size: 9px; vertical-align: middle; }
+        .details-table th:last-child, .details-table td:last-child { border-right: none; }
+        .item-row td { height: 13mm; border-bottom: none; }
+        .cell { height: 13mm; padding: 0.6mm 0; overflow: hidden; display: flex; flex-direction: column; justify-content: center; gap: 1px; line-height: 1.1; }
+        .one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* Description line 1 with the item note in brackets right after it (wraps over at most 3 lines) */
+        .desc-line { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; line-height: 1.15; }
+        .amount-col { text-align: right !important; white-space: nowrap; }
+        .center-col { text-align: center !important; }
+        .details-table th.money-head { border-bottom: 1px solid #111827; }
+        .rs-ps { display: flex; justify-content: space-between; padding: 0 4px; }
+        .sub-text { font-size: 8px; color: #374151; }
+        .details-table .totals-row td { height: 4.8mm; border-bottom: none; padding: 0 6px; font-weight: 600; }
+        .details-table .totals-row.first-total td { border-top: 1px solid #111827; }
+        .totals-label { text-align: right; }
+        .details-table .grand-row td { border-top: 1px solid #111827; font-size: 10px; font-weight: 800; }
+        .terms { flex: 0 0 auto; min-height: 0; overflow: hidden; border-top: 1px solid #111827; padding: 3px 10px 2px 10px; font-size: 8.5px; }
+        .terms-title { font-size: 10px; font-weight: 800; margin: 0 0 2px 0; }
+        .terms ol { margin: 0; padding-left: 18px; }
+        .terms li { margin: 1px 0; }
+        .note-box { flex-shrink: 0; border-top: 1px solid #111827; padding: 3px 10px; max-height: 12mm; overflow: hidden; }
+        .note-box p { margin: 0; }
+        .continued { flex: 1 1 auto; border-top: 1px solid #111827; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #374151; }
+        .sign-row { flex: 1 1 auto; min-height: 12mm; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; border-top: 1px solid #111827; padding: 4px 10px 5px 10px; }
+        .sign-for { font-weight: 700; font-size: 11px; }
+        .sign-label { font-size: 10px; font-weight: 600; color: #111827; }
+        .footer { height: 5mm; display: flex; justify-content: space-between; align-items: center; color: #6b7280; font-size: 7.5px; }
       </style>
     </head>
     <body>
-      <div style="position: relative; border: 1px solid #cbd5e1; padding: 10px; margin-bottom: 20px;">
-        ${logoBase64 ? `
-        <div style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center;">
-          <img src="${logoBase64}" style="max-height: 70px; max-width: 140px; object-fit: contain;" />
-        </div>
-        ` : ''}
-        <div style="width: 100%; text-align: center;">
-          <div class="title">QUOTATION</div>
-          <div class="company-name">${hostCompanyName}</div>
-          <div class="company-info">
-            ${hostCompanyAddressHtml}<br>
-            Email: ${hostEmail} | Mobile: ${hostPhone}
-          </div>
-        </div>
-      </div>
-
-      <table class="quote-info">
-        <tr>
-          <td>
-            <strong>Quotation For:</strong><br>
-            <span style="font-size: 14px; font-weight: bold;">${clientName}</span><br>
-            Client ID: ${clientId || 'N/A'}<br>
-            ${clientDetails?.contact_person ? `Contact Person: ${clientDetails.contact_person}<br>` : ''}
-            ${clientDetails?.email ? `Email: ${clientDetails.email}<br>` : ''}
-            ${clientDetails?.phone ? `Phone: ${clientDetails.phone}<br>` : ''}
-            ${clientDetails?.gstin ? `GST No: ${clientDetails.gstin}<br>` : ''}
-          </td>
-          <td>
-            <strong>Quotation Details:</strong><br>
-            Date: ${new Date().toLocaleDateString('en-IN')}<br>
-            Quote No: ${quoteNumber || `QT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`}
-          </td>
-        </tr>
-      </table>
-
-      <table class="items-table">
-        <thead>
-          <tr>
-            <th style="width: 5%;">Sr. No</th>
-            <th style="width: 32%;">Description / Drawing No</th>
-            <th style="width: 10%;">HSN Code</th>
-            <th style="width: 8%;">Qty</th>
-            <th style="width: 15%;">Unit Rate (₹)</th>
-            <th style="width: 15%;">Total (₹)</th>
-            <th style="width: 15%;">Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${itemsHTML}
-        </tbody>
-      </table>
-
-      <table class="totals-table">
-        <tr style="background-color: #f8fafc; border-top: 2px solid #e2e8f0;">
-          <td style="font-weight: bold; font-size: 14px; color: #1e3a8a;">Grand Total</td>
-          <td style="text-align: right; font-weight: bold; font-size: 14px; color: #059669;">₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-        </tr>
-      </table>
-
-      ${((notes && !notes.trim().startsWith('Drawing Numbers:')) || hostCompany?.invoice_footer_notes) ? `
-        <div style="margin-top: 20px; border: 1px solid #cbd5e1; padding: 10px;">
-          <strong>Terms & Conditions:</strong><br>
-          <p style="white-space: pre-wrap; margin: 5px 0 0 0;">${(notes && !notes.trim().startsWith('Drawing Numbers:')) ? notes : hostCompany.invoice_footer_notes}</p>
-        </div>
-      ` : `
-        <div style="margin-top: 20px; border: 1px solid #cbd5e1; padding: 10px;">
-          <strong>Terms & Conditions:</strong><br>
-          <ol style="margin: 5px 0 0 0; padding-left: 20px; line-height: 1.6;">
-            <li>Prices mentioned are inclusive/exclusive of GST as applicable.</li>
-            <li>Delivery schedule will be as per mutually agreed timeline.</li>
-            <li>Payment terms: As per agreed quotation terms.</li>
-            <li>Any change in drawing/specification may affect cost and delivery.</li>
-            <li>Quotation validity: 15 Days from quotation date.</li>
-            <li>This is a computer-generated quotation and does not require physical signature.</li>
-          </ol>
-        </div>
-      `}
-
-      <table class="signature-table">
-        <tr>
-          <td>
-            <div style="height: 50px;"></div>
-            <div style="border-top: 1px solid #000; width: 150px; margin: 0 auto; margin-bottom: 5px;"></div>
-            Prepared By
-          </td>
-          <td>
-            <div style="height: 50px; display: flex; align-items: center; justify-content: center; margin-bottom: 5px;">
-              ${signatureBase64 ? `<img src="${signatureBase64}" style="max-height: 50px; max-width: 150px; object-fit: contain;" />` : ''}
-            </div>
-            <div style="border-top: 1px solid #000; width: 150px; margin: 0 auto; margin-bottom: 5px;"></div>
-            Authorized Signatory
-          </td>
-        </tr>
-      </table>
-
-      <div class="footer" style="text-align: center; margin-top: 50px; color: #666; border-top: 1px solid #eee; padding-top: 10px;">
-        This is a computer generated quotation and does not require a physical signature.
-      </div>
+      ${pagesHtml}
     </body>
     </html>
   `;
@@ -586,7 +697,8 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
         pdfBuffer = await page.pdf({
           format: 'A4',
           printBackground: true,
-          margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
+          preferCSSPageSize: true,
+          margin: { top: '0', right: '0', bottom: '0', left: '0' }
         });
         await browser.close();
       } catch (pdfError) {
@@ -730,8 +842,9 @@ const generateQuotationPDF = async (clientName, items, totalAmount, notes, clien
   await page.setContent(html, { waitUntil: 'networkidle0' });
   const pdf = await page.pdf({
     format: 'A4',
-    margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' },
-    printBackground: true
+    printBackground: true,
+    preferCSSPageSize: true,
+    margin: { top: '0', right: '0', bottom: '0', left: '0' }
   });
   await browser.close();
   return pdf;
